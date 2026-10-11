@@ -1,0 +1,39 @@
+# Line endings: pinned for the repo, not left to each machine's core.autocrlf.
+# Unity writes its YAML/asset files with LF, and a checkout that flips them to CRLF
+# is a whole-project phantom diff waiting on the second dev's machine.
+* text=auto eol=lf
+
+# The files git must never try to merge as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.tif binary
+*.tiff binary
+*.exr binary
+*.hdr binary
+*.ogg binary
+*.mp3 binary
+*.wav binary
+*.aif binary
+*.unitypackage binary
+*.dll binary
+*.so binary
+*.pdb binary
+
+# Unity's serialised objects are text, but they merge badly by hand: with the
+# smartYaml merge driver registered (.mergemafo / git config) these tags let it find them.
+*.asset text merge=unityyamlmerge eol=lf
+*.meta text merge=unityyamlmerge eol=lf
+*.unity text merge=unityyamlmerge eol=lf
+*.prefab text merge=unityyamlmerge eol=lf
+*.mat text merge=unityyamlmerge eol=lf
+*.anim text merge=unityyamlmerge eol=lf
+*.controller text merge=unityyamlmerge eol=lf
+*.physicMaterial text merge=unityyamlmerge eol=lf
+*.physicMaterial2D text merge=unityyamlmerge eol=lf
+*.cubemap text merge=unityyamlmerge eol=lf
+*.guiskin text merge=unityyamlmerge eol=lf
+*.fontsettings text merge=unityyamlmerge eol=lf
+*.playable text merge=unityyamlmerge eol=lf
+*.mask text merge=unityyamlmerge eol=lf
+*.asmref text eol=lf

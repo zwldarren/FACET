@@ -1,0 +1,162 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 410face2b1160f448ba47ed71bc81142, type: 3}
+  m_Name: ContentDatabase
+  m_EditorClassIdentifier: FACET.Game::Facet.Game.ContentDatabaseAsset
+  Shapes:
+  - Shape: 0
+    Name: Nothing
+    Glyph: "\xB7"
+  - Shape: 1
+    Name: Circle
+    Glyph: "\u25CB"
+  - Shape: 2
+    Name: Half-circle
+    Glyph: "\u25E0"
+  - Shape: 3
+    Name: Square
+    Glyph: "\u25A1"
+  - Shape: 4
+    Name: Half-square
+    Glyph: "\u25AD"
+  Recipes:
+  - Id: decompose
+    Input: 1
+    Output: 2
+    InputCount: 1
+    OutputCount: 2
+    Interval: 1.5
+    Buffer: 4
+  - Id: bisect
+    Input: 3
+    Output: 4
+    InputCount: 1
+    OutputCount: 2
+    Interval: 1.5
+    Buffer: 4
+  Machines:
+  - Id: belt
+    Build: 0
+    Tile: 1
+    Behavior: 0
+    Cost: 1
+    Name: Belt
+    Description: "carries one shape per tile \xB7 drag to lay a run"
+    RecipeId: 
+    Interval: 0
+    Filter: 0
+  - Id: drill
+    Build: 1
+    Tile: 4
+    Behavior: 1
+    Cost: 10
+    Name: Drill
+    Description: "on a shape patch \xB7 mines the belt it faces"
+    RecipeId: 
+    Interval: 1
+    Filter: 0
+  - Id: decomposer
+    Build: 2
+    Tile: 5
+    Behavior: 2
+    Cost: 15
+    Name: Decomposer
+    Description: splits one shape into its parts
+    RecipeId: decompose
+    Interval: 0
+    Filter: 0
+  - Id: pipe
+    Build: 3
+    Tile: 6
+    Behavior: 3
+    Cost: 6
+    Name: Pipe
+    Description: "jumps one tile - the crossing piece \xB7 never jams"
+    RecipeId: 
+    Interval: 0.25
+    Filter: 0
+  - Id: splitter
+    Build: 4
+    Tile: 7
+    Behavior: 4
+    Cost: 10
+    Name: Splitter
+    Description: "ports read off the belts around it \xB7 in/out by their direction"
+    RecipeId: 
+    Interval: 0
+    Filter: 0
+  - Id: cannon
+    Build: 5
+    Tile: 8
+    Behavior: 5
+    Cost: 20
+    Name: Cannon
+    Description: 
+    RecipeId: 
+    Interval: 0
+    Filter: 0
+  - Id: sorter
+    Build: 6
+    Tile: 9
+    Behavior: 6
+    Cost: 12
+    Name: Sorter
+    Description: "routes by shape \xB7 one shape leaves by the side it faces"
+    RecipeId: 
+    Interval: 0
+    Filter: 1
+  - Id: cutter
+    Build: 7
+    Tile: 10
+    Behavior: 2
+    Cost: 15
+    Name: Cutter
+    Description: splits one shape into its parts
+    RecipeId: bisect
+    Interval: 0
+    Filter: 0
+  - Id: mortar
+    Build: 8
+    Tile: 11
+    Behavior: 5
+    Cost: 30
+    Name: Mortar
+    Description: 
+    RecipeId: 
+    Interval: 0
+    Filter: 0
+  Turrets:
+  - Id: cannon
+    Build: 5
+    Name: Cannon
+    Ammo: 2
+    FireInterval: 1
+    Damage: 3
+    Range: 7
+    ProjectileSpeed: 14
+  - Id: mortar
+    Build: 8
+    Name: Mortar
+    Ammo: 4
+    FireInterval: 1.5
+    Damage: 6
+    Range: 9
+    ProjectileSpeed: 12
+  Enemies:
+  - Id: spike
+    Kind: 0
+    Name: Spike
+    Hp: 6
+    Speed: 1.5
+    Damage: 6
+    AttackInterval: 1
+    Weakness: 2

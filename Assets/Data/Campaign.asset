@@ -1,0 +1,17 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba13d37de1badc74c8f59f3ca1518ebf, type: 3}
+  m_Name: Campaign
+  m_EditorClassIdentifier: FACET.Game::Facet.Game.MapSet
+  Maps:
+  - {fileID: 11400000, guid: cdc4a00272f992248b121303bc333c42, type: 2}
+  - {fileID: 11400000, guid: 270a3b6e823ab6b4c81633f4dba54700, type: 2}
