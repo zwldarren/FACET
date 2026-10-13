@@ -17,6 +17,15 @@ namespace Facet.Core
 
         /// <summary>True once it has stopped to hit something - the Core, or a machine in reach.</summary>
         public bool Attacking;
+
+        /// <summary>
+        /// The walk this one chose when it spawned: true to flank (follow the threat-weighted field),
+        /// false to overrun (follow the plain shortest way). The choice is the whole route weighed once
+        /// at the door - <see cref="PathField.FlankAt"/> - and is kept for the enemy's life, so a
+        /// field rebuilt under a walking wave never dithers it between the two; the wave's next spawn
+        /// weighs the new ground instead.
+        /// </summary>
+        public bool AvoidsFire;
     }
 
     /// <summary>One enemy, flattened for the view layer.</summary>
@@ -35,11 +44,15 @@ namespace Facet.Core
     /// Every enemy on the map, plus the four things that happen to them: walking at the Core, being
     /// shot, stopping to tear down whatever machine stands in the way, and giving each other room.
     ///
-    /// <b>Machines block and are attackable; belts are walked over.</b> An enemy walks the
-    /// <see cref="PathField"/>'s flow toward the Core - around machines, not through them - but stops
-    /// the moment an attackable machine is within <see cref="EnemyDef.AggroRange"/>, and charges one it
-    /// notices within <see cref="EnemyDef.DetectionRange"/>: aggressive targeting, not just obstacle
-    /// avoidance, so a building beside the path is a target rather than scenery. When the flow has no
+    /// <b>Machines block and are attackable; belts are walked over.</b> An enemy walks a
+    /// <see cref="PathField"/>'s flow toward the Core - around machines, not through them - the plain
+    /// shortest way unless it weighed the ground at its door and chose to flank the guns' coverage
+    /// instead. It stops the moment
+    /// an attackable machine is within <see cref="EnemyDef.AggroRange"/>, and charges one it notices
+    /// within <see cref="EnemyDef.DetectionRange"/>: aggressive targeting, not just obstacle
+    /// avoidance, so a building beside the path is a target rather than scenery. Between two machines
+    /// in reach of its notice, the turret is the one it charges - the wave hunts the guns, which is why
+    /// a bare gun wants a wall between it and the lane. When the flow has no
     /// direction for a cell (the Core is sealed in), it walks straight at the Core and chews through
     /// whatever blocks the way; a standing enemy is always within its own reach of the blocker it is
     /// pressed against, so the siege resolves itself. Belts are walkable and unattackable,
@@ -111,7 +124,12 @@ namespace Facet.Core
             _nextId = 1;
         }
 
-        /// <summary>Create one enemy. Returns its id, which is what shots home in on.</summary>
+        /// <summary>Create one enemy. Returns its id, which is what shots home in on.
+        ///
+        /// The field is synced here rather than trusted to have been stepped this tick: a spawner
+        /// outside the tick - a test, mostly - can place a building and spawn in the same breath, and
+        /// the flanking judgement (<see cref="EnemyState.AvoidsFire"/>) must read the ground as it
+        /// stands, not as the last rebuild left it. Sync is a no-op when nothing changed.</summary>
         public int Spawn(EnemyKind kind, Vec2 position)
         {
             if (_count == _enemies.Length)
@@ -120,6 +138,7 @@ namespace Facet.Core
                 Array.Resize(ref _push, _push.Length * 2);
             }
 
+            _paths.Sync();
             EnemyDef spec = _content.Enemy(kind);
             int id = _nextId++;
 
@@ -133,6 +152,11 @@ namespace Facet.Core
                 Position = position,
                 PreviousPosition = position,
                 AttackCooldown = 0f,
+
+                // The one decision a walker makes for itself, at the door: flank the covered way or
+                // overrun it. The field is rebuilt on the same revision the spawner's tick used, so
+                // the judgement reads the ground as it stands this tick.
+                AvoidsFire = _paths.FlankAt(_grid.CellAt(position)),
             };
 
             _slotById[id] = _count;
@@ -180,14 +204,30 @@ namespace Facet.Core
                 // 2. Machines, nearest first: inside the attack reach it stops and hits the machine;
                 // between the reach and the notice range it charges it - leaving its path and heading
                 // for the building, which is what stops a machine two tiles off the lane from being
-                // furniture. One scan covers both, because the nearest machine within either radius is
-                // the one in reach whenever anything is: nothing can be closer than the nearest. The
+                // furniture. The scan covers both, and the nothing-can-be-closer-than-the-nearest
+                // invariant still holds for the attack decision, because a preferred turret beyond
+                // reach falls back to the nearest machine inside it. The
                 // same cooldown covers the Core and every machine, so the damage rate is the enemy's
-                // rate whatever it is hitting.
+                // rate whatever it is hitting. A gun is charged before a granary anywhere in reach of
+                // its notice, nearer or not - the turret is what is killing the wave, so it is what
+                // the wave kills first, which is why a bare gun wants a wall between it and the lane
+                // it covers.
                 float notice = MathF.Max(spec.AggroRange, spec.DetectionRange);
-                if (_machines.TryFindNearest(e.Position, notice, out Int2 target))
+                if (_machines.TryFindNearest(e.Position, notice, out Int2 target, preferTurrets: true))
                 {
                     float gap = (_grid.CellCenter(target) - e.Position).Magnitude;
+
+                    // A machine the walker can actually chew outranks one it can only dream of: when
+                    // the preferred gun sits beyond reach - behind the wall this posture invites -
+                    // charging it would pin the walker against the wall forever, attacking neither.
+                    // Chew the blocker; the scan re-hunts the gun the moment it is gone.
+                    if (gap > spec.AggroRange
+                        && _machines.TryFindNearest(e.Position, spec.AggroRange, out Int2 reachable))
+                    {
+                        target = reachable;
+                        gap = (_grid.CellCenter(target) - e.Position).Magnitude;
+                    }
+
                     if (gap <= spec.AggroRange)
                     {
                         e.Attacking = true;
@@ -208,11 +248,12 @@ namespace Facet.Core
                 e.Attacking = false;
                 float step = spec.Speed * dt;
 
-                // 3. The flow field: steer at the centre of the next cell on the way to the Core, and
-                // land exactly on it rather than stepping past it - overshooting would oscillate around
-                // the centre the way it would around the Core's ring.
+                // 3. The flow field - the one this walker chose at the door - steer at the centre of
+                // the next cell on the way to the Core, and land exactly on it rather than stepping
+                // past it: overshooting would oscillate around the centre the way it would around the
+                // Core's ring.
                 Int2 cell = _grid.CellAt(e.Position);
-                if (_paths.TryDirection(cell, out Dir dir))
+                if (_paths.TryDirection(cell, e.AvoidsFire, out Dir dir))
                 {
                     e.Position = Advance(e.Position, _grid.CellCenter(cell + dir.Offset()), step);
                     continue;

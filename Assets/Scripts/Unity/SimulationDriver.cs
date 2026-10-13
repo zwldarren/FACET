@@ -183,8 +183,9 @@ namespace Facet.Game
             // N means "go on" in both states a run can be in: start the next wave while a map is still
             // being fought, and carry on to the next map once it is won. The world drops a start-wave
             // request that arrives after the run ended, so this is the only reader that acts on it
-            // there - and the one-shot is consumed here either way, so the new map does not open by
-            // starting its own first wave, which is the player's call on every map.
+            // there - and the one-shot is consumed here either way, so the new map does not spend the
+            // same press a second time: every map's opening waits for the player's first building, and N
+            // cuts that wait short like any other.
             if (World.Status == GameStatus.Won && _input.StartWaveRequested)
             {
                 _input.ConsumeOneShots();
@@ -252,7 +253,9 @@ namespace Facet.Game
             Frames.Frame = new ViewFrame(1f, WorldPerPixel, CursorCell);
 
             for (int i = 0; i < _views.Count; i++) _views[i].Rebind(World);
-            if (_rig != null) _rig.Initialize(World.TileGrid, Campaign.IsFirstMap);
+            // The run opens on the Core: the map can be taller than the screen, and the Core is what the
+            // player is defending and the thing they have to find first.
+            if (_rig != null) _rig.Initialize(World.TileGrid, World.Core.Center, Campaign.IsFirstMap);
             if (_hud != null)
                 _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog);
 
@@ -309,7 +312,7 @@ namespace Facet.Game
 
             _rig = _camera.GetComponent<CameraRig>();
             if (_rig == null) _rig = _camera.gameObject.AddComponent<CameraRig>();
-            _rig.Initialize(World.TileGrid, Campaign.IsFirstMap);
+            _rig.Initialize(World.TileGrid, World.Core.Center, Campaign.IsFirstMap);
         }
 
         private T AddView<T>(string viewName) where T : Component

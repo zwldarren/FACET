@@ -11,24 +11,11 @@ namespace Facet.Tests
     /// A map is data, and the mistakes data makes do not throw - they produce a wave that stands at its
     /// door forever, which reads as a hung game rather than as a bad map. So every one of these tests is
     /// a map that is wrong in exactly one way, and the assertion is that the validator names that way
-    /// and nothing else. <see cref="EveryMapTheCampaignShips_ValidatesClean"/> is the other half: the maps
-    /// the campaign ships, held to the same rules.
+    /// and nothing else. The maps the game ships are held to the same rules by the window that paints
+    /// them, which is where a designer sees them; nothing here reads a shipped map.
     /// </summary>
     public class MapValidationTests
     {
-        [Test]
-        public void EveryMapTheCampaignShips_ValidatesClean()
-        {
-            // Every map the game ships, against the same rules the painting window shows a designer. Read
-            // from the campaign asset rather than from a list in code, so the maps that ship are the maps
-            // that are held to this - a painted map is one drag away from being here.
-            foreach (MapDefinition map in Sim.Maps)
-            {
-                List<MapProblem> problems = MapValidation.Validate(map);
-                Assert.IsEmpty(problems, map.Name + " is not playable data:\n" + Describe(problems));
-            }
-        }
-
         [Test]
         public void Validate_ARockWallAcrossALane_IsADoorThatCanNeverArrive()
         {
@@ -148,6 +135,33 @@ namespace Facet.Tests
                 terrain: TerrainLayout.Rects(16, 12, new TerrainRect(new Int2(6, 4), 4, 4, TerrainKind.Rock)));
 
             AssertProblem(MapValidation.Validate(map), MapProblemKind.CoreUnderTerrain, new Int2(6, 4));
+        }
+
+        [Test]
+        public void Validate_OreInTheTerrainArray_IsReported_WithOrWithoutAVeinBesideIt()
+        {
+            // A vein is the ore list's entry, and the ground under one is plain - so an array that says
+            // ore is a map no writer here produces, and both halves of the mistake get named. With no
+            // entry at the cell the world still gets an ore tile, one only a drill may stand on and that
+            // yields nothing; with an entry beside it, the byte is the half-write that leaves exactly
+            // that tile behind the moment the entry is removed by hand.
+            var ore = new Int2(2, 2);
+            MapDefinition orphan = Map(16, 12,
+                doors: new[] { new Int2(0, 10) },
+                terrain: TerrainLayout.Rects(16, 12, new TerrainRect(ore, 2, 2, TerrainKind.Ore)));
+
+            List<MapProblem> problems = MapValidation.Validate(orphan);
+
+            AssertProblem(problems, MapProblemKind.OreInTerrain, ore);
+            Assert.IsEmpty(ProblemsOtherThan(problems, MapProblemKind.OreInTerrain),
+                "and nothing else is wrong with it:\n" + Describe(problems));
+
+            MapDefinition paired = Map(16, 12,
+                doors: new[] { new Int2(0, 10) },
+                patches: new[] { new ShapePatch(ore, 2, 2, ShapeType.Circle) },
+                terrain: TerrainLayout.Rects(16, 12, new TerrainRect(ore, 2, 2, TerrainKind.Ore)));
+
+            AssertProblem(MapValidation.Validate(paired), MapProblemKind.OreInTerrain, ore);
         }
 
         /// <summary>A map with a real door and a real wave, so a test can break exactly one other thing

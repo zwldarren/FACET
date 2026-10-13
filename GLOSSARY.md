@@ -26,6 +26,25 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   and anything else asking. Geometry only - whether a cell *accepts* a belt is the BuildController's
   question.
 
+## The wave's walk
+
+- **Flow field** (`PathField`) - the way to the Core from every walkable cell, stored as one step
+  per cell rather than a path per enemy. It is kept twice: the **direct field** (the plain
+  breadth-first flood the game has always simulated) and the **flank field** (a Dijkstra where a
+  cell under a standing gun's range costs `Balance.PathThreatWeight` extra). Both rebuild only when
+  a building comes or goes; terrain is fixed and cannot invalidate them.
+- **Threat** - 1 for a cell whose centre is inside a standing turret's range, 0 elsewhere. Asked of
+  the machines, not of the shots: a starved gun still covers its ground, because a wave reads the
+  gun on the ground and not the magazine behind it. Belts and walls project none - a wall is there
+  to be chewed.
+- **Flank decision** (`FlankAt`, `EnemyState.AvoidsFire`) - the one judgement a walker makes, once,
+  at the door it came in: follow the flank field only when the open way undercuts what the direct
+  way would itself pay under fire (`_directWeighted`, the chain sum of the direct field's own
+  steps) by `Balance.PathDetourFactor` plus `PathDetourSlack` steps of slop. The choice is kept for
+  the walker's life, so a field rebuilt under a walking wave never dithers it between the two; the
+  wave's next spawn weighs the new ground instead. With no turret on the map the decision always
+  reads "direct", which is why a threat-free world plays bit-for-bit as it always did.
+
 ## Reading machines
 
 - **MachineReading** - the one module that says what a machine *means* to the player: the
@@ -52,9 +71,10 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
 ## The clock and the stream
 
 - **Wave phase** (`WavePhase`) - what the wave clock is doing right now, in one word: `Running`,
-  `Intermission`, `Held` (the first wave, waiting for the player), `Over`. Readers branch on the
-  phase instead of recomposing it from the `CurrentWave == 0` / `NextWave == 0` sentinels;
-  `HasWaveToStart` is the one question the N key, the HUD's button and a test's run-to-end all ask.
+  `Intermission` (a countdown is running), `Held` (the opening, before the player's first building arms
+  its clock - no time passes there), `Over`. Readers branch on the phase instead of recomposing it from
+  the `CurrentWave == 0` / `NextWave == 0` sentinels; `HasWaveToStart` is the one question the N key, the
+  HUD's button and a test's run-to-end all ask.
 - **Window** (in time) - a slice of the event stream at or after a given tick: `CountSince`,
   `TryLastWithin`, `DroppedSince`. The HUD's "last 1s" line and the refusal toast read these instead
   of hand-filtering the ring; drop honesty (`DroppedSince`, next to `Dropped` and `LastDropTick`)
@@ -78,6 +98,13 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   group, move the Core, resize) that answers *whether anything changed*. The public arrays are
   serialization, not the interface: the copy-append-reassign dance and the door dedupe live here,
   with a test crossing each instead of a hand clicking it.
+- **Vein** - a mineral in the ground, written in one place: an `Ore:` entry naming its cell, with that
+  cell's `Terrain:` byte left plain. The conversion claims cells from the entry (`PatchClaims`,
+  `StampTerrain`), so the array is not where a vein is added or taken away. Both halves of getting it
+  wrong are named rather than silent: an array that says Ore with no entry beside it
+  (`OreInTerrain` - a tile only a drill may stand on, which yields nothing when it does) and two
+  entries for one cell (`DuplicateOre` - only the first one counts). `Tools/check-maps.py` asks the
+  same questions of the file itself, without an Editor.
 - **Canonical walk / drawn view** (`DrawableView`, `DrawnMap`) - the one enumeration of what a map
   draws: every in-map cell's ground and mineral (first-entry-wins, the conversion's own rule), the
   in-bounds doors each with the table position a wave group names them by, and the Core footprint.
@@ -100,8 +127,9 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   `RequestRestart`). The pass-throughs that only re-exposed a public field are gone.
 - **Read that reads** - `ToCore`, `Validate`, `DrawableView` and `ContentHash` answer about the
   asset as authored and write nothing; repair lives where repair belongs (`OnValidate` on import,
-  and each write keeping its own arrays in step). A query that resized the map under a repaint,
-  with no Undo and no dirty, was the bug this rule retired.
+  and each write being the whole of what it writes: a stroke lays down the ground it names and takes
+  any mineral with it, and `PaintOre` writes the one place a vein lives). A query that resized the map
+  under a repaint, with no Undo and no dirty, was the bug this rule retired.
 
 ## The run
 

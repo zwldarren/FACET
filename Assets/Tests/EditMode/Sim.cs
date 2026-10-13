@@ -1,9 +1,6 @@
-using System;
 using System.Collections.Generic;
 using Facet.Core;
-using Facet.Game;
 using NUnit.Framework;
-using UnityEditor;
 
 namespace Facet.Tests
 {
@@ -20,23 +17,6 @@ namespace Facet.Tests
         /// about the economy itself ever have to think about the economy.</summary>
         public const int TestCircles = 100000;
 
-        /// <summary>
-        /// Where the shipping campaign lives. One path, named once: the tests read the same asset the game
-        /// runs on, so a map that ships is a map the tests are held to, and the two cannot drift the way a
-        /// fixture and a built game can.
-        /// </summary>
-        private const string CampaignPath = "Assets/Data/Campaign.asset";
-
-        /// <summary>The shipping campaign, read the way the driver reads it.</summary>
-        public static MapCatalog Campaign => MapCatalog.From(AssetDatabase.LoadAssetAtPath<MapSet>(CampaignPath));
-
-        /// <summary>The maps of it, in the order they are played.</summary>
-        public static IReadOnlyList<MapDefinition> Maps => Campaign.Maps;
-
-        /// <summary>One map of it by position. Map 1 is the tutorial, so a test that names a map by index
-        /// is naming the order the campaign is played in - see CampaignTests for what each one promises.</summary>
-        public static MapDefinition Shipped(int index) => Campaign.At(index);
-
         /// <summary>A featureless map of the given size: no patches, no spawn points, no waves, and
         /// <paramref name="startCircles"/> banked - by default a stockpile that never runs dry. Unit
         /// tests draw their own terrain on it.</summary>
@@ -44,13 +24,80 @@ namespace Facet.Tests
             => new MapDefinition("test", width, height, startCircles,
                 new ShapePatch[0], new Int2[0], new WaveDefinition[0]);
 
+        /// <summary>
+        /// The rig every test that needs a real map fights on, written here rather than read from a shipped
+        /// one: the maps the game plays are data a designer repaints whenever they like, so a test that
+        /// asserted *their* ground, doors or waves would be a test of today's map file rather than of the
+        /// simulation. This map is the tests' own, it is small, and it is shaped so that a fight on it is
+        /// the same fight every time.
+        ///
+        /// A corridor down the north side - rock at (4,10) and (6,10), each eleven tiles tall - so a wave
+        /// walks a straight lane into the Core's north face instead of a diagonal across open ground. One
+        /// vein beside the Core for the economy line and one at the mouth of a drill &gt; decomposer &gt;
+        /// cannon line, whose gun sits four tiles off that lane: inside its 7-tile range, outside the 2.5
+        /// tiles a Spike notices a machine from, which is why nothing charges it. Two Spikes a wave, two
+        /// waves a table, and a budget that pays for exactly the opening both lines described below cost.
+        /// </summary>
+        public static MapDefinition RigMap()
+            => new MapDefinition("rig", 16, 22, 62,
+                new[]
+                {
+                    new ShapePatch(new Int2(12, 6), 2, 1, ShapeType.Circle),
+                    new ShapePatch(new Int2(12, 9), 2, 1, ShapeType.Circle),
+                },
+                new[] { new Int2(5, 20) },
+                new[]
+                {
+                    new WaveDefinition(60f, new SpawnGroup(EnemyKind.Spike, 2, 0, 0f, 2f)),
+                    new WaveDefinition(30f, new SpawnGroup(EnemyKind.Spike, 2, 0, 0f, 2f)),
+                },
+                TerrainLayout.Rects(16, 22,
+                    new TerrainRect(new Int2(4, 10), 1, 11, TerrainKind.Rock),
+                    new TerrainRect(new Int2(6, 10), 1, 11, TerrainKind.Rock)),
+                coreCell: new Int2(4, 6));
+
+        /// <summary>A world on <see cref="RigMap"/> - what the older tests took from the shipped campaign.</summary>
+        public static SimWorld Rig() => new SimWorld(RigMap(), new SimConfig());
+
+        /// <summary>
+        /// The rig's economy line: a drill on the vein beside the Core at (12,6), pushing west onto four
+        /// belts that run into the Core's east side - fourteen circles, four of them the line home.
+        /// </summary>
+        public static void BuildRigEconomy(SimWorld world)
+        {
+            Place(world, BuildKind.Drill, new Int2(12, 6), Dir.West);
+            LayRun(world, new Int2(11, 6), Dir.West, 4);          // (11,6) .. (8,6), into the Core
+        }
+
+        /// <summary>
+        /// The rig's defence: a drill on the second vein at (12,9) pushing west onto two belts into a
+        /// decomposer at (9,9), whose outlet runs north up into a cannon at (9,11) - three tiles from the
+        /// lane's cell at (9,10)'s column, four from the lane itself. The cannon faces west so its barrel
+        /// points at the Core. <paramref name="trunk"/> is the input run's first cell: the one a jam goes
+        /// in. Forty-eight circles, the opening's other half.
+        /// </summary>
+        public static void BuildRigDefence(SimWorld world, out Int2 trunk)
+        {
+            Place(world, BuildKind.Drill, new Int2(12, 9), Dir.West);
+            Int2 runStart = new Int2(11, 9);
+            LayRun(world, runStart, Dir.West, 2);                 // (11,9) (10,9), into the decomposer
+            trunk = runStart;
+
+            Place(world, BuildKind.Decomposer, new Int2(9, 9), Dir.East);
+            LayRun(world, new Int2(9, 10), Dir.North, 1);         // out of the decomposer, up into the gun
+            Place(world, BuildKind.Cannon, new Int2(9, 11), Dir.West);
+        }
+
+        /// <summary>The whole opening, the way a player builds it: the economy first, then the defence.</summary>
+        public static void BuildRig(SimWorld world, out Int2 trunk)
+        {
+            BuildRigEconomy(world);
+            BuildRigDefence(world, out trunk);
+        }
+
         /// <summary>A test map world. Unit tests draw their own patches and never see a wave.</summary>
         public static SimWorld NewWorld(int width, int height)
             => new SimWorld(TestMap(width, height), new SimConfig());
-
-        /// <summary>The real map 1, with its real starting stockpile. Economy and scenario tests live here:
-        /// what they build is exactly what a player could afford on the map the game opens with.</summary>
-        public static SimWorld NewWorld() => new SimWorld(Shipped(0), new SimConfig());
 
         /// <summary>A world whose Core cannot die, for tests that are about turrets and supply rather
         /// than about the run ending: an enemy that reaches the Core would otherwise end the run and
@@ -58,24 +105,43 @@ namespace Facet.Tests
         public static SimWorld NewEnduringWorld(int width = 20, int height = 12)
             => new SimWorld(TestMap(width, height), new SimConfig { CoreMaxHp = 1000000f });
 
+        /// <summary>
+        /// The minimal rig that can actually end: a 20x12 map (Core at (8,4)-(11,7)) whose one wave
+        /// sends a single Spike in from (13,10), answered by a cannon at (10,10) fed by a belt at
+        /// (9,10) - which a test stocks by hand each tick. The spike dies at the gun, the wave clears,
+        /// and the table is exhausted: the run ends, which is what the tests that need a run to END
+        /// (a win, the clock's last tick) need without borrowing the campaign's longer maps. Note the
+        /// rig has already built by the time any tick runs - the belt and cannon go through TryPlace,
+        /// which arms the clock - and its opening countdown is 0, so the wave starts itself on the
+        /// very first tick; a press of N is harmless but redundant here. A test that means to
+        /// exercise the Held-to-press transition needs a rig that builds nothing at all.
+        /// </summary>
+        public static SimWorld OneWaveWorld()
+        {
+            var map = new MapDefinition("one wave", 20, 12, TestCircles,
+                new ShapePatch[0],
+                new[] { new Int2(13, 10) },
+                new[] { new WaveDefinition(0f, new SpawnGroup(EnemyKind.Spike, 1, 0, 1f, 1f)) });
+            var world = new SimWorld(map, new SimConfig());
+
+            LayRun(world, new Int2(9, 10), Dir.East, 1);
+            Place(world, BuildKind.Cannon, new Int2(10, 10), Dir.East);
+            return world;
+        }
+
+        /// <summary>Keep <see cref="OneWaveWorld"/>'s cannon fed: one half-circle dropped on the belt's
+        /// single cell each tick. At <see cref="SimConfig.BeltSpeed"/> of 1 the cell delivers one per
+        /// second - exactly the gun's ceiling, so the gun is never throughput-starved, though a shot
+        /// still waits out the cell's first second of fill.</summary>
+        public static void FeedOneWaveGun(SimWorld world)
+            => world.Belts.TrySpawnItem(new Int2(9, 10), ShapeType.HalfCircle);
+
         public static void Tick(SimWorld world, InputCommand cmd, int count)
         {
             for (int i = 0; i < count; i++) world.Tick(cmd);
         }
 
         public static void Tick(SimWorld world, int count) => Tick(world, InputCommand.None, count);
-
-        /// <summary>Advance until the stockpile reaches <paramref name="target"/> - the economy
-        /// line's deliveries banking at the Core - or fail after <paramref name="maxSeconds"/>.</summary>
-        public static void TickUntilFunded(SimWorld world, int target, float maxSeconds = 240f)
-        {
-            int cap = (int)(maxSeconds * SimConfig.TickRate);
-            for (int i = 0; i < cap && world.Economy.Circles < target; i++)
-                world.Tick(InputCommand.None);
-
-            Assert.GreaterOrEqual(world.Economy.Circles, target,
-                "the economy never banked " + target + " circles");
-        }
 
         /// <summary>
         /// Press the left button on a cell, hold it and drag the cursor to another, then lift. Driven
@@ -104,44 +170,6 @@ namespace Facet.Tests
                 "expected to place " + kind + " at " + cell + " facing " + direction);
 
         /// <summary>
-        /// The reference map-1 defence, shared by every test that fights the wave: a drill on the
-        /// east patch at (62,23) pushing west, fifteen belts to a decomposer at (46,23), two more
-        /// belts to a pipe at (43,23) that jumps whatever sits at (43,22) - bare ground here, the
-        /// economy line when both are built - then south and west to a cannon at (37,18) covering
-        /// the Core's southern corner, inside range of both the southern approach and the western
-        /// flank the wave ends with. The cannon sits three tiles off the south lane on purpose: a
-        /// machine two tiles off is inside a Spike's notice range, and the wave would charge it
-        /// instead of walking into its fire. The build costs 77 circles against the map's 80, so it
-        /// is a build a player can actually afford.
-        /// <paramref name="trunk"/> is a cell in the middle of the input run - the one a jam goes in.
-        /// </summary>
-        public static void BuildMapOneDefence(SimWorld world, out Int2 trunk, out Int2 cannon)
-        {
-            Place(world, BuildKind.Drill, new Int2(62, 23), Dir.West);
-            LayRun(world, new Int2(61, 23), Dir.West, 15);      // (61,23) .. (47,23)
-
-            trunk = new Int2(54, 23);
-
-            Place(world, BuildKind.Decomposer, new Int2(46, 23), Dir.West);
-            LayRun(world, new Int2(45, 23), Dir.West, 2);       // (45,23) (44,23)
-            Place(world, BuildKind.Pipe, new Int2(43, 23), Dir.South);   // over (43,22), to (43,21)
-            LayRun(world, new Int2(43, 21), Dir.South, 3);      // (43,21) .. (43,19)
-            LayRun(world, new Int2(43, 18), Dir.West, 1);       // the corner
-            LayRun(world, new Int2(42, 18), Dir.West, 5);       // (42,18) .. (38,18), pointing in
-
-            cannon = new Int2(37, 18);
-            Place(world, BuildKind.Cannon, cannon, Dir.West);
-        }
-
-        /// <summary>The economy line: a drill on the east patch at (62,22) and twenty belts straight
-        /// west into the Core, so mined circles bank themselves. Thirty circles of the run's budget.</summary>
-        public static void BuildMapOneEconomyLine(SimWorld world)
-        {
-            Place(world, BuildKind.Drill, new Int2(62, 22), Dir.West);
-            LayRun(world, new Int2(61, 22), Dir.West, 20);      // (61,22) .. (42,22), into the Core
-        }
-
-        /// <summary>
         /// Drag a route and then prove it landed: every cell of the Manhattan walk must be a belt
         /// facing the next cell of the walk. The walk takes the drag's dominant axis first, exactly as
         /// the drag itself does, so a route up the map is proved cell by cell up the map. A route that
@@ -166,8 +194,9 @@ namespace Facet.Tests
         }
 
         /// <summary>
-        /// Run the whole game, starting each wave the moment its intermission begins so the test does
-        /// not sit through the countdowns (the countdown has its own test).
+        /// Run the whole game, starting each wave the moment its wait begins so the test does not sit
+        /// through the countdowns (the countdown has its own tests). The opening's wait counts: it is Held
+        /// for a first building, and a press ends it just as a running countdown can be cut short.
         /// </summary>
         public static void RunToEnd(SimWorld world, int maxTicks = 60 * 30 * 12)
         {

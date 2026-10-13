@@ -279,16 +279,24 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// Nearest attackable machine (<see cref="MachineDef.MaxHp"/> above 0) whose cell centre is
-        /// within <paramref name="range"/> of <paramref name="centre"/>. Ties go to the earlier occupied
-        /// cell - the map's order, not the caller's. False when nothing is in range, in which case the
-        /// output is unusable.
+        /// The nearest attackable machine (<see cref="MachineDef.MaxHp"/> above 0) to
+        /// <paramref name="centre"/> within <paramref name="range"/>. Ties go to the later occupied
+        /// cell - the map's order, not the caller's - because the scan keeps overwriting on an exact
+        /// tie, so the highest-index match wins for both the plain and the turret-preferring pick.
+        /// With <paramref name="preferTurrets"/>, a standing
+        /// turret is charged in preference to any other machine in the same radius - the wave hunts the
+        /// gun before the granary, because the gun is what is emptying the wave into the ground; the
+        /// gun chosen is the nearest one, and single-machine cases read exactly as the plain rule does.
+        /// False when nothing is in range, in which case the output is unusable.
         /// </summary>
-        public bool TryFindNearest(Vec2 centre, float range, out Int2 cell)
+        public bool TryFindNearest(Vec2 centre, float range, out Int2 cell, bool preferTurrets = false)
         {
             float bestSq = range * range;
+            float bestGunSq = range * range;
             cell = default;
+            Int2 gunCell = default;
             bool found = false;
+            bool foundGun = false;
 
             for (int k = 0; k < _occupied.Count; k++)
             {
@@ -299,11 +307,28 @@ namespace Facet.Core
                 Int2 here = _grid.CellOf(i);
                 Vec2 delta = _grid.CellCenter(here) - centre;
                 float sq = delta.X * delta.X + delta.Y * delta.Y;
-                if (sq > bestSq) continue;
 
-                bestSq = sq;
-                cell = here;
-                found = true;
+                if (sq <= bestSq)
+                {
+                    bestSq = sq;
+                    cell = here;
+                    found = true;
+                }
+
+                // Tracked separately rather than inside the nearest-match block above: the gun worth
+                // chewing may well be the farther machine, and preferring it is the whole point.
+                if (preferTurrets && _content.IsTurret(m.Build) && sq <= bestGunSq)
+                {
+                    bestGunSq = sq;
+                    gunCell = here;
+                    foundGun = true;
+                }
+            }
+
+            if (foundGun)
+            {
+                cell = gunCell;
+                return true;
             }
 
             return found;

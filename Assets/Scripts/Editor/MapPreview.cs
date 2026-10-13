@@ -34,9 +34,12 @@ namespace Facet.EditorTools
     /// changed" - still repaints.
     ///
     /// <b>It owns everything it makes, and saves none of it.</b> The objects are <c>DontSave</c>, so a
-    /// preview can never be written into the scene it is drawn in, and a script reload - which destroys
-    /// what it does not save - is answered by the window asking again rather than by a half-built preview.
-    /// The whole of its lifetime is <see cref="Show"/> and <see cref="Hide"/>.
+    /// preview can never be written into the scene it is drawn in, and a script reload - which drops the
+    /// statics that own them without destroying them - is answered twice: they are taken down before the
+    /// reload, and any that outlived a reload that ran without that hook are swept when the next preview
+    /// starts. A <c>DontSave</c> preview is not merely unsaved: the Scene view keeps rendering it, hidden
+    /// from the hierarchy, for as long as nobody can name it. The whole of its lifetime is <see cref="Show"/>
+    /// and <see cref="Hide"/>.
     ///
     /// <b>And it stands down while the game runs.</b> The driver builds its own views the moment Play
     /// starts, at the same depths as these, so a preview left on would draw a second copy of the map
@@ -97,6 +100,10 @@ namespace Facet.EditorTools
             if (_asset == asset) return;
 
             Hide();
+
+            // Whatever a previous domain left drawing - see SweepOrphans - is cleared before this
+            // preview's own root is built beside it.
+            SweepOrphans();
 
             _asset = asset;
             _frames = new FrameClock();
@@ -215,6 +222,43 @@ namespace Facet.EditorTools
             _views.Clear();
             _world = null;
             _digest = 0;
+        }
+
+        /// <summary>
+        /// Take the preview down before the scripts are reloaded.
+        ///
+        /// A reload drops every static in this class - including the one that names the preview's own
+        /// root - and it does not take the objects with them: they are <c>DontSave</c>, so the Scene view
+        /// keeps rendering the meshes they were last built with. What is left is a preview nobody can name:
+        /// hidden from the hierarchy, so it cannot be deleted by hand, and drawing a frozen picture of the
+        /// map as it was before the recompile, under the preview of the map being edited now. Standing down
+        /// first is the cheaper half of the answer, because it leaves nothing to find; the expensive half is
+        /// <see cref="SweepOrphans"/>, for a domain that went away without this hook - one this class has
+        /// only run since, and an Editor session that began before it.
+        /// </summary>
+        [InitializeOnLoadMethod]
+        private static void HookReload()
+        {
+            AssemblyReloadEvents.beforeAssemblyReload -= StandDown;
+            AssemblyReloadEvents.beforeAssemblyReload += StandDown;
+        }
+
+        /// <summary>
+        /// Destroy every root carrying this class's name that it does not own, so a preview that outlived
+        /// its statics stops drawing instead of being drawn under the next one. Asked of
+        /// <see cref="Resources.FindObjectsOfTypeAll{T}"/>, which is the one lookup that sees an object
+        /// hidden from the hierarchy and not saved into any scene - the two things that make an orphan
+        /// unfindable by name, by selection or by hand.
+        /// </summary>
+        private static void SweepOrphans()
+        {
+            foreach (GameObject found in Resources.FindObjectsOfTypeAll<GameObject>())
+            {
+                if (found == _root || found.name != RootName) continue;
+                if ((found.hideFlags & HideFlags.DontSave) == 0) continue;   // not ours: a scene's own object
+
+                Object.DestroyImmediate(found);
+            }
         }
 
         private static void OnSceneGui(SceneView view)

@@ -227,10 +227,11 @@ namespace Facet.Game
 
         /// <summary>
         /// The wave entry points, each as a hollow frame built from one alpha value this frame.
-        /// While a wave runs the frames sit at a steady faint alpha; during an intermission they
-        /// pulse with the countdown so the map itself says "something is coming". The points the
-        /// NEXT wave uses additionally get a solid inner quad, which is the wave preview drawn
-        /// where the player is already looking.
+        /// While a wave runs the frames sit at a steady faint alpha; during an intermission they pulse
+        /// with the countdown so the map itself says "something is coming". The opening's countdown
+        /// pulses like the rest once the player's first building arms it. The points the NEXT wave
+        /// uses additionally get a solid inner quad, which is the wave preview drawn where the
+        /// player is already looking.
         /// </summary>
         private void AppendSpawnMarkers()
         {
@@ -242,10 +243,11 @@ namespace Facet.Game
             {
                 // The phase is the semantic answer - a countdown is running - and WavePhase says why
                 // reading it off a number once was a bug ("CurrentWave alone is 0 both before the
-                // first wave and right after one clears"). The total stays guarded because the
-                // fraction divides by it: a table row that promised 0 seconds is data, and data does
-                // not get to divide the renderer by zero. The first wave is Held, not counting down,
-                // so its frames sit steady: the wave waits for the player (WaveDirector).
+                // first wave and right after one clears"). The opening is Held, not counting, so its
+                // frames sit steady instead of pulsing from a countdown that has not been armed. The
+                // total stays guarded because the fraction divides by it: a table row that promised 0
+                // seconds is data, and data does not get to divide the renderer by zero - a 0-second
+                // intermission starts its wave on the same tick, so there is nothing to pulse for.
                 float phase = 1f - waves.IntermissionRemaining / waves.IntermissionTotal;
                 frameAlpha = look.SpawnPulseCenter + look.SpawnPulseAmplitude * Mathf.Sin(phase * Mathf.PI * 2f * look.SpawnPulseCycles);
             }

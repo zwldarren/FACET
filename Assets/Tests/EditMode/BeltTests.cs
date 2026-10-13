@@ -252,15 +252,30 @@ namespace Facet.Tests
             // facing - east - so a belt dragged north out of it was never mined into, and the run
             // looked like the mistake while the drill's facing was the cause. A run leaving a drill's
             // own cell can only be that drill's output, so the drill turns to face it.
-            SimWorld world = Sim.NewWorld();                  // the real map 1, real patches
-            var drill = new Int2(14, 11);                     // top row of the (14,10) 3x2 patch
-            var head = new Int2(14, 12);                      // the first cell off the patch
+            //
+            // The map is this test's own, so the vein is where the test says it is and the run is as
+            // long as the plain ground above it goes - the drag, not the map file, is what is on trial.
+            const int Dragged = 4;                          // cells the run leaves the drill for
+            var drill = new Int2(4, 2);
+            var map = new MapDefinition("drill run", 16, 12, Sim.TestCircles,
+                new[] { new ShapePatch(drill, 1, 1, ShapeType.Circle) }, new Int2[0], new WaveDefinition[0]);
+            var world = new SimWorld(map, new SimConfig());
+
+            for (int i = 0; i < Dragged; i++)
+            {
+                var next = new Int2(drill.X, drill.Y + i + 1);
+                Assert.AreEqual(TerrainKind.Ground, world.Terrain.KindAt(next),
+                    "the run needs plain ground north of the vein: " + next);
+                Assert.IsFalse(world.Terrain.HasOre(next), "and not more of the vein: " + next);
+            }
+
+            var head = new Int2(drill.X, drill.Y + 1);       // the first cell off the patch
 
             world.Tick(Gesture.Aim(drill, BuildKind.Drill));
             world.Tick(Gesture.Release(drill, BuildKind.Drill));
             Assert.AreEqual(Dir.East, Sim.MachineAt(world, drill).Direction, "a click keeps the ghost's facing");
 
-            Sim.Drag(world, drill, new Int2(14, 17));
+            Sim.Drag(world, drill, new Int2(drill.X, drill.Y + Dragged));
 
             Assert.AreEqual(Dir.North, Sim.MachineAt(world, drill).Direction, "the drill follows the run");
             Assert.AreEqual(Dir.North, Sim.DirAt(world, head), "and the run leaves it northwards");

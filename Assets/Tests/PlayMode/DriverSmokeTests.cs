@@ -21,18 +21,18 @@ namespace Facet.PlayTests
     /// does whatever it likes, and that a view whose simulation state changed has a mesh with geometry
     /// in it. The last one is the honest check for "is it drawn": the mesh is real even when there is
     /// no display to put it on, so an empty or never-rebuilt mesh fails here.
+    ///
+    /// The driver is wired to a campaign this fixture builds (see <see cref="TestCampaign"/>), not to
+    /// the shipped one: the maps the game plays are data a designer repaints whenever they like, and a
+    /// smoke test that asserted their ground, their ore or their sizes would be a test of today's map
+    /// file rather than of the driver. <see cref="TheShippedMainScene_RunsAsBuilt"/> is the one test
+    /// that loads the shipped scene, where the shipped campaign is wired for real.
     /// </summary>
     public class DriverSmokeTests
     {
         private GameObject _cameraObject;
         private GameObject _driverObject;
-
-        /// <summary>
-        /// The campaign the shipped scene is wired to. Named here for the same reason the game names it in
-        /// the scene: a driver built by hand has no Inspector to wire it in, and a driver with no campaign
-        /// refuses to start - which is the behaviour, not an inconvenience.
-        /// </summary>
-        private const string CampaignPath = "Assets/Data/Campaign.asset";
+        private MapSet _campaign;
 
         [SetUp]
         public void CreateScene()
@@ -52,10 +52,11 @@ namespace Facet.PlayTests
             _driverObject.SetActive(false);
             SimulationDriver driver = _driverObject.AddComponent<SimulationDriver>();
 
+            _campaign = TestCampaign();
+
 #if UNITY_EDITOR
             var serialized = new SerializedObject(driver);
-            serialized.FindProperty("campaign").objectReferenceValue =
-                AssetDatabase.LoadAssetAtPath<MapSet>(CampaignPath);
+            serialized.FindProperty("campaign").objectReferenceValue = _campaign;
             serialized.ApplyModifiedPropertiesWithoutUndo();
 #endif
 
@@ -68,7 +69,74 @@ namespace Facet.PlayTests
             // Unity's destroyed-object equality makes this safe even if a test replaced the scene.
             if (_driverObject != null) Object.Destroy(_driverObject);
             if (_cameraObject != null) Object.Destroy(_cameraObject);
+            if (_campaign != null)
+            {
+                if (_campaign.Maps != null)
+                    foreach (MapAsset map in _campaign.Maps)
+                        if (map != null) Object.Destroy(map);
+
+                Object.Destroy(_campaign);
+            }
         }
+
+        /// <summary>
+        /// The campaign the smoke tests run, built here instead of read from
+        /// <c>Assets/Data/Campaign.asset</c>. Two maps, because a swap needs two: the first wears rock,
+        /// water and a void corner and carries one vein, and the second is a different size - which is
+        /// what the ground view's rebind is proved against.
+        /// </summary>
+        private static MapSet TestCampaign()
+        {
+            var set = ScriptableObject.CreateInstance<MapSet>();
+            set.Maps = new[] { GroundMap(), WideMap() };
+            return set;
+        }
+
+        /// <summary>32x20, rock and water painted, a void corner, one circle vein, one door and one wave
+        /// that never arrives: the tests place their own belt, turret and enemy on it.</summary>
+        private static MapAsset GroundMap()
+        {
+            var map = ScriptableObject.CreateInstance<MapAsset>();
+            map.Name = "test ground";
+            map.Width = 32;
+            map.Height = 20;
+            map.StartCircles = 80;
+            map.Terrain = TerrainLayout.Rects(32, 20,
+                new TerrainRect(new Int2(2, 2), 6, 4, TerrainKind.Rock),
+                new TerrainRect(new Int2(20, 12), 4, 4, TerrainKind.Water),
+                new TerrainRect(new Int2(30, 18), 2, 2, TerrainKind.Void));
+            map.Ore = new[] { new MapAsset.OreCell { Cell = new Vector2Int(6, 12), Shape = ShapeType.Circle } };
+            map.SpawnPoints = new[] { new Vector2Int(2, 18) };
+            map.Waves = new[] { OneWave() };
+            return map;
+        }
+
+        /// <summary>The second map: 48x12, plain ground and a door of its own, so the world the driver
+        /// builds next is a different shape from the one it opened on.</summary>
+        private static MapAsset WideMap()
+        {
+            var map = ScriptableObject.CreateInstance<MapAsset>();
+            map.Name = "test wide";
+            map.Width = 48;
+            map.Height = 12;
+            map.StartCircles = 80;
+            map.SpawnPoints = new[] { new Vector2Int(45, 2) };
+            map.Waves = new[] { OneWave() };
+            return map;
+        }
+
+        private static MapAsset.WaveRow OneWave()
+            => new MapAsset.WaveRow
+            {
+                Intermission = 60f,
+                Groups = new[]
+                {
+                    new MapAsset.SpawnGroupRow
+                    {
+                        Kind = EnemyKind.Spike, Count = 2, SpawnPoint = 0, FirstDelay = 0f, Interval = 2f,
+                    },
+                },
+            };
 
         /// <summary>
         /// The one thing that has no fallback. A missing Palette falls back to the code defaults and says so;
@@ -252,7 +320,8 @@ namespace Facet.PlayTests
             Assert.AreEqual(0, driver.Campaign.MapIndex, "the driver opens on the first map");
 
             yield return null;
-            Assert.AreEqual(GridVertices(driver.Catalog.At(0)), Vertices("Grid"), "the ground is map 1's");
+            Vector3 mapOneSpan = GridSpan();
+            Assert.Greater(Vertices("Grid"), 0, "the ground is drawn for the first map");
 
             driver.Campaign.EnterNext();
             driver.LoadMap();
@@ -264,8 +333,17 @@ namespace Facet.PlayTests
             Assert.AreEqual(0, driver.World.TickCount, "and as a fresh run");
             Assert.AreEqual(GameStatus.Playing, driver.World.Status);
 
-            Assert.AreEqual(GridVertices(driver.Catalog.At(1)), Vertices("Grid"),
-                "the ground was rebound to the new map's tile grid");
+            // The ground follows the world the driver swapped in. The fixture's two maps are different
+            // sizes, so a mesh left at the extent it opened on cannot pass this: it has to span the new
+            // map's own tile grid, bar the half-line width the frame draws past each edge.
+            Vector3 mapTwoSpan = GridSpan();
+            Assert.Greater(mapTwoSpan.x, mapOneSpan.x,
+                "the ground was rebound to the wider map, not left at the extent it opened on");
+            Assert.AreEqual(driver.World.TileGrid.Width, mapTwoSpan.x, 0.25f,
+                "and it spans the new map's width");
+            Assert.AreEqual(driver.World.TileGrid.Height, mapTwoSpan.y, 0.25f,
+                "and its height");
+            Assert.Greater(Vertices("Grid"), 0, "and the new grid is drawn");
             Assert.Greater(Vertices("Enemies"), 0, "and the new map's entry points are drawn");
 
             int ticks = driver.World.TickCount;
@@ -312,69 +390,19 @@ namespace Facet.PlayTests
         /// A map with a ground of its own: rock, water and the void a map is shaped by have to reach the
         /// screen, and the ground view has to keep drawing the tiles they sit on.
         ///
-        /// The two shipped maps are plain ground, so the terrain view draws nothing at all on them - which
-        /// is itself worth pinning, because "no obstacles" has to cost no geometry rather than a mesh
-        /// full of nothing. The campaign's first map that states terrain is found by asking the data, so
-        /// adding a fourth map does not quietly turn this into a test of map 3.
+        /// The fixture's first map is the specimen - its rock and water reach the screen as terrain
+        /// geometry, over the grid that draws the ground every tile stands on. The claim that a
+        /// map with nothing on it costs no geometry at all is pinned in EditMode
+        /// (<see cref="Facet.Tests.TerrainRendererTests"/>), where a plain map can be built to measure.
         /// </summary>
         [UnityTest]
         public IEnumerator AMapWithItsOwnGround_DrawsIt()
         {
             yield return null;
 
-            var driver = _driverObject.GetComponent<SimulationDriver>();
-            Assert.AreEqual(0, Vertices("Terrain"), "the first map is plain ground, so there is nothing to draw");
-
-            int terrainMap = -1;
-            for (int i = 0; i < driver.Catalog.Count; i++)
-            {
-                if (!HasAnObstacle(driver.Catalog.At(i))) continue;
-                terrainMap = i;
-                break;
-            }
-
-            Assert.GreaterOrEqual(terrainMap, 0, "the campaign has a map with a ground of its own");
-            while (driver.Campaign.MapIndex < terrainMap) driver.Campaign.EnterNext();
-
-            driver.LoadMap();
-            yield return null;
-            yield return null;
-
-            Assert.AreEqual(driver.Catalog.At(terrainMap).Name, driver.World.Map.Name);
-            Assert.Greater(Vertices("Terrain"), 0, "the rock and the water are drawn");
+            Assert.Greater(Vertices("Terrain"), 0, "the map's own rock and water are drawn");
             Assert.Greater(Vertices("Grid"), 0, "and the ground they stand on is still drawn under them");
         }
-
-        /// <summary>
-        /// Whether a map's ground has anything in it that is neither buildable nor a vein. Asked by kind
-        /// rather than by "does it carry a terrain array at all", because an authored map carries one as
-        /// soon as it has a vein - the array is the ground of every cell, and a vein is a kind of ground -
-        /// so the array's existence says nothing about whether there is rock to draw.
-        ///
-        /// What "anything" means is <see cref="TerrainKindExtensions.IsObstacle"/> - the rock/water/void
-        /// rule Core already owns, the one the read cursor and the build rules ask - so a new kind of
-        /// obstacle ground is a change there, not here.
-        /// </summary>
-        private static bool HasAnObstacle(MapDefinition map)
-        {
-            if (map.Terrain == null) return false;
-
-            for (int i = 0; i < map.Terrain.Length; i++)
-            {
-                if (map.Terrain[i].IsObstacle()) return true;
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// The grid view's vertex count for a map that is plain ground everywhere, which the first two maps
-        /// are: one ground quad per row, plus a line quad per grid line - W+1 vertical and H+1
-        /// horizontal. A map with terrain in it draws fewer of both, because a run of void is not filled
-        /// and a boundary with no ground on either side is not lined, so this helper is only honest for a
-        /// map whose whole rectangle is ground.
-        /// </summary>
-        private static int GridVertices(MapDefinition map) => 4 * (map.Width + 2 * map.Height + 2);
 
         private int Vertices(string viewName)
         {
@@ -386,6 +414,19 @@ namespace Facet.PlayTests
             Assert.IsNotNull(filter.sharedMesh, viewName + " has no mesh");
 
             return filter.sharedMesh.vertexCount;
+        }
+
+        /// <summary>The world-unit span of the grid mesh's bounds - the extent the ground view
+        /// actually covers, which is what proves a rebinding read the new map's tile grid.</summary>
+        private Vector3 GridSpan()
+        {
+            Transform view = _driverObject.transform.Find("Grid");
+            Assert.IsNotNull(view, "no Grid view");
+            var filter = view.GetComponent<MeshFilter>();
+            Assert.IsNotNull(filter, "Grid has no mesh filter");
+            Assert.IsNotNull(filter.sharedMesh, "Grid has no mesh");
+
+            return filter.sharedMesh.bounds.size;
         }
     }
 }

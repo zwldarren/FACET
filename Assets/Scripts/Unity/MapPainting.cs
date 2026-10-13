@@ -35,10 +35,11 @@ namespace Facet.Game
     /// Two rules run through every call. A brush writes only inside the map: the ground brushes are
     /// bounded by the asset itself, and the two placements are bounded by the asset's own structural
     /// edits, which answer "changed" - a stroke dragged off the edge places nothing rather than a door
-    /// the wave table could name and no wave could reach. And a vein is written as one call -
-    /// <c>PaintOre</c> writes the ground and the mineral together - because a mineral with plain ground
-    /// under it, or a vein cell with no mineral, is the pair of states the map's own conversion would
-    /// have to paper over.
+    /// the wave table could name and no wave could reach. And a vein is written in one place: its
+    /// mineral's name goes into the asset's ore list through <c>PaintOre</c>, and the ground under it
+    /// stays plain, because the ore list is what the conversion claims cells from. So the two states a
+    /// half-write can leave a map in - an ore tile nothing can mine, and a mineral the list does not
+    /// name - are the ones no brush here can reach.
     /// </summary>
     public static class MapPainting
     {
@@ -89,9 +90,9 @@ namespace Facet.Game
 
         /// <summary>
         /// The ground a ground brush paints. Ore is not here: a vein is painted by its mineral's name,
-        /// through <see cref="MapAsset.PaintOre"/>, so that the ground and the mineral are written
-        /// together. A brush that is not a ground brush answers plain ground, which is the only thing a
-        /// caller that asked anyway could use - <see cref="Fill"/> refuses those brushes outright.
+        /// through <see cref="MapAsset.PaintOre"/>, which writes the list entry a vein is and leaves the
+        /// ground plain. A brush that is not a ground brush answers plain ground, which is the only thing
+        /// a caller that asked anyway could use - <see cref="Fill"/> refuses those brushes outright.
         /// </summary>
         public static TerrainKind GroundOf(MapBrush brush)
         {

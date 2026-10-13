@@ -137,23 +137,17 @@ namespace Facet.Tests
         [Test]
         public void AWave_ReportsItsStart_ItsClear_AndTheRunEnding_ExactlyOnceEach()
         {
-            // The reference winning run from ScenarioTests, with the stream drained every tick so the
-            // buffer's bound can never confuse the count. Every wave that started must have been
-            // cleared, and a won run reports its win once - not once per tick after it.
-            SimWorld world = Sim.NewWorld();
-            Sim.BuildMapOneEconomyLine(world);
-            Sim.TickUntilFunded(world, world.Content.Machine(BuildKind.Drill).Cost
-                + world.Content.Machine(BuildKind.Decomposer).Cost
-                + world.Content.Machine(BuildKind.Pipe).Cost
-                + world.Content.Machine(BuildKind.Cannon).Cost + 26);
-            Sim.BuildMapOneDefence(world, out _, out _);
-            Sim.Tick(world, (int)(35 * SimConfig.TickRate));
+            // The one-wave rig, with the stream drained every tick so the buffer's bound can never
+            // confuse the count. The wave that started must have been cleared, and a won run reports
+            // its win once - not once per tick after it.
+            SimWorld world = Sim.OneWaveWorld();
 
             int started = 0, cleared = 0, won = 0, lost = 0;
-            for (int i = 0; i < 180 * SimConfig.TickRate && world.Status == GameStatus.Playing; i++)
+            for (int i = 0; i < 60 * SimConfig.TickRate && world.Status == GameStatus.Playing; i++)
             {
                 world.Events.Clear();
                 if (world.Waves.HasWaveToStart) world.Waves.StartNextWave();
+                Sim.FeedOneWaveGun(world);
                 world.Tick(InputCommand.None);
 
                 started += world.Events.CountOf(SimEventKind.WaveStarted);

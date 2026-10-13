@@ -13,7 +13,7 @@ namespace Facet.Tests
     /// and the sink would eat the very items the test is counting.
     ///
     /// The shipped filter is a circle, so these tests read as "money goes where it faces, ammo carries
-    /// on" - the split map 1 wants.
+    /// on" - the split any map with a line to the Core wants.
     /// </summary>
     public class SorterTests
     {

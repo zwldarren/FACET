@@ -79,12 +79,13 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void Stroke_Ore_WritesTheGroundAndTheMineralTogether()
+        public void Stroke_Ore_WritesTheMineralAndLeavesTheGroundPlain()
         {
             MapPainting.Stroke(_asset, MapBrush.Ore, ShapeType.HalfSquare, 1, 1, erase: false);
 
-            Assert.AreEqual(TerrainKind.Ore, _asset.TerrainAt(1, 1), "a vein is ore ground");
-            Assert.AreEqual(1, _asset.Ore.Length, "with the mineral written down beside it");
+            Assert.AreEqual(1, _asset.Ore.Length, "a vein is the mineral written down");
+            Assert.AreEqual(TerrainKind.Ground, _asset.TerrainAt(1, 1),
+                "and the ground under it stays plain: one place a vein exists");
 
             ShapePatch patch = _asset.ToCore().Patches[0];
             Assert.AreEqual(ShapeType.HalfSquare, patch.Shape, "and the conversion reads the mineral back");

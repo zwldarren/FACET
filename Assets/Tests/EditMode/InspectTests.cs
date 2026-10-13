@@ -93,7 +93,7 @@ namespace Facet.Tests
         [Test]
         public void ClickingAnEntryPoint_PinsIt()
         {
-            SimWorld world = Sim.NewWorld();   // the real map, with its doorways
+            SimWorld world = Sim.Rig();   // a map with a doorway on it
             Int2 door = world.Map.SpawnPoints[0];
 
             Assert.IsFalse(world.Machines.Has(door), "a doorway is bare ground otherwise");

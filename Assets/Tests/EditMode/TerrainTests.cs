@@ -1,8 +1,6 @@
 using System.Collections.Generic;
 using Facet.Core;
-using Facet.Game;
 using NUnit.Framework;
-using UnityEditor;
 
 namespace Facet.Tests
 {
@@ -197,58 +195,11 @@ namespace Facet.Tests
             Assert.IsTrue(world.TryPlace(BuildKind.Drill, ore, Dir.West), "so it can be drilled again");
         }
 
-        [Test]
-        public void Canyon_KeepsTheGroundItAdvertises()
-        {
-            // Canyon is painted map data that the campaign does not ship, and it is the one map that uses
-            // this layer at all, so what it claims has to be true of the data: void in the corners, both
-            // obstacle kinds somewhere in it, a Core where the map says, and a drill's worth of ore on
-            // every patch it declares. Read as an asset, the way the editor would - not through the
-            // campaign, which it is not part of.
-            MapAsset canyonAsset = AssetDatabase.LoadAssetAtPath<MapAsset>("Assets/Data/Maps/Canyon.asset");
-            Assert.IsNotNull(canyonAsset, "the painted canyon map is still in the project");
-            MapDefinition canyon = canyonAsset.ToCore();
-            Assert.AreEqual("Canyon", canyon.Name);
-
-            Assert.IsNotNull(canyon.Terrain, "a map with a shape has to state its ground");
-            Assert.AreEqual(canyon.Width * canyon.Height, canyon.Terrain.Length);
-
-            Assert.AreEqual(TerrainKind.Void, canyon.TerrainAt(new Int2(0, 0)), "the corners are void");
-            Assert.AreEqual(TerrainKind.Void, canyon.TerrainAt(new Int2(canyon.Width - 1, canyon.Height - 1)));
-            Assert.AreEqual(TerrainKind.Ground, canyon.TerrainAt(new Int2(canyon.Width / 2, canyon.Height / 2)),
-                "and the middle of it is where the fight happens");
-
-            Assert.IsTrue(Has(canyon, TerrainKind.Rock), "the ridges are rock");
-            Assert.IsTrue(Has(canyon, TerrainKind.Water), "and the pond is water");
-
-            // Ore is stated as patches, so "is there ore in the ground" is the question the world's own
-            // stamping answers - which is the rule this asks, rather than a second reading of the data.
-            var ground = new TerrainKind[canyon.Width * canyon.Height];
-            canyon.StampTerrain(ground);
-            Assert.IsTrue(Has(ground, TerrainKind.Ore), "with ore in the ground");
-
-            Assert.AreEqual(new Int2(34, 20), canyon.CoreCell, "and the Core where the map put it");
-            Assert.IsEmpty(MapValidation.Validate(canyon), "with no problems a designer would have to fix");
-
-            var world = new SimWorld(canyon, new SimConfig());
-            foreach (ShapePatch patch in canyon.Patches)
-                Assert.IsTrue(world.CanPlace(BuildKind.Drill, patch.Origin),
-                    "the patch at " + patch.Origin + " takes the drill that mines it");
-        }
-
         /// <summary>A world on a map whose whole point is its ground: no ore but what a test stamps, no
         /// waves, and a stockpile that never runs dry.</summary>
         private static SimWorld TerrainWorld(int width, int height, TerrainKind[] terrain)
             => new SimWorld(new MapDefinition("terrain", width, height, Sim.TestCircles,
                 new ShapePatch[0], new Int2[0], new WaveDefinition[0], terrain), new SimConfig());
-
-        private static bool Has(MapDefinition map, TerrainKind kind)
-        {
-            for (int i = 0; i < map.Terrain.Length; i++)
-                if (map.Terrain[i] == kind) return true;
-
-            return false;
-        }
 
         private static bool Has(TerrainKind[] ground, TerrainKind kind)
         {

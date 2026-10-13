@@ -28,8 +28,9 @@ namespace Facet.Game
     /// out its terrain array or otherwise touches it. A validation run inside a repaint pass used to
     /// normalize the asset as a side effect - a mutation with no Undo entry and no dirty flag, which is
     /// an interface fact absent from its signature. Repair happens where repair belongs:
-    /// <see cref="OnValidate"/> normalizes on import, and every write below keeps the arrays it writes in
-    /// step as part of writing.
+    /// <see cref="OnValidate"/> normalizes on import, and every write below is the whole of what it
+    /// writes: a stroke lays down the ground it names and takes any mineral with it, and
+    /// <see cref="PaintOre"/> writes the one place a vein lives.
     ///
     /// <b>Edits answer "changed".</b> The lists - doors, waves, groups, the Core cell, the size - are
     /// edited through the operations at the bottom of this file, each of which checks, writes, and says
@@ -66,7 +67,9 @@ namespace Facet.Game
         [Serializable]
         public sealed class WaveRow
         {
-            [Tooltip("Seconds before this wave. Unread for the first wave, which waits for the player.")]
+            [Tooltip("Seconds before this wave. It starts itself when it runs out; N starts it early. " +
+                "The first wave wants the longest countdown on the table, and its clock starts with the " +
+                "player's first building rather than with the run.")]
             public float Intermission = 30f;
             public SpawnGroupRow[] Groups = new SpawnGroupRow[0];
 
@@ -109,11 +112,12 @@ namespace Facet.Game
 
         [Header("Ground")]
         [Tooltip("Row-major (y * Width + x), Width * Height long. Written by the paint operations; " +
-            "a map with no obstacles at all may leave it all Ground.")]
+            "a map with no obstacles at all may leave it all Ground. Never Ore: a vein is the Ore " +
+            "list's entry, and the ground under one is plain.")]
         public TerrainKind[] Terrain = new TerrainKind[0];
 
-        [Tooltip("Painted veins. A cell here is painted ground too - the conversion writes the ore into " +
-            "the terrain array and the mineral into the patch list, so the two cannot disagree.")]
+        [Tooltip("Painted veins, one entry per cell: the only place a vein is written down. The first " +
+            "entry for a cell is the one that counts, and the terrain array under it stays plain.")]
         public OreCell[] Ore = new OreCell[0];
 
         [Header("Doors and waves")]
@@ -127,8 +131,11 @@ namespace Facet.Game
         /// disagreement no test would think to look for.</summary>
         public bool InBounds(int x, int y) => x >= 0 && y >= 0 && x < Width && y < Height;
 
-        /// <summary>The ground at a cell, with a cell outside the array reading as plain ground - so a
-        /// half-edited asset is still paintable rather than throwing in the window's draw loop.</summary>
+        /// <summary>The ground this asset's array states at a cell, with a cell outside the array reading
+        /// as plain ground - so a half-edited asset is still paintable rather than throwing in the
+        /// window's draw loop. A vein is not read from here: it is <see cref="Ore"/>'s entry, and
+        /// <see cref="ToCore"/> hands the runtime a map whose patches claim those cells as ore whatever
+        /// this array says. An ore value here is a map <see cref="MapValidation"/> reports.</summary>
         public TerrainKind TerrainAt(int x, int y)
         {
             if (!InBounds(x, y) || Terrain == null) return TerrainKind.Ground;
@@ -146,23 +153,29 @@ namespace Facet.Game
 
             Terrain[y * Width + x] = kind;
 
-            // Ground that stops being ore stops yielding: a vein cell keeps its mineral only while it
-            // is a vein, which is what stops a rock painted over a patch from leaving a mineral behind
-            // that the map does not show.
+            // Any ground that is not ore takes the mineral with it: a vein cell keeps its mineral only
+            // while it is a vein, which is what stops a rock painted over a patch from leaving a mineral
+            // behind that the map does not show. Ore is not painted through here - PaintOre is the one
+            // writer of a vein, and it writes the list entry rather than this array.
             if (kind != TerrainKind.Ore) RemoveOreAt(new Vector2Int(x, y));
         }
 
-        /// <summary>Paint one ore tile with its mineral: the ground becomes ore and the mineral is
-        /// recorded in the same call, so the two halves of a vein cannot drift apart. Inside a batch
+        /// <summary>
+        /// Paint one ore tile with its mineral. The vein is the entry in <see cref="Ore"/> and the ground
+        /// under it is written plain: one place a vein exists, so there is no second half to leave behind,
+        /// and the array never holds an ore tile that yields nothing. Inside a batch
         /// (<see cref="BeginBatch"/>) the append lands on the batch's buffer instead of the array,
-        /// which is written back once at <see cref="EndBatch"/>.</summary>
+        /// which is written back once at <see cref="EndBatch"/>.
+        /// </summary>
         public void PaintOre(int x, int y, ShapeType shape)
         {
             if (!InBounds(x, y) || !shape.IsShape()) return;
 
-            Paint(x, y, TerrainKind.Ore);
             var cell = new Vector2Int(x, y);
-            RemoveOreAt(cell);
+
+            // Plain ground, which is also what takes any earlier mineral at this cell away: a vein is
+            // repainted to change its mineral, not to stack a second one beside it.
+            Paint(x, y, TerrainKind.Ground);
 
             if (_batch != null)
             {
@@ -265,11 +278,35 @@ namespace Facet.Game
                 coreCell: CoreCell.x < 0 || CoreCell.y < 0 ? (Int2?)null : new Int2(CoreCell.x, CoreCell.y));
         }
 
-        /// <summary>Everything wrong with this map, as the simulation would read it. What the editor
-        /// window shows and what the test suite asserts on: one rule, one answer - and a pure one,
-        /// because this runs inside a repaint pass, and a question that resized the asset on its way
-        /// through <see cref="ToCore"/> was a mutation with no Undo and no dirty.</summary>
-        public List<MapProblem> Validate() => MapValidation.Validate(ToCore());
+        /// <summary>
+        /// Everything wrong with this map, as the simulation would read it. What the editor window shows
+        /// and what the test suite asserts on: one rule, one answer - and a pure one, because this runs
+        /// inside a repaint pass, and a question that resized the asset on its way through
+        /// <see cref="ToCore"/> was a mutation with no Undo and no dirty.
+        ///
+        /// The ore list's own rule is added here rather than in <see cref="MapValidation"/>, which judges
+        /// a <see cref="MapDefinition"/>: the conversion takes a cell's first entry and drops the rest, so
+        /// a second entry for one cell is invisible by the time the runtime form exists. It is a fact
+        /// about the list as written down, and this is where the list is.
+        /// </summary>
+        public List<MapProblem> Validate()
+        {
+            List<MapProblem> problems = MapValidation.Validate(ToCore());
+            var seen = new HashSet<Vector2Int>();
+
+            if (Ore != null)
+                for (int i = 0; i < Ore.Length; i++)
+                {
+                    Vector2Int cell = Ore[i].Cell;
+                    if (seen.Add(cell)) continue;
+
+                    problems.Add(new MapProblem(MapProblemKind.DuplicateOre, new Int2(cell.x, cell.y),
+                        Name + ": the ore list names (" + cell.x + "," + cell.y + ") more than once, and " +
+                        "only the first entry counts - the mineral named after it is ignored"));
+                }
+
+            return problems;
+        }
 
         /// <summary>
         /// The one canonical walk of what this map <em>draws</em>: the ground and the mineral of every

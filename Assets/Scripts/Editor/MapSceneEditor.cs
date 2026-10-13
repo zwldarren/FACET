@@ -173,9 +173,13 @@ namespace Facet.EditorTools
                 return;
             }
 
-            // A view tool is the view's own: the hand and the orbit win over the brush, which is also a way
-            // out of a brush that is in the way.
-            if (Tools.viewTool != ViewTool.None)
+            // The tool in hand is the view's own: the hand wins over the brush, which is also a way out of
+            // a brush that is in the way. What is asked here is which tool is *in hand* - Tools.current,
+            // the same answer the tool strip highlights. Tools.viewTool is a different question: it says
+            // which option the View tool is set to - pan, orbit, zoom, FPS - and Unity can leave that
+            // answered while the hand is away, which left a designer whose strip said Move with a brush
+            // that refused every click, and an overlay blaming a tool that was not in hand.
+            if (Tools.current == Tool.View)
             {
                 EndStroke();
                 return;
@@ -402,7 +406,7 @@ namespace Facet.EditorTools
         private static string Hint(SceneView view)
         {
             if (!view.orthographic) return "the map draws in 2D only - press Focus";
-            if (Tools.viewTool != ViewTool.None) return "a view tool is in hand - the brush is off";
+            if (Tools.current == Tool.View) return "the hand tool is in hand - the brush is off";
 
             return "L-drag paints, Shift+L-drag erases, Esc leaves";
         }

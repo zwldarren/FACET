@@ -42,5 +42,39 @@ namespace Facet.Core
 
         /// <summary>Shots that do not match the enemy's weakness deal reduced damage.</summary>
         public const float ResistantDamageMultiplier = 0.25f;
+
+        /// <summary>
+        /// The extra cost of walking one cell under a standing turret's fire, in the flow field's own
+        /// units - a step's cost is 1, so this is the exchange rate between a covered cell and an open
+        /// one: one for one.
+        ///
+        /// One is what keeps the two behaviours the field has to show on the right sides of the detour
+        /// rule (<see cref="PathDetourFactor"/>): a wave will not walk far out of its way to dodge a
+        /// gun it could simply overrun, but a corridor swept along its whole length is flanked for the
+        /// open approach beside it, because twenty covered cells saved are worth the twelve steps the
+        /// swing costs. That is the reading a defence should get - cover the whole approach, or accept
+        /// that the wave finds the lane you did not.
+        /// </summary>
+        public const int PathThreatWeight = 1;
+
+        /// <summary>
+        /// How much cheaper than the covered way a flanking route has to be before the wave takes it:
+        /// the open way is worth the swing while its threat-weighted cost undercuts what the plain
+        /// shortest way would itself pay under fire by this share, plus <see cref="PathDetourSlack"/>
+        /// steps of slop. Past that, the wave overruns the fire instead - the Core has to be reached,
+        /// and a defence that covers every approach is crossed precisely because there is no way
+        /// around it.
+        ///
+        /// 0.8 and 2 are the pair that separates the two cases the rule exists for: a skirt that saves
+        /// two steps around a lone gun's edge pays about what it saves and is overrun, while a gauntlet
+        /// swept end to end beside an open parallel corridor - half again the price - is flanked. At
+        /// 1.0 the skirt is taken too, and a lone gun beside the lane stops mattering; at 0.5 even the
+        /// honest flank is refused, and the avoidance never shows.
+        /// </summary>
+        public const float PathDetourFactor = 0.8f;
+
+        /// <summary>The flat slop, in plain steps, added to the flanking budget: a wave does not count
+        /// pennies. See <see cref="PathDetourFactor"/>.</summary>
+        public const float PathDetourSlack = 2f;
     }
 }

@@ -119,7 +119,10 @@ namespace Facet.Core
         ///
         /// This is the map's terrain <em>array</em> as authored, and deliberately not the ground a world
         /// ends up with: a vein is stated as a patch, so a cell inside one is ore in the world whether or
-        /// not this says so. <see cref="StampTerrain"/> is the whole rule.</summary>
+        /// not this says so. Every writer in the game leaves the array plain under a vein - a vein is the
+        /// ore list's entry and nothing else - so an array that says ore is the one map error
+        /// <see cref="MapValidation"/> names rather than papers over. <see cref="StampTerrain"/> is the
+        /// whole rule.</summary>
         public TerrainKind TerrainAt(Int2 cell)
         {
             if (Terrain == null || cell.X < 0 || cell.Y < 0 || cell.X >= Width || cell.Y >= Height)
@@ -136,6 +139,17 @@ namespace Facet.Core
             => cell.X >= CoreCell.X && cell.Y >= CoreCell.Y &&
                cell.X < CoreCell.X + CoreState.Size && cell.Y < CoreCell.Y + CoreState.Size;
 
+        /// <summary>True where a shape patch covers a cell, the Core's tiles included. The one test of
+        /// "is there a vein here", so <see cref="AuthoredGroundAt"/> and <see cref="MapValidation"/>'s
+        /// ore rule cannot come apart about it.</summary>
+        public bool PatchClaims(Int2 cell)
+        {
+            for (int p = 0; p < Patches.Length; p++)
+                if (Patches[p].Shape.IsShape() && Patches[p].Contains(cell)) return true;
+
+            return false;
+        }
+
         /// <summary>
         /// The ground this map's <em>data</em> states at one cell, the Core included: ore where a shape
         /// patch covers it, otherwise whatever its terrain array says.
@@ -149,12 +163,7 @@ namespace Facet.Core
         /// judges the map the author wrote, not the ground that was built.
         /// </summary>
         public TerrainKind AuthoredGroundAt(Int2 cell)
-        {
-            for (int p = 0; p < Patches.Length; p++)
-                if (Patches[p].Shape.IsShape() && Patches[p].Contains(cell)) return TerrainKind.Ore;
-
-            return TerrainAt(cell);
-        }
+            => PatchClaims(cell) ? TerrainKind.Ore : TerrainAt(cell);
 
         /// <summary>
         /// Write this map's ground into a cell array of <c>Width * Height</c>, row-major: what the world
@@ -171,9 +180,11 @@ namespace Facet.Core
         ///   * the terrain array paints what nobody claimed, so a rock is likewise never quietly turned
         ///     into ore.
         ///
-        /// An overlap is a data error either way, and <see cref="MapValidation"/> is what reports it.
-        /// The ordering itself is not re-stated by its readers: <see cref="AuthoredGroundAt"/> is this
-        /// precedence asked about a single tile, the one other place the question exists.
+        /// An array that states ore at all is a map no writer in the game produces, and
+        /// <see cref="MapValidation"/> is what reports it - with or without a patch on the same cell, so
+        /// neither half of a vein can be written alone without being named.
+        /// The ordering itself is not re-stated by its readers: <see cref="PatchClaims"/> is this
+        /// precedence's one test, and <see cref="AuthoredGroundAt"/> asks it, as does the validator.
         /// <paramref name="shape"/> is optional and receives the mineral of every ore cell, for the
         /// caller that also needs what a vein yields.
         /// </summary>

@@ -98,7 +98,7 @@ namespace Facet.Tests
             // The exploit this rule exists for: plug the wave's door with a wall and every enemy spawns
             // inside the wall - and a wave held at its door by two circles of wall is a wave the player
             // never has to fight. The map's door is not the player's tile.
-            SimWorld world = Sim.NewWorld();                       // the real map, with its doors
+            SimWorld world = Sim.Rig();                            // a map with a door on it
             Int2 door = world.Map.SpawnPoints[0];
 
             Assert.IsFalse(world.CanPlace(BuildKind.Wall, door), "the door stays open");
@@ -119,9 +119,13 @@ namespace Facet.Tests
             Assert.IsTrue(world.CanPlaceBelt(door), "a belt over a door blocks nothing");
             Assert.IsTrue(world.TryPlaceBelt(door, Dir.East));
 
-            // And the wave that walks in there still walks in: the door was never plugged.
+            // And the wave that walks in there still walks in: the door was never plugged. The walk down
+            // the corridor to the Core is the rig's own, so this waits on the Core's first hit instead of
+            // on a stopwatch - two minutes, which is longer than the walk and the wave's own schedule
+            // together.
             world.Waves.StartNextWave();
-            Sim.Tick(world, 30 * 30);
+            for (int i = 0; i < 120 * SimConfig.TickRate && world.Events.CountOf(SimEventKind.CoreDamaged) == 0; i++)
+                world.Tick(InputCommand.None);
 
             Assert.Greater(world.Enemies.AliveCount, 0, "the wave walked in");
             Assert.Greater(world.Events.CountOf(SimEventKind.CoreDamaged), 0,
@@ -135,7 +139,7 @@ namespace Facet.Tests
             // has to name the rule the placement actually failed on - the doorway, which CanPlace reads
             // before it ever reads the tile - because a toast naming the belt would send the player off to
             // clear a tile a machine may not stand on even when it is clear.
-            SimWorld world = Sim.NewWorld();
+            SimWorld world = Sim.Rig();
             Int2 door = world.Map.SpawnPoints[0];
             Assert.IsTrue(world.TryPlaceBelt(door, Dir.East), "a belt is walkable: it may cross a door");
 

@@ -29,7 +29,7 @@ namespace Facet.Tests
             new Vector2(800f, 600f),      // small and 4:3, to reach the bottom of the scale clamp
         };
 
-        /// <summary>Map 1 and map 2, as (width, height).</summary>
+        /// <summary>Two map sizes to clamp against: one wider than a 1080p screen and one narrower.</summary>
         private static readonly Vector2[] Maps = { new Vector2(80f, 48f), new Vector2(64f, 40f) };
 
         /// <summary>The rig's zoom range, plus the scene's default in the middle.</summary>

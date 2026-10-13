@@ -37,7 +37,7 @@ namespace Facet.Tests
         [Test]
         public void TheShippedSorter_SendsCirclesTheWayItFaces()
         {
-            // The shipped filter is the money shape, which is the split map 1 wants: face the Core
+            // The shipped filter is the money shape, which is the split an opening wants: face the Core
             // and the circles bank while everything else carries on down the line.
             MachineDef sorter = Content.Machine(BuildKind.Sorter);
 

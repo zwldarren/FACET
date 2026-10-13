@@ -45,6 +45,13 @@ namespace Facet.Core
 
         /// <summary>A wave with no enemies in it: it can never be cleared.</summary>
         WaveWithoutEnemies = 12,
+
+        /// <summary>The terrain array stating ore, which no writer in the game does: a vein is the ore
+        /// list's entry, and the ground under one is plain.</summary>
+        OreInTerrain = 13,
+
+        /// <summary>Two ore entries naming one cell, of which only the first one counts.</summary>
+        DuplicateOre = 14,
     }
 
     /// <summary>One problem found in a map, with the sentence a designer can act on.</summary>
@@ -111,6 +118,11 @@ namespace Facet.Core
             CheckPatches(map, into);
             CheckWaves(map, into);
             CheckTerrainSize(map, into);
+
+            // The array's own rule, asked with the cheap ones: it is about the data as written down, not
+            // about the ground a world would be built with, so a map whose Core does not fit still gets
+            // its half-written veins named.
+            CheckOreInTerrain(map, into);
 
             // Everything left is asked from the Core outwards, so a Core that does not fit is the one
             // problem worth reporting on its own: without seeds every cell reads as unreachable, and the
@@ -206,6 +218,35 @@ namespace Facet.Core
                     into.Add(new MapProblem(MapProblemKind.PatchOffMap, corner,
                         map.Name + ": a shape patch hangs off the map at " + corner));
                 }
+            }
+        }
+
+        /// <summary>
+        /// The terrain array stating ore, which is a map no writer in the game produces - the painting
+        /// surfaces write a vein as an ore-list entry and leave the ground under it plain, and the ore
+        /// list is what the conversion claims cells from. Two ways to get here, and both are worth
+        /// naming: with <em>no</em> vein listed at the cell the world still gets an ore tile, one that
+        /// only a drill may stand on and that yields nothing when it does; with a vein already listed
+        /// there, the byte says what the entry says and is the half-write that leaves an ore tile behind
+        /// the moment the entry is taken away by hand.
+        /// </summary>
+        private static void CheckOreInTerrain(MapDefinition map, List<MapProblem> into)
+        {
+            if (map.Terrain == null) return;
+
+            int cells = map.Width * map.Height;
+            for (int i = 0; i < map.Terrain.Length && i < cells; i++)
+            {
+                if (map.Terrain[i] != TerrainKind.Ore) continue;
+
+                var cell = new Int2(i % map.Width, i / map.Width);
+                string why = map.PatchClaims(cell)
+                    ? " as well as the vein listed there - a vein is the ore list's entry, and the ground " +
+                      "under one is plain"
+                    : " and no vein is listed there - a drill would stand on it and mine nothing";
+
+                into.Add(new MapProblem(MapProblemKind.OreInTerrain, cell,
+                    map.Name + ": the terrain array says Ore at " + cell + why));
             }
         }
 

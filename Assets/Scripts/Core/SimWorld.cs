@@ -118,7 +118,7 @@ namespace Facet.Core
             Terrain = new TerrainField(TileGrid);
             Belts = new BeltField(TileGrid, Terrain, Events);
             Machines = new MachineField(TileGrid, Terrain, Belts, Content, Events, Map);
-            _paths = new PathField(TileGrid, Terrain, Machines);
+            _paths = new PathField(TileGrid, Terrain, Machines, Content);
             Enemies = new EnemyField(Content, Events, TileGrid, Terrain, Machines, _paths);
             Projectiles = new ProjectileField();
             Waves = new WaveDirector(Enemies, map, Events);
@@ -168,6 +168,11 @@ namespace Facet.Core
             }
 
             _build.Apply(cmd);
+
+            // The opening's countdown is the player's to start: it begins on the tick their first
+            // building lands, so planning costs nothing and building costs time. Say it every tick once
+            // they have built - the clock is what decides that only the first one means anything.
+            if (_build.HasBuilt) Waves.ArmFirstWave();
 
             Belts.Step(SimConfig.TickDt, Config.BeltSpeed);
             _machineSystem.Step(SimConfig.TickDt);

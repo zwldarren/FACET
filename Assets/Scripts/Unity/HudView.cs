@@ -442,10 +442,11 @@ namespace Facet.Game
             switch (waves.Phase)
             {
                 case WavePhase.Held:
-                    // The first wave has no countdown to print - no clock starts it, the player does - so
-                    // its slot says "ready" instead of "in 0s" and the button below is the invitation. The
-                    // wave line underneath names the key, and the panel is only so wide.
-                    return head + "  ·  wave 1 of " + waveCount + "  ·  ready";
+                    // The opening's clock has not been armed: it starts with the player's first building, so
+                    // its slot says "ready" rather than counting a number down - the number is waiting in the
+                    // table, and the wave line underneath says what starts it. The button below is the other
+                    // way to begin, for a player who wants the wave before they have built anything.
+                    return head + "  ·  wave " + waves.NextWave + " of " + waveCount + "  ·  ready";
                 case WavePhase.Intermission:
                     return head + "  ·  wave " + waves.NextWave + " of " + waveCount +
                            " in " + Mathf.CeilToInt(waves.IntermissionRemaining) + "s";
@@ -461,7 +462,8 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>The wave line and, during an intermission, the composition the player is building for.</summary>
+        /// <summary>The wave line and, while a wave waits for its clock, the composition the player is
+        /// building for.</summary>
         private string WaveLines()
         {
             if (_world.Status != GameStatus.Playing) return "press R to restart";
@@ -476,10 +478,13 @@ namespace Facet.Game
                 case WavePhase.Intermission:
                 {
                     string incoming = "incoming: " + Composition(waves.NextWaveDefinition);
-                    // The first wave arrives when the player calls it, so the line names the call.
+                    // The opening begins its countdown with the player's first building; every countdown after
+                    // it is already running. Either way the button below - or N - starts the wave now, while
+                    // the run is unpaused; paused, neither the key nor the button does anything.
+                    if (_world.Paused) return incoming;
                     return waves.Phase == WavePhase.Held
-                        ? incoming + "   ·   press N to start it"
-                        : incoming;
+                        ? incoming + "   ·   N starts it now, or build to start the countdown"
+                        : incoming + "   ·   press N to start it early";
                 }
 
                 case WavePhase.Running:

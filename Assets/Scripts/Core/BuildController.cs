@@ -59,6 +59,15 @@ namespace Facet.Core
         /// belt on the map to explain the silence.</summary>
         private bool _gestureLaid;
 
+        /// <summary>
+        /// Has the player placed anything at all this run? This is a rule's input, not telemetry: the
+        /// opening's countdown starts with the first building (<see cref="WaveDirector.ArmFirstWave"/>),
+        /// so a run where the player is still reading the map has no clock on it. Belts count - a belt is
+        /// something the player built, and waiting for a machine would leave the clock stopped while they
+        /// laid the line that machine was going to feed.
+        /// </summary>
+        public bool HasBuilt { get; private set; }
+
         public BuildKind? Selected { get; private set; }
 
         /// <summary>
@@ -111,6 +120,7 @@ namespace Facet.Core
             _dragCellIsOurs = false;
             _lastRemovedCell = NoCell;
             _gestureLaid = false;
+            HasBuilt = false;
         }
 
         /// <summary>Would a placement of this kind be allowed here? Structural only - whether the
@@ -140,6 +150,7 @@ namespace Facet.Core
             }
 
             _events.Built(cell, _economy.CostOf(kind));
+            HasBuilt = true;
             return true;
         }
 

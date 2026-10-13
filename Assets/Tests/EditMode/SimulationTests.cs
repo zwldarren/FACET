@@ -19,14 +19,21 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void Core_SitsAtTheMapCentre_AtFullHealth_AndIsNotBuildable()
+        public void Core_StandsWhereTheMapSays_AtFullHealth_AndIsNotBuildable()
         {
-            SimWorld world = Sim.NewWorld();
-            float mapCentreX = world.TileGrid.Width * 0.5f;
-            float mapCentreY = world.TileGrid.Height * 0.5f;
+            // The Core used to be the map's dead centre, and every map that existed then was small and
+            // square enough for that to be the same thing. A map now names the tile its Core stands on -
+            // the rig puts it at (4,6) of a 16x22 map, which is a place the map's own middle is not - so
+            // what this asks is that the world builds the Core where the map put it, and not that the map
+            // put it in the middle.
+            SimWorld world = Sim.Rig();
+            Int2 footprint = world.Map.CoreCell;
+            float centreX = footprint.X + CoreState.Size * 0.5f;
+            float centreY = footprint.Y + CoreState.Size * 0.5f;
 
-            Assert.AreEqual(mapCentreX, world.Core.Center.X, Sim.Tol, "the Core is the defended object, dead centre");
-            Assert.AreEqual(mapCentreY, world.Core.Center.Y, Sim.Tol);
+            Assert.AreEqual(footprint, world.Core.Cell, "the Core stands where the map says it does");
+            Assert.AreEqual(centreX, world.Core.Center.X, Sim.Tol, "and is the defended object, whatever it is centred on");
+            Assert.AreEqual(centreY, world.Core.Center.Y, Sim.Tol);
             Assert.AreEqual(world.Config.CoreMaxHp, world.Core.Hp, Sim.Tol);
             Assert.AreEqual(1f, world.Core.HealthFraction, Sim.Tol);
             Assert.IsTrue(world.Core.Alive);
@@ -48,7 +55,7 @@ namespace Facet.Tests
         [Test]
         public void PausedWorld_DoesNotAdvance()
         {
-            SimWorld world = Sim.NewWorld();
+            SimWorld world = Sim.Rig();
             int ticks = world.TickCount;
 
             world.Paused = true;
@@ -64,7 +71,7 @@ namespace Facet.Tests
             // while the world is held. Selection is not a world change - it is the one input the
             // paused branch of the tick still applies - which is what keeps the highlighted tile
             // following the click instead of freezing the moment the game does.
-            SimWorld world = Sim.NewWorld();
+            SimWorld world = Sim.Rig();
 
             world.Paused = true;
             world.Tick(new InputCommand(selected: BuildKind.Mortar));

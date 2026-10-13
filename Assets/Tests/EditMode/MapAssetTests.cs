@@ -124,7 +124,10 @@ namespace Facet.Tests
             _asset.PaintOre(3, 3, ShapeType.Circle);
 
             MapDefinition painted = _asset.ToCore();
-            Assert.AreEqual(TerrainKind.Ore, painted.TerrainAt(new Int2(3, 3)));
+            Assert.AreEqual(TerrainKind.Ground, painted.TerrainAt(new Int2(3, 3)),
+                "the array under a vein is plain");
+            Assert.AreEqual(TerrainKind.Ore, painted.AuthoredGroundAt(new Int2(3, 3)),
+                "and the vein is the patch the list turned into");
             Assert.AreEqual(1, painted.Patches.Length);
             Assert.AreEqual(ShapeType.Circle, painted.Patches[0].Shape);
 
@@ -146,6 +149,46 @@ namespace Facet.Tests
 
             Assert.AreEqual(1, _asset.Ore.Length);
             Assert.AreEqual(ShapeType.Square, _asset.Ore[0].Shape);
+            Assert.AreEqual(TerrainKind.Ground, _asset.TerrainAt(3, 3),
+                "and the ground under it is still plain: a vein is the one entry");
+        }
+
+        [Test]
+        public void Validate_AVeinWrittenByTheBrush_IsNotAProblem()
+        {
+            // The two rules the writer exists to keep: the array never says ore, and the list never
+            // names a cell twice. A brush stroke that broke either would be a map error no designer
+            // could see - so the same call that paints is held to them.
+            _asset.PaintOre(7, 7, ShapeType.Circle);
+            List<MapProblem> problems = _asset.Validate();
+
+            AssertNoProblem(problems, MapProblemKind.OreInTerrain);
+            AssertNoProblem(problems, MapProblemKind.DuplicateOre);
+        }
+
+        [Test]
+        public void Validate_ATerrainArrayHandwrittenToSayOre_IsReported()
+        {
+            // What a hand edit of the array buys: nothing, because the ore list is what the conversion
+            // claims cells from - so it is named rather than silently ignored.
+            _asset.Terrain = TerrainLayout.Rects(12, 10, new TerrainRect(new Int2(7, 7), 1, 1, TerrainKind.Ore));
+
+            AssertProblem(_asset.Validate(), MapProblemKind.OreInTerrain, new Int2(7, 7));
+        }
+
+        [Test]
+        public void Validate_TwoEntriesForOneCell_IsReportedAsTheSecondOneBeingIgnored()
+        {
+            // Hand-appending an entry for a cell the list already has is an edit that does nothing: the
+            // first entry is the one that counts, here and in the conversion alike.
+            _asset.Ore = new[]
+            {
+                new MapAsset.OreCell { Cell = new Vector2Int(7, 7), Shape = ShapeType.Circle },
+                new MapAsset.OreCell { Cell = new Vector2Int(7, 7), Shape = ShapeType.Square },
+            };
+
+            AssertProblem(_asset.Validate(), MapProblemKind.DuplicateOre, new Int2(7, 7));
+            Assert.AreEqual(ShapeType.Circle, _asset.DrawableView().MineralAt(7, 7), "and the first entry wins");
         }
 
         [Test]
@@ -397,10 +440,41 @@ namespace Facet.Tests
                     Assert.AreEqual(map.TerrainAt(new Int2(x, y)), drawn.GroundAt(x, y), "cell " + x + "," + y);
 
             Assert.AreEqual(ShapeType.HalfSquare, drawn.MineralAt(6, 1));
-            Assert.AreEqual(TerrainKind.Ore, drawn.GroundAt(6, 1), "a vein's ground and its mineral arrive together");
+            Assert.AreEqual(TerrainKind.Ground, drawn.GroundAt(6, 1),
+                "a vein's ground is plain, as it is in the array - the mineral is what says there is a vein");
             Assert.AreEqual(map.CoreCell.X, drawn.Core.x);
             Assert.AreEqual(map.CoreCell.Y, drawn.Core.y);
             Assert.AreEqual(ShapeType.None, drawn.MineralAt(0, 0), "plain ground carries no mineral");
+        }
+
+        /// <summary>The problem of that kind at that cell, so a test asks about the one rule it broke
+        /// rather than about the whole list - these maps carry other problems on purpose.</summary>
+        private static void AssertProblem(List<MapProblem> problems, MapProblemKind kind, Int2 cell)
+        {
+            for (int i = 0; i < problems.Count; i++)
+                if (problems[i].Kind == kind && problems[i].Cell == cell) return;
+
+            Assert.Fail("expected a " + kind + " problem at " + cell + ", got:\n" + Describe(problems));
+        }
+
+        /// <summary>No problem of that kind anywhere: the rules about a vein being written half at a time
+        /// are asked as an absence, because the whole point is that a brush cannot reach them.</summary>
+        private static void AssertNoProblem(List<MapProblem> problems, MapProblemKind kind)
+        {
+            for (int i = 0; i < problems.Count; i++)
+                if (problems[i].Kind == kind)
+                    Assert.Fail("unexpected " + kind + " at " + problems[i].Cell + ": " + problems[i].Message);
+        }
+
+        private static string Describe(List<MapProblem> problems)
+        {
+            var text = new System.Text.StringBuilder();
+            if (problems.Count == 0) text.Append("  (no problems)");
+
+            for (int i = 0; i < problems.Count; i++)
+                text.Append("  ").Append(problems[i].Kind).Append(": ").Append(problems[i].Message).Append('\n');
+
+            return text.ToString();
         }
     }
 }

@@ -45,8 +45,15 @@ namespace Facet.Game
         /// <paramref name="tutorialUp"/> is whether the HUD's "how to play" card is on screen - it is a
         /// solid panel on the first map, so the map has to be able to get out from under it. Passed in
         /// rather than read here: the rig knows the map, not the campaign.
+        ///
+        /// <paramref name="focus"/> is the point each map opens looking at - the Core in the driver's
+        /// call, which runs again on every map swap, not just the first. It used to be the map's own
+        /// middle, and on a map small enough to fit the screen
+        /// the two are the same view; on one that is not, the middle is empty corridor. The campaign's
+        /// first map is a strip three screens tall with its Core at the south end, and the thing a player
+        /// has to be watching on the first frame is that Core.
         /// </summary>
-        public void Initialize(TileGrid grid, bool tutorialUp = false)
+        public void Initialize(TileGrid grid, Vec2 focus, bool tutorialUp = false)
         {
             _camera = GetComponent<Camera>();
             _grid = grid;
@@ -54,8 +61,8 @@ namespace Facet.Game
 
             _targetZoom = Mathf.Clamp(_camera.orthographicSize, minZoom, maxZoom);
 
-            // Start centred on the map rather than wherever the scene happened to author the camera.
-            _target = Clamp(new Vector3(grid.Width * 0.5f, grid.Height * 0.5f, transform.position.z), _targetZoom);
+            // Start on the focus point rather than wherever the scene happened to author the camera.
+            _target = Clamp(new Vector3(focus.X, focus.Y, transform.position.z), _targetZoom);
             transform.position = _target;
             _camera.orthographicSize = _targetZoom;
         }
