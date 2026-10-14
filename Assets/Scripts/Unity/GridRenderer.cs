@@ -4,24 +4,16 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// Draws the map's ground and its tile grid as one mesh of thin quads: every tile the map calls
-    /// ground filled with <see cref="Palette.Platform"/>, then the lines on top of it. That is what
-    /// separates the buildable world from the void the camera sits in.
+    /// <summary>Draws the map's ground and its tile grid as one mesh of thin quads: every tile the map calls
+    /// ground filled with <see cref="Palette.Platform"/>, then the lines on top - what separates the buildable
+    /// world from the void the camera sits in.
     ///
-    /// <b>The ground is drawn per tile, not as one rectangle.</b> A map may leave tiles out - the void
-    /// kind is how a map is something other than a rectangle - and those tiles are not ground, so nothing
-    /// is drawn there and the background shows through. What is filled is therefore runs of adjacent
-    /// ground within a row, and what is lined is only the boundaries that touch ground, so a hole in the
-    /// map is a hole and not a rectangle with a grid over it. A plain map comes out of the same loop as
-    /// one run per row, which is why this costs a few quads less than filling the rectangle did.
-    ///
-    /// The grid only ever changes when the zoom moves the screen-pixel size, which is exactly the
-    /// rebuild reason the gate owns: the line width is a screen-space constant, so the mesh is
-    /// rebuilt when the pixel size moves and not otherwise. Without it the lines are only as wide as
-    /// the zoom they happened to be built at, and vanish into sub-pixel aliasing at the far end of
-    /// the camera's range.
-    /// </summary>
+    /// <b>The ground is drawn per tile, not as one rectangle.</b> A map may leave tiles out (the void kind), and
+    /// those are not ground, so nothing is drawn there and the background shows through. What is filled is runs of
+    /// adjacent ground within a row, and what is lined is only boundaries that touch ground, so a hole in the map
+    /// stays a hole. A plain map comes out of the same loop as one run per row. The grid rebuilds only when the
+    /// zoom moves the screen-pixel size, the rebuild reason the gate owns: the line width is a screen-space
+    /// constant, and without it the lines fade into sub-pixel aliasing at the camera's far end.</summary>
     [DefaultExecutionOrder(100)]
     public sealed class GridRenderer : MeshView
     {
@@ -52,9 +44,8 @@ namespace Facet.Game
 
             AppendGround();
 
-            // Every boundary that has ground on at least one side gets a line, and a boundary with
-            // ground on both sides is an ordinary grid line. Runs of live boundaries are merged, so a
-            // plain map draws the same W+1 and H+1 full-length lines it always did, at the same cost.
+            // Every boundary with ground on at least one side gets a line; ground on both sides is an ordinary grid
+            // line. Runs of live boundaries are merged, so a plain map draws the same W+1 and H+1 lines at the same cost.
             for (int x = 0; x <= _grid.Width; x++)
             {
                 AppendRuns(alongY: true, y => LiveColumnBoundary(x, y),
@@ -68,8 +59,8 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>Fill every run of adjacent ground in a row: one quad per run, so a plain map is one
-        /// quad per row and an irregular one is as many as it has spans.</summary>
+        /// <summary>Fill every run of adjacent ground in a row: one quad per run, so a plain map is one quad per row
+        /// and an irregular one as many as it has spans.</summary>
         private void AppendGround()
         {
             for (int y = 0; y < _grid.Height; y++)
@@ -79,14 +70,12 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>Walk one line of cells from its start to its end, merging consecutive live cells
-        /// into a run and emitting one quad per run. The merge rule lives here so a run is defined
-        /// once, not three times: scanning starts at 0, skips dead cells one at a time, and extends
-        /// a run while the next cell along the line is still live, so the run boundaries and their
-        /// order are exactly what the inline loops produced. The caller's <paramref name="live"/>
-        /// predicate closes over the line's fixed coordinate; <paramref name="alongY"/> picks the
-        /// walk direction - a column when true, whose length is the grid's height, and a row when
-        /// false, whose length is its width.</summary>
+        /// <summary>Walk one line of cells merging consecutive live cells into a run and emitting one quad per run.
+        /// The merge rule lives here so a run is defined once: scanning starts at 0, skips dead cells, and extends a
+        /// run while the next cell is live, so the run boundaries and their order match the old inline loops. The
+        /// caller's <paramref name="live"/> predicate closes over the line's fixed coordinate;
+        /// <paramref name="alongY"/> picks the walk direction - a column when true (length the grid's height), a row
+        /// when false (length its width).</summary>
         private void AppendRuns(bool alongY, Func<int, bool> live, Action<int, int> emit)
         {
             int count = alongY ? _grid.Height : _grid.Width;
@@ -105,8 +94,8 @@ namespace Facet.Game
         private bool Drawn(Int2 cell)
             => _grid.InBounds(cell) && _terrain.KindAt(cell).IsDrawn();
 
-        /// <summary>Does the vertical boundary at x, on row y, touch any ground? Off the map is not
-        /// ground, so the map's own edge is lined.</summary>
+        /// <summary>Does the vertical boundary at x, on row y, touch any ground? Off the map is not ground, so the
+        /// map's own edge is lined.</summary>
         private bool LiveColumnBoundary(int x, int y)
             => Drawn(new Int2(x - 1, y)) || Drawn(new Int2(x, y));
 

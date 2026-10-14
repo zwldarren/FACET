@@ -3,21 +3,10 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// The machine half of the tick, in one pass. It walks the machine field's occupancy registry -
-    /// not the whole grid - and dispatches each machine to the behaviour its definition names:
-    ///
-    ///   DrillBehavior      mines the patch under it
-    ///   ConverterBehavior  runs a recipe (the decomposer is the shipped one)
-    ///   PipeBehavior       carries an item across a tile
-    ///   SplitterBehavior   balances whatever the belts around it deliver
-    ///   SorterBehavior     routes the shape its definition filters for out the side it faces
-    ///   TurretBehavior     eats its diet and fires it
-    ///
-    /// This replaced three separate whole-grid sweeps (production, transit, turrets). Machines only
-    /// ever interact through belts, so visiting them in one pass in ascending map order is equivalent
-    /// to the old grouping except in the rare "one machine pushes onto the exact cell another empties
-    /// this tick" case - and map order is the more defensible of the two, being independent of the
-    /// order the player happened to build in.
+    /// The machine half of the tick, in one pass: walks the machine field's occupancy registry - not
+    /// the whole grid - and dispatches each machine to the behaviour its definition names. Visiting in
+    /// ascending map order is independent of build order, and equivalent to the old whole-grid sweeps
+    /// except when one machine pushes onto the exact cell another empties this tick.
     /// </summary>
     public sealed class MachineSystem
     {
@@ -62,10 +51,8 @@ namespace Facet.Core
             _byBehavior[(int)BehaviorKind.Sorter] = new SorterBehavior();
             _byBehavior[(int)BehaviorKind.Turret] = new TurretBehavior();
 
-            // A content row asking for a behaviour that is not registered would build, sit, and do
-            // nothing - silence, the one failure a player reads as a broken game. The world refuses to
-            // start instead, and names the row and the behaviour. New behaviour: register it above,
-            // and no call site has to remember this check exists.
+            // A content row asking for an unregistered behaviour would build and silently do nothing.
+            // Refuse to start instead: register new behaviours above and no call site must remember this.
             var rows = content.Machines;
             for (int i = 0; i < rows.Count; i++)
             {
@@ -103,12 +90,9 @@ namespace Facet.Core
         }
     }
 
-    /// <summary>
-    /// The drill's cooldown rule: count it down first, then report whether it fired. Decrementing
-    /// first is not cosmetic - an interval of exactly one second is exactly 30 ticks at 30 Hz, and
-    /// testing the cooldown <em>before</em> decrementing it spends the tick it reaches zero doing
-    /// nothing, so the drill would mine at 31 ticks per item.
-    /// </summary>
+    /// <summary>The drill's cooldown rule: count down first, then report whether it fired. Decrement
+    /// before testing, or the tick that reaches zero is spent doing nothing and a one-second interval
+    /// takes 31 ticks at 30 Hz instead of 30.</summary>
     internal static class MachineClock
     {
         public static bool Ticked(ref float cooldown, float dt)

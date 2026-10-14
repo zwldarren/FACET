@@ -5,33 +5,24 @@ using UnityEngine;
 namespace Facet.Game
 {
     /// <summary>
-    /// Draws every machine as one mesh. A turret's Aim and Armed state, a converter's split, a
-    /// pipe's item in transit and a splitter's ports all change while the player is watching them,
-    /// so this view rebuilds every frame rather than on a watched value. Because the mesh is
-    /// rebuilt every frame, outline widths stay a true 2 px at any zoom.
+    /// Draws every machine as one mesh. A turret's Aim and Armed state, a converter's split, a pipe's
+    /// item in transit and a splitter's ports all change while the player watches, so this view rebuilds
+    /// every frame; outline widths therefore stay a true 2 px at any zoom.
     ///
-    /// Each building's <em>body</em> may be overridden from the Palette's
-    /// <see cref="Palette.Visuals"/> - a Sprite replaces the flat body polygon, or a procedural
-    /// override picks a different silhouette/colour. The functional overlays are deliberately never
-    /// overridden: a turret keeps its barrel and ammo icon, a converter and splitter keep their port
-    /// stubs and held-item icon, so however a building is re-skinned its state is still readable.
+    /// A building's <em>body</em> may be overridden from the Palette's <see cref="Palette.Visuals"/> - a
+    /// Sprite replacing the flat body, or a procedural override picking a different silhouette/colour.
+    /// Functional overlays are never overridden (a turret keeps its barrel and ammo icon, a converter and
+    /// splitter their port stubs and held-item icon), so a re-skinned building still reads its state.
     ///
-    /// The drawing is dispatched on the machine's <see cref="BehaviorKind"/>, not on its tile kind, and
-    /// each routine asks for the override of the <em>build kind</em> it was handed. That split is what
-    /// lets a second gun and a second converter exist without a line here: the mortar draws down the
-    /// turret path with the mortar's own skin, and the cutter down the converter path with the
-    /// cutter's, and neither is named anywhere in this file.
+    /// Drawing dispatches on the machine's <see cref="BehaviorKind"/>, not its tile kind, and asks for the
+    /// override of the <em>build kind</em> it was handed - which is what lets a second gun and a second
+    /// converter exist without a line here.
     ///
-    /// The readout each behaviour owes the player:
-    ///   drill       - a hollow frame, so the patch icon underneath stays the identity
-    ///   converter   - the shape it holds: a circle or a square mid-split, or the parts waiting to
-    ///                 leave, plus a stub on every side a belt feeds or drains
-    ///   pipe        - the tube across the jumped tile, and the item riding over it
-    ///   splitter    - the hub, with a stub per live port read off the belts around it
-    ///   sorter      - a triangle whose apex points out the side the filtered shape leaves by, with
-    ///                 that shape as a badge: the silhouette says "router", the apex says "this way"
-    ///   turret      - the barrel, and the ammo icon whose grey-out is the "silenced" state
-    ///   wall        - a plain block; damage tint is its whole state
+    /// Each behaviour's readout: drill - a hollow frame so the patch icon underneath is the identity;
+    /// converter - the held shape plus a stub per fed/drained side; pipe - the tube across the jumped tile
+    /// and the item riding it; splitter - the hub with a stub per live port read off the belts; sorter - a
+    /// triangle whose apex points out the exit side, with that shape as a badge; turret - the barrel and
+    /// the ammo icon whose grey-out is "silenced"; wall - a plain block whose damage tint is its state.
     /// </summary>
     [DefaultExecutionOrder(105)]
     public sealed class MachineRenderer : MeshView
@@ -40,24 +31,20 @@ namespace Facet.Game
 
         private readonly List<MachineSnapshot> _machines = new List<MachineSnapshot>();
 
-        /// <summary>Scratch array: AppendPolygon wants a point list per shape, and newing one up
-        /// per machine per frame is exactly the allocation the view layer must not do.</summary>
+        /// <summary>Scratch barrel points, reused so a per-machine-per-frame array is not allocated.</summary>
         private readonly Vector2[] _barrel = new Vector2[4];
 
-        /// <summary>The shipped silhouettes, cached at their default geometry. A build whose override
-        /// ticks a procedural shape supplies its own points instead, which is why these are only the
-        /// fallback rather than the only option.</summary>
+        /// <summary>The shipped silhouettes, cached; a procedural override supplies its own points.</summary>
         private Vector2[] _converterBody;
         private Vector2[] _turretBody;
         private Vector2[] _splitterHub;
 
-        /// <summary>The sorter's triangle at its default facing, plus the array it is rotated into
-        /// every frame - so the facing costs six multiplies and no allocation.</summary>
+        /// <summary>The sorter's triangle at its default facing, plus the scratch it is rotated into
+        /// each frame, so the facing allocates nothing.</summary>
         private Vector2[] _sorterBody;
         private Vector2[] _sorterRotated;
 
-        /// <summary>The wall's inset block: an axis-aligned square, cached like the other silhouettes
-        /// so the wall costs no allocation either.</summary>
+        /// <summary>The wall's inset block, cached like the other silhouettes.</summary>
         private Vector2[] _wallBody;
 
         private ShapeIconSet _carriedIcons;
@@ -67,11 +54,9 @@ namespace Facet.Game
 
         protected override Palette.Layer Layer => Colors.MachineLayer;
 
-        /// <summary>The player's authored look for one building, or null when the palette authors
-        /// none for it - which is the normal case, since the override block is purely additive. Every
-        /// caller therefore reads through <see cref="BodyOf"/> / <see cref="FillOf"/> /
-        /// <see cref="OutlineOf"/> or guards the reference itself; a building the palette has not
-        /// heard of draws the shipped silhouette its behaviour already chose.</summary>
+        /// <summary>The player's authored look for one building, or null when none is authored - the
+        /// normal case, since the override block is purely additive. Callers read through
+        /// <see cref="BodyOf"/> / <see cref="FillOf"/> / <see cref="OutlineOf"/> or guard the reference.</summary>
         private VisualStyle Over(BuildKind kind) => Colors.Visuals.Machines.For(kind);
 
         /// <summary>The points to draw a body with: the authored shape when the override ticks one,
@@ -80,16 +65,13 @@ namespace Facet.Game
             => Overridden(style) ? VisualShapes.Points(style, Colors.CircleSides) : shipped;
 
         /// <summary>A body's fill: the authored colour when overridden, otherwise what the machine's
-        /// behaviour calls for - so a second gun is dark like a gun without being listed here.</summary>
+        /// behaviour calls for.</summary>
         private Color FillOf(VisualStyle style, BehaviorKind behavior)
             => Overridden(style) ? style.Fill : Colors.BodyColor(behavior);
 
-        /// <summary>
-        /// A body's fill after damage: reddened toward the Core's hurt colour as health drains, the
-        /// same language <see cref="CoreView"/> uses, so a chewed building reads at a glance. An
-        /// indestructible building (MaxHp 0) is never damaged and is never tinted. Sprite-overridden
-        /// bodies go through this too, with white as the healthy end, exactly as the Core's sprite does.
-        /// </summary>
+        /// <summary>A body's fill after damage: reddened toward <see cref="CoreView"/>'s hurt colour as
+        /// health drains. An indestructible building (MaxHp 0) is never tinted; sprite bodies pass
+        /// through too, with white as the healthy end.</summary>
         private Color Damaged(Color body, in MachineSnapshot machine)
             => machine.MaxHp <= 0f ? body : Color.Lerp(Colors.CoreDamage, body, machine.HealthFraction);
 
@@ -104,9 +86,8 @@ namespace Facet.Game
         /// <summary>Whether the palette authored a replacement for this content's body.</summary>
         private static bool Overridden(VisualStyle style) => style != null && style.Override;
 
-        /// <summary>Whether that replacement is a sprite rather than a procedural silhouette. Only the
-        /// body path changes; a sprite keeps its functional overlays, so a turret still shows its barrel
-        /// and ammo icon.</summary>
+        /// <summary>Whether the replacement is a sprite rather than a procedural silhouette; a sprite
+        /// replaces the body only, keeping the functional overlays.</summary>
         private static bool IsSprite(VisualStyle style)
             => Overridden(style) && style.Source == VisualSource.Sprite;
 
@@ -114,24 +95,19 @@ namespace Facet.Game
         {
             Palette.MachineLook look = Colors.Machines;
 
-            // The decomposer's first vertex sits at 30 degrees so a flat edge faces up, matching
-            // the shape patches the shape patch view lays in the ground; a procedural override
-            // supplies its own silhouette instead. The cutter shares both, because it is the same
-            // machine on a different recipe.
+            // First vertex at 30 degrees puts a flat edge up, matching the ground shape patches; the
+            // cutter shares it (same machine, different recipe), and a procedural override supplies its own.
             _converterBody = ProcMesh.RegularPolygon(6, look.DecomposerRadius, 30f);
             _turretBody = ProcMesh.RegularPolygon(8, look.TurretRadius);
             _splitterHub = ProcMesh.RegularPolygon(4, look.SplitterHubHalfSize * 1.4143f, 45f);
 
-            // The sorter's triangle: 3 sides with the first vertex at angle 0 points east, which the
-            // draw rotates to the machine's direction.
+            // The sorter's triangle: first vertex at angle 0 points east, rotated to the machine's direction.
             _sorterBody = ProcMesh.RegularPolygon(3, look.SorterRadius);
 
-            // The wall's block: a square (4 sides turned 45 degrees) inset from the cell edge, so two
-            // neighbouring walls still show the grid line between them.
+            // The wall's block: a square inset from the cell edge, so neighbours still show the grid line.
             _wallBody = ProcMesh.RegularPolygon(4, (0.5f - look.WallInset) * 1.4143f, 45f);
 
-            // The held / carried / ammo icons follow the item-shape overrides, so re-skinning a shape
-            // is consistent on the belts, in the ground and on the machines that handle it.
+            // The icons follow the item-shape overrides, so a re-skinned shape reads the same everywhere.
             _carriedIcons = Colors.ShapeIcons(look.DecomposerIconRadius, Colors.OutlinePixels);
             _ammoIcons = Colors.ShapeIcons(look.AmmoIconRadius, Colors.OutlinePixels);
             _pipeIcons = Colors.ShapeIcons(look.PipeItemRadius, Colors.OutlinePixels);
@@ -160,10 +136,8 @@ namespace Facet.Game
                     case BehaviorKind.Turret: AppendTurret(_machines[i], outlineWidth); break;
                     case BehaviorKind.None: AppendWall(_machines[i], outlineWidth); break;
                     default:
-                        // A behaviour this view does not draw would simply be absent from the screen -
-                        // the machine built, working, invisible. Say so instead. (MachineSystem's
-                        // start-up check normally catches this before the world exists; this is the
-                        // view's own half of the same rule.)
+                        // An undrawn behaviour would be invisible on screen; say so instead. (MachineSystem's
+                        // start-up check normally catches this first; this is the view's half of the rule.)
                         throw new System.ArgumentOutOfRangeException(
                             nameof(_machines), _machines[i].Behavior,
                             "a new behaviour must get a drawing case in MachineRenderer");
@@ -173,9 +147,8 @@ namespace Facet.Game
             EndSprites();
         }
 
-        /// <summary>A hollow frame plus an outlet chevron. No outline anywhere: an outline is baked
-        /// at the current pixel width, but more importantly the patch icon underneath IS the drill's
-        /// identity, so the frame only frames it.</summary>
+        /// <summary>A hollow frame plus an outlet chevron. No outline: the patch icon underneath IS the
+        /// drill's identity, so the frame only frames it.</summary>
         private void AppendDrill(in MachineSnapshot machine)
         {
             var centre = CellCentre(machine.Cell);
@@ -206,21 +179,17 @@ namespace Facet.Game
             AppendChevron(machine.Cell, machine.Direction, body);
         }
 
-        /// <summary>Hexagon body with the shape it holds as its icon - what its recipe is eating or
-        /// has made, nothing - the idle state - when empty - plus a stub on every side the belts
-        /// actually wired, so two outlets look like two outlets. There is no facing chevron: which
-        /// sides are outlets is read off the belts, exactly as the tick reads them.
+        /// <summary>Hexagon body with the held shape as its icon (nothing when empty), plus a stub on
+        /// every wired side; no facing chevron, since the outlets are read off the belts as the tick does.
         ///
-        /// Both converters come down this path. The icon is the snapshot's shape, which
-        /// <see cref="MachineField"/> reads out of the recipe, so the decomposer shows its circles and
-        /// the cutter its squares without either being named here.</summary>
+        /// Both converters share this path: the icon is the snapshot's shape, read by
+        /// <see cref="MachineField"/> out of the recipe, so decomposer and cutter need no line here.</summary>
         private void AppendConverter(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);
             VisualStyle style = Over(machine.Build);
 
-            // 0.8 r is inside the hexagon's flat edge (the apothem is 0.866 r) and the cardinal sides are
-            // mid-edge, so the body polygon drawn next covers each stub's inner end.
+            // 0.8 r is inside the hexagon's flat edge (apothem 0.866 r), so the body covers each stub's inner end.
             AppendPortStubs(machine, centre, Colors.Machines.DecomposerRadius * 0.8f);
 
             if (IsSprite(style))
@@ -237,10 +206,9 @@ namespace Facet.Game
             AppendIcon(_carriedIcons, machine.Shape, centre, null);
         }
 
-        /// <summary>The crossing piece: two rails running from this cell's entry edge across the
-        /// jumped tile to the landing belt, with a collar at each end - the collars and the gap under
-        /// the tube are what read as "over". The item in transit rides the tube at its work fraction,
-        /// so a backed-up pipe shows its item parked over the landing belt.</summary>
+        /// <summary>Two rails from this cell's entry edge across the jumped tile to the landing belt,
+        /// with a collar at each end - the collars and the gap under the tube read as "over". The item
+        /// rides the tube at its work fraction.</summary>
         private void AppendPipe(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);
@@ -276,8 +244,8 @@ namespace Facet.Game
             AppendIcon(_pipeIcons, machine.Shape, entry + forward * (2f * machine.Work), null);
         }
 
-        /// <summary>The hub plus one stub per live port, read off the belts around it exactly the
-        /// way the simulation does. The buffered item sits at the hub's centre.</summary>
+        /// <summary>The hub plus one stub per live port, read off the belts as the simulation does; the
+        /// buffered item sits at the centre.</summary>
         private void AppendSplitter(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);
@@ -299,23 +267,18 @@ namespace Facet.Game
             AppendIcon(_carriedIcons, machine.Shape, centre, null);
         }
 
-        /// <summary>
-        /// The router: a triangle whose apex points out the side the filtered shape leaves by, with
-        /// that shape as a badge at its centre, and a stub per live port - so the two things a sorter
-        /// can be wrong about (which side, and which shape) are both on screen at once.
+        /// <summary>The router: a triangle whose apex points out the side the filtered shape leaves by,
+        /// with that shape as a centre badge and a stub per live port - both things a sorter can be wrong
+        /// about (side and shape) on screen at once.
         ///
-        /// The apex is the direction readout, which is why a sorter needs no chevron: no other
-        /// building is a triangle, so the silhouette says "router" before the badge says which way.
-        /// Port stubs are drawn first and the body covers their inner ends, exactly like the
-        /// converters and the splitter.
-        /// </summary>
+        /// The apex is the direction readout, so a sorter needs no chevron. Stubs are drawn first and the
+        /// body covers their inner ends, as with the converters and splitter.</summary>
         private void AppendSorter(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);
             VisualStyle style = Over(machine.Build);
 
-            // 0.75 r reaches inside the triangle's incircle (r/2), so the body covers each stub's
-            // inner end the way the converters' hexagon does.
+            // 0.75 r reaches inside the triangle's incircle (r/2), so the body covers each stub's inner end.
             AppendPortStubs(machine, centre, Colors.Machines.SorterRadius * 0.75f);
 
             if (IsSprite(style))
@@ -333,12 +296,9 @@ namespace Facet.Game
             AppendIcon(_sorterIcons, machine.Shape, centre, null);
         }
 
-        /// <summary>
-        /// A cached polygon rotated about the origin by an angle in degrees, through a scratch array,
-        /// so a view that rebuilds every frame allocates nothing to turn a shape. Rotation preserves
-        /// the counter-clockwise winding that <see cref="ProcMesh.AppendPolygon"/>'s outline normals
-        /// depend on.
-        /// </summary>
+        /// <summary>A cached polygon rotated about the origin by an angle in degrees, through a scratch
+        /// array, so a per-frame view allocates nothing to turn a shape. Rotation preserves the
+        /// counter-clockwise winding <see cref="ProcMesh.AppendPolygon"/>'s outline normals depend on.</summary>
         private void AppendRotatedPolygon(Vector2[] points, Vector2[] scratch, Vector2 centre,
             float angleDegrees, Color fill, Color outline, float width)
         {
@@ -414,14 +374,12 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>Octagon body, barrel along Aim, then the ammo icon. Draw order matters: barrel
-        /// after body so it reads as the gun, icon last so the armed/silenced colour is never
-        /// covered. The icon's grey is the "silenced" state - the single most important readout,
-        /// because a turret with no ammo is a dead building.
+        /// <summary>Octagon body, barrel along Aim, then the ammo icon. Draw order matters: barrel after
+        /// body, icon last so the armed/silenced colour is never covered - the icon's grey is the
+        /// "silenced" state, a turret with no ammo being a dead building.
         ///
-        /// Both guns come down this path, and the icon is the snapshot's shape - which
-        /// <see cref="MachineField"/> reads out of that gun's <see cref="TurretDef"/> - so the cannon
-        /// shows half-circles and the mortar half-squares without either being named here.</summary>
+        /// Both guns share this path: the icon is the snapshot's shape, read by
+        /// <see cref="MachineField"/> out of that gun's <see cref="TurretDef"/>.</summary>
         private void AppendTurret(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);
@@ -440,16 +398,15 @@ namespace Facet.Game
 
             AppendBarrel(machine, centre, outlineWidth, body);
 
-            // A turret's diet is always a real shape (ContentDatabase.Turret); the icon is total, so
-            // the null branch is written out rather than assumed away.
+            // A turret's diet is always a real shape (ContentDatabase.Turret), so the null branch is
+            // written out rather than assumed away.
             Color? ammoTint = machine.Armed ? (Color?)null : Colors.MachineIdle;
             AppendIcon(_ammoIcons, machine.Shape, centre, ammoTint);
         }
 
-        /// <summary>One quad from the body centre out along the aim. Aim is already normalized by
-        /// the tick; a zero Aim (a turret that has never seen an enemy) falls back to its rest
-        /// direction so the barrel still points somewhere sane. The barrel takes the body's colour so
-        /// a re-skinned gun is one colour, and the default is the turret shade either way.</summary>
+        /// <summary>One quad from the body centre out along the aim, normalized by the tick; a zero Aim
+        /// (never saw an enemy) falls back to the rest direction. Takes the body's colour, so a
+        /// re-skinned gun is one colour.</summary>
         private void AppendBarrel(in MachineSnapshot machine, Vector2 centre, float outlineWidth, Color body)
         {
             Vec2 aim = machine.Aim;
@@ -478,14 +435,11 @@ namespace Facet.Game
             AppendPolygon(_barrel, Vector2.zero, body, Colors.Outline, outlineWidth);
         }
 
-        /// <summary>
-        /// The wall: a plain inset block in the machine-body colour, reddening as it is chewed. It has
-        /// no behaviour and no state to show - the point of a wall is that there is nothing to read
-        /// but "solid, and how close to falling" - so the silhouette is the whole readout.
+        /// <summary>A plain inset block in the machine-body colour, reddening as it is chewed; the
+        /// silhouette is the whole readout.
         ///
-        /// Only walls reach here. Belts are also <see cref="BehaviorKind.None"/> but they are not
-        /// machines, so they never appear in <see cref="MachineField.GetMachines"/>.
-        /// </summary>
+        /// Only walls reach here: belts are also <see cref="BehaviorKind.None"/> but are not machines, so
+        /// never appear in <see cref="MachineField.GetMachines"/>.</summary>
         private void AppendWall(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);

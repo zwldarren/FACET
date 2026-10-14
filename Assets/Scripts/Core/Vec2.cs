@@ -2,9 +2,8 @@ using System;
 
 namespace Facet.Core
 {
-    /// <summary>
-    /// Float vector in world units (1 unit = 1 tile). Engine-free replacement for UnityEngine.Vector2.
-    /// </summary>
+    /// <summary>Float vector in world units (1 unit = 1 tile). Engine-free replacement for
+    /// UnityEngine.Vector2.</summary>
     [Serializable]
     public readonly struct Vec2 : IEquatable<Vec2>
     {

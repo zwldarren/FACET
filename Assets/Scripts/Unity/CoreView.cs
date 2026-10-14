@@ -3,19 +3,16 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// The defended object: one flat block covering its whole <see cref="CoreState.Size"/> x
-    /// <see cref="CoreState.Size"/> footprint, with a dark emblem in the middle that tints toward the
-    /// damage colour as HP falls - one shape carrying both "this is the thing you lose on" and "how
-    /// close you are to losing", which is the second half of the design doc's art rule.
+    /// <summary>The defended object: one flat block covering its whole <see cref="CoreState.Size"/> x
+    /// <see cref="CoreState.Size"/> footprint, with a dark emblem in the middle that tints toward the damage colour as
+    /// HP falls - one shape carrying both "this is what you lose on" and "how close you are to losing".
     ///
-    /// The Core is the one view whose rebuild reason is a watched value rather than a revision or the
-    /// clock: it redraws when its cell or its health fraction changes, and not otherwise. The
-    /// procedural geometry, which is static, is built once in <see cref="OnInitialized"/>.
+    /// The Core is the one view whose rebuild reason is a watched value rather than a revision or the clock: it
+    /// redraws when its cell or health fraction changes, and not otherwise. The static procedural geometry is built
+    /// once in <see cref="OnInitialized"/>.
     ///
-    /// A Sprite override replaces the block and emblem with one image, tinted toward the damage
-    /// colour as the Core takes hits, so the health readout survives the re-skin.
-    /// </summary>
+    /// A Sprite override replaces the block and emblem with one image, tinted toward the damage colour as the Core
+    /// takes hits, so the health readout survives the re-skin.</summary>
     [DefaultExecutionOrder(100)]
     public sealed class CoreView : MeshView
     {
@@ -57,9 +54,8 @@ namespace Facet.Game
 
         protected override void Observe(in ViewFrame frame)
         {
-            // The Core is static, so this view rebuilds only when it moves or its health moves the
-            // fraction it draws - which is also why a map change has to reset what it last saw: the
-            // next map's Core can sit on the same cell at the same health.
+            // The Core is static, so this view rebuilds only when it moves or its health fraction changes - which is why
+            // a map change resets what it last saw: the next map's Core can sit on the same cell at the same health.
             CoreState core = World.Core;
             if (core.Cell == _seenCell && Mathf.Abs(core.HealthFraction - _seenFraction) < 0.001f) return;
 
@@ -89,8 +85,8 @@ namespace Facet.Game
                 return;
             }
 
-            // A procedural override may recolour the block's healthy end and its outline; the health
-            // tint and the emblem are still the palette's, so the damage readout is never lost.
+            // A procedural override may recolour the block's healthy end and outline; the health tint and emblem stay
+            // the palette's, so the damage readout is never lost.
             Color healthy = _core.Override ? _core.Fill : Colors.Core;
             Color outline = _core.Override ? _core.Outline : Colors.Outline;
             float outlineWidth = _core.Override ? OutlineWidthFor(_core) : OutlineWidth;
@@ -100,8 +96,7 @@ namespace Facet.Game
 
             AppendPolygon(_block, origin, fill, outline, outlineWidth);
 
-            // No outline of its own: it sits inside the block, and a second outline there would read
-            // as a seam in the building.
+            // No outline of its own: it sits inside the block, where a second outline would read as a seam.
             AppendPolygon(_emblem, origin, emblem, emblem, 0f);
 
             EndSprites();

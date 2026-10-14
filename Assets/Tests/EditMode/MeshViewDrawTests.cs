@@ -6,11 +6,10 @@ using UnityEngine;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The rebuild gate, driven by hand. A view is normally advanced by Unity's frame message - that is
-    /// what the PlayMode gate test pins, and it is also why nothing outside a running game could draw
-    /// one. The gate is a method (<see cref="MeshView.Draw"/>) for the one caller that has no frames at
-    /// all: the Editor's map preview, which draws the game's own views in the Scene view with no Play
-    /// mode. These are that caller's contract, and the reason a map can be looked at before it is played.
+    /// The rebuild gate, driven by hand. A view is normally advanced by Unity's frame message - what the
+    /// PlayMode gate test pins, and why nothing outside a running game could draw one. The gate is a
+    /// method (<see cref="MeshView.Draw"/>) for the one caller with no frames at all: the Editor's map
+    /// preview, which draws the game's views in the Scene view. These are that caller's contract.
     /// </summary>
     public class MeshViewDrawTests
     {
@@ -62,8 +61,8 @@ namespace Facet.Tests
         public void Draw_OfARealView_PutsTheMapsObstaclesInAMesh()
         {
             // The map the preview is really for: ground that is not all ground, drawn by the view that
-            // draws the map's own rock - so what lands in the mesh is the map's data and not a shape the
-            // test asked for.
+            // draws the map's own rock - so what lands in the mesh is the map's data, not a shape the test
+            // asked for.
             var go = new GameObject("Terrain");
             try
             {
@@ -86,8 +85,8 @@ namespace Facet.Tests
         public void Draw_AfterItsMeshWasDestroyed_MakesAnotherOne()
         {
             // What a Play-mode transition does to a preview that outlives it: the mesh goes, the view stays.
-            // A lost mesh is a reason to rebuild - the gate would otherwise sit out an unchanged frame and
-            // leave the view either drawing into nothing or throwing at the object that used to be there.
+            // A lost mesh is a reason to rebuild - otherwise the gate would sit out an unchanged frame and
+            // leave the view drawing into nothing.
             var go = new GameObject("Terrain");
             try
             {

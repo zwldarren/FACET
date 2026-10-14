@@ -4,17 +4,17 @@ using UnityEngine.InputSystem;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// The free camera the design doc's controls call for: WASD or the arrow keys pan, the wheel zooms,
-    /// and the pan is bounded by the map - by as much of the screen as the HUD leaves, so a tile at the
-    /// map's edge can always be brought out from under the panels, and a little further so it arrives in
-    /// the open. The bound itself is <see cref="PanLimits"/>; the rig only feeds it the screen, the zoom
-    /// and the slack below.
+    /// <summary>The free camera the design doc's controls call for: WASD or arrows pan, the wheel zooms, and
+    /// the pan is bounded by the map - by as much of the screen as the HUD leaves, so an edge tile can be
+    /// brought out from under the panels, plus a little slack. The bound itself is <see cref="PanLimits"/>;
+    /// the rig only feeds it the screen, the zoom and the slack.
     ///
-    /// This reads input itself rather than going through the simulation. Panning is a view concern -
-    /// nothing replays it, and routing it through the tick would make the camera step at 30 Hz for no
-    /// reason.
-    /// </summary>
+    /// <c>C</c> puts the Core back in the middle of the screen: a map can be taller than a window, and once
+    /// the locator has told the player their Core is off view, the next thing they need is the way back. The
+    /// Core is one keypress from anywhere.
+    ///
+    /// It reads input itself rather than going through the simulation: panning is a view concern, nothing
+    /// replays it, and routing it through the tick would make the camera step at 30 Hz for no reason.</summary>
     [DefaultExecutionOrder(-50)]
     public sealed class CameraRig : MonoBehaviour
     {
@@ -27,6 +27,9 @@ namespace Facet.Game
         [SerializeField] private float minZoom = 4f;
         [SerializeField] private float maxZoom = 18f;
         [SerializeField] private float smoothTime = 0.08f;
+
+        [Tooltip("The key that centres the view on the run's one losing object.")]
+        [SerializeField] private Key focusCoreKey = Key.C;
 
         [Tooltip("How far past the map's edge the camera may still pan, as a fraction of the screen. " +
             "This is the margin an edge row is panned out into instead of stopping against the panel " +
@@ -41,18 +44,18 @@ namespace Facet.Game
         private float _zoomVelocity;
         private bool _tutorialUp;
 
-        /// <summary>
-        /// <paramref name="tutorialUp"/> is whether the HUD's "how to play" card is on screen - it is a
-        /// solid panel on the first map, so the map has to be able to get out from under it. Passed in
-        /// rather than read here: the rig knows the map, not the campaign.
-        ///
-        /// <paramref name="focus"/> is the point each map opens looking at - the Core in the driver's
-        /// call, which runs again on every map swap, not just the first. It used to be the map's own
-        /// middle, and on a map small enough to fit the screen
-        /// the two are the same view; on one that is not, the middle is empty corridor. The campaign's
-        /// first map is a strip three screens tall with its Core at the south end, and the thing a player
-        /// has to be watching on the first frame is that Core.
-        /// </summary>
+        /// <summary>The point a map is played around - the Core's centre, which <see cref="Initialize"/> is handed
+        /// and <see cref="focusCoreKey"/> returns to.</summary>
+        private Vector2 _home;
+
+        /// <summary><paramref name="tutorialUp"/> is whether the HUD's "how to play" card is on screen - a solid
+        /// panel on the first map, so the map has to get out from under it. Passed in rather than read here: the
+        /// rig knows the map, not the campaign.
+        /// <paramref name="focus"/> is the point each map opens looking at - the Core in the driver's call, which
+        /// runs again on every map swap, not just the first. It used to be the map's own middle; on a map small
+        /// enough to fit the screen the two are the same view, but on one that is not, the middle is empty
+        /// corridor. The campaign's first map is a strip three screens tall with its Core at the south end, and
+        /// the thing a player must be watching on the first frame is that Core.</summary>
         public void Initialize(TileGrid grid, Vec2 focus, bool tutorialUp = false)
         {
             _camera = GetComponent<Camera>();
@@ -60,6 +63,8 @@ namespace Facet.Game
             _tutorialUp = tutorialUp;
 
             _targetZoom = Mathf.Clamp(_camera.orthographicSize, minZoom, maxZoom);
+
+            _home = new Vector2(focus.X, focus.Y);
 
             // Start on the focus point rather than wherever the scene happened to author the camera.
             _target = Clamp(new Vector3(focus.X, focus.Y, transform.position.z), _targetZoom);
@@ -73,6 +78,7 @@ namespace Facet.Game
 
             Pan();
             Zoom();
+            Focus();
         }
 
         private void LateUpdate()
@@ -86,6 +92,18 @@ namespace Facet.Game
             // or the view would overshoot the map edge while a zoom settles.
             transform.position = Vector3.SmoothDamp(
                 transform.position, Clamp(_target, _camera.orthographicSize), ref _panVelocity, smoothTime);
+        }
+
+        /// <summary><c>C</c>: put the Core in the middle of the view. The pan bound is applied to the destination,
+        /// so the key cannot shove the map off the open screen any more than a drag can, and the glide uses the
+        /// rig's smoothing rather than a cut - a hard cut leaves the player no idea which way they went.</summary>
+        private void Focus()
+        {
+            var keyboard = Keyboard.current;
+            if (keyboard == null) return;
+            if (!keyboard[focusCoreKey].wasPressedThisFrame) return;
+
+            _target = Clamp(new Vector3(_home.x, _home.y, transform.position.z), _targetZoom);
         }
 
         private void Pan()
@@ -123,18 +141,16 @@ namespace Facet.Game
             _target = Clamp(_target, _targetZoom);
         }
 
-        /// <summary>
-        /// Wheel deltas arrive as 120 per notch on Windows and as 1 on some other backends, so a raw
-        /// division would make the wheel dead on one of them. Take whichever reading fits.
-        /// </summary>
+        /// <summary>Wheel deltas arrive as 120 per notch on Windows and as 1 on some other backends, so a raw
+        /// division would make the wheel dead on one of them. Take whichever reading fits.</summary>
         private static float WheelNotches(float scroll)
         {
             float notches = Mathf.Abs(scroll) <= 1.5f ? scroll : scroll / 120f;
             return Mathf.Clamp(notches, -3f, 3f);
         }
 
-        /// <summary>The pan bound for a given zoom; the rule is <see cref="PanLimits"/>. The rig only
-        /// hands it the screen, the zoom and <see cref="edgeSlackScreens"/>.</summary>
+        /// <summary>The pan bound for a given zoom; the rule is <see cref="PanLimits"/>. The rig only hands it the
+        /// screen, the zoom and <see cref="edgeSlackScreens"/>.</summary>
         private Vector3 Clamp(Vector3 position, float zoom)
         {
             return PanLimits.Clamp(position, zoom, _camera.aspect, Screen.width, Screen.height,

@@ -4,19 +4,14 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// Draws every shot in flight as one mesh, rebuilt each frame because shots never stop moving.
-    /// A kill should be visibly a shape that left a belt and flew to its target, so each shot is
-    /// drawn as its ammunition shape at a small radius. Positions are interpolated between the
-    /// last two simulation ticks with the frame's Alpha, so flight is smooth at any frame rate
-    /// instead of stepping at 30 Hz.
+    /// <summary>Draws every shot in flight as one mesh, rebuilt each frame because shots never stop moving. A kill
+    /// should be visibly a shape that left a belt and flew to its target, so each shot is its ammo shape at a small
+    /// radius. Positions interpolate between the last two ticks with the frame's Alpha, so flight is smooth instead
+    /// of stepping at 30 Hz.
     ///
-    /// The in-flight shape follows the same item-shape override as the belts, so a re-skinned
-    /// resource stays recognisable all the way to the impact.
-    ///
-    /// These shapes carry no outline by default, unlike the items on belts: at projectile size the
-    /// outline would be more pixels than the shape itself, and the colour alone is the message here.
-    /// </summary>
+    /// The in-flight shape follows the same item-shape override as the belts, so a re-skinned resource stays
+    /// recognisable to the impact. These shapes carry no outline by default, unlike belt items: at projectile size
+    /// the outline would be more pixels than the shape itself, and the colour alone is the message.</summary>
     [DefaultExecutionOrder(114)]
     public sealed class ProjectileRenderer : MeshView
     {

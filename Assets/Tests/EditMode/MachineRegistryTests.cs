@@ -4,10 +4,9 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The machine field's two new jobs: an explicit occupancy registry the tick walks instead of the
-    /// whole grid, and the port masks it computes once so the view and the simulation read the same
-    /// rule. The mask test pins the case the old view got wrong - a decomposer's second outlet on a
-    /// side that is not its facing.
+    /// The machine field's two jobs: an explicit occupancy registry the tick walks instead of the whole
+    /// grid, and the port masks it computes once so the view and the simulation read the same rule. The
+    /// mask test pins the case the old view got wrong - a decomposer's second outlet on a non-facing side.
     /// </summary>
     public class MachineRegistryTests
     {

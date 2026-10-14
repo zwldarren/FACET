@@ -6,50 +6,48 @@ using UnityEngine;
 namespace Facet.EditorTools
 {
     /// <summary>
-    /// The painting surface for a <see cref="MapAsset"/>: the ground, the veins in it, where the Core
-    /// stands, the doors a wave walks in at, the map's size and its wave table - with the map's own
-    /// validation kept beside it, because the mistakes a map makes do not throw, they leave a wave that
-    /// stands still.
+    /// The painting surface for a <see cref="MapAsset"/>: the ground, the veins in it, where the Core stands,
+    /// the doors a wave walks in at, the map's size and its wave table - with the map's own validation kept
+    /// beside it, because the mistakes a map makes do not throw, they leave a wave that stands still.
     ///
-    /// Two rules run through the whole window. It keeps no copy of the map: every cell, every field and
-    /// every problem is read off the asset in the pass that draws it, so nothing can drift from the
-    /// asset and nothing has to be written back. And every edit goes through Undo and marks the asset
-    /// dirty, so a stroke is one Ctrl+Z away and Save is the only thing that touches the disk.
+    /// Two rules run through the whole window: it keeps no copy of the map (every cell, field and problem is
+    /// read off the asset in the pass that draws it, so nothing can drift and nothing has to be written back),
+    /// and every edit goes through Undo and marks the asset dirty, so a stroke is one Ctrl+Z away and Save is
+    /// the only thing that touches the disk.
     ///
-    /// The one piece of machinery worth knowing before reading the grid: the rectangle the cells are
-    /// drawn in is worked out in <em>every</em> pass and kept in fields, not only while painting. A
-    /// mouse event arrives in a pass of its own, and a rect that existed only during Repaint would leave
-    /// that pass with nothing to hit-test - the classic way a custom grid stops answering the mouse.
+    /// The one piece of machinery worth knowing: the rectangle the cells are drawn in is worked out in
+    /// <em>every</em> pass and kept in fields, not only while painting. A mouse event arrives in a pass of its
+    /// own, and a rect that existed only during Repaint would leave that pass with nothing to hit-test - the
+    /// classic way a custom grid stops answering the mouse.
     ///
-    /// The window is one type split by concern rather than a feature per file: this fragment is the
-    /// shell - the target picker, the toolbar and the pass that draws them. The grid's geometry and
-    /// painting live in the <c>MapEditorWindow.Grid</c> fragment, the side panel - size, Core, legend
-    /// and validation - in <c>MapEditorWindow.Panel</c>, and the wave table in
+    /// The window is one type split by concern: this fragment is the shell - the target picker, the toolbar and
+    /// the pass that draws them. The grid's geometry and painting live in <c>MapEditorWindow.Grid</c>, the side
+    /// panel - size, Core, legend and validation - in <c>MapEditorWindow.Panel</c>, and the wave table in
     /// <c>MapEditorWindow.Waves</c>.
     /// </summary>
     public sealed partial class MapEditorWindow : EditorWindow
     {
         private const string WindowTitle = "FACET Map Editor";
 
-        /// <summary>The side panel's width. Fixed rather than proportional: the grid is the thing that
-        /// resizes with the window - that is what the fit arithmetic is for - and a panel that resized
-        /// too would slide every field out from under the pointer as the window is dragged.</summary>
+        /// <summary>The side panel's width. Fixed rather than proportional: the grid is the thing that resizes
+        /// with the window - that is what the fit arithmetic is for - and a panel that resized too would slide
+        /// every field out from under the pointer as the window is dragged.</summary>
         private const float PanelWidth = 340f;
 
-        /// <summary>The preview toggle's label. A GUIContent for its tooltip: the preview draws at the
-        /// map's own coordinates, so "on but nothing in sight" is a state a designer can land in, and the
-        /// tooltip is where the button beside it is explained.</summary>
+        /// <summary>The preview toggle's label. A GUIContent for its tooltip: the preview draws at the map's
+        /// own coordinates, so "on but nothing in sight" is a state a designer can land in, and the tooltip is
+        /// where the button beside it is explained.</summary>
         private static readonly GUIContent PreviewLabel = new GUIContent("Preview",
             "Draw this map in the Scene view with the game's own views, while painting it and without " +
             "Play mode. Press Focus to put the Scene view on the map.");
 
-        /// <summary>Serialized so a script recompile does not forget which map the window was on; it is
-        /// the picker's value, not a copy of anything the map holds.</summary>
+        /// <summary>Serialized so a script recompile does not forget which map the window was on; it is the
+        /// picker's value, not a copy of anything the map holds.</summary>
         [SerializeField] private MapAsset _asset;
 
-        /// <summary>Whether the map is drawn in the Scene view while it is painted. Serialized like the
-        /// picker above, so a recompile does not quietly turn the preview off - the preview's own objects
-        /// do not survive one, and this field is what says they should be built again.</summary>
+        /// <summary>Whether the map is drawn in the Scene view while it is painted. Serialized like the picker
+        /// above, so a recompile does not quietly turn the preview off - the preview's own objects do not
+        /// survive one, and this field is what says they should be built again.</summary>
         [SerializeField] private bool _preview;
 
         private MapBrush _brush = MapBrush.Ground;
@@ -75,21 +73,20 @@ namespace Facet.EditorTools
 
         /// <summary>
         /// Closing the window takes the window's own request for a preview with it. It does not take the
-        /// preview down: the Scene view's editor may be showing the same map, and which of the two the
-        /// Scene view is answering is <see cref="MapEditTarget"/>'s to decide, not this window's.
+        /// preview down: the Scene view's editor may be showing the same map, and which of the two the Scene
+        /// view is answering is <see cref="MapEditTarget"/>'s to decide, not this window's.
         /// </summary>
         private void OnDisable() => MapEditTarget.FromWindow(null);
 
         /// <summary>
-        /// Say what this window is asking for, in one place: the map it is pointed at while the toggle is
-        /// on, and nothing at all when it is off.
+        /// Say what this window is asking for, in one place: the map it is pointed at while the toggle is on,
+        /// and nothing at all when it is off.
         ///
-        /// The window is where its own preview is asked for, so it is also where one is asked for again - a
-        /// script reload destroys the preview's objects, and a window whose fields survived it is the only
-        /// thing that knows there was one. Saying it here rather than in each path that can change the
-        /// toggle or the map is what keeps the preview from needing a line on every one of them. It is a
-        /// request and not a decision: which map the Scene view ends up drawing is
-        /// <see cref="MapEditTarget"/>'s.
+        /// The window is also where a preview is asked for again - a script reload destroys the preview's
+        /// objects, and a window whose fields survived it is the only thing that knows there was one. Saying it
+        /// here rather than in each path that can change the toggle or the map keeps the preview from needing a
+        /// line on every one of them. It is a request and not a decision: which map the Scene view ends up
+        /// drawing is <see cref="MapEditTarget"/>'s.
         /// </summary>
         private void SyncPreview()
         {
@@ -124,9 +121,8 @@ namespace Facet.EditorTools
         }
 
         /// <summary>
-        /// The asset the window is editing, and the one way to make a new one. Everything else on screen
-        /// is drawn from whatever this field holds, so pointing it at another map is the whole of
-        /// "switching maps".
+        /// The asset the window is editing, and the one way to make a new one. Everything else on screen is
+        /// drawn from whatever this field holds, so pointing it at another map is the whole of "switching maps".
         /// </summary>
         private void DrawTarget()
         {
@@ -144,8 +140,8 @@ namespace Facet.EditorTools
             }
         }
 
-        /// <summary>The brushes, then the settings that go with them, the scene preview, and the two
-        /// actions that write.</summary>
+        /// <summary>The brushes, then the settings that go with them, the scene preview, and the two actions
+        /// that write.</summary>
         private void DrawToolbar(MapAsset asset)
         {
             EditorGUILayout.BeginHorizontal();

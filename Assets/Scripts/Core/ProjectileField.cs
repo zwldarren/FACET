@@ -34,9 +34,8 @@ namespace Facet.Core
     }
 
     /// <summary>
-    /// Shots in flight. They exist so that "every shot is a shape that was mined, split and carried" is
-    /// visible right up to the impact: what kills an enemy is a triangle that left a belt, not a
-    /// number subtracted at a turret.
+    /// Shots in flight, so "every shot is a shape that was mined, split and carried" stays visible to the
+    /// impact: what kills an enemy is a triangle that left a belt, not a number subtracted at a turret.
     /// </summary>
     public sealed class ProjectileField
     {

@@ -3,13 +3,10 @@ namespace Facet.Core
     /// <summary>
     /// What occupies a tile: the thing standing on the ground, as opposed to the ground itself.
     ///
-    /// The two questions are separate on purpose, and the split is what lets a map carry rock, water and
-    /// the void outside it without every rule about buildings learning about them. What the ground is
-    /// lives in <see cref="TerrainField"/>; this enum only ever answers "is something built here".
-    ///
-    /// The Core is the one kind the map places rather than the player, and it is a building all the same:
-    /// it occupies its tiles, it has health, and that is why <see cref="TileKindExtensions.IsBuilding"/>
-    /// counts it.
+    /// The split lets a map carry rock, water and the void outside it without every rule about buildings
+    /// learning about them. What the ground is lives in <see cref="TerrainField"/>; this enum only ever
+    /// answers "is something built here". The Core is the one kind the map places rather than the player,
+    /// but it is a building all the same - which is why <see cref="TileKindExtensions.IsBuilding"/> counts it.
     /// </summary>
     public enum TileKind : byte
     {
@@ -22,9 +19,8 @@ namespace Facet.Core
         /// reaching it is what a wave is for.</summary>
         Core = 2,
 
-        // 3 was ShapePatch. Retired, and not to be reused: terrain became its own layer
-        // (TerrainField), so "the ground is ore" is no longer an occupancy and no tile kind has to
-        // carry it. Leaving the number dead keeps every authored TileKind value in
+        // 3 was ShapePatch. Retired and not to be reused: terrain became its own layer
+        // (TerrainField), and leaving the number dead keeps every authored TileKind value in
         // Assets/Data/ContentDatabase.asset meaning what it meant before.
 
         /// <summary>Mines the ore under it and pushes a shape onto the belt it faces.</summary>
@@ -69,27 +65,22 @@ namespace Facet.Core
 
     public static class TileKindExtensions
     {
-        /// <summary>True for a building: something that occupies its tile, the Core included. Bare
-        /// ground is the only tile kind that is not one, because terrain is no longer a tile kind at
-        /// all - so this is simply "is something here".</summary>
+        /// <summary>True for a building: something that occupies its tile, the Core included. Bare ground
+        /// is the only kind that is not one, so this is simply "is something here".</summary>
         public static bool IsBuilding(this TileKind kind) => kind != TileKind.Empty;
 
         /// <summary>True for the built machines, which all carry a <see cref="MachineState"/>.
         ///
-        /// Written as the range the enum's own history defines - everything appended after the retired
-        /// 3 is a built thing carrying a MachineState - rather than a list of the kinds that happen to
-        /// exist today: a hand-written OR chain is a second list, and a new machine left out of it
-        /// silently never enters the registry. Defaulting the open end of the range to "machine" is
-        /// the deliberate choice - a new built kind is a machine unless someone has already said
-        /// otherwise. <see cref="ContentFormatTests"/> nails the ordinals, and if a future tile kind
-        /// is ever built but carries no MachineState, split this range <em>here</em>, on purpose.</summary>
+        /// Written as a range rather than a list of today's kinds: a hand-written OR chain is a second
+        /// list, and a new machine left out silently never enters the registry. The open end defaults to
+        /// "machine" deliberately. If a future tile kind is ever built but carries no MachineState, split
+        /// this range <em>here</em>, on purpose - <see cref="ContentFormatTests"/> nails the ordinals.</summary>
         public static bool IsMachine(this TileKind kind) => kind >= TileKind.Drill;
 
         /// <summary>
-        /// True for the tiles a belt can hand an item to: anything solid. This asks the same question as
-        /// <see cref="IsBuilding"/>, and it is still written down separately because it is the belt's own
-        /// rule read aloud - "the belt docked with something, rather than pointing at bare ground" - and
-        /// the view that draws a docking lane and the machine layer that reads a port both ask it.
+        /// True for the tiles a belt can hand an item to: anything solid. The same question as
+        /// <see cref="IsBuilding"/>, written down separately because it is the belt's own rule read aloud
+        /// - "the belt docked with something, rather than pointing at bare ground".
         /// </summary>
         public static bool Eats(this TileKind kind) => kind.IsBuilding();
     }

@@ -5,11 +5,10 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// Nails the staircase rule a belt drag lays - the one statement <c>BuildController.LayPath</c>
-    /// walks and <c>Sim.Route</c> asserts against. Before this module existed, the test harness
-    /// carried a line-for-line copy of the walk and the two could drift silently; these tests are
-    /// the drift alarm, and they pin the exact shape the player sees: dominant axis first, X wins a
-    /// tie, the end cell faces the way it was entered.
+    /// Nails the staircase rule a belt drag lays - the one statement <c>BuildController.LayPath</c> walks
+    /// and <c>Sim.Route</c> asserts against. Before this module existed the harness carried a copy of the
+    /// walk and the two could drift silently; these tests are the drift alarm, pinning the shape the
+    /// player sees: dominant axis first, X wins a tie, the end cell faces the way it was entered.
     /// </summary>
     public class BeltWalkTests
     {
@@ -28,8 +27,8 @@ namespace Facet.Tests
         [Test]
         public void Diagonal_TakesTheDominantAxisFirst()
         {
-            // |dy| = 5 > |dx| = 2, so the run leaves the press cell going north and puts its
-            // sideways legs at the far end.
+            // |dy| = 5 > |dx| = 2, so the run leaves the press cell going north and puts its sideways
+            // legs at the far end.
             List<BeltWalk.Step> steps = BeltWalk.Predict(new Int2(0, 0), new Int2(2, 5));
 
             Assert.AreEqual(8, steps.Count, "Manhattan distance + the end cell");
@@ -66,8 +65,8 @@ namespace Facet.Tests
         [Test]
         public void SingleStep_RunIsContiguous_AndEndsWhereTheDragWent()
         {
-            // The structural property behind every case above: each step delivers into the next,
-            // and the walk ends on the target cell.
+            // The structural property behind every case above: each step delivers into the next, and the
+            // walk ends on the target cell.
             Int2[] corners =
             {
                 new Int2(0, 0), new Int2(7, 0), new Int2(0, 7), new Int2(7, 7), new Int2(3, 4),

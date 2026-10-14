@@ -6,14 +6,11 @@ using UnityEngine;
 namespace Facet.Tests
 {
     /// <summary>
-    /// Guards on the project wiring that the game cannot check about itself at runtime.
-    ///
-    /// FACET has no textures and no sprites: every polygon is drawn by a runtime-generated mesh whose
-    /// colour lives in its vertices. That only works with a shader that multiplies vertex colour, and
-    /// the shader has to survive the build. It survives through the asset chain - the scene references
-    /// the Palette, the Palette references the view material, the material references the shader -
-    /// and this test is the guard on that chain, because the failure is not an error but a game that
-    /// renders entirely in one flat colour, in a build only, never in the Editor.
+    /// Guards on the project wiring the game cannot check about itself at runtime. FACET has no textures
+    /// or sprites: every polygon is a runtime-generated mesh whose colour lives in its vertices, which only
+    /// works if the shader multiplies vertex colour and survives the build - it does through the asset chain
+    /// (scene -> Palette -> view material -> shader). The failure is not an error but a build that renders
+    /// wholly in one flat colour, in a build only, never in the Editor.
     /// </summary>
     public class ProjectTests
     {

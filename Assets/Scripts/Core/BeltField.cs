@@ -3,8 +3,8 @@ using System.Collections.Generic;
 
 namespace Facet.Core
 {
-    /// <summary>State of one belt cell. A cell holds at most one item, which is what makes
-    /// throughput equal to <see cref="SimConfig.BeltSpeed"/> and a jam a single locatable cell.</summary>
+    /// <summary>State of one belt cell. A cell holds at most one item, which makes throughput equal to
+    /// <see cref="SimConfig.BeltSpeed"/> and a jam a single locatable cell.</summary>
     public struct BeltState
     {
         /// <summary>Which way items leave this cell.</summary>
@@ -41,27 +41,20 @@ namespace Facet.Core
         public bool Jammed;
     }
 
-    /// <summary>
-    /// The belt layer: one <see cref="BeltState"/> per tile, indexed exactly like
-    /// <see cref="TileGrid"/>. Whether a tile <em>is</em> a belt stays <see cref="TileGrid"/>'s
-    /// business (<see cref="TileKind.Belt"/>); this class only stores what is riding it.
+    /// <summary>The belt layer: one <see cref="BeltState"/> per tile, indexed exactly like
+    /// <see cref="TileGrid"/>. Whether a tile <em>is</em> a belt stays <see cref="TileGrid"/>'s business
+    /// (<see cref="TileKind.Belt"/>); this stores only what is riding it. Where a belt may be laid is
+    /// <see cref="TerrainField.CanLayBelt"/>: ground and ore take transport, so a run can cross a vein
+    /// while rock, water and void take nothing.
     ///
-    /// Where a belt may be laid is <see cref="TerrainField.CanLayBelt"/>: in bounds, with nothing
-    /// standing there, on ground that takes transport - which is ground and ore, so a belt run can cross
-    /// a vein while rock, water and the void outside the map take nothing at all.
-    ///
-    /// Determinism: every field lives in a fixed-length array walked by linear index, so no
-    /// update depends on dictionary enumeration order. The one order-sensitive decision - which
-    /// of two belts feeding the same cell gets it - is settled by a fixed rule (see
-    /// <see cref="ResolveHandoffs"/>).
-    /// </summary>
+    /// Determinism: every field is a fixed-length array walked by linear index, so no update depends on
+    /// dictionary order. The one order-sensitive decision - which of two belts feeding a cell gets it -
+    /// is settled by a fixed rule (<see cref="ResolveHandoffs"/>).</summary>
     public sealed class BeltField
     {
-        /// <summary>
-        /// Progress is snapped to exactly 1 once it lands this close, so an item can never be left
-        /// a few float ulps below the hand-off threshold and queue forever. 1e-4 of a tile is far
-        /// below one screen pixel at any sane zoom.
-        /// </summary>
+        /// <summary>Progress is snapped to exactly 1 once it lands this close, so an item can never be
+        /// left a few float ulps below the hand-off threshold and queue forever. 1e-4 of a tile is far
+        /// below one screen pixel.</summary>
         private const float ProgressEpsilon = 1e-4f;
 
         private const byte MemoTrue = 1;
@@ -70,8 +63,8 @@ namespace Facet.Core
         private readonly TileGrid _grid;
 
         /// <summary>The ground, for the one thing a removal owes it: handing the tile back exactly as the
-        /// map drew it. A belt crossing a vein leaves the vein, and a belt over bare ground leaves bare
-        /// ground, without this layer having to remember which was which.</summary>
+        /// map drew it - a belt crossing a vein leaves the vein, one over bare ground leaves bare ground,
+        /// without this layer remembering which was which.</summary>
         private readonly TerrainField _terrain;
 
         /// <summary>The stream jams and fixes are reported on. Derived telemetry: nothing here reads
@@ -86,15 +79,12 @@ namespace Facet.Core
         /// <summary>Commit list for the current tick, in post-order: successors before predecessors.</summary>
         private readonly List<int> _handoffOrder = new List<int>();
 
-        /// <summary>
-        /// Bumped by every change a renderer would have to redraw. Items moving deliberately do not
-        /// bump it - they are drawn every frame anyway, while the belt bed only changes when it is built.
-        /// </summary>
+        /// <summary>Bumped by every change a renderer would have to redraw. Items moving deliberately do
+        /// not bump it - they are drawn every frame, while the belt bed only changes when it is built.</summary>
         public int Revision { get; private set; }
 
-        /// <summary>How many belt cells are blocked right now. Maintained on mutation rather than
-        /// counted per frame, because the HUD reads it every frame and the twist's whole failure mode
-        /// is "how many segments are red".</summary>
+        /// <summary>How many belt cells are blocked right now. Maintained on mutation, because the HUD
+        /// reads it every frame and the twist's whole failure mode is "how many segments are red".</summary>
         public int JamCount { get; private set; }
 
         public BeltField(TileGrid grid, TerrainField terrain, SimEventBuffer events)
@@ -128,8 +118,8 @@ namespace Facet.Core
         public bool IsJammed(Int2 cell) => Has(cell) && _state[_grid.Index(cell)].Jammed;
 
         /// <summary>Lay a new belt. Fails out of bounds, on a tile that already holds something, on
-        /// ground that takes no transport, or on an existing belt. Ground and ore both take one (see
-        /// <see cref="TerrainField.CanLayBelt"/>), so a run can cross a vein.</summary>
+        /// ground that takes no transport, or on an existing belt. Ground and ore both take one
+        /// (<see cref="TerrainField.CanLayBelt"/>), so a run can cross a vein.</summary>
         public bool TryPlace(Int2 cell, Dir direction)
         {
             if (!_terrain.CanLayBelt(cell)) return false;
@@ -142,10 +132,8 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>
-        /// Re-point an existing belt. Used by the drag while it still owns the cell it laid,
-        /// so dragging never silently rotates a belt the player placed earlier.
-        /// </summary>
+        /// <summary>Re-point an existing belt. Used by the drag while it still owns the cell it laid, so
+        /// dragging never silently rotates a belt the player placed earlier.</summary>
         public bool TrySetDirection(Int2 cell, Dir direction)
         {
             if (!Has(cell)) return false;
@@ -154,8 +142,8 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>Remove a belt and destroy whatever it was carrying. The ground under it comes back:
-        /// a belt crossing a vein leaves the vein, not a hole.</summary>
+        /// <summary>Remove a belt and destroy whatever it carried. The ground comes back: a belt crossing
+        /// a vein leaves the vein, not a hole.</summary>
         public bool TryRemove(Int2 cell)
         {
             if (!Has(cell)) return false;
@@ -168,10 +156,9 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>
-        /// Block a cell. The item on it freezes where it stands rather than snapping to a canonical
-        /// position, so a jam reads as "stuck here", and everything upstream backs up behind it.
-        /// </summary>
+        /// <summary>Block a cell. The item on it freezes where it stands rather than snapping to a
+        /// canonical position, so a jam reads as "stuck here", and everything upstream backs up behind
+        /// it.</summary>
         public bool TryJam(Int2 cell)
         {
             if (!Has(cell)) return false;
@@ -188,10 +175,8 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>
-        /// Clear a jam and destroy the item that caused it. Destroying the item is not optional:
-        /// leave it in place and the very next tick re-jams the same cell.
-        /// </summary>
+        /// <summary>Clear a jam and destroy the item that caused it. Destroying the item is not
+        /// optional: leave it in place and the very next tick re-jams the same cell.</summary>
         public bool TryClearJam(Int2 cell)
         {
             if (!Has(cell)) return false;
@@ -206,11 +191,9 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>
-        /// Take the item off a cell and keep the belt. This is how a turret eats and how a decomposer
-        /// takes its delivery: the machine consumes the delivery and the line carries on. The caller decides
-        /// whether the item was the right shape; this only moves it.
-        /// </summary>
+        /// <summary>Take the item off a cell and keep the belt - how a turret eats and a decomposer takes
+        /// its delivery: the machine consumes the delivery and the line carries on. The caller decides
+        /// whether the shape was right; this only moves it.</summary>
         public bool TryTakeItem(Int2 cell, out ShapeType shape)
         {
             shape = ShapeType.None;
@@ -225,10 +208,8 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>
-        /// Drop an item onto an empty, unjammed belt cell. Drills use this; so do the tests, which is
-        /// why it is not gated behind anything.
-        /// </summary>
+        /// <summary>Drop an item onto an empty, unjammed belt cell. Drills use this; so do the tests,
+        /// which is why it is not gated behind anything.</summary>
         public bool TrySpawnItem(Int2 cell, ShapeType shape)
         {
             if (shape == ShapeType.None || !Has(cell)) return false;
@@ -260,10 +241,8 @@ namespace Facet.Core
             }
         }
 
-        /// <summary>
-        /// Pass 1. An item advances to the end of its own cell and no further - it does not need to
-        /// know whether the next cell is free, because progress 1 <em>is</em> the boundary it queues on.
-        /// </summary>
+        /// <summary>Pass 1. An item advances to the end of its own cell and no further - it need not know
+        /// whether the next cell is free, because progress 1 <em>is</em> the boundary it queues on.</summary>
         private void AdvanceProgress(float dt, float beltSpeed)
         {
             float step = beltSpeed * dt;
@@ -277,19 +256,13 @@ namespace Facet.Core
             }
         }
 
-        /// <summary>
-        /// Passes 2 and 3. Decide who may move, then commit.
+        /// <summary>Passes 2 and 3. Decide who may move, then commit.
         ///
         /// This split is the whole reason the file exists. When a belt is packed, every item reaches
-        /// progress 1 on the same tick and every successor is "occupied", so:
-        ///   * moving in place during one sweep makes a belt whose flow opposes the sweep order
-        ///     release one item per tick instead of a whole cell per tick - throughput collapses;
-        ///   * testing the raw snapshot makes a packed belt deadlock outright.
-        /// Resolving "may I hand off" as a fixpoint first (a successor that is itself vacating this
-        /// tick counts as free) makes a packed belt shift one cell as a train, which costs zero
-        /// world-space motion because progress 1 of a cell and progress 0 of its successor are the
-        /// same point.
-        /// </summary>
+        /// progress 1 on the same tick and every successor is "occupied", so moving in place during one
+        /// sweep collapses throughput and testing the raw snapshot deadlocks outright. Resolving "may I
+        /// hand off" as a fixpoint first (a successor vacating this tick counts as free) makes a packed
+        /// belt shift one cell as a train, at zero world-space motion.</summary>
         private void ResolveHandoffs()
         {
             // Pass 2: evaluate against one frozen snapshot and record the commit order.
@@ -298,9 +271,9 @@ namespace Facet.Core
             _handoffOrder.Clear();
             for (int i = 0; i < _memo.Length; i++) CanHandoff(i);
 
-            // Pass 3: commit in post-order, so a cell that is vacating this tick is emptied before
-            // the cell behind it fills it. Writing in plain index order would overwrite the item
-            // of a cell that had not moved yet and then move the wrong item.
+            // Pass 3: commit in post-order, so a cell vacating this tick is emptied before the cell
+            // behind it fills it. Writing in plain index order would overwrite the item of a cell that
+            // had not moved yet and then move the wrong item.
             Array.Clear(_claimed, 0, _claimed.Length);
             for (int k = 0; k < _handoffOrder.Count; k++)
             {
@@ -319,12 +292,10 @@ namespace Facet.Core
             }
         }
 
-        /// <summary>
-        /// May the item on <paramref name="index"/> move on this tick? Memoised, and appended to
-        /// <see cref="_handoffOrder"/> on the way out so predecessors are committed after successors.
-        /// A cycle - a full loop of belts - is the one shape that genuinely deadlocks, so it
-        /// evaluates false.
-        /// </summary>
+        /// <summary>May the item on <paramref name="index"/> move on this tick? Memoised, and appended to
+        /// <see cref="_handoffOrder"/> on the way out so predecessors are committed after successors. A
+        /// cycle - a full loop of belts - is the one shape that genuinely deadlocks, so it evaluates
+        /// false.</summary>
         private bool CanHandoff(int index)
         {
             byte memo = _memo[index];
@@ -382,6 +353,22 @@ namespace Facet.Core
             }
         }
 
+        /// <summary>Every jammed cell, in the same stable linear-index order as <see cref="GetBelts"/>.
+        /// <see cref="JamCount"/> answers "how many"; this answers "which ones", which a player needs the
+        /// moment the segment to right-click is off the screen. A dedicated walk rather than a filtered
+        /// <see cref="GetBelts"/>: a jam is the one state a view has to go and find.</summary>
+        public void GetJammed(List<Int2> into)
+        {
+            into.Clear();
+            if (JamCount == 0) return;
+
+            for (int i = 0; i < _state.Length; i++)
+            {
+                if (!_state[i].Jammed) continue;
+                into.Add(_grid.CellOf(i));
+            }
+        }
+
         /// <summary>Every item, with the world positions the view interpolates between.</summary>
         public void GetItems(List<ItemSnapshot> into)
         {
@@ -401,11 +388,9 @@ namespace Facet.Core
             }
         }
 
-        /// <summary>
-        /// World position of an item at a given progress. Progress 0 sits half a tile before the cell
-        /// centre and 1 half a tile past it, so progress 1 of one cell and progress 0 of its successor
-        /// are the same point - a hand-off never visibly jumps.
-        /// </summary>
+        /// <summary>World position of an item at a given progress. Progress 0 sits half a tile before the
+        /// cell centre and 1 half a tile past it, so progress 1 of one cell and progress 0 of its successor
+        /// are the same point - a hand-off never visibly jumps.</summary>
         private Vec2 WorldPositionOf(Int2 cell, float progress, Dir direction)
         {
             return _grid.CellCenter(cell) + direction.ToVec() * (progress - 0.5f);

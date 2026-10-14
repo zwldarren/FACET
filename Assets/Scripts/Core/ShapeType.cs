@@ -1,11 +1,9 @@
 namespace Facet.Core
 {
     /// <summary>
-    /// The item shapes. Map 1 mines one mineral (the circle) and splits it into ammunition (the
-    /// half-circle); map 2 opens a second mineral (the square) that splits into a second ammunition
-    /// (the half-square) for a second gun. Colours and polygon sides are the VIEW's business, not the
-    /// simulation's - Core only knows the identity, so a new mineral is a value here and a patch in a
-    /// map, with no code anywhere that has to learn about it.
+    /// The item shapes. Map 1 mines one mineral (the circle) and splits it into ammo (the half-circle);
+    /// map 2 opens a second mineral (the square) splitting into a second ammo (the half-square). Colours
+    /// and polygon sides are the VIEW's business - Core only knows the identity.
     /// </summary>
     public enum ShapeType
     {
@@ -27,11 +25,8 @@ namespace Facet.Core
 
     public static class ShapeTypeExtensions
     {
-        /// <summary>
-        /// True for the real shapes, false for <see cref="ShapeType.None"/>. Written as "not nothing"
-        /// rather than a list of the shapes that exist, deliberately: a new mineral must be one enum
-        /// value and one patch, not a value plus three lists that have to remember to include it.
-        /// </summary>
+        /// <summary>True for the real shapes, false for <see cref="ShapeType.None"/>. Written as "not
+        /// nothing" so a new mineral is one enum value and one patch, not a value plus more lists.</summary>
         public static bool IsShape(this ShapeType shape) => shape != ShapeType.None;
     }
 }

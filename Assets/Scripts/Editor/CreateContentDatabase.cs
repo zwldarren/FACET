@@ -8,10 +8,10 @@ using UnityEngine;
 namespace Facet.EditorTools
 {
     /// <summary>
-    /// Creates the tunable content asset from the shipped table, so a designer starts from every
-    /// current value rather than from empty arrays. It reads <see cref="ContentDatabase.Default"/> -
-    /// the same numbers the simulation runs on - so the asset can never start out disagreeing with the
-    /// game, and there is exactly one place the shipped numbers are written down.
+    /// Creates the tunable content asset from the shipped table, so a designer starts from every current value
+    /// rather than from empty arrays. It reads <see cref="ContentDatabase.Default"/> - the same numbers the
+    /// simulation runs on - so the asset can never start out disagreeing with the game, and there is exactly one
+    /// place the shipped numbers are written down.
     ///
     /// Batchmode: <c>Unity -batchmode -quit -projectPath &lt;project&gt;
     /// -executeMethod Facet.EditorTools.CreateContentDatabase.CreateFilled</c>
@@ -57,14 +57,13 @@ namespace Facet.EditorTools
         /// <summary>
         /// Rebuild the existing asset's rows from the shipped table, <em>in place</em>.
         ///
-        /// In place rather than by recreating the file, and this is the whole reason it is a separate
-        /// entry point: Assets/Scenes/Main.unity references this asset by GUID, and replacing the object
-        /// on disk would break that reference. "Start over from the shipped numbers" is also a
-        /// destructive thing to do to a tuned asset, so it is a menu item with its own name rather than
-        /// something that happens on its own.
+        /// In place rather than by recreating the file, and this is the whole reason it is a separate entry
+        /// point: Assets/Scenes/Main.unity references this asset by GUID, and replacing the object on disk would
+        /// break that reference. "Start over from the shipped numbers" is also a destructive thing to do to a
+        /// tuned asset, so it is a menu item with its own name rather than something that happens on its own.
         ///
-        /// It is also how the asset learns about content added since it was made - a new mineral, a new
-        /// recipe, a new building - without anyone hand-copying numbers.
+        /// It is also how the asset learns about content added since it was made - a new mineral, a new recipe, a
+        /// new building - without anyone hand-copying numbers.
         /// </summary>
         [MenuItem("FACET/Refresh Content Database from shipped table", priority = 21)]
         public static void Refresh()

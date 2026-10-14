@@ -4,13 +4,10 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// EditMode tests for the twist itself: a turret fires only what a belt physically delivers to
-    /// it, a wrong shape jams the segment it lands on, and a jam silences everything downstream.
-    ///
-    /// The test world is 20x12 (Core at (8,4)-(11,7)) with an effectively immortal Core, so a turret
-    /// test measures firing and never drifts into the run ending under it. Turrets sit at y=10; the
-    /// enemies walk to the Core and then stop, which keeps a target inside a turret's range for as
-    /// long as a test needs.
+    /// EditMode tests for the twist itself: a turret fires only what a belt physically delivers to it, a wrong
+    /// shape jams the segment it lands on, and a jam silences everything downstream. The world is 20x12 (Core at
+    /// (8,4)-(11,7)) with an effectively immortal Core, so a turret test measures firing and never drifts into
+    /// the run ending. Turrets sit at y=10; enemies walk to the Core and stop, keeping a target in range.
     /// </summary>
     public class TurretTests
     {
@@ -29,13 +26,10 @@ namespace Facet.Tests
             return world;
         }
 
-        /// <summary>Another target walking in: Spikes die to two shots, so a firing-rate test keeps
-        /// the range stocked rather than watching one corpse.
-        ///
-        /// It walks in south-east of the Core, out of the turret's own reach: a machine is solid and
-        /// attackable now, and a target spawned on the turret's lane (1.0 away) stops and chews the
-        /// 80-hp gun instead of being shot - which measures a dead turret, not a fire rate. From here
-        /// the walk to the Core stays 3+ tiles from the turret, inside its 7-tile range.</summary>
+        /// <summary>Another target walking in: Spikes die to two shots, so a firing-rate test keeps the range
+        /// stocked rather than watching one corpse. It walks in south-east of the Core, out of the turret's own
+        /// reach - a target spawned on the turret's lane (1.0 away) would stop and chew the 80-hp gun instead of
+        /// being shot, measuring a dead turret rather than a fire rate. The walk stays 3+ tiles out, inside range.</summary>
         private static void SpawnFreshSpike(SimWorld world)
             => world.Enemies.Spawn(EnemyKind.Spike, new Vec2(13.5f, 7.5f));
 
@@ -69,9 +63,9 @@ namespace Facet.Tests
         [Test]
         public void Turret_FireRateIsTheLinesRate_NotItsSpec()
         {
-            // A saturated line: the belt delivers 1/s, the cannon's ceiling is 1/s, so twelve
-            // seconds of targets and feed is about twelve shots, give or take travel time. Targets
-            // keep coming because a Spike folds after two shots - it cannot tank a rate measurement.
+            // A saturated line: the belt delivers 1/s and the cannon's ceiling is 1/s, so twelve seconds of
+            // targets and feed is about twelve shots, give or take travel time. Targets keep coming because a
+            // Spike folds after two shots - it cannot tank a rate measurement.
             SimWorld fed = CannonWorld();
             for (int i = 0; i < 12 * 30; i++)
             {
@@ -82,8 +76,8 @@ namespace Facet.Tests
             Assert.GreaterOrEqual(fed.ShotsFired, 8, "one belt reaches the cannon's 1/s ceiling");
             Assert.LessOrEqual(fed.ShotsFired, 13, "and the ceiling holds: no faster line exists here");
 
-            // A starving line: one item every four seconds fires one shot every four seconds. The
-            // spec did not change - the supply did, which is the whole mechanic.
+            // A starving line: one item every four seconds fires one shot every four seconds. The spec did not
+            // change - the supply did, which is the whole mechanic.
             SimWorld starved = CannonWorld();
             for (int i = 0; i < 5; i++)
             {
@@ -112,10 +106,9 @@ namespace Facet.Tests
         }
 
         /// <summary>
-        /// The weakness rule, on the field directly rather than through a turret: a shot that matches
-        /// the target's weakness lands its full damage, and one that does not lands a quarter of it.
-        /// Read off the HP rather than the event stream so a change to either multiplier shows up as
-        /// the number it is.
+        /// The weakness rule, on the field directly rather than through a turret: a shot matching the target's
+        /// weakness lands full damage, one that does not a quarter of it. Read off the HP rather than the event
+        /// stream so a change to either multiplier shows up as the number it is.
         /// </summary>
         [Test]
         public void EnemyWeakness_ControlsHowMuchDamageAShapeDeals()
@@ -141,10 +134,9 @@ namespace Facet.Tests
         [Test]
         public void Turret_PrefersTheEnemyItsAmmoHurts()
         {
-            // A Bulwark closer than a Spike, both in range: the cannon aims at the Spike, because a
-            // matched shot lands four times what a resisted one does. Both spawn far enough off the
-            // turret's lane that neither charges the gun itself (3.6 and 5 tiles against a notice of
-            // 3.2), and the aim is read after one tick, before either has walked anywhere.
+            // A Bulwark closer than a Spike, both in range: the cannon aims at the Spike, because a matched shot
+            // lands four times what a resisted one does. Both spawn far enough off the turret's lane that neither
+            // charges the gun (3.6 and 5 tiles against a notice of 3.2), and the aim is read after one tick.
             SimWorld world = CannonWorld();
             world.Enemies.Spawn(EnemyKind.Bulwark, new Vec2(13.5f, 8.5f));
             int spike = world.Enemies.Spawn(EnemyKind.Spike, new Vec2(14.5f, 7.5f));
@@ -158,9 +150,9 @@ namespace Facet.Tests
         [Test]
         public void Turret_StillShootsAResistedEnemy_WhenNothingWeakIsInRange()
         {
-            // The preference is not a refusal: with only a Bulwark in range the cannon plinks away at
-            // a quarter damage, and eight resisted halves still bring six health down. Its walk to the
-            // Core passes 3+ tiles from the gun, inside the 7-tile range the whole way.
+            // The preference is not a refusal: with only a Bulwark in range the cannon plinks away at a quarter
+            // damage, and eight resisted halves still bring six health down. Its walk to the Core passes 3+ tiles
+            // from the gun, inside the 7-tile range the whole way.
             SimWorld world = CannonWorld();
             world.Enemies.Spawn(EnemyKind.Bulwark, new Vec2(13.5f, 8.5f));
 
@@ -235,9 +227,9 @@ namespace Facet.Tests
         [Test]
         public void Turret_IgnoresWhatIsOutOfRange()
         {
-            // Two turrets, same supply: the enemy walks to the Core and dies there under the near
-            // one's fire, never once entering the far one's range. A Spike only tanks two shots, so
-            // the target flags are sampled every tick instead of after the fight.
+            // Two turrets, same supply: the enemy walks to the Core and dies there under the near one's fire,
+            // never entering the far one's range. A Spike only tanks two shots, so the target flags are sampled
+            // every tick instead of after the fight.
             SimWorld world = Sim.NewEnduringWorld(W, H);
             var near = new Int2(12, 11);
             var far = new Int2(19, 11);
@@ -246,8 +238,8 @@ namespace Facet.Tests
             Sim.Place(world, BuildKind.Cannon, near, Dir.East);
             Sim.Place(world, BuildKind.Cannon, far, Dir.East);
 
-            // Walks to the Core (10,6) and stops on its edge. At the spawn point it is already 7.4
-            // tiles from `far` against a range of 7, and every step it takes is toward the Core.
+            // Walks to the Core (10,6) and stops on its edge. At the spawn point it is already 7.4 tiles from
+            // `far` against a range of 7, and every step it takes is toward the Core.
             world.Enemies.Spawn(EnemyKind.Spike, new Vec2(13f, 8f));
 
             bool nearSawTarget = false;

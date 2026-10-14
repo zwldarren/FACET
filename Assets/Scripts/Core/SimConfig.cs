@@ -8,11 +8,8 @@ namespace Facet.Core
 
         public const float TickDt = 1f / TickRate;
 
-        /// <summary>
-        /// Belt travel speed in tiles per second. Because a belt cell holds exactly one item,
-        /// this is also the belt's throughput in items per second - 1 tile/s therefore means
-        /// exactly 1 item/s, which is the ratio every turret's supply is reasoned about with.
-        /// </summary>
+        /// <summary>Belt travel speed in tiles per second. A belt cell holds one item, so this is also
+        /// throughput in items/s - 1 tile/s is exactly 1 item/s, the ratio turret supply is reasoned about with.</summary>
         public float BeltSpeed = 1f;
 
         /// <summary>HP of the defended object. Reaching 0 loses the run.</summary>

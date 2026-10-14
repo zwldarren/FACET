@@ -3,29 +3,24 @@ using System.Collections.Generic;
 
 namespace Facet.Core
 {
-    /// <summary>
-    /// State of one built machine. One struct covers drills, decomposers, pipes, splitters and
+    /// <summary>State of one built machine. One struct covers drills, decomposers, pipes, splitters and
     /// turrets because they share the two things that make the twist work: a facing (where a
-    /// drill/decomposer pushes, where a pipe carries, where a turret's barrel points) and being fed
-    /// from the belt cells that deliver into them.
-    ///
-    /// The fields a given kind does not use are deliberate: five parallel arrays with five sets of
-    /// accessors would cost more to read than this costs to store (a few tens of KB for the whole map).
-    /// </summary>
+    /// drill/decomposer pushes, a pipe carries, a turret's barrel points) and being fed from the belt
+    /// cells that deliver into them. The unused fields per kind are deliberate: five parallel arrays would
+    /// cost more to read than this costs to store.</summary>
     public struct MachineState
     {
         /// <summary>One of the machine <see cref="TileKind"/>s. <see cref="TileKind.Empty"/> means the
         /// cell holds no machine.</summary>
         public TileKind Kind;
 
-        /// <summary>Which building this is. Turrets read their whole spec - diet, rate, damage,
-        /// range - back out of it, so one field covers the kind and its numbers.</summary>
+        /// <summary>Which building this is. Turrets read their whole spec - diet, rate, damage, range -
+        /// back out of it, so one field covers the kind and its numbers.</summary>
         public BuildKind Build;
 
         /// <summary>Drill and decomposer: the cell they push out to. Pipe: the direction it carries
-        /// across. Splitter: unused - its ports are read off the belts around it. Sorter: which side
-        /// the filtered shape leaves by; the other shapes leave by the other sides. Turret: where its
-        /// barrel rests when it has no target.</summary>
+        /// across. Splitter: unused - its ports are read off the belts around it. Sorter: which side the
+        /// filtered shape leaves by. Turret: where its barrel rests when it has no target.</summary>
         public Dir Direction;
 
         /// <summary>Seconds until this machine may act again. Pipe: the remaining transit time of the
@@ -61,8 +56,7 @@ namespace Facet.Core
         public bool Armed;
 
         /// <summary>Health enemies have left to chew through. Initialized on placement from the
-        /// building's <see cref="MachineDef.MaxHp"/>; a definition with MaxHp 0 leaves this at 0 and is
-        /// never targeted.</summary>
+        /// building's <see cref="MachineDef.MaxHp"/>; MaxHp 0 leaves this at 0 and is never targeted.</summary>
         public float Hp;
     }
 
@@ -73,8 +67,8 @@ namespace Facet.Core
         public TileKind Kind;
 
         /// <summary>Which building this is, and which behaviour drives it. Both are carried so the view
-        /// can dispatch on the behaviour ("draw a converter") while still resolving the per-building
-        /// look override the player authored, without looking either up per frame.</summary>
+        /// can dispatch on the behaviour ("draw a converter") while resolving the per-building look
+        /// override, without looking either up per frame.</summary>
         public BuildKind Build;
         public BehaviorKind Behavior;
 
@@ -93,8 +87,8 @@ namespace Facet.Core
         public float HealthFraction => MaxHp <= 0f ? 0f : Hp / MaxHp;
 
         /// <summary>What the building draws on itself: a turret's diet, a sorter's filter shape (the
-        /// badge that says which shape goes which way), a decomposer's pending halves (or the circle
-        /// being split), a pipe or splitter's buffered item, None when idle.</summary>
+        /// badge that says which shape goes which way), a decomposer's pending halves (or the circle being
+        /// split), a pipe or splitter's buffered item, None when idle.</summary>
         public ShapeType Shape;
 
         /// <summary>Work-in-progress fraction for the view to animate: a decomposer's split, a pipe's
@@ -102,24 +96,21 @@ namespace Facet.Core
         public float Work;
 
         /// <summary>Sides a belt feeds this machine from, and sides it pushes onto - the same sets the
-        /// tick acts on, computed once in Core by <see cref="MachineDelivery.PortMasks"/>. The view
-        /// draws its stubs and its neighbours' docking lanes from these instead of re-deriving the
-        /// rule, so the picture cannot drift from the simulation.</summary>
+        /// tick acts on, computed once in Core by <see cref="MachineDelivery.PortMasks"/>. The view draws
+        /// its stubs and its neighbours' docking lanes from these instead of re-deriving the rule, so the
+        /// picture cannot drift from the simulation.</summary>
         public DirMask InMask;
         public DirMask OutMask;
     }
 
-    /// <summary>
-    /// Where the machines are and what they are doing. Storage and placement rules, the occupancy
-    /// registry the tick walks, and the snapshots the view reads - the tick behaviour itself lives in
+    /// <summary>Where the machines are and what they are doing: storage and placement rules, the
+    /// occupancy registry the tick walks, and the snapshots the view reads. The tick behaviour lives in
     /// the machine behaviours, dispatched by <c>MachineSystem</c>.
     ///
     /// It keeps an explicit <see cref="Occupied"/> list of the cells that hold a machine, so stepping
-    /// the machines and counting turrets cost the number of machines and not the number of tiles. The
-    /// list is kept in ascending linear-index order rather than insertion order: iteration order is
-    /// then the map's, independent of the order the player happened to build in, which is what keeps a
-    /// replay of the same commands identical.
-    /// </summary>
+    /// machines and counting turrets cost the number of machines, not tiles. The list is kept in ascending
+    /// linear-index order rather than insertion order, so iteration order is the map's, independent of
+    /// build order - which keeps a replay of the same commands identical.</summary>
     public sealed class MachineField
     {
         private readonly TileGrid _grid;
@@ -127,8 +118,8 @@ namespace Facet.Core
         private readonly BeltField _belts;
         private readonly ContentDatabase _content;
 
-        /// <summary>The map, for the one tile-rule that is the map's: a wave enters at its doorways, so
-        /// no machine may stand on one.</summary>
+        /// <summary>The map, for the one tile-rule that is the map's: waves enter at its doorways, so no
+        /// machine may stand on one.</summary>
         private readonly MapDefinition _map;
 
         /// <summary>The stream enemy damage to buildings is reported on. Derived telemetry: nothing
@@ -190,20 +181,16 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>Mutable ref for the machine behaviours, which update cooldowns, aim and armed
-        /// state in place.</summary>
+        /// <summary>Mutable ref for the machine behaviours, which update cooldowns, aim and armed state
+        /// in place.</summary>
         public ref MachineState RefAt(Int2 cell) => ref _state[_grid.Index(cell)];
 
-        /// <summary>
-        /// May a machine of this kind stand here? A drill only on a vein (that is what "mined" means) and
-        /// every other machine only on plain ground - a tile carrying a belt is occupied, so the belt
-        /// comes out first, which is the whole cost of a belt crossing a vein - and no machine at all on a
-        /// wave's doorway, the one place it would seal a wave inside itself. A belt stays legal there
-        /// because only something solid would plug a door.
-        ///
-        /// The ground half of the rule is <see cref="TerrainField.CanPlaceMachine"/>, which is also where
-        /// rock, water and the void outside the map refuse every machine at once.
-        /// </summary>
+        /// <summary>May a machine of this kind stand here? A drill only on a vein and every other machine
+        /// only on plain ground - a belt is occupied, so it comes out first, the whole cost of a belt
+        /// crossing a vein - and no machine on a wave's doorway, the one place it would seal a wave in. A
+        /// belt stays legal there because only something solid would plug a door. The ground half of the
+        /// rule is <see cref="TerrainField.CanPlaceMachine"/>, which is also where rock, water and the void
+        /// refuse every machine at once.</summary>
         public bool CanPlace(BuildKind build, Int2 cell)
         {
             if (!_grid.InBounds(cell)) return false;
@@ -249,15 +236,12 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>
-        /// Apply enemy damage to the machine at a cell. Reports <see cref="SimEventKind.BuildingDamaged"/>
-        /// and, when the last of its HP goes, <see cref="SimEventKind.BuildingDestroyed"/> - then removes
-        /// the machine exactly as <see cref="TryRemove"/> does (terrain restored, carried item lost) but
-        /// with no refund: destruction is not the player cashing out.
-        ///
-        /// False when there is nothing attackable there (no machine, or a definition with MaxHp 0, which
-        /// is indestructible - see <see cref="MachineDef.MaxHp"/>). Returns true iff the building died.
-        /// </summary>
+        /// <summary>Apply enemy damage to the machine at a cell. Reports
+        /// <see cref="SimEventKind.BuildingDamaged"/> and, when the last HP goes,
+        /// <see cref="SimEventKind.BuildingDestroyed"/> - then removes the machine as <see cref="TryRemove"/>
+        /// does (terrain restored, carried item lost) but with no refund. False when nothing attackable is
+        /// there (no machine, or MaxHp 0 - indestructible, see <see cref="MachineDef.MaxHp"/>). Returns true
+        /// iff the building died.</summary>
         public bool DamageAt(Int2 cell, float damage)
         {
             if (!Has(cell)) return false;
@@ -278,17 +262,12 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>
-        /// The nearest attackable machine (<see cref="MachineDef.MaxHp"/> above 0) to
-        /// <paramref name="centre"/> within <paramref name="range"/>. Ties go to the later occupied
-        /// cell - the map's order, not the caller's - because the scan keeps overwriting on an exact
-        /// tie, so the highest-index match wins for both the plain and the turret-preferring pick.
-        /// With <paramref name="preferTurrets"/>, a standing
-        /// turret is charged in preference to any other machine in the same radius - the wave hunts the
-        /// gun before the granary, because the gun is what is emptying the wave into the ground; the
-        /// gun chosen is the nearest one, and single-machine cases read exactly as the plain rule does.
-        /// False when nothing is in range, in which case the output is unusable.
-        /// </summary>
+        /// <summary>The nearest attackable machine (<see cref="MachineDef.MaxHp"/> above 0) to
+        /// <paramref name="centre"/> within <paramref name="range"/>. Ties go to the later occupied cell -
+        /// the map's order, not the caller's - because the scan keeps overwriting on an exact tie. With
+        /// <paramref name="preferTurrets"/>, a standing turret is charged in preference to any other machine
+        /// in range: the wave hunts the gun before the granary. False when nothing is in range, in which
+        /// case the output is unusable.</summary>
         public bool TryFindNearest(Vec2 centre, float range, out Int2 cell, bool preferTurrets = false)
         {
             float bestSq = range * range;
@@ -353,8 +332,8 @@ namespace Facet.Core
         }
 
         /// <summary>Turret count and how many are armed - the HUD's one diagnostic number. Asks the
-        /// content table whether a building is a turret rather than testing a tile kind, so the second
-        /// gun counts without this method knowing it exists.</summary>
+        /// content table whether a building is a turret rather than testing a tile kind, so the second gun
+        /// counts without this method knowing it exists.</summary>
         public void CountTurrets(out int total, out int armed)
         {
             total = 0;
@@ -393,8 +372,8 @@ namespace Facet.Core
             };
         }
 
-        /// <summary>Insert an occupied cell, keeping the list sorted. Occupancy is monotone per cell,
-        /// so a cell can never be added twice.</summary>
+        /// <summary>Insert an occupied cell, keeping the list sorted. Occupancy is monotone per cell, so a
+        /// cell can never be added twice.</summary>
         private void AddOccupied(int index)
         {
             int at = _occupied.BinarySearch(index);

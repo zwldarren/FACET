@@ -10,27 +10,24 @@ namespace Facet.Core
         Lost = 2,
     }
 
-    /// <summary>
-    /// What the wave clock is doing right now. Readers used to compose this themselves from two
-    /// sentinels - <see cref="WaveDirector.CurrentWave"/> == 0 meant "waiting", with
-    /// <see cref="WaveDirector.NextWave"/> == 0 for "nothing left to wait for" - and a renderer stated
-    /// "a countdown is running" a third way, by a non-zero total. Each recomposition was a chance to
-    /// state the rule wrong; the state is the director's, so the answer is too. Branch on this.
-    /// </summary>
+    /// <summary>What the wave clock is doing right now. Readers used to compose this from two sentinels -
+    /// <see cref="WaveDirector.CurrentWave"/> == 0 meant "waiting", <see cref="WaveDirector.NextWave"/> == 0
+    /// for "nothing left to wait for" - and a renderer stated "a countdown is running" a third way. The
+    /// state is the director's, so the answer is too. Branch on this.</summary>
     public enum WavePhase : byte
     {
         /// <summary>A wave is on the clock: its groups are spawning or its enemies are still alive.</summary>
         Running = 0,
 
-        /// <summary>Between two waves, with a clock running - the wave after this one starts itself
-        /// when the countdown ends. Every wait but the opening is one of these, and the opening becomes
-        /// one the moment the player's first building arms it.</summary>
+        /// <summary>Between two waves, with a clock running - the wave after this one starts itself when
+        /// the countdown ends. Every wait but the opening is one of these, and the opening becomes one the
+        /// moment the player's first building arms it.</summary>
         Intermission = 1,
 
         /// <summary>The opening, before its clock has been armed: the first wave waits for the player's
-        /// first building (<see cref="WaveDirector.ArmFirstWave"/>), and no time passes at all - so
-        /// reading the map and planning the first line cost nothing. <see cref="WaveDirector.StartNextWave"/>
-        /// ends the wait with no building placed, for a player who wants the wave now.</summary>
+        /// first building (<see cref="WaveDirector.ArmFirstWave"/>), and no time passes - so reading the map
+        /// and planning cost nothing. <see cref="WaveDirector.StartNextWave"/> ends the wait with no
+        /// building placed.</summary>
         Held = 2,
 
         /// <summary>Every wave in the table has been fought. The run's own end is
@@ -38,27 +35,18 @@ namespace Facet.Core
         Over = 3,
     }
 
-    /// <summary>
-    /// The wave clock: which wave is running, what is left of it, and how long the intermission has to
-    /// go. Every wave - the first included - starts itself when its intermission runs out, and
-    /// <see cref="StartNextWave"/> starts one early: countdown pressure as the design asks for, with a
-    /// player who is ready sooner (or has just re-plumbed a line) still able to choose "now".
+    /// <summary>The wave clock: which wave is running, what is left of it, and how long the intermission
+    /// has to go. Every wave - the first included - starts itself when its intermission runs out, and
+    /// <see cref="StartNextWave"/> starts one early, so a player ready sooner can choose "now".
     ///
-    /// The opening is the one wait that does not begin with the run. It is held until the player puts
-    /// their first building down, and only then does its countdown tick - so studying the map, planning
-    /// the first line and taking a moment cost no time at all, while actually building does. That
-    /// countdown is the longest number on the table, because the whole opening is built under it: mine a
-    /// circle, belt it home, split it into ammunition, place a cannon, and let the line fill before the
-    /// door opens. The 60 s the shipped maps give it is that opening's own clock - about 16 s for the
-    /// bootstrap line to bank the defence's 66 circles and 35 s for the ammo line to fill, measured from
-    /// the first building - rounded up so a player slower than the reference build still has room, with
-    /// the wave's own walk from the rim as the rest of the slack. It is a ceiling on the wait, not a
-    /// floor on the opening: a player who is done early calls the wave with `N` rather than watching the
-    /// clock, so only what they built, and when they chose to call it, decide whether the Core holds.
+    /// The opening is the one wait that does not begin with the run: it is held until the player's first
+    /// building, so studying the map costs no time. Its countdown is the longest on the table, because the
+    /// whole opening is built under it - about 16 s for the bootstrap line to bank the defence's 66 circles
+    /// and 35 s for the ammo line to fill, measured from the first building - rounded up for a slower
+    /// player. It is a ceiling on the wait, not a floor: a player done early calls the wave with `N`.
     ///
     /// It owns spawning and the definition of "this wave is over"; whether that wins the run is the
-    /// world's business (<see cref="GameStatus"/>), so there is exactly one place that decides it.
-    /// </summary>
+    /// world's business (<see cref="GameStatus"/>).</summary>
     public sealed class WaveDirector
     {
         /// <summary>Room for every group of a wave. The table is fixed; this is only a bound.</summary>
@@ -76,29 +64,22 @@ namespace Facet.Core
 
         private int _waveIndex = -1;     // 0-based index of the wave being fought, -1 during intermission
 
-        /// <summary>
-        /// The countdown is kept in ticks, not in seconds. Subtracting a float tick from a float
+        /// <summary>The countdown is kept in ticks, not seconds. Subtracting a float tick from a float
         /// remaining value drifts: after exactly 1800 subtractions of 1/30 s the residue can still be
-        /// positive, so a 60 second intermission would end on tick 1801 or 1799 depending on rounding.
-        /// An integer countdown makes "60 seconds" exactly 1800 ticks, every run.
-        /// </summary>
+        /// positive, so a 60 s intermission would end on tick 1801 or 1799 depending on rounding. An integer
+        /// countdown makes "60 seconds" exactly 1800 ticks, every run.</summary>
         private int _intermissionTicks;
 
-        /// <summary>
-        /// The opening's clock has not been armed yet: the first wave is waiting for the player's first
-        /// building (<see cref="ArmFirstWave"/>) rather than for time to pass. Only the opening behaves
-        /// this way - every later intermission is armed the moment the wave before it clears - so the bit
-        /// is set once per run by <see cref="Reset"/>, spent by whatever starts the opening, and never set
-        /// again.
-        /// </summary>
+        /// <summary>The opening's clock is not armed yet: the first wave waits for the player's first
+        /// building (<see cref="ArmFirstWave"/>) rather than time. Only the opening behaves this way -
+        /// every later intermission is armed when the wave before it clears - so the bit is set once per run
+        /// by <see cref="Reset"/>, spent by whatever starts the opening, and never set again.</summary>
         private bool _openingWaiting;
 
-        /// <summary>
-        /// What the clock is doing (<see cref="WavePhase"/>), in one word. The sentinel readings it
-        /// replaces - "CurrentWave == 0 is an intermission", "NextWave == 0 is over", "a non-zero
-        /// total is counting down" - all agree with this, and readers now branch here instead of
-        /// recomposing the state from numbers.
-        /// </summary>
+        /// <summary>What the clock is doing (<see cref="WavePhase"/>), in one word. The sentinel readings
+        /// it replaces - "CurrentWave == 0 is an intermission", "NextWave == 0 is over", "a non-zero total
+        /// is counting down" - all agree with this, and readers branch here instead of recomposing the state
+        /// from numbers.</summary>
         public WavePhase Phase
         {
             get
@@ -109,11 +90,10 @@ namespace Facet.Core
             }
         }
 
-        /// <summary>Is there a wave the player can start right now? The question the N key, the HUD's
-        /// button and a test's "run to the end" all ask - the opening included, whether it is still held
-        /// for the first building or already counting down. Starting is still a no-op while
-        /// <see cref="WavePhase.Running"/> or <see cref="WavePhase.Over"/>, but readers should not offer
-        /// what they would have to swallow.</summary>
+        /// <summary>Is there a wave the player can start right now? The question the N key, the HUD button
+        /// and a test's "run to the end" all ask - the opening included, held or already counting down.
+        /// Starting is still a no-op while <see cref="WavePhase.Running"/> or <see cref="WavePhase.Over"/>,
+        /// but readers should not offer what they would have to swallow.</summary>
         public bool HasWaveToStart => Phase == WavePhase.Held || Phase == WavePhase.Intermission;
 
         /// <summary>1-based number of the wave being fought, or 0 during an intermission. For printing
@@ -123,19 +103,15 @@ namespace Facet.Core
         /// <summary>1-based number of the wave the intermission is counting down to, 0 when none is left.</summary>
         public int NextWave { get; private set; }
 
-        /// <summary>
-        /// Seconds until the next wave starts by itself: 0 while a wave is running, and 0 once the table
-        /// is exhausted. While the opening is <see cref="WavePhase.Held"/> this is the countdown that will
-        /// run once the player's first building arms it, not one already running - <see cref="Phase"/> is
-        /// what says which of the two it is.
-        /// </summary>
+        /// <summary>Seconds until the next wave starts by itself: 0 while a wave runs, and 0 once the
+        /// table is exhausted. While the opening is <see cref="WavePhase.Held"/> this is the countdown that
+        /// will run once the first building arms it, not one already running - <see cref="Phase"/> says
+        /// which of the two it is.</summary>
         public float IntermissionRemaining { get; private set; }
 
-        /// <summary>
-        /// What that countdown starts at, so a HUD can draw it as a fraction. 0 when there is no countdown
-        /// at all: while a wave runs, or once the table is exhausted. Held for the first building, it is
-        /// the whole countdown waiting to be armed.
-        /// </summary>
+        /// <summary>What that countdown starts at, so a HUD can draw it as a fraction. 0 when there is no
+        /// countdown at all: while a wave runs, or once the table is exhausted. Held for the first building,
+        /// it is the whole countdown waiting to be armed.</summary>
         public float IntermissionTotal { get; private set; }
 
         /// <summary>True once every wave in the table has been fought and cleared.</summary>
@@ -187,23 +163,18 @@ namespace Facet.Core
             _openingWaiting = true;
         }
 
-        /// <summary>
-        /// Arm the opening: the first wave's countdown starts now, because the player has begun to build.
-        /// Called by the world on the tick a run's first building lands, and idempotent, so the world may
-        /// say it on every tick after that. A run where the player never builds never arms it, which is
-        /// the point - reading the map and deciding what to build cost no time. Calling the wave early
-        /// (<see cref="StartNextWave"/>) ends the opening without arming it, because the wave it was
-        /// waiting for is already running.
-        /// </summary>
+        /// <summary>Arm the opening: the first wave's countdown starts now, because the player has begun
+        /// to build. Called by the world on the tick a run's first building lands, and idempotent, so the
+        /// world may say it every tick after. A run where the player never builds never arms it - the point,
+        /// since reading the map costs no time. Calling the wave early (<see cref="StartNextWave"/>) ends the
+        /// opening without arming it.</summary>
         public void ArmFirstWave() => _openingWaiting = false;
 
-        /// <summary>
-        /// Arm the wait before the wave numbered <paramref name="waveNumber"/> (0 when there is none):
-        /// the countdown every wave runs, the first included, so "this wave is coming" is one rule and
-        /// its length is the table's number rather than a special case. The opening's wait begins
-        /// ticking when the player's first building arms it, not when the run starts
-        /// (<see cref="ArmFirstWave"/>); every other one begins ticking the moment it is armed here.
-        /// </summary>
+        /// <summary>Arm the wait before the wave numbered <paramref name="waveNumber"/> (0 when there is
+        /// none): the countdown every wave runs, the first included, so "this wave is coming" is one rule
+        /// and its length is the table's number rather than a special case. The opening's wait begins
+        /// ticking when the first building arms it (<see cref="ArmFirstWave"/>); every other one begins the
+        /// moment it is armed here.</summary>
         private void BeginIntermission(int waveNumber)
         {
             IntermissionTotal = waveNumber > 0 ? Table[waveNumber - 1].Intermission : 0f;
@@ -238,12 +209,10 @@ namespace Facet.Core
         private static int SecondsToTicks(float seconds)
             => (int)MathF.Ceiling(MathF.Max(0f, seconds) * SimConfig.TickRate);
 
-        /// <summary>
-        /// Start the next wave now, the way N does: cut the countdown short, or end the opening's wait
-        /// before a building has armed it. The same verb serves every wait, the first included - a player
-        /// who finished the opening early, or who wants the wave before building anything at all, does not
-        /// have to watch the clock.
-        /// </summary>
+        /// <summary>Start the next wave now, the way N does: cut the countdown short, or end the opening's
+        /// wait before a building has armed it. The same verb serves every wait, the first included - a
+        /// player who finished early, or wants the wave before building anything, need not watch the
+        /// clock.</summary>
         public void StartNextWave()
         {
             if (Finished || _waveIndex >= 0 || NextWave == 0) return;
@@ -296,10 +265,10 @@ namespace Facet.Core
 
         private void CompleteWave()
         {
-            // CurrentWave is the number a reader *prints*; the state it cannot print is what
-            // Phase says. This once tripped a reader that took "still the wave just fought" as
-            // "still running" and reported a cleared wave as one with nothing left in it - the
-            // branch belongs on Phase, and the number goes to 0 while nobody is being fought.
+            // CurrentWave is the number a reader *prints*; the state it cannot print is what Phase says.
+            // This once tripped a reader that took "still the wave just fought" for "still running" and
+            // reported a cleared wave as one with nothing left - the branch belongs on Phase, and the
+            // number goes to 0 while nobody is being fought.
             int cleared = CurrentWave;
             _waveIndex = -1;
             CurrentWave = 0;

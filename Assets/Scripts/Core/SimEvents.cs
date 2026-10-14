@@ -2,21 +2,19 @@ using System;
 
 namespace Facet.Core
 {
-    /// <summary>
-    /// Why a placement was refused: the half of "no" a player needs, because a click that builds
-    /// nothing must say what stopped it instead of vanishing into the map.
-    /// </summary>
+    /// <summary>Why a placement was refused - the half of "no" a player needs, so a click that builds
+    /// nothing says what stopped it instead of vanishing into the map.</summary>
     public enum RejectionReason : byte
     {
-        /// <summary>The stockpile cannot cover the cost - the one refusal the player can fix by
-        /// waiting for a delivery.</summary>
+        /// <summary>The stockpile cannot cover the cost - the one refusal the player can fix by waiting
+        /// for a delivery.</summary>
         NoFunds = 0,
 
         /// <summary>Something already stands on the tile: a belt, a machine, or the Core.</summary>
         Occupied = 1,
 
-        /// <summary>The ground is wrong for this building - a drill needs a shape patch under it, and
-        /// every other machine needs bare ground.</summary>
+        /// <summary>Wrong ground: a drill needs a shape patch under it, every other machine bare
+        /// ground.</summary>
         BadGround = 2,
 
         /// <summary>Outside the map.</summary>
@@ -27,12 +25,10 @@ namespace Facet.Core
         Doorway = 4,
     }
 
-    /// <summary>
-    /// Everything the simulation reports having done. A closed set for the same reason
-    /// <see cref="BehaviorKind"/> is: it is the interface between the simulation and everything that
-    /// wants to *react* to it - a sound, a flash, a log line, a scoreboard - and an interface with a
-    /// dozen known members is worth more than a plugin system nobody needs yet.
-    /// </summary>
+    /// <summary>Everything the simulation reports having done. A closed set for the same reason
+    /// <see cref="BehaviorKind"/> is: the interface between the simulation and everything that reacts to
+    /// it - a sound, a flash, a log line, a scoreboard - and a dozen known members beat a plugin system
+    /// nobody needs yet.</summary>
     public enum SimEventKind : byte
     {
         /// <summary>A building was placed and paid for. <c>Amount</c> is what it cost.</summary>
@@ -91,15 +87,10 @@ namespace Facet.Core
         PlacementRejected = 15,
     }
 
-    /// <summary>
-    /// One thing that happened, as a value: no references, no allocation, and enough identity to place
-    /// it in the world (a cell, a position, an enemy, a shape, a number) and in time (<see cref="Tick"/>).
-    ///
-    /// Events are <b>derived</b>: nothing in the simulation reads one back, so emitting them cannot
-    /// change what the simulation does and a run stays exactly as deterministic with the stream as
-    /// without it. That is the property that lets every visual and audible reaction in the game hang
-    /// off this one seam without putting the simulation's correctness on the line.
-    /// </summary>
+    /// <summary>One thing that happened, as a value: no references, no allocation, and enough identity
+    /// to place it in the world (cell, position, enemy, shape, number) and in time (<see cref="Tick"/>).
+    /// Events are <b>derived</b>: nothing in the simulation reads one back, so emitting them cannot change
+    /// what it does, and every reaction can hang off this one seam without risking determinism.</summary>
     public readonly struct SimEvent
     {
         public readonly SimEventKind Kind;
@@ -113,17 +104,17 @@ namespace Facet.Core
         /// <summary>Where it happened, for a reader that thinks in world space (a flash, a shake).</summary>
         public readonly Vec2 Position;
 
-        /// <summary>The enemy involved, by id, so a view can flash the one that was hit rather than
-        /// every enemy of its kind. 0 when no enemy is involved.</summary>
+        /// <summary>The enemy involved, by id, so a view can flash the one that was hit rather than its
+        /// whole kind. 0 when no enemy is involved.</summary>
         public readonly int EnemyId;
 
         public readonly EnemyKind Enemy;
         public readonly ShapeType Shape;
 
-        /// <summary>The building involved, for the events that are about one
+        /// <summary>The building involved, for the events about one
         /// (<see cref="SimEventKind.BuildingDamaged"/>, <see cref="SimEventKind.BuildingDestroyed"/>).
-        /// <see cref="BuildKind.Belt"/> - the default - when no building is involved, which is also
-        /// what a damaged building reports; the event's <see cref="Cell"/> says which one it was.</summary>
+        /// <see cref="BuildKind.Belt"/> - the default - when none is involved; the event's
+        /// <see cref="Cell"/> says which one it was.</summary>
         public readonly BuildKind Building;
 
         /// <summary>The event's number: a cost, a refund, a damage, a wave number.</summary>
@@ -154,30 +145,20 @@ namespace Facet.Core
             => Kind + "@" + Tick + " cell=" + Cell + " amount=" + Amount.ToString("0.##");
     }
 
-    /// <summary>
-    /// The stream of <see cref="SimEvent"/>s, as a fixed ring of value types: emitting one is an array
-    /// store, so a behaviour can report freely and the tick never allocates.
+    /// <summary>The stream of <see cref="SimEvent"/>s, as a fixed ring of value types: emitting one is an
+    /// array store, so a behaviour can report freely and the tick never allocates.
     ///
-    /// <b>It is a ring, so it always holds the most recent events.</b> A reader therefore needs no
-    /// bookkeeping at all - it reads the window it cares about, by <see cref="SimEvent.Tick"/>, and the
-    /// buffer guarantees the present is in there rather than the distant past. That is what lets two
-    /// readers (a renderer flashing a hit, a HUD reporting the last second) share one stream without
-    /// either of them owning it, and it is why nothing has to clear at a particular moment in the
-    /// frame: a multi-tick frame's events are all still there.
-    ///
-    /// <see cref="Clear"/> is for a reader that wants each event <em>exactly once</em> - the tests do,
-    /// so they can assert on one tick's stream - and for that reason it is an explicit, read-side act
-    /// rather than something <see cref="SimWorld.Tick"/> does behind the reader's back. A stream that
-    /// outgrows the ring drops its oldest events, and <see cref="Dropped"/> counts how many: reported
-    /// rather than swallowed, so a reader can tell "nothing happened" from "I fell behind".
-    ///
-    /// Emitters call the named methods rather than building a <see cref="SimEvent"/> by hand, so what
-    /// each event *means* is written once, where it is emitted.
-    /// </summary>
+    /// It is a ring, so it always holds the most recent events, and a reader needs no bookkeeping - it
+    /// reads the window it cares about, by <see cref="SimEvent.Tick"/>, and the present is guaranteed to be
+    /// in there. <see cref="Clear"/> is for a reader that wants each event <em>exactly once</em> (the
+    /// tests), an explicit read-side act rather than something <see cref="SimWorld.Tick"/> does. A stream
+    /// that outgrows the ring drops its oldest, and <see cref="Dropped"/> counts how many - reported rather
+    /// than swallowed, so a reader can tell "nothing happened" from "I fell behind". Emitters call the
+    /// named methods, so what each event *means* is written once, where it is emitted.</summary>
     public sealed class SimEventBuffer
     {
-        /// <summary>Default capacity: room for many ticks' worth of events, since a pitched wave
-        /// produces only a handful per tick.</summary>
+        /// <summary>Room for many ticks' worth of events; a pitched wave produces only a handful per
+        /// tick.</summary>
         public const int DefaultCapacity = 256;
 
         private readonly SimEvent[] _events;
@@ -202,11 +183,10 @@ namespace Facet.Core
         /// outgrew the ring.</summary>
         public int Dropped { get; private set; }
 
-        /// <summary>The tick the most recent overwrite happened on, or -1 when the ring has never
-        /// dropped anything. A window reader ("the last second") needs this and not just
-        /// <see cref="Dropped"/>: a cumulative count says the stream once overflowed somewhere in the
-        /// run, while the tick says whether that fall-behind touched <em>this</em> window - which is
-        /// the difference between a count the player can steer by and one quietly missing events.</summary>
+        /// <summary>The tick the most recent overwrite happened on, or -1 when the ring never dropped
+        /// anything. A window reader ("the last second") needs this and not just <see cref="Dropped"/>: a
+        /// cumulative count says the stream once overflowed somewhere in the run, while the tick says
+        /// whether that fall-behind touched <em>this</em> window.</summary>
         public int LastDropTick { get; private set; } = -1;
 
         /// <summary>Oldest first, so index 0 is the oldest event still held.</summary>
@@ -220,8 +200,8 @@ namespace Facet.Core
             LastDropTick = -1;
         }
 
-        /// <summary>How many of the buffered events are of one kind - the questions a view actually
-        /// asks ("did anything bank, did anything get shot") without walking the buffer itself.</summary>
+        /// <summary>How many buffered events are of one kind - the questions a view actually asks
+        /// ("did anything bank, did anything get shot") without walking the buffer itself.</summary>
         public int CountOf(SimEventKind kind)
         {
             int found = 0;
@@ -248,11 +228,9 @@ namespace Facet.Core
 
         // ------------------------------------------------------------------ windows in time
         //
-        // A reader that asks "what happened in the last second" is asking about ticks, and only the
-        // buffer knows the ring still reaches that far. Hand-composing the scan outside - filter on
-        // Tick, loop the kinds, remember that LastDropTick also has to be checked - restates the rule
-        // once per reader, and the restatements are what the HUD used to carry. These three are the
-        // rule stated once, next to Dropped and LastDropTick they depend on.
+        // A reader asking "what happened in the last second" is asking about ticks, and only the buffer
+        // knows the ring still reaches that far. These three state that rule once, next to Dropped and
+        // LastDropTick they depend on.
 
         /// <summary>How many events of one kind happened on or after <paramref name="sinceTick"/>.
         /// The window question a ticker asks ("circles banked in the last second"), answered without
@@ -284,9 +262,11 @@ namespace Facet.Core
         }
 
         /// <summary>Did the ring overwrite an event on or after <paramref name="sinceTick"/>? Then a
-        /// window count may be quietly low, and an honest reader says so; a drop in the distant past
-        /// does not touch the window being reported now.</summary>
-        public bool DroppedSince(int sinceTick) => LastDropTick >= sinceTick;
+        /// window count may be quietly low, and an honest reader says so; a drop in the distant past does
+        /// not touch the window being reported now. <see cref="LastDropTick"/>'s "never dropped" is -1, and
+        /// a window opened in the run's first second reaches back past tick 0, so the sentinel is refused
+        /// here rather than compared - otherwise the first frame would announce a full stream.</summary>
+        public bool DroppedSince(int sinceTick) => LastDropTick >= 0 && LastDropTick >= sinceTick;
 
         // ------------------------------------------------------------------ what the simulation reports
 
@@ -354,9 +334,8 @@ namespace Facet.Core
             }
 
             // Full: overwrite the oldest, so a reader that never clears still sees the present rather
-            // than a frozen distant past. Dropped counts the cost of that, and LastDropTick says when
-            // it was paid - a window reader stamps its own honesty with that. Telemetry, not state -
-            // dropping is cheaper than growing an array on the hot path.
+            // than a frozen past. Dropped counts the cost and LastDropTick says when it was paid.
+            // Telemetry, not state - dropping is cheaper than growing an array on the hot path.
             _events[_start] = e;
             _start = (_start + 1) % _events.Length;
             Dropped++;

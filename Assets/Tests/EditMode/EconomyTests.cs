@@ -18,8 +18,8 @@ namespace Facet.Tests
         [Test]
         public void StartingStockpile_ComesFromTheMap()
         {
-            // The opening budget is a number the map carries rather than a constant in the simulation,
-            // so the rig's own 62 and a hand-made map's 3 both arrive exactly as authored.
+            // The opening budget is a map number, not a simulation constant, so the rig's 62 and a
+            // hand-made map's 3 both arrive exactly as authored.
             Assert.AreEqual(62, Sim.Rig().Economy.Circles, "the rig's budget, to the circle");
             Assert.AreEqual(3, PoorWorld(3).Economy.Circles);
             Assert.AreEqual(0, PoorWorld(0).Economy.Circles, "and a map that funds nothing opens with nothing");
@@ -134,9 +134,9 @@ namespace Facet.Tests
         }
 
         // ---- Rates. A 30x12 map, Core pinned at (8,4)-(11,7), one 3x2 circle patch at (24,5).
-        // The belt is one tile per second, a drill mines one shape per second, and the two are
-        // matched on purpose - so the numbers below are the economy's contract, not coincidences:
-        // a lane is one item per second no matter what feeds it, and its latency is its length.
+        // The belt is one tile per second and a drill mines one shape per second, matched on purpose -
+        // so the numbers below are the economy's contract, not coincidences: a lane is one item per
+        // second no matter what feeds it, and its latency is its length.
 
         /// <summary>A world with one patch and the Core pinned at (8,4), for the rate tests.</summary>
         private static SimWorld RateWorld(int startCircles = 1000)
@@ -145,11 +145,10 @@ namespace Facet.Tests
                 new Int2[0], new WaveDefinition[0], coreCell: new Int2(8, 4)), new SimConfig());
 
         /// <summary>
-        /// One drill and a fifteen-belt lane home bank one circle per second, starting after the
-        /// lane's own latency: the first circle lands during the sixteenth second (fifteen tiles of
-        /// belt, one for the hand into the Core), and the count is then exactly t minus fifteen.
-        /// This is the whole wealth rule of the game in one line - distance is paid three times,
-        /// in circles to build the lane, in seconds before the first circle, and in nothing after.
+        /// One drill and a fifteen-belt lane home bank one circle per second after the lane's own
+        /// latency: the first circle lands in the sixteenth second (fifteen belt tiles plus one hand
+        /// into the Core), then the count is t minus fifteen. Distance is paid twice - in circles to
+        /// build the lane, and in seconds before the first circle.
         /// </summary>
         [Test]
         public void AMoneyLine_BanksOneCirclePerSecond_AfterItsOwnLatency()
@@ -167,10 +166,9 @@ namespace Facet.Tests
 
         /// <summary>
         /// Three drills cannot push three circles a second down one lane: the lane is the bottleneck,
-        /// not the patch. The drills queue on their landing cells and the lane carries its one per
-        /// second regardless - which is why a vein's yield is the number of lanes built from it, not
-        /// the number of drills crammed onto it, and why the extra drill is a backup rather than a
-        /// bonus.
+        /// not the patch. The drills queue on their landing cells and the lane carries one per second
+        /// regardless - so a vein's yield is the number of lanes built from it, not the drills on it,
+        /// and the extra drill is a backup rather than a bonus.
         /// </summary>
         [Test]
         public void ThreeDrillsOnOneLane_StillBankOnlyOneCirclePerSecond()
@@ -194,11 +192,9 @@ namespace Facet.Tests
 
         /// <summary>
         /// The armed lane - the build that makes one drill pay for a gun and an income at once: a
-        /// splitter halves the stream, one branch banks at the Core, the other feeds a decomposer
-        /// whose half-circles are the cannon's ammunition. The bank's share is the splitter's half,
-        /// about one circle every two seconds; the ammunition branch demonstrably runs (a half-circle
-        /// sits on the converter's outlet belt) while everything it makes is destroyed at the sink,
-        /// because ammunition is not money.
+        /// splitter halves the stream, one branch banks at the Core, the other feeds a decomposer whose
+        /// half-circles are the cannon's ammunition. The bank's share is about one circle every two
+        /// seconds; the ammo branch demonstrably runs, while its output is destroyed at the sink.
         /// </summary>
         [Test]
         public void AnArmedLane_SplitsOneDrillBetweenMoneyAndAmmo()

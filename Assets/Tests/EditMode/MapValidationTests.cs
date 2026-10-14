@@ -6,21 +6,19 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The rules a map has to satisfy, exercised on maps that deliberately break them.
-    ///
-    /// A map is data, and the mistakes data makes do not throw - they produce a wave that stands at its
-    /// door forever, which reads as a hung game rather than as a bad map. So every one of these tests is
-    /// a map that is wrong in exactly one way, and the assertion is that the validator names that way
-    /// and nothing else. The maps the game ships are held to the same rules by the window that paints
-    /// them, which is where a designer sees them; nothing here reads a shipped map.
+    /// The rules a map has to satisfy, exercised on maps that deliberately break them. A map is data,
+    /// and data mistakes do not throw - they produce a wave standing at its door forever, which reads as
+    /// a hung game. Each test is a map wrong in exactly one way, and the validator must name that way
+    /// and nothing else. The shipped maps are held to the same rules by the editor window; nothing here
+    /// reads a shipped map.
     /// </summary>
     public class MapValidationTests
     {
         [Test]
         public void Validate_ARockWallAcrossALane_IsADoorThatCanNeverArrive()
         {
-            // The mistake a canyon map makes: a ridge drawn all the way across the only lane its door
-            // has. Nothing throws - the wave simply has nowhere to walk, and this is what says so.
+            // The mistake a canyon map makes: a ridge drawn across the only lane its door has. Nothing
+            // throws - the wave simply has nowhere to walk, and this is what says so.
             var door = new Int2(0, 2);
             MapDefinition map = Map(16, 12,
                 doors: new[] { door },
@@ -48,8 +46,8 @@ namespace Facet.Tests
         [Test]
         public void Validate_OreNoBeltCanReach_IsCutOff()
         {
-            // A vein walled in behind a closed ridge: the drill that would mine it can never be fed, and
-            // a player would only find that out after buying the drill.
+            // A vein walled in behind a closed ridge: the drill that would mine it can never be fed, and a
+            // player would only find that out after buying the drill.
             var ore = new Int2(2, 2);
             MapDefinition map = Map(16, 12,
                 doors: new[] { new Int2(0, 10) },
@@ -73,10 +71,9 @@ namespace Facet.Tests
         [Test]
         public void Validate_ACoreThatDoesNotFit_IsReported_AndStopsTheFloods()
         {
-            // The Core is placed by the simulation at the tile the map names, so a footprint hanging off
-            // the grid is a map that cannot be built at all. The floods are seeded from the Core, so
-            // without this the same map would also report every door and every vein as unreachable -
-            // a wall of noise around one real problem.
+            // The Core is placed at the tile the map names, so a footprint hanging off the grid is a map
+            // that cannot be built at all. The floods are seeded from the Core, so without this the same
+            // map would also report every door and vein as unreachable - noise around one real problem.
             var map = new MapDefinition("off the edge", 8, 4, 10, new ShapePatch[0],
                 new[] { new Int2(0, 0) }, new[] { Wave(1) }, coreCell: new Int2(6, 3));
 
@@ -128,7 +125,7 @@ namespace Facet.Tests
         public void Validate_OreUnderTheCore_IsReportedAsTheCoresDataDisagreeing()
         {
             // The Core keeps its tiles and stamps before the ground, so a vein authored over it is lost
-            // silently - which is exactly the kind of silence this validator exists to break.
+            // silently - exactly the kind of silence this validator exists to break.
             var map = new MapDefinition("vein at the Core", 16, 12, 10,
                 new[] { new ShapePatch(new Int2(6, 4), 2, 2, ShapeType.Circle) },
                 new[] { new Int2(0, 10) }, new[] { Wave(1) },
@@ -142,9 +139,8 @@ namespace Facet.Tests
         {
             // A vein is the ore list's entry, and the ground under one is plain - so an array that says
             // ore is a map no writer here produces, and both halves of the mistake get named. With no
-            // entry at the cell the world still gets an ore tile, one only a drill may stand on and that
-            // yields nothing; with an entry beside it, the byte is the half-write that leaves exactly
-            // that tile behind the moment the entry is removed by hand.
+            // entry at the cell the world still gets an ore tile that yields nothing; with an entry
+            // beside it, the byte is the half-write left behind the moment the entry is removed by hand.
             var ore = new Int2(2, 2);
             MapDefinition orphan = Map(16, 12,
                 doors: new[] { new Int2(0, 10) },

@@ -2,15 +2,12 @@ using Facet.Core;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// The per-frame facts the view layer draws with: how far the renderer is between the previous
-    /// and the current simulation tick, the size of one screen pixel in world units, and the tile the
-    /// cursor is over.
+    /// <summary>The per-frame facts the view layer draws with: how far the renderer is between the previous and the
+    /// current simulation tick, the size of one screen pixel in world units, and the tile the cursor is over.
     ///
-    /// It carries no palette and no per-view state, so a view can be handed a frame without being
-    /// handed the driver. Positions lerp with <see cref="Alpha"/>; anything measured in screen pixels -
-    /// outlines, grid lines, range rings, cursor borders - scales with <see cref="WorldPerPixel"/>.
-    /// </summary>
+    /// It carries no palette and no per-view state, so a view can be handed a frame without being handed the driver.
+    /// Positions lerp with <see cref="Alpha"/>; anything measured in screen pixels - outlines, grid lines, range
+    /// rings, cursor borders - scales with <see cref="WorldPerPixel"/>.</summary>
     public readonly struct ViewFrame
     {
         /// <summary>How far the renderer is between the previous and the current tick, 0..1.</summary>

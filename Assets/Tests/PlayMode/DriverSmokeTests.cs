@@ -13,20 +13,12 @@ using UnityEditor;
 namespace Facet.PlayTests
 {
     /// <summary>
-    /// The one thing the EditMode tests cannot reach: the view layer actually running.
-    ///
-    /// These tests build a scene from nothing - camera, driver, views - and then check the three
-    /// failures that no compile can catch and no headless simulation test touches: that the driver
-    /// assembles its views at all, that it advances the world at its fixed rate while the frame rate
-    /// does whatever it likes, and that a view whose simulation state changed has a mesh with geometry
-    /// in it. The last one is the honest check for "is it drawn": the mesh is real even when there is
-    /// no display to put it on, so an empty or never-rebuilt mesh fails here.
-    ///
-    /// The driver is wired to a campaign this fixture builds (see <see cref="TestCampaign"/>), not to
-    /// the shipped one: the maps the game plays are data a designer repaints whenever they like, and a
-    /// smoke test that asserted their ground, their ore or their sizes would be a test of today's map
-    /// file rather than of the driver. <see cref="TheShippedMainScene_RunsAsBuilt"/> is the one test
-    /// that loads the shipped scene, where the shipped campaign is wired for real.
+    /// The one thing the EditMode tests cannot reach: the view layer actually running. These build a scene
+    /// from nothing and check the three failures no compile can catch and no headless test touches - that
+    /// the driver assembles its views, advances the world at its fixed rate whatever the frame rate does,
+    /// and gives a changed view a mesh with geometry. It runs a fixture-built campaign (see
+    /// <see cref="TestCampaign"/>), not the shipped one, because asserting a shipped map's contents would
+    /// test today's file; <see cref="TheShippedMainScene_RunsAsBuilt"/> is the one test that loads it.
     /// </summary>
     public class DriverSmokeTests
     {
@@ -45,9 +37,8 @@ namespace Facet.PlayTests
             camera.transform.position = new Vector3(40f, 24f, -10f);
 
             // Built switched off, wired, and switched on: Awake runs when a component is added to an
-            // active object, and this driver has to have its campaign before its Awake asks for one. Only
-            // the campaign is wired - a missing Palette falls back to the code defaults by design, and only
-            // the campaign is the thing a run cannot do without.
+            // active object, and this driver must have its campaign before its Awake asks for one. Only
+            // the campaign is wired - a missing Palette falls back to the code defaults by design.
             _driverObject = new GameObject("FACET");
             _driverObject.SetActive(false);
             SimulationDriver driver = _driverObject.AddComponent<SimulationDriver>();
@@ -82,8 +73,8 @@ namespace Facet.PlayTests
         /// <summary>
         /// The campaign the smoke tests run, built here instead of read from
         /// <c>Assets/Data/Campaign.asset</c>. Two maps, because a swap needs two: the first wears rock,
-        /// water and a void corner and carries one vein, and the second is a different size - which is
-        /// what the ground view's rebind is proved against.
+        /// water and a void corner and carries one vein, and the second is a different size - what the
+        /// ground view's rebind is proved against.
         /// </summary>
         private static MapSet TestCampaign()
         {
@@ -139,9 +130,9 @@ namespace Facet.PlayTests
             };
 
         /// <summary>
-        /// The one thing that has no fallback. A missing Palette falls back to the code defaults and says so;
-        /// a missing campaign is a game with nothing to play, so the driver reports it and stands down rather
-        /// than running on nothing - which would be a black screen and no explanation for it.
+        /// The one thing that has no fallback. A missing Palette falls back to the code defaults and says
+        /// so; a missing campaign is a game with nothing to play, so the driver reports it and stands down
+        /// rather than running on nothing - a black screen with no explanation for it.
         /// </summary>
         [UnityTest]
         public IEnumerator ADriverWithNoCampaign_RefusesToStart()
@@ -159,9 +150,9 @@ namespace Facet.PlayTests
         }
 
         /// <summary>
-        /// The scene the WebGL build actually boots - not one this test built. If its camera, driver
-        /// or Palette wiring were missing, the build would show an empty blue screen and no test
-        /// would have noticed.
+        /// The scene the WebGL build actually boots - not one this test built. If its camera, driver or
+        /// Palette wiring were missing, the build would show an empty blue screen and no test would have
+        /// noticed.
         /// </summary>
         [UnityTest]
         public IEnumerator TheShippedMainScene_RunsAsBuilt()
@@ -208,7 +199,7 @@ namespace Facet.PlayTests
             var driver = _driverObject.GetComponent<SimulationDriver>();
             Assert.IsNotNull(driver.World, "the driver owns a simulation");
 
-            foreach (string view in new[] { "Grid", "Terrain", "Ore", "Belts", "Core", "Machines", "Items", "Enemies", "Shots", "Cursor", "Hud" })
+            foreach (string view in new[] { "Grid", "Terrain", "Ore", "Belts", "Core", "Machines", "Items", "Enemies", "Shots", "Cursor", "ThreatRadar", "Hud" })
                 Assert.IsNotNull(_driverObject.transform.Find(view), "the driver did not build the " + view + " view");
 
             int ticks = driver.World.TickCount;
@@ -262,10 +253,10 @@ namespace Facet.PlayTests
         }
 
         /// <summary>
-        /// The event stream, seen from the view: a kill has to leave something on the screen. The burst
-        /// is drawn where the enemy died and fades over a few ticks, so the honest check is that the
-        /// Enemies view carries more geometry right after the kill than it does once the burst has
-        /// expired - and that it *rebuilds* without it, or the ring would stay on screen forever.
+        /// The event stream, seen from the view: a kill has to leave something on the screen. The burst is
+        /// drawn where the enemy died and fades over a few ticks, so the honest check is that the Enemies
+        /// view carries more geometry right after the kill than once the burst has expired - and that it
+        /// *rebuilds* without it, or the ring would stay on screen forever.
         /// </summary>
         [UnityTest]
         public IEnumerator AKill_LeavesAVisibleBurst_ThatThenFades()
@@ -282,9 +273,9 @@ namespace Facet.PlayTests
             Assert.IsTrue(world.Belts.TrySpawnItem(belt, ShapeType.HalfCircle));
             Assert.Greater(world.Enemies.Spawn(EnemyKind.Spike, new Vec2(24f, 10.5f)), 0);
 
-            // Ammo arrives, the shots land, the spike dies (6 hp against 3 damage: two shots). Damage
-            // and the kill both go on the stream. The belt holds one item at a time, so the feed keeps
-            // refilling it while the turret works.
+            // Ammo arrives, the shots land, the spike dies (6 hp against 3 damage: two shots). Damage and
+            // the kill both go on the stream. The belt holds one item at a time, so the feed keeps refilling
+            // it while the turret works.
             for (int i = 0; i < 30 * 6 && world.Enemies.AliveCount > 0; i++)
             {
                 if (!world.Belts.HasItemAt(belt)) world.Belts.TrySpawnItem(belt, ShapeType.HalfCircle);
@@ -354,9 +345,8 @@ namespace Facet.PlayTests
         /// <summary>
         /// The answer to a click that built nothing, through the whole chain: the tick refuses the
         /// placement, the stream carries the reason, and the HUD's resource band draws it. IMGUI has no
-        /// headless test - OnGUI only runs in a real player loop - so "drive the refusal, then draw
-        /// frames with it live" is the closest thing to a test of the band, and a throw while drawing it
-        /// fails here the way a compile error would.
+        /// headless test - OnGUI only runs in a real player loop - so "drive the refusal, then draw frames
+        /// with it live" is the closest thing to a test of the band.
         /// </summary>
         [UnityTest]
         public IEnumerator ARefusedPlacement_IsReported_AndTheHudDrawsIt()
@@ -387,12 +377,35 @@ namespace Facet.PlayTests
         }
 
         /// <summary>
+        /// The locator seen from outside: a wave the player is not looking at has to put something on the
+        /// screen edge, or the run is decided off-view with no warning. The enemy goes into the map's far
+        /// corner, the one place the fixture guarantees is out of view at any resolution the runner has -
+        /// the rig centres the view on the Core. What "out of view" means, and where the arrow goes, is
+        /// <see cref="Facet.Tests.ThreatRadarTests"/>'s: pinned from four numbers rather than from a camera.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator AnEnemyOutOfView_IsPointedAt_FromTheEdgeOfTheScreen()
+        {
+            yield return null;
+
+            var driver = _driverObject.GetComponent<SimulationDriver>();
+            SimWorld world = driver.World;
+            int before = Vertices("ThreatRadar");
+
+            world.Enemies.Spawn(EnemyKind.Spike,
+                new Vec2(world.TileGrid.Width - 1.5f, world.TileGrid.Height - 1.5f));
+
+            yield return null;
+            yield return null;
+
+            Assert.Greater(Vertices("ThreatRadar"), before,
+                "the walker at the far corner gets an arrow on the edge of the view");
+        }
+
+        /// <summary>
         /// A map with a ground of its own: rock, water and the void a map is shaped by have to reach the
-        /// screen, and the ground view has to keep drawing the tiles they sit on.
-        ///
-        /// The fixture's first map is the specimen - its rock and water reach the screen as terrain
-        /// geometry, over the grid that draws the ground every tile stands on. The claim that a
-        /// map with nothing on it costs no geometry at all is pinned in EditMode
+        /// screen, and the ground view has to keep drawing the tiles they sit on. The claim that a map with
+        /// nothing on it costs no geometry at all is pinned in EditMode
         /// (<see cref="Facet.Tests.TerrainRendererTests"/>), where a plain map can be built to measure.
         /// </summary>
         [UnityTest]

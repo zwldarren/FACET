@@ -3,14 +3,9 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// The tile grid: what occupies every tile, plus world&lt;-&gt;tile conversion.
-    /// Map space is [0,Width] x [0,Height] world units, so tile (x,y) covers
-    /// [x,x+1] x [y,y+1] and its centre is at (x+0.5, y+0.5).
-    ///
-    /// This is the occupancy layer only - what is <em>standing</em> on the ground. What the ground itself
-    /// is (plain, ore, rock, water, the void outside the map) is <see cref="TerrainField"/>, and the rules
-    /// that read both are stated there, once each, rather than here where either layer alone would give
-    /// half an answer.
+    /// The tile grid: what occupies every tile, plus world&lt;-&gt;tile conversion. Map space is
+    /// [0,Width] x [0,Height] world units, so tile (x,y) covers [x,x+1] x [y,y+1] with centre at
+    /// (x+0.5, y+0.5). This is the occupancy layer only; the ground itself is <see cref="TerrainField"/>.
     /// </summary>
     public sealed class TileGrid
     {
@@ -55,9 +50,8 @@ namespace Facet.Core
             return new Int2((int)MathF.Floor(world.X), (int)MathF.Floor(world.Y));
         }
 
-        /// <summary>Linear index of a cell. Every field stores its per-tile state in this same
-        /// layout, so no field repeats the coordinate arithmetic. Bounds are the caller's business,
-        /// as with <see cref="Get"/>.</summary>
+        /// <summary>Linear index of a cell. Every field stores per-tile state in this same layout, so no
+        /// field repeats the coordinate arithmetic. Bounds are the caller's business (see <see cref="Get"/>).</summary>
         internal int Index(Int2 c) => c.Y * Width + c.X;
 
         /// <summary>The cell at a linear index - the inverse of <see cref="Index"/>.</summary>

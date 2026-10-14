@@ -6,11 +6,10 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The content table, unit-tested where the shipped numbers used to be a pile of statics. The
-    /// point of the table is that "what exists" is data: every kind the enums name must have a row,
-    /// and a lookup for something that is not a turret must fail loudly instead of quietly answering
-    /// "turret". The old <see cref="Balance"/> facade over this table is gone from the code - the
-    /// pins below read <see cref="Default"/> directly, which is the one global this suite agrees to.
+    /// The content table, unit-tested where the shipped numbers used to be a pile of statics. "What
+    /// exists" is data: every kind the enums name must have a row, and a lookup for something that is
+    /// not a turret must fail loudly rather than quietly answering "turret". The old <see cref="Balance"/>
+    /// facade over this table is gone - the pins below read <see cref="Default"/> directly.
     /// </summary>
     public class ContentDatabaseTests
     {
@@ -26,9 +25,8 @@ namespace Facet.Tests
                 Assert.AreEqual(kind, def.Build);
                 Assert.IsFalse(string.IsNullOrEmpty(def.Name), kind + " has no name to print");
 
-                // A sorter's whole job is the filter, so a row that names the behaviour without one
-                // would be a machine that routes nothing anywhere - a data error worth catching here
-                // rather than in a player's line.
+                // A sorter's whole job is the filter, so a row naming the behaviour without one would
+                // route nothing anywhere - a data error worth catching here rather than in a player's line.
                 if (def.Behavior == BehaviorKind.Sorter)
                     Assert.IsTrue(def.Filter.IsShape(), kind + " is a sorter with no filter shape");
             }
@@ -37,8 +35,8 @@ namespace Facet.Tests
         [Test]
         public void TheShippedSorter_SendsCirclesTheWayItFaces()
         {
-            // The shipped filter is the money shape, which is the split an opening wants: face the Core
-            // and the circles bank while everything else carries on down the line.
+            // The shipped filter is the money shape, the split an opening wants: face the Core and the
+            // circles bank while everything else carries on down the line.
             MachineDef sorter = Content.Machine(BuildKind.Sorter);
 
             Assert.AreEqual(BehaviorKind.Sorter, sorter.Behavior);
@@ -72,9 +70,9 @@ namespace Facet.Tests
             Assert.IsTrue(Content.IsTurret(BuildKind.Mortar), "the second gun is a turret too");
             Assert.AreEqual(BuildKind.Mortar, Content.Turret(BuildKind.Mortar).Build);
 
-            // The old convention answered "turret" for anything it did not recognise, and read a spec
-            // by subtracting Cannon's ordinal. Neither is possible now: a non-turret is a hard failure,
-            // and which kinds are turrets is answered by the table rather than by a list of names.
+            // The old convention answered "turret" for anything it did not recognise, and read a spec by
+            // subtracting Cannon's ordinal. Neither is possible now: a non-turret is a hard failure, and
+            // which kinds are turrets comes from the table, not a list of names.
             foreach (BuildKind kind in (BuildKind[])Enum.GetValues(typeof(BuildKind)))
             {
                 bool expected = kind == BuildKind.Cannon || kind == BuildKind.Mortar;
@@ -121,9 +119,9 @@ namespace Facet.Tests
         [Test]
         public void ShippedNumbers_AreTheOnesTheDesignWasBalancedOn()
         {
-            // Pinned so a refactor of the table cannot quietly retune the prototype. These are the
-            // exact values the tests' timing (30 ticks per item, 1.5 s per split) was derived from -
-            // read straight from the table now, since the Balance facade over it is gone.
+            // Pinned so a refactor cannot quietly retune the prototype: these are the exact values the
+            // tests' timing (30 ticks per item, 1.5 s per split) was derived from, read straight from the
+            // table now that the Balance facade is gone.
             Assert.AreEqual(1f, Content.Machine(BuildKind.Drill).Interval, Sim.Tol);
             Assert.AreEqual(1.5f, Content.Recipe(ContentDatabase.DecomposeRecipeId).Interval, Sim.Tol);
             Assert.AreEqual(0.25f, Content.Machine(BuildKind.Pipe).Interval, Sim.Tol);
@@ -141,9 +139,9 @@ namespace Facet.Tests
             Assert.AreEqual(30, Content.Machine(BuildKind.Mortar).Cost);
             Assert.AreEqual(2, Content.Machine(BuildKind.Wall).Cost);
 
-            // Health is content now: the wall is the pool the siege is balanced against (120 hp is
-            // twenty seconds of chewing for one Spike), and the belt's 0 is what says it is walkable
-            // and untouchable rather than a machine with no health.
+            // Health is content now: the wall is the pool the siege is balanced against (120 hp is twenty
+            // seconds of chewing for one Spike), and the belt's 0 is what says it is walkable and
+            // untouchable rather than a machine with no health.
             Assert.AreEqual(120f, Content.Machine(BuildKind.Wall).MaxHp, Sim.Tol);
             Assert.AreEqual(80f, Content.Machine(BuildKind.Cannon).MaxHp, Sim.Tol);
             Assert.AreEqual(0f, Content.Machine(BuildKind.Belt).MaxHp, Sim.Tol,
@@ -156,8 +154,8 @@ namespace Facet.Tests
             Assert.AreEqual(7f, cannon.Range, Sim.Tol);
             Assert.AreEqual(14f, cannon.ProjectileSpeed, Sim.Tol);
 
-            // The two guns are a pair, not a ladder: the mortar fires half as often for twice the
-            // damage, which is the same damage per second out of half as many items.
+            // The two guns are a pair, not a ladder: the mortar fires half as often for twice the damage,
+            // the same damage per second out of half as many items.
             TurretDef mortar = Content.Turret(BuildKind.Mortar);
             Assert.AreEqual(ShapeType.HalfSquare, mortar.Ammo);
             Assert.AreEqual(1.5f, mortar.FireInterval, Sim.Tol);
@@ -177,8 +175,8 @@ namespace Facet.Tests
         [Test]
         public void BisectRecipe_IsOneSquareIntoTwoHalves()
         {
-            // The second chain is the first one's shape applied to the other mineral, which is what
-            // makes the cutter a row rather than a behaviour. Pinned so the two cannot drift apart.
+            // The second chain is the first one's shape applied to the other mineral, which is what makes
+            // the cutter a row rather than a behaviour. Pinned so the two cannot drift apart.
             RecipeDef decom = Content.Recipe(ContentDatabase.DecomposeRecipeId);
             RecipeDef bisect = Content.Recipe(ContentDatabase.BisectRecipeId);
 
@@ -242,8 +240,8 @@ namespace Facet.Tests
         public void EveryDefinition_CarriesAStableId_ThatResolvesBackToIt()
         {
             // Content identity is a string, not an enum ordinal: an ordinal is an implementation detail
-            // that shifts the moment a value is inserted, which is the failure mode the content ids exist
-            // to remove. So every definition has one, and looking it up finds the definition again.
+            // that shifts the moment a value is inserted, the failure mode the content ids exist to
+            // remove. So every definition has one, and looking it up finds the definition again.
             var seen = new HashSet<string>();
 
             foreach (BuildKind kind in ContentDatabase.Default.BuildKinds)

@@ -4,10 +4,10 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// EditMode tests for the engine-free simulation itself: the clock, the map, the defended
-    /// object, and the two invariants worth guarding forever - the tick rate is exactly 30 Hz so
-    /// the balance numbers in the design doc stay true, and the simulation is deterministic so a
-    /// save plus the same input must replay identically.
+    /// EditMode tests for the engine-free simulation: the clock, the map, the defended object, and two
+    /// invariants worth guarding forever - the tick rate is exactly 30 Hz so the design's balance
+    /// numbers stay true, and the simulation is deterministic so a save plus the same input replays
+    /// identically.
     /// </summary>
     public class SimulationTests
     {
@@ -21,11 +21,9 @@ namespace Facet.Tests
         [Test]
         public void Core_StandsWhereTheMapSays_AtFullHealth_AndIsNotBuildable()
         {
-            // The Core used to be the map's dead centre, and every map that existed then was small and
-            // square enough for that to be the same thing. A map now names the tile its Core stands on -
-            // the rig puts it at (4,6) of a 16x22 map, which is a place the map's own middle is not - so
-            // what this asks is that the world builds the Core where the map put it, and not that the map
-            // put it in the middle.
+            // The Core used to be the map's dead centre, which was the same thing while every map was
+            // small and square. A map now names its Core tile (the rig puts it at (4,6) of a 16x22 map,
+            // not the middle), so this asks that the world builds the Core where the map put it.
             SimWorld world = Sim.Rig();
             Int2 footprint = world.Map.CoreCell;
             float centreX = footprint.X + CoreState.Size * 0.5f;
@@ -67,10 +65,9 @@ namespace Facet.Tests
         [Test]
         public void Selection_ChangesWhilePaused_SoTheBuildBarStaysLive()
         {
-            // A pause is exactly when a player re-plans, so the HUD's build bar has to keep working
-            // while the world is held. Selection is not a world change - it is the one input the
-            // paused branch of the tick still applies - which is what keeps the highlighted tile
-            // following the click instead of freezing the moment the game does.
+            // A pause is exactly when a player re-plans, so the HUD's build bar must keep working while
+            // the world is held. Selection is not a world change - the one input the paused branch still
+            // applies - which keeps the highlighted tile following the click instead of freezing.
             SimWorld world = Sim.Rig();
 
             world.Paused = true;
@@ -83,9 +80,9 @@ namespace Facet.Tests
         [Test]
         public void RestartRequested_RebuildsTheRun_OnTheNextTick()
         {
-            // The HUD's restart button cannot reach into the middle of a run any more than its
-            // start-wave button can, so it asks the world and the request lands on a tick boundary
-            // like every other input. This is R's path with the key taken out.
+            // The HUD's restart button cannot reach into the middle of a run any more than its start-wave
+            // button can, so it asks the world and the request lands on a tick boundary like every other
+            // input. This is R's path with the key taken out.
             SimWorld world = Sim.NewWorld(20, 12);
             Assert.IsTrue(world.TryPlaceBelt(new Int2(5, 5), Dir.East));
             Assert.Less(world.Economy.Circles, world.Map.StartCircles, "the belt was paid for");
@@ -148,8 +145,8 @@ namespace Facet.Tests
         [Test]
         public void Grid_ABeltGoesOnGroundOrOre_ButNotOnABuilding()
         {
-            // The rule lives in TerrainField because it reads both layers - what the ground is and what
-            // is standing on it - and neither layer alone can answer it.
+            // The rule lives in TerrainField because it reads both layers - the ground and what stands on
+            // it - and neither layer alone can answer it.
             var grid = new TileGrid(8, 4);
             var terrain = new TerrainField(grid);
             var cell = new Int2(2, 2);
@@ -170,9 +167,9 @@ namespace Facet.Tests
         [Test]
         public void Grid_ObstaclesTakeNothing_AndNothingWalksThem()
         {
-            // Rock, water and the void are the three kinds of ground a map draws that stop things, and
-            // they stop all three of the things that move: belts, machines and walkers. One rule per
-            // question, so a new obstacle is a row in the enum rather than a case in each of them.
+            // Rock, water and the void are the three grounds that stop things, and they stop all three
+            // movers: belts, machines and walkers. One rule per question, so a new obstacle is a row in
+            // the enum rather than a case in each of them.
             var grid = new TileGrid(8, 4);
             var terrain = new TerrainField(grid);
             var cell = new Int2(3, 1);
@@ -203,9 +200,9 @@ namespace Facet.Tests
         [Test]
         public void Terrain_OutOfBoundsReadsAsVoid()
         {
-            // The answer every caller is really asking for is "may something be there", and off the map
-            // that is no. Reading it as Void rather than as ground is what makes the cursor, the belt
-            // rule and the flow field agree without each testing the bounds first.
+            // The answer every caller asks is "may something be there", and off the map that is no.
+            // Reading it as Void rather than as ground is what makes the cursor, the belt rule and the
+            // flow field agree without each testing the bounds first.
             var terrain = new TerrainField(new TileGrid(8, 4));
 
             Assert.AreEqual(TerrainKind.Void, terrain.KindAt(new Int2(-1, 2)));

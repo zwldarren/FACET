@@ -3,28 +3,24 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// The one rule that connects belts to machines, in one place: **a machine eats from every belt
-    /// cell that delivers into it, and from nothing else.**
+    /// The one rule connecting belts to machines: **a machine eats from every belt cell that delivers
+    /// into it, and from nothing else.**
     ///
-    /// A belt delivers into a machine when it points at it - the belt's direction is the step from its
-    /// own cell to the machine's - and when its item has reached the exit edge of its cell (progress 1),
-    /// which is the same boundary a belt-to-belt hand-off happens on. Anything else feeding a machine
-    /// is not a delivery: a belt pointing the other way is a dead end and simply queues, which is a
-    /// visible mistake instead of a silent one.
+    /// A belt delivers when it points at the machine (its direction is the step from its own cell to
+    /// the machine's) and its item has reached the exit edge of its cell (progress 1) - the same
+    /// boundary a belt-to-belt hand-off happens on. A belt pointing the other way is a dead end and
+    /// simply queues, a visible mistake instead of a silent one.
     ///
-    /// Reading from any of the four sides is what makes "expand supply" a layout answer: two belts
-    /// converging on one cannon are how it stays at its 1 shot/s ceiling while lines cross and
-    /// share, and a jam anywhere upstream of those belts silences it without touching the turret itself.
+    /// Reading from all four sides makes "expand supply" a layout answer: belts converging on one
+    /// cannon keep it at its 1 shot/s ceiling, and a jam upstream silences it without touching the turret.
     /// </summary>
     internal static class MachineDelivery
     {
         /// <summary>
-        /// Fixed scan order, so which of several ready items a machine takes is decided by the map and
-        /// not by iteration order. North, East, South, West.
-        ///
-        /// The same order doubles as the round-robin order a machine pushes along, which is why it is
-        /// public: every machine with ports - the splitter and the decomposer - must agree on it, or
-        /// two of them would disagree about which way round their own outlets go.
+        /// Fixed scan order - North, East, South, West - so which of several ready items a machine takes
+        /// is decided by the map, not by iteration order. The same order doubles as the round-robin
+        /// order a machine pushes along, which is why it is public: every ported machine (the splitter
+        /// and the decomposer) must agree on it or disagree about which way round their outlets go.
         /// </summary>
         public static readonly Dir[] Ports = { Dir.North, Dir.East, Dir.South, Dir.West };
 
@@ -52,9 +48,9 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// First cell delivering an item of the *wrong* shape: the delivery that jams. Reported
-        /// separately from a good delivery because a wrong shape always jams, even when the turret is
-        /// busy cooling down - the doc's rule is about the delivery, not about the shot.
+        /// First cell delivering an item of the *wrong* shape: the delivery that jams. Separate from a
+        /// good delivery because a wrong shape always jams, even while the turret cools down - the rule
+        /// is about the delivery, not the shot.
         /// </summary>
         public static bool TryFindWrongDelivery(BeltField belts, Int2 cell, ShapeType ammo, out Int2 deliveryCell)
         {
@@ -73,32 +69,29 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// An outlet: a belt on this side of the machine pointing *away* from it. Whether that belt
-        /// has room is <see cref="BeltField.TrySpawnItem"/>'s question, asked again per push.
+        /// An outlet: a belt on this side pointing *away* from the machine. Whether it has room is
+        /// <see cref="BeltField.TrySpawnItem"/>'s question, asked again per push.
         ///
-        /// Ports are read off the belts rather than stored on the machine, which is what makes a
-        /// decomposer's two outlets the same kind of thing as a splitter's four: re-pointing one belt
-        /// re-wires the machine without touching it, and a machine with no belt pointing away simply
-        /// waits instead of pushing into a dead end.
+        /// Ports are read off the belts rather than stored on the machine, so a decomposer's two
+        /// outlets are the same kind of thing as a splitter's four: re-pointing one belt re-wires the
+        /// machine, and a machine with no belt pointing away waits instead of pushing into a dead end.
         /// </summary>
         public static bool IsOutput(BeltField belts, Int2 cell, Dir side)
             => belts.TryGet(cell + side.Offset(), out BeltState belt) && belt.Direction == side;
 
         /// <summary>
         /// Push <paramref name="shape"/> out through the first outlet with room, starting at the
-        /// machine's rotation cursor and wrapping, then advance that cursor past the outlet used.
-        /// Shared by the decomposer and the splitter so both distribute round-robin: the two halves of
-        /// one split should leave by different belts when two are available, not queue behind one.
-        ///
-        /// This is the unfiltered form - every wired outlet may take the item.
+        /// machine's rotation cursor and wrapping, then advance the cursor past the outlet used. Shared
+        /// by the decomposer and the splitter so both distribute round-robin - two halves of one split
+        /// leave by different belts, not queue behind one. Unfiltered: every wired outlet may take it.
         /// </summary>
         public static bool TryPushOut(BeltField belts, ref MachineState machine, Int2 cell, ShapeType shape)
             => TryPushOut(belts, ref machine, cell, shape, DirMask.All);
 
         /// <summary>
-        /// The same push, narrowed to <paramref name="allowed"/>. A machine that routes by shape
-        /// (the sorter) narrows the set per item instead of re-implementing the search, so "which
-        /// outlet" and "does it have room" stay one rule for every machine that pushes.
+        /// The same push, narrowed to <paramref name="allowed"/>. A shape-routing machine (the sorter)
+        /// narrows the set per item instead of re-implementing the search, so "which outlet" and "does
+        /// it have room" stay one rule for every machine that pushes.
         /// </summary>
         public static bool TryPushOut(BeltField belts, ref MachineState machine, Int2 cell, ShapeType shape,
             DirMask allowed)
@@ -119,19 +112,17 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// Take the first ready item delivered into <paramref name="cell"/> off its belt, in the same
-        /// fixed scan order every ported machine uses. False means nothing is delivering, which for a
-        /// machine already holding an item is simply backpressure: it waits and lets the belts
-        /// upstream queue.
+        /// Take the first ready item delivered into <paramref name="cell"/> off its belt, in the fixed
+        /// scan order every ported machine uses. False means nothing is delivering - for a machine
+        /// already holding an item, simple backpressure: it waits and lets the belts upstream queue.
         ///
-        /// This is the intake mirror of <see cref="TryPushOut"/>, and the one rule for every machine
-        /// that picks up and holds what it takes - the splitter hub and the sorter, whose tick differed
-        /// only in the comments around an identical scan. Put here beside the push so "an outlet is a
+        /// The intake mirror of <see cref="TryPushOut"/>, and the one rule for every machine that picks
+        /// up and holds what it takes (the splitter hub and the sorter), put here so "an outlet is a
         /// belt pointing away" and "an intake is a belt pointing in" cannot drift apart.
         ///
-        /// A jammed belt is skipped: these machines carry what they take to another side, so picking a
-        /// jammed item up would move it past the segment the player is meant to clear and hide the
-        /// mistake. A machine that consumes or fires what it takes asks the other question instead - see
+        /// A jammed belt is skipped: these machines carry what they take to another side, so taking a
+        /// jammed item would move it past the segment the player is meant to clear and hide the mistake.
+        /// A machine that consumes or fires what it takes asks the other question - see
         /// <see cref="TryReadyAt"/>.
         /// </summary>
         public static bool TryTakeInput(BeltField belts, Int2 cell, out ShapeType shape)
@@ -165,20 +156,18 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// The machine's two port sets, computed once here so the simulation and the view read the
-        /// same rule instead of each deciding for itself.
+        /// The machine's two port sets, computed once so the simulation and the view read the same rule.
         ///
-        /// <paramref name="inMask"/>: every side a belt points at the machine from - the sides it can
-        /// be fed on, which is what makes a stub pointing inward read as an input.
+        /// <paramref name="inMask"/>: every side a belt points at the machine from - the sides it can be
+        /// fed on, which is what makes a stub pointing inward read as an input.
         ///
-        /// <paramref name="outMask"/>: every side a belt points away on, when the machine's kind even
-        /// has an output there. A drill's facing <em>is</em> its output, so it gets exactly one; a
-        /// decomposer's, a cutter's, a splitter's and a sorter's outlets are read off the belts around
-        /// them, so they get every side wired that way; a pipe (which lands two cells ahead) and a
-        /// turret (which never pushes) get none.
+        /// <paramref name="outMask"/>: every side a belt points away on, when the machine's kind has an
+        /// output there. A drill's facing <em>is</em> its output (exactly one); a decomposer, cutter,
+        /// splitter and sorter read their outlets off the belts around them (every side wired that way);
+        /// a pipe (lands two cells ahead) and a turret (never pushes) get none.
         ///
-        /// Which of those a machine is comes from its definition's <see cref="BehaviorKind"/>, so a new
-        /// machine of an existing kind docks correctly without being added to a list here.
+        /// Which a machine is comes from its definition's <see cref="BehaviorKind"/>, so a new machine of
+        /// an existing kind docks correctly without being added to a list here.
         /// </summary>
         public static void PortMasks(BeltField belts, ContentDatabase content, Int2 cell,
             in MachineState machine, out DirMask inMask, out DirMask outMask)

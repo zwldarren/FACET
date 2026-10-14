@@ -20,21 +20,15 @@ namespace Facet.Core
     }
 
     /// <summary>
-    /// One wave: how long the intermission before it lasts, and what walks in. Every wave has one - the
-    /// first included - and the wave starts itself when it runs out unless the player cuts it short with
-    /// `N`. The first wave's countdown is the longest number on the table, because the opening is built
-    /// under it, and it does not start until the player's first building arms it
-    /// (see <see cref="WaveDirector.ArmFirstWave"/>): planning is free, building is not.
+    /// One wave: the intermission before it and what walks in. Every wave has one, and it starts itself
+    /// when the intermission runs out unless the player cuts it short with `N`. The first wave does not
+    /// start until the player's first building arms it (see <see cref="WaveDirector.ArmFirstWave"/>).
     /// </summary>
     public sealed class WaveDefinition
     {
-        /// <summary>
-        /// Countdown before this wave, in seconds. The wave starts itself when it runs out, so 0 means
-        /// "the moment this wave's wait is armed" - the run opening, for a first wave in a test rig;
-        /// never what a shipped map's first wave wants, since the player has to mine, belt, split and
-        /// shoot before anything walks in. That is a design rule a map is authored to, not a rule the
-        /// simulation holds map data to.
-        /// </summary>
+        /// <summary>Countdown before this wave, in seconds; 0 means "the moment the wait is armed" (a
+        /// test rig's opening, never a shipped map's first wave, since the player must mine, belt, split
+        /// and shoot first). A design rule maps are authored to, not one the simulation holds them to.</summary>
         public readonly float Intermission;
         public readonly SpawnGroup[] Groups;
 

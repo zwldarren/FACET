@@ -4,17 +4,11 @@ using System.Collections.Generic;
 namespace Facet.Core
 {
     /// <summary>
-    /// The staircase a belt drag lays: the one statement of the walk rule, shared by the drag itself
-    /// and by anything that wants to predict what a drag from A to B will produce.
-    ///
-    /// The walk is Manhattan and takes the drag's dominant axis first - the same axis rule
-    /// <c>BuildController</c> uses to aim a machine - so a run dragged up the screen starts *up* from
-    /// the press cell and puts its sideways step at the far end. One decision per walk, not per step:
-    /// deciding per step would turn a diagonal drag into a staircase of staircases.
-    ///
-    /// This is geometry only. Whether a cell accepts a belt - funds, occupancy, ground - is
-    /// <c>BuildController</c>'s question; <see cref="Predict"/> answers "what would the drag try to
-    /// lay", which is exactly what its callers and its tests both want to ask.
+    /// The staircase a belt drag lays: the one statement of the walk rule, shared by the drag and by
+    /// anything predicting what a drag from A to B produces. The walk is Manhattan and takes the drag's
+    /// dominant axis first (the axis rule <c>BuildController</c> uses to aim a machine), decided once
+    /// per walk rather than per step. Geometry only - whether a cell accepts a belt is
+    /// <c>BuildController</c>'s question; <see cref="Predict"/> answers "what would the drag lay".
     /// </summary>
     public static class BeltWalk
     {
@@ -32,8 +26,7 @@ namespace Facet.Core
         }
 
         /// <summary>Which axis a walk from <paramref name="from"/> to <paramref name="to"/> takes
-        /// first: Y when the drag ran further along Y, with X winning a tie exactly as the machine
-        /// aim does.</summary>
+        /// first: Y when the drag ran further along Y, X winning a tie as the machine aim does.</summary>
         public static bool YFirst(Int2 from, Int2 to)
             => Math.Abs(to.Y - from.Y) > Math.Abs(to.X - from.X);
 
@@ -58,10 +51,9 @@ namespace Facet.Core
         }
 
         /// <summary>Every cell the drag from <paramref name="from"/> to <paramref name="to"/> lays, in
-        /// walk order, with the direction each is pointed. The end cell is included, facing the way the
-        /// last step entered it; a zero-length walk lays nothing through this path (a plain click is
-        /// the release-time placement, not a staircase). Allocates - the drag itself walks incrementally
-        /// through <see cref="NextStep"/>; this is the one-shot question tests and ghosts ask.</summary>
+        /// walk order with each direction; the end cell is included, and a zero-length walk lays
+        /// nothing (a plain click is release-time placement, not a staircase). Allocates - the drag
+        /// itself walks incrementally through <see cref="NextStep"/>.</summary>
         public static List<Step> Predict(Int2 from, Int2 to)
         {
             var steps = new List<Step>();

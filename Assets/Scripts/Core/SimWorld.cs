@@ -3,35 +3,22 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// The whole logic layer. Deterministic, engine-free, advanced exactly once per fixed tick
-    /// by the host. Nothing here knows about Unity, time.DeltaTime, or frame rates.
+    /// The whole logic layer. Deterministic, engine-free, advanced exactly once per fixed tick by the
+    /// host; nothing here knows about Unity, DeltaTime or frame rates.
     ///
-    /// The tick order is the design's causal order, and each step exists because the one after it
-    /// needs its result:
+    /// The tick order is the design's causal order - each step exists because the next needs its
+    /// result: build commands, belts, machines, core sink, projectiles, path field, enemies, waves.
     ///
-    ///   1. build commands     - what the player placed this tick (and paid for)
-    ///   2. belts              - items advance and hand off
-    ///   3. machines           - every machine's behaviour, in map order (they read step 2's arrivals)
-    ///   4. core sink          - deliveries into the Core bank as circles
-    ///   5. projectiles        - fly and burst (they read the shots step 3 fired)
-    ///   6. path field         - rebuild the walkers' way to the Core if buildings changed
-    ///   7. enemies            - walk it, hit the Core or a machine in reach, and give each other room
-    ///   8. waves              - spawn, and decide whether the wave or the run is over
+    /// <see cref="Events"/> is filled alongside all eight and never read back - it is derived, so the
+    /// stream cannot change what a tick does, and reactions happen through it instead of by polling
+    /// for edges.
     ///
-    /// <see cref="Events"/> is filled alongside all eight. It is derived - the simulation never reads
-    /// it back - so the stream cannot change what a tick does, and every reaction to the game happens
-    /// through it instead of through polling for edges.
-    ///
-    /// The seam is chosen, in one sentence: <b>the fields are the interface to the modules, and the
-    /// methods are only for what has no field to cross to.</b> Dropping an item, jamming a belt,
-    /// counting turrets, starting a wave from a test - those are the module's own verbs, written on
-    /// the module (<c>world.Belts.TrySpawnItem(...)</c>, <c>world.Waves.StartNextWave()</c>). What
-    /// stays here forwards to state that is deliberately private - the build gestures behind
-    /// <see cref="_build"/>, the telemetry behind <see cref="_machineSystem"/> - or lands on a tick
-    /// boundary on the world's own clock (<see cref="RequestNextWave"/>, <see cref="RequestRestart"/>).
-    /// The pass-throughs that only re-exposed a public field are gone: they were interface mass with
-    /// no depth, and every one of them made callers guess, from a comment, which of two spellings
-    /// the game itself used.
+    /// The seam: <b>the fields are the interface to the modules; the methods are only for what has no
+    /// field to cross to.</b> Module verbs live on the module
+    /// (<c>world.Belts.TrySpawnItem(...)</c>, <c>world.Waves.StartNextWave()</c>); what stays here
+    /// forwards to deliberately private state (<see cref="_build"/>, <see cref="_machineSystem"/>)
+    /// or lands on a tick boundary on the world's own clock (<see cref="RequestNextWave"/>,
+    /// <see cref="RequestRestart"/>).
     /// </summary>
     public sealed class SimWorld
     {
@@ -45,18 +32,16 @@ namespace Facet.Core
         public readonly SimConfig Config;
         public readonly EconomyState Economy;
 
-        /// <summary>The content this run is played with: every cost, stat and recipe the simulation
-        /// reads comes through here. Injected rather than read from a static, so a test or a replay
-        /// can run a different table and still be reproducible.</summary>
+        /// <summary>The content this run reads: every cost, stat and recipe. Injected rather than read
+        /// from a static, so a test or a replay can run a different table and stay reproducible.</summary>
         public readonly ContentDatabase Content;
 
         /// <summary>
-        /// What the simulation reported having done this run: built, removed, jammed, banked, shot,
-        /// killed, damaged, and the wave and run endings. Filled by the tick and read by whoever
-        /// reacts - a sound, a flash, a HUD ticker.
+        /// What the simulation reported doing this run: built, removed, jammed, banked, shot, killed,
+        /// damaged, and the wave and run endings. Filled by the tick, read by any reactor.
         ///
         /// <b>The simulation appends; the reader clears.</b> See <see cref="SimEventBuffer"/> for why
-        /// that is the reader's job and not the tick's.
+        /// that is the reader's job, not the tick's.
         /// </summary>
         public readonly SimEventBuffer Events = new SimEventBuffer();
 
@@ -75,8 +60,8 @@ namespace Facet.Core
         /// <summary>The defended object, and the bank. Losing it loses the run.</summary>
         public CoreState Core;
 
-        /// <summary>Which building the player has selected right now, or null for the inspect cursor:
-        /// nothing selected, so the left button reads the map instead of building on it.</summary>
+        /// <summary>The building the player has selected, or null for the inspect cursor: nothing
+        /// selected, so the left button reads the map instead of building on it.</summary>
         public BuildKind? SelectedKind => _build.Selected;
 
         /// <summary>The building the player last read - the tile the HUD's info card describes while
@@ -144,9 +129,8 @@ namespace Facet.Core
             Events.Tick = TickCount;
 
             // Restart is honoured even while paused or after the run ended: it is the only way back.
-            // The HUD's button goes through RequestRestart for the same reason the start-wave button
-            // goes through RequestNextWave: a click happens between ticks, and this world is what
-            // knows the tick order.
+            // The HUD's button goes through RequestRestart, for the same reason the start-wave button
+            // goes through RequestNextWave - a click happens between ticks and this world knows the order.
             if (cmd.RestartPressed || _restartRequested)
             {
                 _restartRequested = false;
@@ -169,9 +153,9 @@ namespace Facet.Core
 
             _build.Apply(cmd);
 
-            // The opening's countdown is the player's to start: it begins on the tick their first
-            // building lands, so planning costs nothing and building costs time. Say it every tick once
-            // they have built - the clock is what decides that only the first one means anything.
+            // The opening countdown starts on the tick the player's first building lands, so planning
+            // costs nothing and building costs time. Said every tick once they have built - the clock
+            // decides that only the first one means anything.
             if (_build.HasBuilt) Waves.ArmFirstWave();
 
             Belts.Step(SimConfig.TickDt, Config.BeltSpeed);
@@ -182,12 +166,10 @@ namespace Facet.Core
             Enemies.Step(SimConfig.TickDt, ref Core);
             Waves.Step(SimConfig.TickDt);
 
-            // The N key and the HUD's button, applied *after* the wave step: on the tick a wave's last
-            // enemy dies, step 8 is what ends the wave, so a request arriving in that same tick would
-            // find a wave still running and be swallowed. Here it starts the intermission step 8 just
-            // opened. A wave that is actually running ignores the request, and so does a finished run,
-            // so this stays exactly the "start it now, only once" the design asks for. The countdown
-            // path is untouched: start-early is this line's only job.
+            // The N key and the HUD's button, applied *after* the wave step: step 8 ends a wave on the
+            // tick its last enemy dies, so a request in that same tick would find a wave still running
+            // and be swallowed. Here it starts the intermission step 8 just opened; a running wave or a
+            // finished run ignores it, so this stays "start it now, only once".
             if (cmd.StartWavePressed || _waveRequested)
             {
                 _waveRequested = false;
@@ -237,10 +219,9 @@ namespace Facet.Core
             Events.Clear();
         }
 
-        /// <summary>Ask for the next wave on the next tick. The HUD's button calls this because a
-        /// click happens between ticks and this world is the only thing that knows the tick order.
-        /// A test that means to start a wave - not to simulate the click that starts it - writes
-        /// <c>world.Waves.StartNextWave()</c> on the clock directly.</summary>
+        /// <summary>Ask for the next wave on the next tick. The HUD's button calls this because a click
+        /// happens between ticks and only this world knows the tick order. A test that means to start a
+        /// wave writes <c>world.Waves.StartNextWave()</c> on the clock directly.</summary>
         public void RequestNextWave() => _waveRequested = true;
 
         /// <summary>Ask for the run to restart on the next tick. The HUD's restart button calls this;
@@ -251,9 +232,8 @@ namespace Facet.Core
 
         public bool TryPlace(BuildKind kind, Int2 cell, Dir direction) => _build.TryPlace(kind, cell, direction);
 
-        /// <summary>Clear a jam or remove a building (refunding it), the way right-click does. This is
-        /// the player's verb; the no-refund low-level removal lives on <see cref="Belts"/> for the
-        /// scaffolding that needs it, not forwarded here a second time.</summary>
+        /// <summary>Clear a jam or remove a building (refunding it), the way right-click does - the
+        /// player's verb. The no-refund low-level removal lives on <see cref="Belts"/>.</summary>
         public bool TryRemoveBuilding(Int2 cell) => _build.Remove(cell);
 
         public bool CanPlaceBelt(Int2 cell) => _build.CanPlace(BuildKind.Belt, cell);

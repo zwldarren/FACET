@@ -3,23 +3,16 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// Draws the map's own obstacles: rock, water, and the rim where either meets ground that is not
-    /// itself. One mesh for all of them, merged along a row wherever the kind repeats, so a rock ridge
-    /// costs a handful of quads instead of one per tile.
+    /// <summary>Draws the map's own obstacles: rock, water, and the rim where either meets ground that is not
+    /// itself. One mesh for all of them, merged along a row wherever the kind repeats, so a rock ridge costs a
+    /// handful of quads instead of one per tile. This is what makes the map's shape legible: a wave walks around
+    /// these tiles because the flow field reads the same ground, so what the player sees and what the enemies do
+    /// come from one answer. Rock and water are drawn in their own colours and outlined on their own rim, which
+    /// separates a wall the <em>map</em> drew from the wall a player <em>bought</em>.
     ///
-    /// This is the view that makes the map's shape legible: a wave walks around these tiles because the
-    /// flow field reads the same ground, so what the player sees and what the enemies do come from one
-    /// answer. Rock and water are drawn in their own colours and outlined on their own rim, which is what
-    /// separates a wall the <em>map</em> drew from the wall a player <em>bought</em> - the machines'
-    /// colour, drawn by the machine renderer.
-    ///
-    /// The void is deliberately not drawn here at all: it is the absence of ground, and the ground view
-    /// is what leaves it out, so the background shows through where the map is not.
-    ///
-    /// Terrain is stamped once and never moves during a run, so this view has no rebuild reason of its
-    /// own - only the gate's, which is the zoom moving the screen-space rim width.
-    /// </summary>
+    /// The void is deliberately drawn nowhere here: it is the absence of ground, left out by the ground view, so
+    /// the background shows through. Terrain is stamped once and never moves, so this view has no rebuild reason of
+    /// its own - only the gate's, the zoom moving the screen-space rim width.</summary>
     [DefaultExecutionOrder(100)]
     public sealed class TerrainRenderer : MeshView
     {
@@ -66,11 +59,9 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>
-        /// Outline every side of an obstacle tile that does not face the same kind. A ridge therefore
-        /// gets one rim around its whole perimeter and nothing down its middle, which is what makes it
-        /// read as one mass rather than as a row of blocks.
-        /// </summary>
+        /// <summary>Outline every side of an obstacle tile that does not face the same kind. A ridge therefore gets one
+        /// rim around its whole perimeter and nothing down its middle, so it reads as one mass rather than a row of
+        /// blocks.</summary>
         private void AppendRims(float rim)
         {
             for (int y = 0; y < _grid.Height; y++)
@@ -96,12 +87,10 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>
-        /// The obstacle kind at a tile, or <see cref="TerrainKind.Ground"/> where this view has nothing
-        /// of its own to draw - which is plain ground, ore, the void and the cells off the map alike.
-        /// Collapsing all four into one "not an obstacle" answer is what keeps the rim rule to a single
-        /// comparison: a side is outlined exactly when the tile across it is not the same obstacle.
-        /// </summary>
+        /// <summary>The obstacle kind at a tile, or <see cref="TerrainKind.Ground"/> where this view has nothing of its
+        /// own to draw - plain ground, ore, the void and off-map cells alike. Collapsing all four into one "not an
+        /// obstacle" answer keeps the rim rule to a single comparison: a side is outlined exactly when the tile across
+        /// it is not the same obstacle.</summary>
         private TerrainKind ObstacleAt(Int2 cell)
         {
             if (!_grid.InBounds(cell)) return TerrainKind.Ground;
@@ -110,10 +99,9 @@ namespace Facet.Game
             return kind == TerrainKind.Ore || kind == TerrainKind.Void ? TerrainKind.Ground : kind;
         }
 
-        /// <summary>The colour an obstacle kind of ground draws as: one lookup for every surface that
-        /// shows the map's ground. The map itself is stamped from it, and the HUD's inscription card
-        /// reads the same table, so a kind of ground carries its look the way its row asks for it -
-        /// in one place - and neither surface keeps a colour of its own to drift.</summary>
+        /// <summary>The colour an obstacle kind of ground draws as: one lookup for every surface that shows the map's
+        /// ground. The map is stamped from it, and the HUD's inscription card reads the same table, so a kind of ground
+        /// carries its look in one place and neither surface keeps a colour of its own to drift.</summary>
         internal static Color ColorOf(TerrainKind kind, Palette palette)
             => kind == TerrainKind.Water ? palette.Water : palette.Rock;
 

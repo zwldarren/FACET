@@ -3,17 +3,10 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// How far the player has come, across runs: which map is being played, and how many maps this
-    /// campaign has cleared.
-    ///
-    /// Deliberately not part of <see cref="SimWorld"/>. A world is one run and is rebuilt from its
-    /// map's own data; it knows nothing about what came before it and must not, or "replay this map
-    /// from these commands" would stop being true. The only thing that carries over between maps is
-    /// the one number that says where the player is, and this is where it lives - so progression is a
-    /// thing the host drives, not a thing the simulation accumulates.
-    ///
-    /// Plain C# on purpose: <c>FACET.Core</c> stays engine-free, and a test can walk a whole campaign
-    /// without a scene.
+    /// How far the player has come across runs: which map is being played, and how many this campaign
+    /// has cleared. Deliberately not part of <see cref="SimWorld"/> - a world is one run and must not
+    /// remember what came before, or "replay this map from these commands" stops being true. Plain C#
+    /// so <c>FACET.Core</c> stays engine-free.
     /// </summary>
     public sealed class CampaignState
     {
@@ -30,15 +23,9 @@ namespace Facet.Core
         /// <summary>Is there a map after this one?</summary>
         public bool HasNext => MapIndex + 1 < MapCount;
 
-        /// <summary>
-        /// Is this map 0 - the map the tutorial card and its camera strip belong to? The one thing
-        /// that is true of that map and no other, so the HUD's "how to play" card and the camera's
-        /// bound for it cannot disagree about when it is up.
-        ///
-        /// This is the map's number, not the order it happens to be played in: a campaign started
-        /// partway through (the driver's start map) opens on a later map, and the tutorial stays down
-        /// there - its text is about this map's chain, not about whatever map came first for that run.
-        /// </summary>
+        /// <summary>Is this map 0 - the map the tutorial card and its camera strip belong to? This is
+        /// the map's number, not the order it is played in: a campaign started partway through opens on
+        /// a later map and the tutorial stays down.</summary>
         public bool IsFirstMap => MapIndex == 0;
 
         public CampaignState(int mapCount, int mapIndex = 0)

@@ -5,17 +5,10 @@ namespace Facet.Tests
 {
     /// <summary>
     /// EditMode tests for the second production chain: a square patch, a cutter, half-square
-    /// ammunition and a mortar.
-    ///
-    /// The point of these is not that a second chain exists - it is what adding one cost. The cutter is
-    /// the decomposer's behaviour on another recipe; the mortar is the cannon's behaviour on another
-    /// diet. So the tests that matter most here are the ones that show both chains obeying the *same*
-    /// rules: each converter refuses the other's mineral, each gun refuses the other's ammunition, and
-    /// the sorter can separate the two minerals on one line.
-    ///
-    /// The worlds are the 20x12 test map, whose Core sits at (8,4)-(11,7) - so the chain is laid along
-    /// the bottom of the map, clear of the Core, and the worlds are unkillable ones: an enemy reaching
-    /// the Core would otherwise end the run in the middle of a measurement.
+    /// ammunition and a mortar. Most pin that both chains obey the same rules: each converter
+    /// refuses the other's mineral, each gun the other's ammunition, and the sorter separates the
+    /// two minerals on one line. Worlds use the 20x12 test map, unkillable so a Core breach cannot
+    /// end a measurement mid-run.
     /// </summary>
     public class ChainTests
     {
@@ -23,9 +16,9 @@ namespace Facet.Tests
         private static readonly Int2 Mortar = new Int2(10, 9);
 
         /// <summary>
-        /// The second chain, laid along the bottom of the test map: a drill on a square patch at
-        /// (3,9) mining east, four belt cells into the cutter, then three more into the mortar. The
-        /// mortar's rest facing is west; its barrel points wherever the nearest enemy is.
+        /// Lays the second chain along the bottom of the test map: a drill on a square patch at (3,9)
+        /// mining east, four belt cells into the cutter, then three more into the mortar (rest facing
+        /// west; its barrel points at the nearest enemy).
         /// </summary>
         private static SimWorld SecondChain()
         {
@@ -43,11 +36,9 @@ namespace Facet.Tests
         [Test]
         public void TheSecondChain_RunsFromAPatch_ToAKill()
         {
-            // Mine a square, split it, belt the halves, fire one: the whole chain, headless. The mortar
-            // was the cheap way to a Spike before weaknesses counted - one 6-damage shell against its 6
-            // HP - and it is the expensive way now: half-square ammo is resisted by a quarter, so the
-            // same shell lands 1.5 and the kill costs four of them instead of one. The second chain is
-            // still worth running, it is just no longer the shortcut past the first one.
+            // Mine a square, split it, belt the halves, fire: the whole chain, headless. The mortar was
+            // once the cheap way to a Spike (one 6-damage shell against 6 HP); half-square ammo is now
+            // resisted by a quarter, so the same shell lands 1.5 and the kill costs four shells.
             SimWorld world = SecondChain();
             Assert.Greater(world.Enemies.Spawn(EnemyKind.Spike, new Vec2(14.5f, 9.5f)), 0);
 
@@ -62,8 +53,8 @@ namespace Facet.Tests
         [Test]
         public void TheMortar_IsFedHalfSquares_NotCircles()
         {
-            // The diet is the definition's, so what arrives at the mortar is the second recipe's output
-            // - not a circle that wandered down the wrong line.
+            // The diet is the definition's: what arrives is the second recipe's output, not a circle
+            // that wandered down the wrong line.
             SimWorld world = SecondChain();
 
             for (int i = 0; i < 30 * 20; i++)
@@ -80,10 +71,9 @@ namespace Facet.Tests
         [Test]
         public void OneSquare_BecomesTwoHalfSquares()
         {
-            // The recipe's shape, not the machine's: one square in, two half-squares out, which is
-            // exactly what the decomposer does to a circle. A single outlet therefore caps the cutter
-            // at the belt's rate, so the second half waits in the machine's buffer - the same
-            // starvation-behind-the-stage behaviour that makes a second outlet worth wiring.
+            // The recipe's shape, not the machine's: one square in, two half-squares out, as a decomposer
+            // does to a circle. A single outlet caps the cutter at the belt's rate, so the second half
+            // waits in the machine's buffer - the starvation that makes a second outlet worth wiring.
             SimWorld world = SecondChain();
 
             int halves = 0;
@@ -105,9 +95,8 @@ namespace Facet.Tests
         [Test]
         public void ACutter_RefusesCircles_TheWayADecomposerRefusesSquares()
         {
-            // The wrong-shape rule is the recipe's, not a list of machines: a cutter is fed circles and
-            // jams the belt that fed it, with the circle still on it. Nothing here knows what a cutter
-            // is - the recipe's input is the whole rule.
+            // The wrong-shape rule is the recipe's, not a list of machines: a cutter fed circles jams the
+            // belt that fed it, with the circle still on it. The recipe's input is the whole rule.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             world.Terrain.SetOre(new Int2(3, 9), ShapeType.Circle);
 
@@ -147,8 +136,8 @@ namespace Facet.Tests
         [Test]
         public void EachGun_RefusesTheOtherChainsAmmunition()
         {
-            // A mortar fed half-circles jams the feeding belt, and a cannon fed half-squares does the
-            // same. Two turrets with two diets is a routing problem for the player, and this is why.
+            // A mortar fed half-circles jams its feed belt, and a cannon fed half-squares does the same -
+            // why two turrets with two diets are a routing problem.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
 
             Sim.LayRun(world, new Int2(4, 9), Dir.East, 1);
@@ -169,9 +158,8 @@ namespace Facet.Tests
         [Test]
         public void ASorter_SeparatesTheTwoMinerals_OnOneLine()
         {
-            // The chain and the router together, which is the split the second mineral makes the sorter
-            // worth building for: one input line carrying both minerals, the squares leaving by the side
-            // the sorter faces, the circles carrying on down the line.
+            // The chain and the router together: one input line carrying both minerals, the squares
+            // leaving by the side the sorter faces, the circles carrying on down the line.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             var hub = new Int2(4, 5);
 
@@ -180,8 +168,8 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(5, 5), Dir.East, 2);         // (5,5) (6,5): squares this way
             Sim.LayRun(world, new Int2(4, 6), Dir.North, 2);        // (4,6) (4,7): everything else
 
-            // The shipped filter is a circle, so this is a sorter retuned the way a player would for a
-            // map that mines two minerals: swap the two shapes' names and the routing swaps with them.
+            // The shipped filter is a circle; this is a sorter retuned as a player would, swapping the
+            // shapes' names and the routing with them.
             Assert.AreEqual(ShapeType.Circle, world.Content.Machine(BuildKind.Sorter).Filter);
 
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), ShapeType.Square));

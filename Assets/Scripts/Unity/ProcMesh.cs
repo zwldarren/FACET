@@ -3,40 +3,32 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// Builds flat, vertex-coloured meshes at runtime. No textures, no gradients: every FACET visual
+    /// <summary>Builds flat, vertex-coloured meshes at runtime. No textures, no gradients: every FACET visual
     /// is a flat fill plus a constant-width dark outline. All polygons must be convex and wound
-    /// counter-clockwise.
-    ///
-    /// The Append* + <see cref="Finish"/> trio exists because a few hundred belts or items have to
-    /// land in ONE mesh; building a mesh per object would mean a GameObject per belt.
-    /// </summary>
+    /// counter-clockwise. The Append* + <see cref="Finish"/> trio exists because a few hundred belts or items
+    /// have to land in ONE mesh; a mesh per object would mean a GameObject per belt.</summary>
     public static class ProcMesh
     {
-        /// <summary>The only built-in shader here that multiplies the mesh's vertex colours. The one
-        /// material every view shares is an asset wired to the Palette (<see cref="Palette.ViewMaterial"/>),
-        /// so a build carries the shader through that reference; this constant names the shader that asset
-        /// must use, and is what the runtime fallback below looks up when no asset is assigned.</summary>
+        /// <summary>The only built-in shader here that multiplies the mesh's vertex colours. The one material every
+        /// view shares is an asset wired to the Palette (<see cref="Palette.ViewMaterial"/>), so a build carries the
+        /// shader through that reference; this constant names the shader that asset must use, and is what the runtime
+        /// fallback below looks up when no asset is assigned.</summary>
         public const string VertexColorShader = "Sprites/Default";
 
         private static Material _unlit;
         private static bool _shaderMissing;
 
-        /// <summary>
-        /// The runtime-built fallback material for when the Palette has no view material assigned:
-        /// unlit, respecting per-vertex colour, or null when no usable shader is installed (in which
-        /// case the error has already been logged). The Editor never strips shaders, so the fallback is
-        /// always safe here; a build only survives it when the shader is otherwise included, which is
-        /// exactly what the Palette's material asset guarantees.
-        /// </summary>
+        /// <summary>The runtime-built fallback material for when the Palette has no view material assigned: unlit,
+        /// respecting per-vertex colour, or null when no usable shader is installed (in which case the error has
+        /// already been logged). The Editor never strips shaders, so the fallback is always safe there; a build only
+        /// survives it when the shader is otherwise included - which the Palette's material asset guarantees.</summary>
         public static Material UnlitMaterial()
         {
             if (_unlit != null) return _unlit;
             if (_shaderMissing) return null;
 
-            // Every FACET polygon gets its colour from the mesh, so a swapped shader is not a
-            // cosmetic difference - URP/Unlit ignores vertex colours and would paint the whole game
-            // one flat colour. So: never fall back silently to some other shader.
+            // Every FACET polygon gets its colour from the mesh, so a swapped shader is not cosmetic - URP/Unlit
+            // ignores vertex colours and would paint the whole game one flat colour. Never fall back silently.
             Shader shader = Shader.Find(VertexColorShader);
             if (shader == null)
             {
@@ -65,11 +57,9 @@ namespace Facet.Game
             return pts;
         }
 
-        /// <summary>
-        /// Vertices of a half-disc, dome up: the arc from 0 to 180 degrees, closed by the diameter.
-        /// Convex and wound counter-clockwise, so the polygon helpers take it unchanged. The dome-up
-        /// orientation is the fixed one, so an ammo icon and the enemy weak to it read as one shape.
-        /// </summary>
+        /// <summary>Vertices of a half-disc, dome up: the arc from 0 to 180 degrees, closed by the diameter. Convex
+        /// and wound counter-clockwise, so the polygon helpers take it unchanged. Dome-up is fixed so an ammo icon
+        /// and the enemy weak to it read as one shape.</summary>
         public static Vector2[] HalfDisc(int arcSegments, float radius)
         {
             if (arcSegments < 2) arcSegments = 2;
@@ -82,13 +72,10 @@ namespace Facet.Game
             return pts;
         }
 
-        /// <summary>
-        /// Drop one polygon into shared vertex/colour/index buffers, optionally displaced by
-        /// <paramref name="offset"/>. This is what lets a renderer pack every belt or every item
-        /// into a single mesh instead of one GameObject per object.
-        /// The outline is built as one quad per edge rather than by scaling the polygon outward,
-        /// so its width stays constant no matter how many sides the shape has.
-        /// </summary>
+        /// <summary>Drop one polygon into shared vertex/colour/index buffers, optionally displaced by
+        /// <paramref name="offset"/> - what lets a renderer pack every belt or item into a single mesh instead of one
+        /// GameObject per object. The outline is one quad per edge rather than a scaled polygon, so its width stays
+        /// constant however many sides the shape has.</summary>
         public static void AppendPolygon(List<Vector3> verts, List<Color> colors, List<int> tris,
             IReadOnlyList<Vector2> points, Vector2 offset, Color fill, Color outline, float outlineWidth)
         {
@@ -157,8 +144,8 @@ namespace Facet.Game
             tris.Add(i0); tris.Add(i0 + 2); tris.Add(i0 + 3);
         }
 
-        /// <summary>Turn shared buffers into a mesh. Reuses <paramref name="into"/> when given, so a
-        /// renderer that rebuilds every frame does not allocate a new mesh each time.</summary>
+        /// <summary>Turn shared buffers into a mesh. Reuses <paramref name="into"/> when given, so a renderer that
+        /// rebuilds every frame does not allocate a new mesh each time.</summary>
         public static Mesh Finish(List<Vector3> verts, List<Color> colors, List<int> tris, string name, Mesh into = null)
         {
             Mesh mesh = into != null ? into : new Mesh();

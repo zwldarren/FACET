@@ -5,15 +5,11 @@ using UnityEngine;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The pan bound decides whether a tile at the map's edge can be looked at, and the HUD is what made
-    /// the old bound wrong: the map had to cover the whole screen, so at any zoom the player would use,
-    /// the bottom rows could not be panned clear of the build bar - rows nobody can look at, on the very
-    /// edge a belt run has to be routed along. These tests pin the bound in screen pixels: how much of
-    /// the screen each panel owns, how far past the map's edge the camera may then travel, and that the
-    /// two together leave the background showing on every side.
-    ///
-    /// Measured on real screens, real maps and the rig's real zoom range, because the failure they guard
-    /// is a ring of invisible tiles - something the player notices and nothing throws.
+    /// The pan bound decides whether a tile at the map's edge can be looked at, and the HUD is what broke the
+    /// old bound: with the map forced to cover the whole screen, the bottom rows could not be panned clear of
+    /// the build bar at any usable zoom. These tests pin the bound in screen pixels - how much screen each panel
+    /// owns, how far past the map edge the camera may travel, and that both leave background showing on every
+    /// side. Measured on real screens, maps and zoom, because the failure they guard is rings of invisible tiles.
     /// </summary>
     public class PanLimitsTests
     {
@@ -37,8 +33,7 @@ namespace Facet.Tests
 
         private static readonly ScreenInsets None = new ScreenInsets(0f, 0f, 0f, 0f);
 
-        /// <summary>A camera position far past anything the bound allows, so the clamp returns the limit
-        /// itself - which is what these tests want to look at.</summary>
+        /// <summary>A camera position far past anything the bound allows, so the clamp returns the limit itself.</summary>
         private static readonly Vector3 FarCorner = new Vector3(-1e6f, -1e6f, 0f);
 
         [Test]
@@ -50,8 +45,8 @@ namespace Facet.Tests
         }
 
         /// <summary>
-        /// No slack: the bound stops the moment the map covers everything the HUD does not - the rule the
-        /// slack is added to.
+        /// No slack: the bound stops the moment the map covers everything the HUD does not - the rule the slack
+        /// is added to.
         /// </summary>
         [Test]
         public void WithoutSlack_TheMapStopsOnTheStripEachPanelOwns()
@@ -68,9 +63,9 @@ namespace Facet.Tests
         }
 
         /// <summary>
-        /// The bound with its slack: panned as far as it allows, every side of the map has been carried
-        /// past the panel that used to hide it, into the open screen - background visible behind the edge,
-        /// on all four sides including the bottom one, which the build bar covers across its whole strip.
+        /// The bound with its slack: panned as far as allowed, every side of the map is carried past the panel
+        /// that used to hide it, into the open screen - background visible behind the edge on all four sides,
+        /// including the bottom one, which the build bar covers across its whole strip.
         /// </summary>
         [Test]
         public void PannedAsFarAsItGoes_EverySideOfTheMapShowsBackground()
@@ -106,9 +101,8 @@ namespace Facet.Tests
             }
         }
 
-        /// <summary>A map too small to fill the open screen is placed in the middle of it, rather than
-        /// pushed up against a panel by a bound that assumes it is bigger than the screen. The slack is
-        /// symmetric, so it does not move that middle.</summary>
+        /// <summary>A map too small to fill the open screen is placed in the middle of it rather than pushed up
+        /// against a panel by a bound that assumes it is bigger. The slack is symmetric, so it does not move that middle.</summary>
         [Test]
         public void AMapSmallerThanTheOpenScreen_IsCentredInIt()
         {
@@ -130,10 +124,9 @@ namespace Facet.Tests
         }
 
         /// <summary>
-        /// The other half of the contract: the strips the rig clears are the strips the panels actually
-        /// occupy. The reserve and the panels are written down separately on purpose - the reserve has to
-        /// follow the widest card on each side - so a card moved or added without the strip following it
-        /// is a tile the camera will leave underneath it.
+        /// The other half of the contract: the strips the rig clears are the strips the panels occupy. The reserve
+        /// and the panels are written separately on purpose - the reserve follows the widest card on each side - so
+        /// a card moved or added without the strip following it is a tile the camera leaves underneath it.
         /// </summary>
         [Test]
         public void EveryPanel_SitsInsideTheStripTheCameraClears()
@@ -150,9 +143,8 @@ namespace Facet.Tests
                 Rect controls = HudLayout.Controls(screen.x, s);
                 Rect info = HudLayout.Info(bar, s);
 
-                // The readout has no panel of its own, so its contract is the top strip, the screen's
-                // edges, and the right of the card it is measured from - the overlap test below holds the
-                // rest.
+                // The readout has no panel of its own, so its contract is the top strip, the screen edges, and
+                // the right of the card it is measured from - the overlap test below holds the rest.
                 Assert.GreaterOrEqual(stockpile.x, status.xMax - 1e-2f, "the stockpile readout is not beside the status card" + at);
                 Assert.LessOrEqual(stockpile.xMax, screen.x + 1e-2f, "the stockpile readout runs off the screen" + at);
                 Assert.LessOrEqual(stockpile.yMax, insets.Top + 1e-2f, "the stockpile readout reaches below the top strip" + at);
@@ -165,11 +157,9 @@ namespace Facet.Tests
                 Assert.GreaterOrEqual(bar.y, screen.y - insets.Bottom - 1e-2f, "the build bar is taller than the bottom strip" + at);
                 Assert.LessOrEqual(bar.yMax, screen.y + 1e-2f, "the build bar runs off the screen" + at);
 
-                // The tutorial card is the one panel that is not permanent, so it is checked against the
-                // strip the camera clears *while it is up* - insets above is the map with no tutorial,
-                // which is every map but the first. This is the check that catches a card added under the
-                // status card without the strip growing to cover it: the failure is a band of tiles the
-                // player can neither see nor click, and nothing throws.
+                // The tutorial card is the one non-permanent panel, checked against the strip the camera clears
+                // *while it is up* (insets above is the map with no tutorial). This catches a card added under
+                // the status card without the strip growing: the failure is a band of tiles the player can neither see nor click.
                 ScreenInsets withTutorial = HudLayout.Insets(s, tutorialUp: true);
                 Rect tutorial = HudLayout.Tutorial(s);
 
@@ -180,15 +170,11 @@ namespace Facet.Tests
         }
 
         /// <summary>
-        /// The other half of "the panels own their strips": nothing the HUD draws permanently may sit on
-        /// anything else it draws permanently. The stockpile readout is the newest way to break this - it
-        /// is anchored to the status card and gives up width rather than ever reaching the controls card -
-        /// but the check is written over every pair, because two pieces drifting into each other is the
-        /// same bug wherever it comes from. Toasts are left out on purpose: they overlay the map, which is
-        /// the one thing they are for.
-        ///
-        /// The tutorial card is in the list even though it is only up on the first map: it hangs off the
-        /// status card, which is the one arrangement in the HUD where a new piece is placed by eye.
+        /// The other half of "the panels own their strips": nothing the HUD draws permanently may sit on anything
+        /// else it draws permanently. The check covers every pair, because two pieces drifting into each other is
+        /// the same bug wherever it comes from; toasts are left out on purpose, since overlaying the map is their
+        /// whole job. The tutorial card is included even though it is only up on the first map: it hangs off the
+        /// status card, the one arrangement where a new piece is placed by eye.
         /// </summary>
         [Test]
         public void NoHudPieceOverlapsAnother()
@@ -222,8 +208,8 @@ namespace Facet.Tests
             => a.xMin < b.xMax - 1e-2f && b.xMin < a.xMax - 1e-2f &&
                a.yMin < b.yMax - 1e-2f && b.yMin < a.yMax - 1e-2f;
 
-        /// <summary>Where a world point lands on the screen, in pixels, for an orthographic camera
-        /// centred on <paramref name="centre"/> on a screen <paramref name="screen"/> pixels across.</summary>
+        /// <summary>Where a world point lands on the screen, in pixels, for an orthographic camera centred on
+        /// <paramref name="centre"/> on a screen <paramref name="screen"/> pixels across.</summary>
         private static Vector2 ScreenPoint(float worldX, float worldY, Vector2 centre, float zoom, Vector2 screen)
         {
             float halfWidth = zoom * screen.x / screen.y;

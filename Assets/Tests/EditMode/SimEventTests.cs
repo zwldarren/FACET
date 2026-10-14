@@ -4,14 +4,12 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// EditMode tests for the event stream - the seam every reaction to the game hangs off (a flash, a
-    /// sound, a HUD ticker). Two properties matter. First, the stream says what actually happened:
-    /// which shape jammed what, which enemy was hit, which wave ended. Second, it is <b>derived</b> -
-    /// nothing in the simulation reads it back - so it has to be a pure function of the run, which the
-    /// determinism test below pins by comparing two identical runs tick for tick.
-    ///
-    /// The buffer is bounded, so a test that reads a specific tick's events clears first (that is the
-    /// documented protocol: the simulation appends, the reader clears).
+    /// EditMode tests for the event stream - the seam every reaction to the game hangs off (a flash, a sound, a
+    /// HUD ticker). Two properties matter: the stream says what actually happened (which shape jammed what,
+    /// which enemy was hit, which wave ended), and it is <b>derived</b> - nothing in the simulation reads it
+    /// back - so it must be a pure function of the run, which the determinism test below pins tick for tick. The
+    /// buffer is bounded, so a test reading a specific tick's events clears first (the simulation appends, the
+    /// reader clears).
     /// </summary>
     public class SimEventTests
     {
@@ -41,9 +39,8 @@ namespace Facet.Tests
         [Test]
         public void AWrongShapeDelivery_ReportsTheJam_AndTheShapeThatCausedIt()
         {
-            // The shipped cannon eats half-circles, so a circle arriving at it is the jam the whole
-            // twist is about - and the event has to name the shape, or a log line cannot say what
-            // went wrong.
+            // The shipped cannon eats half-circles, so a circle arriving at it is the jam the whole twist is
+            // about - and the event must name the shape, or a log line cannot say what went wrong.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);
             Sim.Place(world, BuildKind.Cannon, new Int2(4, 2), Dir.East);
@@ -66,8 +63,8 @@ namespace Facet.Tests
         [Test]
         public void ACircleReachingTheCore_ReportsTheBank_AtTheBeltThatDeliveredIt()
         {
-            // The Core's footprint in the 20x12 test map is (8,4)-(11,7), so (7,4) pointing east is a
-            // delivery: the tick banks it and the stream says so the same tick.
+            // The Core's footprint in the 20x12 test map is (8,4)-(11,7), so (7,4) pointing east is a delivery:
+            // the tick banks it and the stream says so the same tick.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(7, 4), Dir.East, 1);
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 4), ShapeType.Circle));
@@ -86,8 +83,8 @@ namespace Facet.Tests
         [Test]
         public void AFiredShot_ReportsItsAmmo_AndItsHit_ReportsTheEnemy()
         {
-            // One cannon, two half-circles, one 6-HP spike: the first shot damages, the second kills -
-            // so the stream has to carry a fired shot, a damage and a kill, in that order.
+            // One cannon, two half-circles, one 6-HP spike: the first shot damages, the second kills - so the
+            // stream has to carry a fired shot, a damage and a kill, in that order.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);
             Sim.Place(world, BuildKind.Cannon, new Int2(4, 2), Dir.East);
@@ -121,8 +118,8 @@ namespace Facet.Tests
         [Test]
         public void AnEnemyAtTheCore_ReportsTheDamageItDid()
         {
-            // The Core's attack ring is two tiles from its centre, so an enemy dropped half a tile
-            // outside it arrives and hits within a few ticks.
+            // The Core's attack ring is two tiles from its centre, so an enemy dropped half a tile outside it
+            // arrives and hits within a few ticks.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10f, 8.5f));
 
@@ -137,9 +134,8 @@ namespace Facet.Tests
         [Test]
         public void AWave_ReportsItsStart_ItsClear_AndTheRunEnding_ExactlyOnceEach()
         {
-            // The one-wave rig, with the stream drained every tick so the buffer's bound can never
-            // confuse the count. The wave that started must have been cleared, and a won run reports
-            // its win once - not once per tick after it.
+            // The one-wave rig, with the stream drained every tick so the buffer's bound cannot confuse the
+            // count. Every wave that started was cleared, and a won run reports its win once, not per tick.
             SimWorld world = Sim.OneWaveWorld();
 
             int started = 0, cleared = 0, won = 0, lost = 0;
@@ -166,8 +162,8 @@ namespace Facet.Tests
         [Test]
         public void TheRingKeepsTheMostRecentEvents_AndCountsWhatItOverwrote()
         {
-            // A reader that never clears still has to see the present: the buffer is a ring, so a
-            // stream that outgrows it loses its oldest events and says how many.
+            // A reader that never clears still has to see the present: the buffer is a ring, so a stream that
+            // outgrows it loses its oldest events and says how many.
             var events = new SimEventBuffer(capacity: 4);
             Assert.AreEqual(-1, events.LastDropTick, "a fresh ring has never dropped anything");
 
@@ -195,10 +191,9 @@ namespace Facet.Tests
         [Test]
         public void TheWindow_CountsAndReads_OnlyWhatIsInsideIt()
         {
-            // The HUD's questions ("banked in the last second", "a refusal still on screen") are the
-            // buffer's window queries, so the boundary is the buffer's to get right: an event exactly
-            // on sinceTick is inside, one tick older is outside, and a drop only shames the window
-            // it fell into.
+            // The HUD's questions ("banked in the last second", "a refusal still on screen") are the buffer's
+            // window queries, so the boundary is the buffer's to get right: an event exactly on sinceTick is
+            // inside, one tick older is outside, and a drop only shames the window it fell into.
             var events = new SimEventBuffer(capacity: 8);
 
             events.Tick = 0;
@@ -226,9 +221,9 @@ namespace Facet.Tests
         [Test]
         public void ADrop_Shames_OnlyTheWindowItFellInto()
         {
-            // Dropped is a run-long counter; DroppedSince is what a window reader actually asks. An
-            // old overflow must not make a fresh, comfortably-sized window confess to counts it can
-            // still prove - and a fresh one must not be reported as quiet.
+            // Dropped is a run-long counter; DroppedSince is what a window reader actually asks. An old
+            // overflow must not make a fresh, comfortably-sized window confess to counts it can still prove -
+            // and a fresh one must not be reported as quiet.
             var events = new SimEventBuffer(capacity: 4);
 
             for (int i = 0; i < 6; i++)
@@ -245,9 +240,9 @@ namespace Facet.Tests
 
             events.Tick = 9;
             events.Banked(new Int2(9, 0));
-            // A full ring never catches up: every new event evicts an old one, so this push is
-            // itself a drop. What a reader can prove is the narrower fact it needs - a window that
-            // opens after the last eviction lost nothing it should have seen.
+            // A full ring never catches up: every new event evicts an old one, so this push is itself a drop.
+            // What a reader can prove is the narrower fact it needs - a window opening after the last eviction
+            // lost nothing it should have seen.
             Assert.AreEqual(3, events.Dropped, "and it is counted, not swallowed");
             Assert.AreEqual(9, events.LastDropTick);
             Assert.IsTrue(events.DroppedSince(9), "inside a window that reaches the eviction, honesty says so");
@@ -255,13 +250,32 @@ namespace Facet.Tests
             Assert.AreEqual(0, events.CountSince(SimEventKind.Banked, 10), "and its count - empty, here - cannot be quietly low");
         }
 
+        /// <summary>
+        /// The same honesty, one second earlier: a window opened in a run's first second reaches back before
+        /// tick 0, and the ring's "never dropped anything" sentinel is -1 - so a comparison that forgets which is
+        /// which reports a full stream and zero drops on a run that wrote three events. That is the HUD's
+        /// "last 1s" line on the first frame, the one claim to quietness the player cannot check.
+        /// </summary>
+        [Test]
+        public void AFreshRing_IsWhole_EvenForAWindowReachingBeforeTheFirstTick()
+        {
+            var events = new SimEventBuffer(capacity: 4);
+
+            Assert.AreEqual(-1, events.LastDropTick, "nothing has been overwritten");
+            Assert.IsFalse(events.DroppedSince(-30), "and a window opened before the run began is not shamed");
+            Assert.IsFalse(events.DroppedSince(0), "nor the one the first second of the HUD asks");
+
+            events.Tick = 0;
+            events.Banked(new Int2(1, 0));
+            Assert.IsFalse(events.DroppedSince(-30), "still whole after the first event");
+        }
+
         [Test]
         public void ARefusedPlacement_ReportsWhy_TheClickThatBuiltNothing()
         {
-            // The click the player complains about: the stockpile cannot cover a belt, so nothing
-            // appears on the map. Silence there reads as a broken button, so the tick reports the
-            // refusal with the reason and the price - which is what lets the HUD say "not enough
-            // circles" instead of saying nothing at all.
+            // The click the player complains about: the stockpile cannot cover a belt, so nothing appears on
+            // the map. Silence there reads as a broken button, so the tick reports the refusal with reason and
+            // price - which lets the HUD say "not enough circles" instead of nothing at all.
             SimWorld world = BrokeWorld();
             Click(world, new Int2(2, 2), BuildKind.Belt);
 
@@ -278,8 +292,8 @@ namespace Facet.Tests
         [Test]
         public void ARefusedPlacement_NamesTheTileOrTheGround_NotJustNo()
         {
-            // Funded, so every refusal here is about the map rather than the money - and "blocked"
-            // and "wrong ground" are different problems with different fixes.
+            // Funded, so every refusal here is about the map rather than the money - and "blocked" and
+            // "wrong ground" are different problems with different fixes.
             SimWorld world = Sim.NewWorld(16, 10);
             var ore = new Int2(4, 4);
             world.Terrain.SetOre(ore, ShapeType.Circle);
@@ -304,9 +318,9 @@ namespace Facet.Tests
         [Test]
         public void ADragThatRunsDry_StopsQuietly_BecauseTheRunShowsWhereItStopped()
         {
-            // The boundary of the reporting above. The cells a belt *drag* sweeps are skipped like
-            // blocked ones - a run that stops growing at a dry stockpile is visible on the map, and a
-            // drag across an existing build must not shout once per cell.
+            // The boundary of the reporting above: the cells a belt *drag* sweeps are skipped like blocked
+            // ones - a run that stops at a dry stockpile is visible on the map, and a drag over an existing
+            // build must not shout once per cell.
             SimWorld world = BrokeWorld(circles: 2);
             Sim.Drag(world, new Int2(1, 1), new Int2(6, 1));
 
@@ -331,8 +345,8 @@ namespace Facet.Tests
             Assert.AreEqual(0, world.Events.CountOf(SimEventKind.PlacementRejected), "no refusal to report");
         }
 
-        /// <summary>A press and release on one cell - the gesture spelled the way the input adapter
-        /// spells it, as far as the tick is concerned.</summary>
+        /// <summary>A press and release on one cell - the gesture spelled the way the input adapter spells it,
+        /// as far as the tick is concerned.</summary>
         private static void Click(SimWorld world, Int2 cell, BuildKind kind)
         {
             world.Tick(Gesture.Aim(cell, kind));
@@ -346,8 +360,8 @@ namespace Facet.Tests
         [Test]
         public void TwoIdenticalRuns_ReportIdenticalStreams()
         {
-            // Derived or not, the stream has to be a function of the run: a replay that drives sound
-            // and flashes must react identically, or the feedback lies about what happened.
+            // Derived or not, the stream has to be a function of the run: a replay that drives sound and
+            // flashes must react identically, or the feedback lies about what happened.
             SimWorld a = Sim.NewWorld(24, 12);
             SimWorld b = Sim.NewWorld(24, 12);
 

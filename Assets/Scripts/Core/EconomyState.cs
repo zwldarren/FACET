@@ -3,10 +3,9 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// The stockpile: circles the player has banked by belting them into the Core, minus what
-    /// building has spent. There is no other currency and no other income - a circle on a belt is
-    /// inventory in transit, not yet spendable, which is what makes the resource lines a logistics
-    /// problem instead of a timer.
+    /// The stockpile: circles banked by belting them into the Core, minus what building has spent. A
+    /// circle on a belt is inventory in transit, not spendable, which makes resource lines a logistics
+    /// problem rather than a timer.
     /// </summary>
     public sealed class EconomyState
     {

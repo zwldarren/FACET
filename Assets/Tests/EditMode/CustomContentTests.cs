@@ -6,17 +6,17 @@ namespace Facet.Tests
 {
     /// <summary>
     /// The Phase-1 promise, tested end to end: the machine behaviours read their numbers from the
-    /// <see cref="ContentDatabase"/> the world was handed, so a different table is a different game -
-    /// a converter that eats half-circles, a turret that eats circles, an enemy with different stats -
-    /// with no switch anywhere edited. This is what "add content = fill in data" has to mean.
+    /// <see cref="ContentDatabase"/> the world was handed, so a different table is a different game - a
+    /// converter that eats half-circles, a turret that eats circles, an enemy with different stats - with
+    /// no switch anywhere edited. This is what "add content = fill in data" has to mean.
     /// </summary>
     public class CustomContentTests
     {
         [Test]
         public void AConverter_RunsWhateverRecipeItsDefinitionNames()
         {
-            // The shipped decomposer eats circles. Hand it the mirror recipe: eat a half-circle, put
-            // out two circles. Same behaviour, same code path, opposite machine.
+            // The shipped decomposer eats circles. Hand it the mirror recipe: eat a half-circle, put out
+            // two circles. Same behaviour, same code path, opposite machine.
             var mirrored = new RecipeDef(ContentDatabase.DecomposeRecipeId, ShapeType.HalfCircle,
                 ShapeType.Circle, inputCount: 1, outputCount: 2, interval: 1f, buffer: 4);
 
@@ -79,8 +79,8 @@ namespace Facet.Tests
         [Test]
         public void ATableThatChangesCosts_ChangesWhatCanBeAfforded()
         {
-            // The economy reads the injected table too, so a retuned cost is a real constraint and not
-            // just a HUD string.
+            // The economy reads the injected table too, so a retuned cost is a real constraint, not just a
+            // HUD string.
             var dearCannon = new MachineDef(new ContentId("cannon"), BuildKind.Cannon, TileKind.Turret,
                 BehaviorKind.Turret, cost: Sim.TestCircles + 1, name: "Cannon", description: "",
                 recipeId: ContentId.None, interval: 0f);
@@ -100,8 +100,8 @@ namespace Facet.Tests
         [Test]
         public void ASorter_FiltersWhateverItsDefinitionNames()
         {
-            // Mirror the shipped sorter: send half-circles out the facing side instead of circles.
-            // Same behaviour, same code path, opposite machine - a row, not a class.
+            // Mirror the shipped sorter: send half-circles out the facing side instead of circles. Same
+            // behaviour, same code path, opposite machine - a row, not a class.
             var mirrored = new MachineDef(new ContentId("sorter"), BuildKind.Sorter, TileKind.Sorter,
                 BehaviorKind.Sorter, cost: 12, name: "Ammo Router", description: "",
                 recipeId: ContentId.None, interval: 0f, filter: ShapeType.HalfCircle);
@@ -123,10 +123,10 @@ namespace Facet.Tests
         }
 
         /// <summary>
-        /// A copy of the shipped table with one or two rows swapped. Built by reading
-        /// <see cref="ContentDatabase.Default"/> rather than by restating every number, so a test only
-        /// has to be explicit about what it is changing - and so it keeps passing when the shipped
-        /// numbers are retuned. Shared with the other suites that need a table of their own.
+        /// A copy of the shipped table with one or two rows swapped, built by reading
+        /// <see cref="ContentDatabase.Default"/> rather than restating every number - so a test is
+        /// explicit about what it changes and keeps passing when shipped numbers are retuned. Shared with
+        /// the other suites that need a table of their own.
         /// </summary>
         internal static ContentDatabase Rewrite(MachineDef machine = null, RecipeDef recipe = null,
             TurretDef turret = null, EnemyDef enemy = null)
@@ -152,9 +152,9 @@ namespace Facet.Tests
             foreach (ShapeType shape in (ShapeType[])Enum.GetValues(typeof(ShapeType)))
                 shapes[(int)shape] = shipped.Shape(shape);
 
-            // A swapped recipe keeps the shipped id, so the converter's definition still finds it.
-            // Both shipped recipes are carried: a table with a cutter row that could not name its
-            // recipe is refused at construction now, and this helper must not trip its own rule.
+            // A swapped recipe keeps the shipped id, so the converter's definition still finds it. Both
+            // shipped recipes are carried because a table with a cutter row that cannot name its recipe is
+            // refused at construction.
             var recipes = new[]
             {
                 recipe ?? shipped.Recipe(ContentDatabase.DecomposeRecipeId),

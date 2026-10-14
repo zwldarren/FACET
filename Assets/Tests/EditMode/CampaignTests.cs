@@ -7,14 +7,10 @@ namespace Facet.Tests
 {
     /// <summary>
     /// EditMode tests for the campaign machinery: the little state that outlives any one run, and the
-    /// catalog the driver walks.
-    ///
-    /// <see cref="SimWorld"/> is one run on one map and stays that way - it is rebuilt from its map's
-    /// own data and knows nothing about what came before it - so what is left to test here is where the
-    /// player is across maps (<see cref="CampaignState"/>) and how a list of maps is turned into a
-    /// progression (<see cref="MapCatalog"/>). Nothing here reads a shipped map: the maps the game plays
-    /// are data a designer repaints, and a test that asserted their contents would only be a test of
-    /// today's file.
+    /// catalog the driver walks. <see cref="SimWorld"/> is one run on one map, rebuilt from its map's
+    /// data, so what is left here is where the player is across maps (<see cref="CampaignState"/>) and
+    /// how a list of maps becomes a progression (<see cref="MapCatalog"/>). No shipped map is read: the
+    /// maps are designer data, and asserting their contents would only test today's file.
     /// </summary>
     public class CampaignTests
     {
@@ -30,7 +26,7 @@ namespace Facet.Tests
             Assert.IsTrue(campaign.HasNext);
 
             // Clearing is idempotent, because the host polls the world's status every frame rather than
-            // having to watch for the edge itself.
+            // watching for the edge itself.
             campaign.MarkCleared();
             campaign.MarkCleared();
             Assert.AreEqual(1, campaign.ClearedCount);
@@ -93,8 +89,8 @@ namespace Facet.Tests
         public void MapCatalog_SkipsAnEntryThatNamesNoMap()
         {
             // A set being filled in is a shorter campaign rather than a hole in one: the empty slots the
-            // Inspector shows are exactly what a half-authored campaign looks like, and the map after the
-            // gap still has to load.
+            // Inspector shows are what a half-authored campaign looks like, and the map after the gap
+            // still has to load.
             var one = NewMap("One");
             var two = NewMap("Two");
             var set = ScriptableObject.CreateInstance<MapSet>();
@@ -119,9 +115,9 @@ namespace Facet.Tests
         [Test]
         public void MapCatalog_ClampsTheStaleIndexTheDriverStartsOn()
         {
-            // "Which map is next" is asked by the driver, by the campaign's count and by the HUD's carry-on
-            // button, so the arithmetic lives in one place: a start index left over from a longer campaign
-            // lands on a real map instead of throwing in Awake.
+            // "Which map is next" is asked by the driver, the campaign's count and the HUD's carry-on
+            // button, so the arithmetic lives in one place: a stale index lands on a real map instead of
+            // throwing in Awake.
             var one = NewMap("One");
             var two = NewMap("Two");
             var three = NewMap("Three");
@@ -152,8 +148,8 @@ namespace Facet.Tests
         [Test]
         public void MapCatalog_ForASetWithNoMaps_IsNoCatalogAtAll()
         {
-            // The state the driver refuses to start in - reported once, where it can be acted on, instead
-            // of being an empty list every reader of At() would have to check for.
+            // The state the driver refuses to start in - reported once, where it can be acted on, rather
+            // than an empty list every reader of At() would have to check for.
             var empty = ScriptableObject.CreateInstance<MapSet>();
 
             try

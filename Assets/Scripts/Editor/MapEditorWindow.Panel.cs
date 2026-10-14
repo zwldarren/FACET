@@ -7,9 +7,9 @@ using UnityEngine;
 namespace Facet.EditorTools
 {
     /// <summary>
-    /// The side panel half of the <see cref="MapEditorWindow"/>: everything the grid cannot say in
-    /// colour - the map's size, where the Core stands, the legend that states the grid's tones, the
-    /// map's own validation, and the fields through which an edit reaches the asset through Undo.
+    /// The side panel half of the <see cref="MapEditorWindow"/>: everything the grid cannot say in colour -
+    /// the map's size, where the Core stands, the legend that states the grid's tones, the map's own validation,
+    /// and the fields through which an edit reaches the asset through Undo.
     /// </summary>
     public sealed partial class MapEditorWindow
     {
@@ -18,28 +18,24 @@ namespace Facet.EditorTools
 
         private static readonly Color NoTone = new Color(0f, 0f, 0f, 0f);
 
-        /// <summary>The green the panel draws its "playable" line in, tinted enough to read but not to
-        /// bury the sentence on it.</summary>
+        /// <summary>The green the panel draws its "playable" line in, tinted enough to read but not to bury the
+        /// sentence on it.</summary>
         private static readonly Color PlayableTone = new Color(0.18f, 0.48f, 0.24f, 0.55f);
 
-        /// <summary>The size the designer has typed and not yet applied. It is the one buffered value in
-        /// the window, because a resize throws away everything past the new edge and a half-typed number
-        /// must not do that.</summary>
+        /// <summary>The size the designer has typed and not yet applied. It is the one buffered value in the
+        /// window, because a resize throws away everything past the new edge and a half-typed number must not do
+        /// that.</summary>
         private int _editWidth = 1;
         private int _editHeight = 1;
 
         private Vector2 _panelScroll;
 
-        /// <summary>The map's own problems as of the last repaint, and whether one has ever been
-        /// computed. The flood MapValidation runs is the only expensive thing this panel does, and the
-        /// window's OnGUI passes that do not draw anything - layout, mouse moves - would run it a
-        /// handful of times between repaints. So the answer is computed where it is drawn: the repaint
-        /// pass is the one that produces the pixels, and every change to the map's data repaints the
-        /// window on its way to being seen, so what the panel states is the answer to what it shows.
-        /// A cache the window's own edits could leave stale is not a hazard of this shape: a stroke,
-        /// a field edit and a wave edit all funnel into the queued repaint before anything new is
-        /// drawn - the risk the old every-pass recompute met was spending the flood on passes nobody
-        /// sees.</summary>
+        /// <summary>The map's own problems as of the last repaint, and whether one has ever been computed. The
+        /// flood MapValidation runs is the only expensive thing this panel does, and the window's OnGUI passes
+        /// that draw nothing - layout, mouse moves - would run it several times between repaints, so the answer
+        /// is computed where it is drawn: the repaint pass is the one that produces the pixels, and every change
+        /// to the map's data repaints the window on its way to being seen, so the panel states the answer to
+        /// what it shows.</summary>
         private List<MapProblem> _problems;
         private bool _problemsComputed;
 
@@ -63,10 +59,10 @@ namespace Facet.EditorTools
             asset.Name = TextField(asset, "Name", asset.Name, "Rename map");
             asset.StartCircles = IntField(asset, "Start circles", asset.StartCircles, "Edit the map's stockpile");
 
-            // Width and Height are the one pair of fields that is not written straight back. A resize
-            // re-lays the terrain array and drops everything past the new edge, so a half-typed number
-            // must not do it - and the buffer is read back off the asset whenever neither field has
-            // focus, which is what stops the window showing a size the map does not have.
+            // Width and Height are the one pair of fields not written straight back. A resize re-lays the
+            // terrain array and drops everything past the new edge, so a half-typed number must not do it; the
+            // buffer is read back off the asset whenever neither field has focus, so the window never shows a
+            // size the map does not have.
             if (GUI.GetNameOfFocusedControl() != WidthFieldName && GUI.GetNameOfFocusedControl() != HeightFieldName)
             {
                 _editWidth = asset.Width;
@@ -82,10 +78,10 @@ namespace Facet.EditorTools
         }
 
         /// <summary>
-        /// Resize on request, through a <see cref="MapEdit.Session"/> so the record and the dirty are
-        /// the session's one pair. An Apply that would change nothing is not an edit: the same floor
-        /// the asset applies to itself is read before the session even opens, so a no-op Apply
-        /// records nothing - which is also why the answer, not the click, marks the boundary.
+        /// Resize on request, through a <see cref="MapEdit.Session"/> so the record and the dirty are the
+        /// session's one pair. An Apply that would change nothing is not an edit: the same floor the asset
+        /// applies to itself is read before the session opens, so a no-op Apply records nothing - which is also
+        /// why the answer, not the click, marks the boundary.
         /// </summary>
         private void ApplySize(MapAsset asset)
         {
@@ -124,8 +120,8 @@ namespace Facet.EditorTools
         }
 
         /// <summary>
-        /// The colours the grid uses, stated. The tones are the only key to the ground kinds and to which
-        /// mineral a vein carries, so the window has to say what they mean somewhere other than the map.
+        /// The colours the grid uses, stated. The tones are the only key to the ground kinds and to which mineral
+        /// a vein carries, so the window has to say what they mean somewhere other than the map.
         /// </summary>
         private void DrawLegend()
         {
@@ -143,8 +139,8 @@ namespace Facet.EditorTools
             LegendRow("wave entry point", DoorTone);
         }
 
-        /// <summary>One legend line. A tone with no alpha is drawn as nothing at all, which is the state
-        /// the void's own row is describing.</summary>
+        /// <summary>One legend line. A tone with no alpha is drawn as nothing at all, which is the state the
+        /// void's own row is describing.</summary>
         private static void LegendRow(string name, Color tone)
         {
             Rect row = EditorGUILayout.GetControlRect(false, 16f);
@@ -158,9 +154,8 @@ namespace Facet.EditorTools
         {
             EditorGUILayout.LabelField("Validation", EditorStyles.boldLabel);
 
-            // Computed where it is drawn - see the field comment for why the repaint pass is the only
-            // place the flood has to run, and why first use pays for itself whether or not a repaint
-            // is what asked.
+            // Computed where it is drawn - see the field comment for why the repaint pass is the only place the
+            // flood has to run, and why first use pays for itself whether or not a repaint is what asked.
             if (!_problemsComputed || Event.current.type == EventType.Repaint)
             {
                 _problems = asset.Validate();
@@ -207,12 +202,12 @@ namespace Facet.EditorTools
         /// <summary>
         /// One field whose edit reaches the asset through Undo.
         ///
-        /// The widget buffers the value and the write happens once the change is known, because the asset
-        /// has to be recorded <em>before</em> it is written: a wave row is a class, so the object a
-        /// designer types into is already the asset's own, and recording after the assignment would
-        /// record the change it exists to undo. Delaying the commit also makes a number one edit rather
-        /// than one per keystroke. The record-commit shape lives in
-        /// <see cref="CommitChange{T}"/>; these are the four widgets that reach it, no more.
+        /// The widget buffers the value and the write happens once the change is known, because the asset has to
+        /// be recorded <em>before</em> it is written: a wave row is a class, so the object a designer types into
+        /// is already the asset's own, and recording after the assignment would record the change it exists to
+        /// undo. Delaying the commit also makes a number one edit rather than one per keystroke. The
+        /// record-commit shape lives in <see cref="CommitChange{T}"/>; these are the four widgets that reach it,
+        /// no more.
         /// </summary>
         private static string TextField(MapAsset asset, string label, string value, string undo)
         {
@@ -238,8 +233,8 @@ namespace Facet.EditorTools
         }
 
         /// <inheritdoc cref="TextField"/>
-        /// <summary>Named for what it offers: this is the wave group's popup over the enemy kinds, so
-        /// the name says the kind it edits rather than a generic word for every popup in the window.</summary>
+        /// <summary>Named for what it offers: this is the wave group's popup over the enemy kinds, so the name
+        /// says the kind it edits rather than a generic word for every popup in the window.</summary>
         private static EnemyKind EnemyKindField(MapAsset asset, string label, EnemyKind value, string undo)
         {
             EditorGUI.BeginChangeCheck();
@@ -248,11 +243,10 @@ namespace Facet.EditorTools
         }
 
         /// <summary>The one place an edit of a plain field is recorded and committed: the
-        /// <see cref="MapEdit.Session"/> records the asset <em>before</em> the caller's assignment
-        /// lands - a wave row is a class, so the object the designer typed into is already the
-        /// asset's own, and a record after the assignment would record the change the entry exists
-        /// to undo - and it dirties once, whatever the field. A field that did not reach the end of
-        /// the widget change keeps the value it came in with.</summary>
+        /// <see cref="MapEdit.Session"/> records the asset <em>before</em> the caller's assignment lands - a wave
+        /// row is a class, so the object the designer typed into is already the asset's own, and a record after
+        /// the assignment would record the change the entry exists to undo - and it dirties once, whatever the
+        /// field. A field that did not reach the end of the widget change keeps the value it came in with.</summary>
         private static T CommitChange<T>(MapAsset asset, string undo, bool changed, T value, T edited)
         {
             if (!changed) return value;

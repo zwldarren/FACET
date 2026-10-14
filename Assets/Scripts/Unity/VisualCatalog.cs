@@ -10,8 +10,8 @@ namespace Facet.Game
         /// <summary>A flat vertex-coloured polygon built at runtime - the built-in FACET look.</summary>
         Procedural = 0,
 
-        /// <summary>A sprite. The mesh path still draws the functional overlays around it
-        /// (a turret's barrel, a machine's port stubs), so a sprite replaces the body only.</summary>
+        /// <summary>A sprite; the mesh path still draws the functional overlays, so a sprite replaces
+        /// the body only.</summary>
         Sprite = 1,
     }
 
@@ -23,17 +23,14 @@ namespace Facet.Game
         HalfDisc = 2,
         Rect = 3,
 
-        /// <summary>Half a rect: a square cut down the middle. The second chain's ammunition, so
-        /// "half of a square" reads off the silhouette the same way "half of a circle" does.</summary>
+        /// <summary>Half a rect, the second chain's ammunition, so "half of a square" reads off the
+        /// silhouette as "half of a circle" does.</summary>
         HalfRect = 4,
     }
 
-    /// <summary>
-    /// One content's appearance override. The catalog is <em>override-only</em> on purpose: with
-    /// <see cref="Override"/> unticked the view keeps drawing exactly what it drew before, so an
-    /// untouched Palette reproduces the shipped look pixel for pixel and a missing entry can never
-    /// silently blank something out.
-    /// </summary>
+    /// <summary>One content's appearance override. The catalog is <em>override-only</em> on purpose:
+    /// with <see cref="Override"/> unticked the view draws exactly what it drew before, so an untouched
+    /// Palette reproduces the shipped look and a missing entry can never silently blank something out.</summary>
     [Serializable]
     public sealed class VisualStyle
     {
@@ -74,17 +71,12 @@ namespace Facet.Game
         public float Rotation;
     }
 
-    /// <summary>
-    /// Per-shape overrides (the belt items, or the patch icons). Entries are <em>keyed by kind</em>
-    /// rather than listed one serialized field per shape, so re-skinning a mineral the player has not
-    /// seen yet - a square, a half-square - is one entry in this block, and adding a mineral is a
-    /// value in <see cref="ShapeType"/> with no change here at all. A shape with no entry keeps the
-    /// built-in look, exactly like an unticked one.
+    /// <summary>Per-shape overrides (belt items, or patch icons), <em>keyed by kind</em> rather than one
+    /// serialized field per shape: re-skinning a mineral is one entry, and adding a mineral is a value in
+    /// <see cref="ShapeType"/> with no change here. A shape with no entry keeps the built-in look.
     ///
-    /// The kind-keyed list is the point, not an implementation detail: a per-shape field plus a
-    /// <c>switch</c> to read it is a second list of the shapes that exists, and a new shape has to be
-    /// added to both - which is the bug <see cref="ShapeIconSet"/> was already changed to avoid.
-    /// </summary>
+    /// The kind-keyed list is the point: a per-shape field plus a <c>switch</c> is a second list of the
+    /// shapes, and a new shape must be added to both - the bug <see cref="ShapeIconSet"/> avoids.</summary>
     [Serializable]
     public sealed class ShapeVisuals
     {
@@ -103,9 +95,8 @@ namespace Facet.Game
             "new mineral needs no change here.")]
         public Entry[] Entries = new Entry[0];
 
-        /// <summary>The authored look for a shape, or null when nothing is authored for it - never a
-        /// silent default, because "no entry" and "an unticked entry" have to be distinguishable to
-        /// the caller that resolves the built-in look.</summary>
+        /// <summary>The authored look for a shape, or null when nothing is authored - never a silent
+        /// default, since "no entry" and "an unticked entry" must stay distinguishable.</summary>
         public VisualStyle For(ShapeType shape)
         {
             for (int i = 0; i < Entries.Length; i++)
@@ -124,14 +115,11 @@ namespace Facet.Game
     {
         public VisualStyle Spike = new VisualStyle();
 
-        /// <summary>
-        /// An authored alternative body for the Bulwark: a heavier steel-blue hexagon. Left unticked
-        /// in the shipped look on purpose - an enemy's polygon count already says how damaged it is,
-        /// so a fixed six-sided body would hide the Bulwark's health (and, at full health, draw the
-        /// exact hexagon a fresh Spike wears). What tells the two kinds apart out of the box is body
-        /// colour - <see cref="Palette.BulwarkBody"/> against <see cref="Palette.SpikeBody"/> - because
-        /// which gun can hurt which is the whole rule the second mineral exists to teach.
-        /// </summary>
+        /// <summary>An authored alternative body for the Bulwark: a heavier steel-blue hexagon. Left
+        /// unticked in the shipped look on purpose - a fixed six-sided body would hide the Bulwark's
+        /// health, since an enemy's polygon count says how damaged it is. Body colour out of the box -
+        /// <see cref="Palette.BulwarkBody"/> against <see cref="Palette.SpikeBody"/> - tells the kinds
+        /// apart, since which gun can hurt which is the rule the second mineral teaches.</summary>
         public VisualStyle Bulwark = new VisualStyle
         {
             Source = VisualSource.Procedural,
@@ -143,12 +131,9 @@ namespace Facet.Game
             OutlinePixels = 3f,
         };
 
-        /// <summary>
-        /// The shipped look for an enemy: every kind is named here and in
-        /// <see cref="Palette.EnemyColor"/>, and a kind that is in neither fails loudly at the view's
-        /// initialisation rather than drawing the Spike and telling nobody. A per-kind authored override
-        /// in the Palette asset still wins over these defaults through the style itself.
-        /// </summary>
+        /// <summary>The shipped look for an enemy: every kind is named here and in
+        /// <see cref="Palette.EnemyColor"/>, and one in neither fails loudly at view initialisation. A
+        /// per-kind authored override still wins over these defaults through the style itself.</summary>
         public VisualStyle For(EnemyKind kind)
         {
             switch (kind)
@@ -184,9 +169,8 @@ namespace Facet.Game
             "and the second gun the cannon's a shade darker, without either being listed here.")]
         public Entry[] Entries = new Entry[0];
 
-        /// <summary>The authored look for a building, or null when nothing is authored for it. A
-        /// building of an existing behaviour therefore needs no entry: the view falls back to the
-        /// shipped silhouette its behaviour already chooses.</summary>
+        /// <summary>The authored look for a building, or null when nothing is authored; it then falls
+        /// back to the shipped silhouette its behaviour already chooses.</summary>
         public VisualStyle For(BuildKind kind)
         {
             for (int i = 0; i < Entries.Length; i++)
@@ -199,14 +183,12 @@ namespace Facet.Game
         }
     }
 
-    /// <summary>
-    /// Every per-content appearance override, in one serializable block on the <see cref="Palette"/>.
+    /// <summary>Every per-content appearance override, in one serializable block on the
+    /// <see cref="Palette"/>.
     ///
-    /// It lives on the Palette rather than in its own asset so that it is edited in the asset the
-    /// project already wires into the scene (Assets/Data/Palette.asset) - one look asset, no new
-    /// wiring. Each entry is override-only: unticked means "draw the built-in look", so this block
-    /// can grow without changing any existing appearance.
-    /// </summary>
+    /// It lives on the Palette so it is edited in the asset the project already wires into the scene -
+    /// one look asset, no new wiring. Each entry is override-only, so this block can grow without
+    /// changing any existing appearance.</summary>
     [Serializable]
     public sealed class VisualCatalog
     {
@@ -226,11 +208,9 @@ namespace Facet.Game
         public MachineVisuals Machines = new MachineVisuals();
     }
 
-    /// <summary>
-    /// Turns a <see cref="VisualStyle"/> into the geometry the views draw, so no view has to know
-    /// how a shape is built. The point arrays are meant to be cached by the caller: a view resolves
-    /// its handful of styles once, then reuses the arrays every frame.
-    /// </summary>
+    /// <summary>Turns a <see cref="VisualStyle"/> into the geometry the views draw, so no view knows how
+    /// a shape is built. Point arrays are cached by the caller, which resolves its styles once and reuses
+    /// the arrays every frame.</summary>
     public static class VisualShapes
     {
         /// <summary>Silhouette points for a procedural style. Null for a sprite style or no shape.</summary>
@@ -265,10 +245,8 @@ namespace Facet.Game
             };
         }
 
-        /// <summary>
-        /// The style as it will actually be drawn: the override when it is ticked, otherwise a
-        /// style built from the given defaults. Views call this once per content and keep the result.
-        /// </summary>
+        /// <summary>The style as actually drawn: the override when ticked, otherwise one built from the
+        /// given defaults. Views call this once per content and keep the result.</summary>
         public static VisualStyle Resolve(VisualStyle over, VisualSource source, ProcShape shape,
             float size, Color fill, Color outline, float outlinePixels, int sides = 16)
         {
@@ -288,17 +266,12 @@ namespace Facet.Game
         }
     }
 
-    /// <summary>
-    /// The shape icons a view draws on itself or in the ground - a decomposer's held circle, a
-    /// cutter's held square, a splitter's carried item, a turret's ammo, an enemy's weakness, a patch
-    /// in the ground. Resolved once from the same item-shape overrides the belt items use, so
-    /// re-skinning a shape stays consistent everywhere it appears, and each use supplies its own
-    /// radius so an untouched Palette draws exactly what it always did.
+    /// <summary>The shape icons a view draws on itself or in the ground - a held item, a carried item, a
+    /// turret's ammo, an enemy's weakness, a patch. Resolved once from the same item-shape overrides the
+    /// belt items use, so a re-skin stays consistent everywhere; each use supplies its own radius.
     ///
-    /// Every shape the simulation knows gets an entry, built from the Palette's own silhouette and
-    /// colour for it, so the set does not have to be told when a mineral is added - the enum is the
-    /// list.
-    /// </summary>
+    /// Every shape the simulation knows gets an entry from the Palette's own silhouette and colour, so
+    /// the set needs no telling when a mineral is added - the enum is the list.</summary>
     public sealed class ShapeIconSet
     {
         private static readonly ShapeType[] Shapes = (ShapeType[])Enum.GetValues(typeof(ShapeType));

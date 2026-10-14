@@ -5,21 +5,18 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// EditMode tests for the siege rules: machines are solid and destructible, enemies follow the flow
-    /// field around them and stop to chew on any attackable machine within reach, a sealed Core is
-    /// chewed through, destruction pays no refund, and a definition with MaxHp 0 is untargetable and
-    /// indestructible.
-    ///
-    /// The worlds are the standard test rigs: <see cref="Sim.NewWorld(int,int)"/> gives the Core at
-    /// (8,4)..(11,7) with centre (10,6) on a featureless map, so every layout and every lane here is
-    /// this file's own.
+    /// EditMode tests for the siege rules: machines are solid and destructible, enemies follow the
+    /// flow field around them and stop to chew any attackable machine within reach, a sealed Core is
+    /// chewed through, destruction pays no refund, and a MaxHp 0 definition is untargetable and
+    /// indestructible. Worlds are the standard rigs: <see cref="Sim.NewWorld(int,int)"/> gives the
+    /// Core at (8,4)..(11,7) on a featureless map, so every layout here is this file's own.
     /// </summary>
     public class SiegeTests
     {
-        /// <summary>The same shipped wall with MaxHp 0: solid but not attackable - the definition
-        /// level's opt-out (<see cref="MachineDef.MaxHp"/>). Handed to a world through the custom-table
-        /// helper <see cref="CustomContentTests"/> uses, so the test proves the rule and not a private
-        /// code path.</summary>
+        /// <summary>The shipped wall with MaxHp 0: solid but not attackable - the definition-level
+        /// opt-out (<see cref="MachineDef.MaxHp"/>). Handed to a world through the custom-table helper
+        /// <see cref="CustomContentTests"/> uses, so the test proves the rule and not a private code
+        /// path.</summary>
         private static MachineDef UnattackableWall()
         {
             MachineDef wall = ContentDatabase.Default.Machine(BuildKind.Wall);
@@ -30,10 +27,9 @@ namespace Facet.Tests
         [Test]
         public void AWallInTheLane_StopsTheWalk_AndIsChewedThrough()
         {
-            // A wall on the straight lane to the Core. Aggressive targeting means the enemy does not
-            // walk around it: it stops within reach and starts on the wall, which is what a wall in the
-            // way is for. A straight-line walker would reach the Core's ring at tick ~51, so the wall
-            // has to have bought the Core more than a second of life by then.
+            // A wall on the straight lane: aggressive targeting means the enemy does not walk around it but
+            // stops within reach and starts on the wall. A straight-line walker would reach the Core's ring
+            // at tick ~51, so the wall must buy the Core more than a second of life by then.
             SimWorld world = Sim.NewWorld(20, 12);
             var wall = new Int2(10, 9);
             Sim.Place(world, BuildKind.Wall, wall, Dir.North);
@@ -67,10 +63,9 @@ namespace Facet.Tests
         [Test]
         public void ABlockThatCannotBeAttacked_StillRedirectsTheWalk()
         {
-            // The flow field on its own: with MaxHp 0 the block is never targeted (that is what the
-            // definition's zero means), so the only way past it is around it. The enemy must leave the
-            // straight lane, never enter the solid cell, and still arrive - which is exactly the
-            // walk-around the wall case hides behind the attack.
+            // The flow field on its own: with MaxHp 0 the block is never targeted, so the only way past is
+            // around. The enemy must leave the straight lane, never enter the solid cell, and still arrive -
+            // the walk-around the wall case hides behind the attack.
             SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig(),
                 CustomContentTests.Rewrite(machine: UnattackableWall()));
             var block = new Int2(10, 9);
@@ -98,10 +93,9 @@ namespace Facet.Tests
         [Test]
         public void AnEnemy_ChargesAMachineItNotices_BeyondItsReach()
         {
-            // The notice range: a wall 2.0 tiles away is further than the attack reach, so the enemy
-            // cannot hit it yet - but it is inside the notice range, so it leaves the lane and heads
-            // for the building instead of walking past something it can plainly see, and only starts
-            // hitting it once it is in reach.
+            // The notice range: a wall 2.0 tiles away is beyond attack reach, so the enemy cannot hit it yet,
+            // but inside notice range, so it leaves the lane and heads for the building, hitting only once in
+            // reach.
             SimWorld world = Sim.NewWorld(20, 12);
             var wall = new Int2(10, 8);
             Sim.Place(world, BuildKind.Wall, wall, Dir.North);
@@ -136,8 +130,8 @@ namespace Facet.Tests
         [Test]
         public void AMachine_BeyondTheNoticeRange_IsLeftAlone()
         {
-            // The other side of the same rule, so the notice range is a range and not "always": a
-            // machine four tiles off the lane stays untouched while the wave walks past it to the Core.
+            // The other side of the same rule - notice range is a range, not "always": a machine four
+            // tiles off the lane stays untouched while the wave walks past it to the Core.
             SimWorld world = Sim.NewWorld(20, 12);
             var machine = new Int2(14, 10);
             Sim.Place(world, BuildKind.Pipe, machine, Dir.North);
@@ -155,9 +149,8 @@ namespace Facet.Tests
         [Test]
         public void APasserby_StopsToAttack_AMachineInReach()
         {
-            // A pipe one tile east of the lane, 30 hp. The enemy walks until the pipe comes within
-            // reach, stops beside it, chews it down in about four seconds, and then carries on to the
-            // Core - the whole of the aggressive-scan rule on one walk.
+            // A pipe one tile east of the lane, 30 hp: the enemy walks until it comes within reach, stops
+            // beside it, chews it down in about four seconds, then carries on to the Core.
             SimWorld world = Sim.NewWorld(20, 12);
             var pipe = new Int2(11, 8);
             Sim.Place(world, BuildKind.Pipe, pipe, Dir.North);
@@ -205,8 +198,8 @@ namespace Facet.Tests
         public void ADestroyedMachine_PaysNoRefund()
         {
             // An unarmed cannon has no ammo line, so it never fires and cannot defend itself: the spike
-            // grinds it down. The player paid for the cannon; its destruction must not pay them back,
-            // or a chewed building would be a free undo.
+            // grinds it down. Destruction must not refund what the player paid, or a chewed building is a
+            // free undo.
             SimWorld world = Sim.NewWorld(20, 12);
             var cannon = new Int2(5, 5);
             Sim.Place(world, BuildKind.Cannon, cannon, Dir.North);
@@ -231,8 +224,8 @@ namespace Facet.Tests
         [Test]
         public void ZeroMaxHp_Machines_AreIndestructible()
         {
-            // 0 on the definition is the opt-out: solid, walk-around-able, and immune to the siege.
-            // Park a spike next to one for ten seconds and nothing about it may change.
+            // 0 on the definition is the opt-out: solid, walk-around-able, immune to the siege. Park a
+            // spike next to one for ten seconds and nothing about it may change.
             SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig(),
                 CustomContentTests.Rewrite(machine: UnattackableWall()));
             var wall = new Int2(10, 9);

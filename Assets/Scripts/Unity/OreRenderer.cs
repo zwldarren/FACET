@@ -4,21 +4,16 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// Draws the ore in the ground, one mesh for all of it: a bed quad plus the mineral's own
-    /// silhouette at each ore tile. This is the player's map of where each resource lives
-    /// before any drill is placed, so the icon uses the same shape and colour as the belt items it
-    /// will become - recognition should not have to be learned twice.
+    /// <summary>Draws the ore in the ground, one mesh for all of it: a bed quad plus the mineral's own silhouette at
+    /// each ore tile. This is the player's map of where each resource lives before any drill is placed, so the icon
+    /// uses the same shape and colour as the belt items it will become - recognition not learned twice.
     ///
-    /// The icon's appearance comes from the Palette's <see cref="Palette.Visuals"/> shape override,
-    /// built once at initialization; unticked it is the built-in silhouette at the ore icon radius,
-    /// so an untouched Palette draws exactly what it always did.
+    /// The icon's appearance comes from the Palette's <see cref="Palette.Visuals"/> shape override, built once at
+    /// initialization; unticked it is the built-in silhouette at the ore icon radius.
     ///
-    /// The ore is terrain, stamped once from the map's data and never moving during a run,
-    /// and a restart re-stamps the identical layout - so this view has no rebuild reason of its own.
-    /// The only thing that changes it is the one reason the gate owns: the icon carries an outline, a
-    /// screen-space constant, so a zoom rebuilds it and re-stamps the bed at no extra cost.
-    /// </summary>
+    /// The ore is terrain, stamped once from the map's data and never moving, and a restart re-stamps the identical
+    /// layout - so this view has no rebuild reason of its own. The only thing that changes it is the gate's: the icon
+    /// carries a screen-space outline, so a zoom rebuilds it and re-stamps the bed at no extra cost.</summary>
     [DefaultExecutionOrder(100)]
     public sealed class OreRenderer : MeshView
     {

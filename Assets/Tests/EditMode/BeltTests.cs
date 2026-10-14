@@ -1,17 +1,16 @@
+using System.Collections.Generic;
 using Facet.Core;
 using NUnit.Framework;
 
 namespace Facet.Tests
 {
     /// <summary>
-    /// EditMode tests for the belt layer - the mechanic the whole design hangs off.
-    ///
-    /// The two that matter most are <see cref="PackedBelt_ShiftsAsATrain_InsteadOfDeadlocking"/>
-    /// and <see cref="Throughput_IsTheSameFacingAnyDirection"/>. A belt packed full is the case
-    /// where every item reaches its cell's exit edge on the same tick and every successor is
-    /// occupied, and it is exactly where a naive implementation either deadlocks outright or
-    /// silently drains at one item per tick. If those two go red, the game is lying about its
-    /// own throughput, which is the one number the design asks the player to reason with.
+    /// EditMode tests for the belt layer, the mechanic the whole design hangs off. The two that matter most
+    /// are <see cref="PackedBelt_ShiftsAsATrain_InsteadOfDeadlocking"/> and
+    /// <see cref="Throughput_IsTheSameFacingAnyDirection"/>: a packed-full belt is where every item hits its
+    /// cell's exit edge on the same tick with every successor occupied - exactly where a naive implementation
+    /// either deadlocks or silently drains at one item per tick. If those two go red, the game is lying about
+    /// its own throughput, the one number the design asks the player to reason with.
     /// </summary>
     public class BeltTests
     {
@@ -54,11 +53,37 @@ namespace Facet.Tests
             Assert.AreEqual(7, Sim.ItemCount(world), "no item may be lost or duplicated");
         }
 
+        /// <summary>
+        /// The jammed cells are separately enumerable: "how many" is a diagnostic, "which ones" is what an
+        /// off-screen player has to be told - a jam that cannot be found is a jam that cannot be right-clicked.
+        /// </summary>
+        [Test]
+        public void GetJammed_ListsEveryBlockedCell_AndNothingWhenClear()
+        {
+            SimWorld world = Sim.NewWorld(16, 10);
+            Sim.LayRun(world, new Int2(2, 5), Dir.East, 3);           // (2,5) (3,5) (4,5)
+
+            var cells = new List<Int2>();
+            world.Belts.GetJammed(cells);
+            Assert.AreEqual(0, cells.Count, "a line that is not jammed has nothing to find");
+
+            world.Belts.TryJam(new Int2(3, 5));
+            world.Belts.TryJam(new Int2(4, 5));
+
+            world.Belts.GetJammed(cells);
+            CollectionAssert.AreEqual(new[] { new Int2(3, 5), new Int2(4, 5) }, cells,
+                "every jammed cell, in the field's own index order");
+
+            world.Belts.TryClearJam(new Int2(3, 5));
+            world.Belts.GetJammed(cells);
+            CollectionAssert.AreEqual(new[] { new Int2(4, 5) }, cells, "and a cleared one stops being listed");
+        }
+
         [Test]
         public void Throughput_IsTheSameFacingAnyDirection()
         {
-            // Guards against iteration order leaking into the result: if the sweep order favoured
-            // one flow direction, these four would disagree.
+            // Guards against iteration order leaking into the result: if the sweep favoured one flow
+            // direction, these four would disagree.
             foreach (Dir dir in new[] { Dir.North, Dir.East, Dir.South, Dir.West })
             {
                 SimWorld world = Sim.NewWorld(20, 20);        // Core sits at (10,10)
@@ -224,11 +249,9 @@ namespace Facet.Tests
         [Test]
         public void Drag_LeavesThePressCellAlongTheDragsOwnAxis()
         {
-            // A drag up the map has to leave the press cell *up*: the first leg is the axis the drag
-            // ran further along, so the sideways step lands at the far end. Always stepping in X first
-            // made every run come out of the press cell to the left or the right whatever the player
-            // dragged - "the belt only comes out sideways" - which is also how a run drawn north out
-            // of a drill ends up one tile east of it, where the drill cannot feed it.
+            // A drag up the map has to leave the press cell *up*: the first leg is the axis the drag ran further
+            // along, so the sideways step lands at the far end. Always stepping in X first made every run come out
+            // sideways whatever the player dragged - and a run drawn north out of a drill landed one tile east of it.
             SimWorld world = Sim.NewWorld(16, 12);
             Sim.Drag(world, new Int2(1, 1), new Int2(4, 8));
 
@@ -248,13 +271,10 @@ namespace Facet.Tests
         [Test]
         public void DragOutOfADrill_PointsTheDrillAtTheRun_SoAVerticalLineIsFed()
         {
-            // The reported bug, as a test. A drill placed by a plain click keeps the ghost's default
-            // facing - east - so a belt dragged north out of it was never mined into, and the run
-            // looked like the mistake while the drill's facing was the cause. A run leaving a drill's
-            // own cell can only be that drill's output, so the drill turns to face it.
-            //
-            // The map is this test's own, so the vein is where the test says it is and the run is as
-            // long as the plain ground above it goes - the drag, not the map file, is what is on trial.
+            // The reported bug, as a test: a drill placed by a plain click keeps the ghost's default facing
+            // (east), so a belt dragged north out of it was never mined into, and the run looked like the
+            // mistake while the drill's facing was the cause. A run leaving a drill's own cell can only be that
+            // drill's output, so the drill turns to face it. The map is this test's own - the drag is on trial.
             const int Dragged = 4;                          // cells the run leaves the drill for
             var drill = new Int2(4, 2);
             var map = new MapDefinition("drill run", 16, 12, Sim.TestCircles,
@@ -287,11 +307,10 @@ namespace Facet.Tests
         [Test]
         public void DragOutOfADecomposer_LeavesItsFacingAlone()
         {
-            // A decomposer has no facing to point: its inlet is the belt that points into it and its
-            // outlets are the belts pointing away, read fresh on every tick. So a run dragged out of one
-            // wires itself up - the belt leaving southwards is an outlet the moment it exists - and the
-            // machine keeps the facing it was placed with. (The drill next door is the other case: its
-            // facing *is* its output, so a run leaving it turns it.)
+            // A decomposer has no facing to point: its inlet is the belt pointing into it and its outlets are
+            // the belts pointing away, read fresh each tick. So a run dragged out of one wires itself up - the
+            // belt leaving southwards is an outlet the moment it exists - and the machine keeps its placed
+            // facing. (The drill is the other case: its facing *is* its output, so a run leaving it turns it.)
             SimWorld world = Sim.NewWorld(16, 12);
             var decomposer = new Int2(2, 8);
 
@@ -310,8 +329,8 @@ namespace Facet.Tests
         [Test]
         public void TheCursorGhost_ShowsTheRunBeingDragged()
         {
-            // The chevron under the cursor used to keep pointing wherever Q/E had left the ghost, so a
-            // belt being dragged north still advertised itself as an east-west belt.
+            // The chevron under the cursor used to keep pointing wherever Q/E left the ghost, so a belt
+            // dragged north still advertised itself as an east-west belt.
             SimWorld world = Sim.NewWorld(16, 12);
 
             world.Tick(Gesture.Aim(new Int2(4, 4), BuildKind.Belt));
@@ -342,8 +361,8 @@ namespace Facet.Tests
         [Test]
         public void PressingOntoAnExistingRun_PointsItTheWayYouDrag()
         {
-            // Drawing a run in two segments is normal play, so pressing the end of a run and
-            // dragging on has to turn that corner instead of leaving it facing the old way.
+            // Drawing a run in two segments is normal play, so pressing the end of a run and dragging on
+            // has to turn that corner instead of leaving it facing the old way.
             SimWorld world = Sim.NewWorld(16, 10);
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 3);   // (1,1) (2,1) (3,1), all East
 
@@ -358,10 +377,9 @@ namespace Facet.Tests
         [Test]
         public void ABareClickLaysOneBelt_BecauseTheGhostNamesItsDirection()
         {
-            // A click used to lay nothing at all, on the theory that a belt needs a direction. It has
-            // one - the ghost's, which Q/E turn and the info card names - so a click that built nothing
-            // was simply a click that did nothing: the button the player pressed promised a belt and
-            // delivered silence, which is what "the game won't let me build" looks like from outside.
+            // A click used to lay nothing, on the theory that a belt needs a direction. It has one - the ghost's,
+            // which Q/E turn and the info card names - so a click that built nothing promised a belt and delivered
+            // silence, which is what "the game won't let me build" looks like from outside.
             SimWorld world = Sim.NewWorld(16, 10);
             var click = Gesture.Aim(new Int2(2, 2), BuildKind.Belt);
             Sim.Tick(world, click, 10);
@@ -483,10 +501,9 @@ namespace Facet.Tests
         [Test]
         public void ADraggedRun_CrossesOre_InsteadOfBreakingOnIt()
         {
-            // A patch used to be treated exactly like the Core by the drag: the cell was skipped and the
-            // direction link dropped across the gap, so a line drawn over a vein came out as two runs
-            // with a one-cell hole between them - the hole being the ore the player was trying to thread
-            // through. Ore is ground a belt can be laid on, so the run is unbroken.
+            // A patch used to be treated like the Core by the drag: the cell was skipped and the direction link
+            // dropped, so a line over a vein came out as two runs with a one-cell hole - the hole being the ore
+            // the player was trying to thread. Ore is ground a belt can be laid on, so the run is unbroken.
             SimWorld world = Sim.NewWorld(20, 12);
             for (int x = 0; x < 3; x++)
                 world.Terrain.SetOre(new Int2(6 + x, 8), ShapeType.Circle);
@@ -503,11 +520,9 @@ namespace Facet.Tests
         [Test]
         public void ABeltOnOre_GivesTheOreBack_WhenRemoved()
         {
-            // The hazard that comes with the rule above. A belt standing on a patch is the one case where
-            // clearing a tile could delete the map's terrain, and deleting it would be permanent and
-            // silent - the player would just find their vein short one cell, with no way to tell why or
-            // to put it back. Removing the belt is a right-click that refunds, so the only thing it may
-            // change is the belt.
+            // The hazard that comes with the rule above: a belt on a patch is the one case where clearing a tile
+            // could delete the map's terrain - permanently and silently, leaving the player a vein short one cell.
+            // Removing the belt is a right-click that refunds, so the only thing it may change is the belt.
             SimWorld world = Sim.NewWorld(20, 12);
             var ore = new Int2(7, 7);
             world.Terrain.SetOre(ore, ShapeType.Square);
@@ -525,11 +540,9 @@ namespace Facet.Tests
         [Test]
         public void ADragKeepsBuildingWhatThePressStarted_WhenTheSelectionChanges()
         {
-            // The press decides, so the gesture cannot be re-purposed under the player's hand. Before
-            // this, aiming a drill at a patch and tapping the belt key while the button was still down
-            // turned the same held button into "lay a belt run from the press cell" - and with ore now
-            // being ground a belt can be laid on, that would pave the very cell the drill was aimed at.
-            // The ghost shows what the release will build, so the ghost and the outcome agree.
+            // The press decides, so the gesture cannot be re-purposed under the player's hand. Before, aiming a
+            // drill at a patch and tapping the belt key mid-drag turned the held button into "lay a belt run from
+            // the press cell" - which would pave the very cell the drill was aimed at. Ghost and outcome agree.
             SimWorld world = Sim.NewWorld(20, 12);
             var ore = new Int2(3, 9);
             world.Terrain.SetOre(ore, ShapeType.Circle);

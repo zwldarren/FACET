@@ -5,13 +5,10 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// EditMode tests for the splitter: the one-tile balancer whose ports are nothing but the belts
-    /// around it - a belt pointing in is an input, a belt pointing away is an output - so merging,
-    /// splitting and balancing are the same building on different streets.
-    ///
-    /// The worlds are the 20x12 test map, whose Core sits at (8,4)-(11,7), and the hub sits at (4,5):
-    /// every line here is short and clear of the Core, because a belt pointing into the Core is a
-    /// delivery and the sink would eat the very items the test is counting.
+    /// EditMode tests for the splitter: the one-tile balancer whose ports are just the belts around it -
+    /// a belt pointing in is an input, one pointing away an output - so merging, splitting and balancing
+    /// are the same building on different streets. Worlds use the 20x12 test map with the hub at (4,5),
+    /// lines kept clear of the Core so the sink cannot eat the items under test.
     /// </summary>
     public class SplitterTests
     {
@@ -32,14 +29,14 @@ namespace Facet.Tests
         /// <summary>West of the hub.</summary>
         private static int West(SimWorld world) => CountWhere(world, p => p.X < 3.5f);
 
-        /// <summary>The column north of the hub, above it.</summary>
+        /// <summary>The column north of the hub.</summary>
         private static int North(SimWorld world) => CountWhere(world, p => p.X >= 4f && p.X < 5f && p.Y > 5.5f);
 
         [Test]
         public void OneIn_TwoOut_Alternates()
         {
-            // South input, east and west outputs: four circles in, and the hub deals them alternately
-            // like cards - the round-robin is what makes one decomposer share two cannons evenly.
+            // South input, east and west outputs: four circles in, dealt alternately like cards. The
+            // round-robin is what lets one decomposer share two cannons evenly.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(4, 4), Dir.North, 1);
             Sim.Place(world, BuildKind.Splitter, Hub, Dir.North);
@@ -62,8 +59,8 @@ namespace Facet.Tests
         [Test]
         public void ThreeIn_OneOut_Merges()
         {
-            // The same building as a merger: three lines pointing in, one pointing away. All three
-            // items leave north - which one goes first is the fixed port order, not chance.
+            // The same building as a merger: three lines pointing in, one pointing away. All three items
+            // leave north - which one goes first is the fixed port order, not chance.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(4, 4), Dir.North, 1);   // south in
             Sim.LayRun(world, new Int2(3, 5), Dir.East, 1);    // west in
@@ -83,8 +80,8 @@ namespace Facet.Tests
         [Test]
         public void TwoIn_TwoOut_Balances()
         {
-            // The balancer proper: two feeds, two destinations, and the hub deals 2 and 2 out of 4,
-            // not 4 and 0 - the round-robin is the whole point of putting one in.
+            // The balancer proper: two feeds, two destinations, dealing 2 and 2 out of 4 rather than 4 and 0.
+            // The round-robin is the whole point of putting one in.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(4, 4), Dir.North, 1);   // south in
             Sim.LayRun(world, new Int2(3, 5), Dir.East, 1);    // west in
@@ -131,8 +128,8 @@ namespace Facet.Tests
         [Test]
         public void AFullOutput_Backpressures()
         {
-            // Nowhere to go at all: the hub holds its one item and stops taking, so the input line
-            // backs up behind it - the same honest wait a drill shows, not item loss.
+            // Nowhere to go at all: the hub holds its one item and stops taking, so the input line backs up
+            // behind it - the same honest wait a drill shows, not item loss.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(4, 3), Dir.North, 2);   // south in: (4,3) (4,4)
             Sim.Place(world, BuildKind.Splitter, Hub, Dir.North);
@@ -158,8 +155,8 @@ namespace Facet.Tests
         [Test]
         public void ABeltRunningPast_IsNotAPort()
         {
-            // A belt beside the hub pointing along, neither in nor away, is not part of the hub: the
-            // port roles come from belt directions, so a passing line is ignored, not robbed.
+            // A belt beside the hub pointing along, neither in nor away, is not part of the hub: the port
+            // roles come from belt directions, so a passing line is ignored, not robbed.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(4, 4), Dir.North, 1);   // south in
             Sim.Place(world, BuildKind.Splitter, Hub, Dir.North);

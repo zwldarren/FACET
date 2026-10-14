@@ -9,14 +9,10 @@ namespace Facet.PlayTests
 {
     /// <summary>
     /// The rebuild gate as Unity drives it: a view that fails to rebuild and a view that rebuilds twice
-    /// a frame both look the same from the outside, so the only way to see the difference is to count
-    /// the rebuilds a real play loop produces. This drives a view with a frame clock the test owns and
-    /// counts how many times the gate let it rebuild, so the four reasons are pinned - the first frame,
-    /// an unchanged frame, a zoom past the tolerance, a zoom inside it, and a view marking itself dirty.
-    ///
-    /// The gate's other caller - the Editor's map preview, which hands frames in by hand with no play
-    /// loop at all - is pinned by MeshViewDrawTests in the EditMode suite. This one is the message path:
-    /// that Unity's own frame call reaches the same gate.
+    /// a frame look identical from outside, so the difference is only visible by counting the rebuilds a
+    /// real play loop produces. This drives a view with a test-owned frame clock, pinning the reasons - the
+    /// first frame, an unchanged frame, a zoom past the tolerance, a zoom inside it, and a self-marked
+    /// dirty view. The gate's other caller, the Editor's map preview, is pinned by MeshViewDrawTests.
     /// </summary>
     public class MeshViewGateTests
     {

@@ -45,6 +45,38 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   wave's next spawn weighs the new ground instead. With no turret on the map the decision always
   reads "direct", which is why a threat-free world plays bit-for-bit as it always did.
 
+## Being out of view
+
+- **Locator** (`ThreatRadar`) - the game's one answer to "where is it?", for everything the player can
+  neither see nor click. Arithmetic on a rectangle, not a renderer: two readers ask it -
+  `ThreatRadarView` draws the arrows, `HudView` prints the same numbers - so the marks on the edge of the
+  map and the sentence in the status card cannot disagree about what is out of view.
+- **Open screen** (`ThreatRadar.Viewport`) - the part of the window no HUD panel covers, and therefore the
+  part a click can reach. The rule the whole feature hangs on, and the reason it reads
+  `HudLayout.Panels` - the cards' boxes - rather than `HudLayout.Insets`: an inset is one number per side,
+  which is right for a camera bound and wrong for a question about a tile, because the ground below the
+  status card is free and a walker there needs no arrow.
+- **Arrow / mark** - what the locator puts on the edge of that open screen. A chevron is something that
+  moves and is coming (an enemy cluster); a mark is a place to go (a jammed segment, the Core). Sizes are
+  screen pixels rather than tiles, because an arrow is a mark on the window and the window is what zooms.
+- **Step back** (`EdgeTowards`) - an arrow that would land under a card is slid in along its own sight line
+  until it clears the card. The sight line is what the arrow means, so it is the one thing the arrow never
+  leaves: it never slides sideways to somewhere it would point at the wrong tile.
+- **Fold** (`Marker.Fold`, `RadarLook.MergePixels`) - the judgement that makes a wave in one door one arrow
+  counting sixteen rather than sixteen arrows: clustered by where the *arrow* would land, along the edge,
+  not through the map. A full marker array folds rather than dropping, so the count stays true.
+- **Danger frame** - the band the open screen wears while the Core is being hit out of view. It says "look
+  back", not "look here" - the arrows are what say where - and it is timed off the same event window the
+  health bar's flash fades over (`ThreatRadar.CoreHitAge`), so the card and the frame pulse together.
+
+- **Shape word / shape mark** (`ShapeDef.Glyph`, `HudIcons`) - the two ways a shape is shown, and the rule
+  for which is which. In a sentence the shape's *word* is spelled from the content table ("starved - no
+  half-circle waiting on its lines"); where a shape is a *mark* - beside the stockpile, on a build tile -
+  the HUD draws the silhouette the map draws, from the same Palette. It used to spell both with one
+  character ("○", "◠"), and in a built player every one of those came out as a gap: the font the IMGUI text
+  is drawn with has no such character. Same reasoning kept the HUD's shipped strings inside ASCII plus the
+  middle dot - no en dash, no triangle - for the same reason.
+
 ## Reading machines
 
 - **MachineReading** - the one module that says what a machine *means* to the player: the
@@ -86,6 +118,10 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   once as `InputCommand`s: a click is the press-and-hold that latches inspect, a drag is press,
   carry, lift - the lift carrying the release edge, as the mouse's does. The shipped adapter
   (`BuildInput`) and the tests quote the same words, so "what a click is" has one spelling.
+- **Camera keys** - the pan, the wheel and `C`, which puts the Core back in the middle of the view. They
+  stay outside the gesture vocabulary on purpose: `CameraRig` reads its devices itself, because nothing
+  replays a pan and routing it through the tick would make the camera step at 30 Hz for no reason. `C` is
+  the locator's own companion - it says *that* something is out of view and where; the key says *go there*.
 
 ## Editing maps
 

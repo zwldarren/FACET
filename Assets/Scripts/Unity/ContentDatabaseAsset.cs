@@ -5,25 +5,20 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// The Editor's carrier for the content table. It is a ScriptableObject so the numbers can be
-    /// edited in the Inspector and live in an asset, but it is <em>not</em> the simulation's table:
-    /// <see cref="ToCore"/> converts it to the engine-free <see cref="ContentDatabase"/>, which is
-    /// what <see cref="SimWorld"/> is handed. That boundary is the whole reason
-    /// <c>FACET.Core</c> can keep its <c>noEngineReferences</c> contract while the content is
+    /// <summary>The Editor's carrier for the content table. A ScriptableObject so the numbers can be edited in the
+    /// Inspector and live in an asset, but it is <em>not</em> the simulation's table: <see cref="ToCore"/> converts it
+    /// to the engine-free <see cref="ContentDatabase"/>, which is what <see cref="SimWorld"/> is handed. That boundary
+    /// is the whole reason <c>FACET.Core</c> can keep its <c>noEngineReferences</c> contract while the content is
     /// authored in the Editor.
     ///
-    /// Every row is an <b>override</b>, not a full definition: a kind with no row keeps the shipped
-    /// value. So this asset is purely additive - an empty one behaves exactly like
-    /// the shipped game, and you only fill in what you are changing or adding. That also means an
-    /// existing kind's numbers can be retuned here without recompiling, and a new kind (a turret, an
-    /// enemy, a mineral, a recipe) is a row plus the enum value that names it - never a switch.
+    /// Every row is an <b>override</b>, not a full definition: a kind with no row keeps the shipped value, so this
+    /// asset is purely additive - an empty one behaves exactly like the shipped game - and you only fill in what you
+    /// are changing or adding. An existing kind's numbers can be retuned without recompiling, and a new kind is a row
+    /// plus the enum value that names it.
     ///
-    /// The row types below own the whole mapping to and from the engine-free definitions: each one
-    /// converts itself with <c>ToDef</c> and builds itself back with <c>FromDef</c>, so adding a stat to
-    /// the game is one edit beside the row's own fields rather than the same field written out again in
-    /// a merge method and again in the asset creator.
-    /// </summary>
+    /// The row types below own the whole mapping to and from the engine-free definitions: each converts itself with
+    /// <c>ToDef</c> and builds itself back with <c>FromDef</c>, so adding a stat is one edit beside the row's own
+    /// fields rather than the same field written out again in a merge method and again in the asset creator.</summary>
     [CreateAssetMenu(fileName = "ContentDatabase", menuName = "FACET/Content Database", order = 1)]
     public sealed class ContentDatabaseAsset : ScriptableObject
     {
@@ -33,12 +28,14 @@ namespace Facet.Game
             [Tooltip("Which shape this row describes.")]
             public ShapeType Shape = ShapeType.Circle;
             public string Name = "Circle";
-            [Tooltip("The single character the HUD prints for this shape.")]
-            public string Glyph = "○";
+            [Tooltip("The word a sentence spells this shape with - \"no half-circle waiting on its lines\". " +
+                "Where a shape is a mark rather than a word (beside the stockpile, on a build tile) the HUD " +
+                "draws the silhouette the map draws, from the Palette, so this field never has to be a " +
+                "character the player's font happens to carry.")]
+            public string Glyph = "circle";
 
-            /// <summary>This row as a definition. It keeps the shipped id: that is the simulation's
-            /// identity for the shape, not a display name, so a row may rename what a shape is called
-            /// without changing what it is.</summary>
+            /// <summary>This row as a definition. It keeps the shipped id: that is the simulation's identity for the shape,
+            /// not a display name, so a row may rename what a shape is called without changing what it is.</summary>
             public ShapeDef ToDef(ContentId shippedId) => new ShapeDef(Shape, shippedId.Value, Name, Glyph);
 
             public static ShapeRow FromDef(ShapeDef def) => new ShapeRow
@@ -108,22 +105,19 @@ namespace Facet.Game
             [Tooltip("Health enemies must chew through to demolish this building. 0 keeps the shipped value.")]
             public float MaxHp = 0f;
 
-            /// <summary>This row as the engine-free definition the simulation runs on. It takes the id,
-            /// the <paramref name="build"/> its slot carries and the effective
-            /// <paramref name="maxHp"/> rather than reading its own fields, so a row resolved by
-            /// identity still describes the building its id names - and a row that leaves MaxHp at 0
-            /// still comes out with the shipped slot's health, mirroring this asset's purely-additive
-            /// rule.</summary>
+            /// <summary>This row as the engine-free definition the simulation runs on. It takes the id, the
+            /// <paramref name="build"/> its slot carries and the effective <paramref name="maxHp"/> rather than reading its own
+            /// fields, so a row resolved by identity still describes the building its id names - and a row that leaves MaxHp at
+            /// 0 still comes out with the shipped slot's health, mirroring this asset's purely-additive rule.</summary>
             public MachineDef ToDef(ContentId id, BuildKind build, float maxHp) => new MachineDef(id, build, Tile,
                 Behavior, Cost, Name, Description, new ContentId(RecipeId), Interval, Filter, maxHp);
 
-            /// <summary>The identity this row ends up carrying: its own, or the slot's shipped one when the
-            /// row names none - so a table built from an asset never holds a definition that cannot be
-            /// looked up by identity.</summary>
+            /// <summary>The identity this row ends up carrying: its own, or the slot's shipped one when the row names none - so
+            /// a table built from an asset never holds a definition that cannot be looked up by identity.</summary>
             public ContentId IdOr(ContentId shippedId) => RowId(Id, shippedId);
 
-            /// <summary>The inverse. Every field of a definition is written down here and in
-            /// <see cref="ToDef"/> and nowhere else, so a new stat is one edit in one class.</summary>
+            /// <summary>The inverse. Every field of a definition is written down here and in <see cref="ToDef"/> and nowhere
+            /// else, so a new stat is one edit in one class.</summary>
             public static MachineRow FromDef(MachineDef def) => new MachineRow
             {
                 Id = def.Id.Value,
@@ -196,15 +190,15 @@ namespace Facet.Game
                 "attack reach it only attacks what it walks into. 0 keeps the shipped value.")]
             public float DetectionRange = 0f;
 
-            /// <summary>This row as the engine-free definition the simulation runs on. It takes the
-            /// effective radii the merge resolved rather than reading its own fields, for the same
-            /// additive reason <see cref="MachineRow.ToDef"/> takes <c>maxHp</c>.</summary>
+            /// <summary>This row as the engine-free definition the simulation runs on. It takes the effective radii the merge
+            /// resolved rather than reading its own fields, for the same additive reason <see cref="MachineRow.ToDef"/> takes
+            /// <c>maxHp</c>.</summary>
             public EnemyDef ToDef(ContentId id, EnemyKind kind, float aggroRange, float detectionRange)
                 => new EnemyDef(id, kind, Name, Hp, Speed, Damage, AttackInterval, Weakness, aggroRange,
                     detectionRange);
 
-            /// <summary>The identity this row ends up carrying, or the slot's shipped one when it names
-            /// none - see <see cref="MachineRow.IdOr"/>.</summary>
+            /// <summary>The identity this row ends up carrying, or the slot's shipped one when it names none - see
+            /// <see cref="MachineRow.IdOr"/>.</summary>
             public ContentId IdOr(ContentId shippedId) => RowId(Id, shippedId);
 
             public static EnemyRow FromDef(EnemyDef def) => new EnemyRow
@@ -229,11 +223,8 @@ namespace Facet.Game
         public TurretRow[] Turrets;
         public EnemyRow[] Enemies;
 
-        /// <summary>
-        /// Build the engine-free table this asset describes, starting from the shipped one and
-        /// applying every row. Null row arrays are fine; so are individual null entries (the gap the
-        /// Inspector leaves when a row is deleted).
-        /// </summary>
+        /// <summary>Build the engine-free table this asset describes, starting from the shipped one and applying every row.
+        /// Null row arrays are fine; so are individual null entries (the gap the Inspector leaves when a row is deleted).</summary>
         public ContentDatabase ToCore()
         {
             ContentDatabase shipped = ContentDatabase.Default;
@@ -243,9 +234,8 @@ namespace Facet.Game
                 MergeShapes(shipped), MergeRecipes(shipped));
         }
 
-        /// <summary>The identity a row ends up carrying: the id it names, or the shipped one for the
-        /// slot it fills. Shared by the machine and enemy rows so "an empty id means the slot's" is one
-        /// rule, not one copy per row type.</summary>
+        /// <summary>The identity a row ends up carrying: the id it names, or the shipped one for the slot it fills. Shared
+        /// by the machine and enemy rows so "an empty id means the slot's" is one rule, not one copy per row type.</summary>
         private static ContentId RowId(string rowId, ContentId shippedId)
         {
             var id = new ContentId(rowId);
@@ -265,8 +255,8 @@ namespace Facet.Game
                 int slot = SlotFor(shipped.MachineSlot(new ContentId(row.Id)), (int)row.Build);
                 MachineDef shippedDef = shipped.Machine(shipped.BuildKinds[slot]);
 
-                // 0 on the row means "unset", so a row (or a whole asset) authored before HP existed
-                // keeps the shipped value - the same purely-additive rule this asset follows everywhere.
+                // 0 on the row means "unset", so a row (or a whole asset) authored before HP existed keeps the shipped value -
+                // the same purely-additive rule this asset follows everywhere.
                 float maxHp = row.MaxHp > 0f ? row.MaxHp : shippedDef.MaxHp;
                 defs[slot] = row.ToDef(row.IdOr(shippedDef.Id), shipped.BuildKinds[slot], maxHp);
             }
@@ -274,12 +264,10 @@ namespace Facet.Game
             return defs;
         }
 
-        /// <summary>
-        /// Which slot a row fills. An id the shipped table carries wins over the row's own enum, and that
-        /// is the whole reason the rows may carry one: an enum value inserted above a building moves every
-        /// later ordinal, so a row keyed by ordinal alone would retune its new neighbour instead. A row with
-        /// no id (the default) is keyed by its dropdown, exactly as before ids existed.
-        /// </summary>
+        /// <summary>Which slot a row fills. An id the shipped table carries wins over the row's own enum, and that is why
+        /// the rows may carry one: an enum value inserted above a building moves every later ordinal, so a row keyed by
+        /// ordinal alone would retune its new neighbour instead. A row with no id (the default) is keyed by its dropdown,
+        /// exactly as before ids existed.</summary>
         private static int SlotFor(int byId, int byOrdinal) => byId >= 0 ? byId : byOrdinal;
 
         private TurretDef[] MergeTurrets(ContentDatabase shipped)

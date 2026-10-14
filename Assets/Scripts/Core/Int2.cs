@@ -3,8 +3,8 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// Integer tile coordinate on the map. (0,0) is the bottom-left tile.
-    /// Deliberately NOT UnityEngine.Vector2Int so the simulation layer stays engine-free.
+    /// Integer tile coordinate on the map; (0,0) is the bottom-left tile. Deliberately not
+    /// UnityEngine.Vector2Int so the simulation layer stays engine-free.
     /// </summary>
     [Serializable]
     public readonly struct Int2 : IEquatable<Int2>

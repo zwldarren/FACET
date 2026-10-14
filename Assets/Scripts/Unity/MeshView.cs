@@ -6,30 +6,25 @@ using UnityEngine.Rendering;
 namespace Facet.Game
 {
     /// <summary>
-    /// The module every view of the simulation extends. It owns the mesh lifecycle - the geometry
-    /// buffers, the mesh and its renderer, the screen-space constants, and the rebuild gate - so a
-    /// view contributes only the geometry for the current frame.
+    /// The module every view of the simulation extends. It owns the mesh lifecycle - geometry buffers,
+    /// mesh and renderer, screen-space constants and the rebuild gate - so a view contributes only the
+    /// current frame's geometry.
     ///
-    /// The four rebuild reasons in the view layer are all expressed through two hooks. A view calls
-    /// <see cref="MarkDirty"/> from <see cref="Observe"/> when its watched value changed - a belt
-    /// revision, the Core's health fraction, the cursor's cell, or simply "every frame" - while the
-    /// gate owns the reasons that are identical across views: a zoom that moves the pixel size past a
-    /// tolerance, and a mesh that is gone. The first rebuild happens on the first frame with a real zoom,
-    /// so a view never has to synthesize a frame of its own.
+    /// The view layer's four rebuild reasons go through two hooks: a view calls <see cref="MarkDirty"/>
+    /// from <see cref="Observe"/> when its watched value changed, while the gate owns the shared reasons
+    /// (a zoom past tolerance, a gone mesh). The first rebuild happens on the first frame with a real
+    /// zoom, so a view never synthesizes a frame of its own.
     ///
-    /// One <see cref="MeshView"/> is one GameObject with one mesh, which is the shape the PlayMode
-    /// tests pin: the default (procedural) output is a single mesh whose vertex count they can read.
-    /// A content that opts into a Sprite override adds a small pooled SpriteRenderer behind that
-    /// mesh, so the default look still touches no GameObject beyond the view's own mesh. The mesh is
-    /// made and freed with its view - and it lives as long as the object that draws it does, so a view
-    /// held on to by a scene reload still has the geometry to draw into.
+    /// One <see cref="MeshView"/> is one GameObject with one mesh - the shape the PlayMode tests pin. A
+    /// Sprite override adds a small pooled SpriteRenderer behind that mesh, so the default look touches
+    /// no extra GameObject. The mesh is made and freed with its view, and lives as long as the object
+    /// that draws it, so a view held across a scene reload still has geometry to draw into.
     /// </summary>
     /// <para>
     /// The class executes in the editor so its mesh frees when the object holding it goes while no game
-    /// is running: a preview's object is <c>DontSave</c>, so nothing else will sweep its mesh away, and
-    /// a lifetime the player only frees is a leak per preview rebuild. The editor add is for the freeing,
-    /// not for the drawing - frames belong to the caller that has them - so the Unity-driven draw below
-    /// stays a play-mode call.
+    /// runs: a preview object is <c>DontSave</c>, so nothing else sweeps its mesh away, and a leak per
+    /// preview rebuild otherwise. The editor add is for the freeing, not the drawing - frames belong to
+    /// the caller - so the Unity-driven draw below stays a play-mode call.
     /// </para>
     [ExecuteAlways]
     public abstract class MeshView : MonoBehaviour
@@ -47,8 +42,8 @@ namespace Facet.Game
 
         private Mesh _mesh;
 
-        /// <summary>The name and lifetime this view's mesh is (re)built with, kept so a mesh that has to be
-        /// made again - see <see cref="AcquireMesh"/> - is made the same way it was made the first time.</summary>
+        /// <summary>The mesh's name and lifetime, kept so a mesh remade by <see cref="AcquireMesh"/> is
+        /// made the same way as the first.</summary>
         private string _meshName;
         private HideFlags _meshFlags;
 
@@ -62,13 +57,11 @@ namespace Facet.Game
         private Transform _spriteRoot;
         private int _spritesUsed;
 
-        /// <summary>Sprites sit this far behind the view's mesh, so the mesh's functional overlays
-        /// (a turret's barrel, a machine's port stubs) draw on top of an overridden body. Small
-        /// enough never to be seen as a parallax offset at any zoom.</summary>
+        /// <summary>Sprites sit this far behind the mesh, so its functional overlays draw on top of an
+        /// overridden body; small enough never to read as parallax at any zoom.</summary>
         private const float SpriteDepthOffset = 0.001f;
 
-        /// <summary>The simulation this view draws. The view keeps its own gather and reads
-        /// whatever it needs from here; the mesh lifecycle does not depend on it.</summary>
+        /// <summary>The simulation this view draws; the mesh lifecycle does not depend on it.</summary>
         protected SimWorld World { get; private set; }
 
         /// <summary>The one asset the whole look lives in: colours, screen-space thicknesses and
@@ -84,10 +77,8 @@ namespace Facet.Game
         /// <summary>The palette's screen-space outline constant at the current zoom, in world units.</summary>
         protected float OutlineWidth => _palette != null ? _palette.OutlinePixels * WorldPerPixel : 0f;
 
-        /// <summary>
-        /// Build the view: one mesh on this GameObject, on the layer the view declares, with the
-        /// shared view material. Nothing is drawn until the first frame rebuilds.
-        /// </summary>
+        /// <summary>Build the view: one mesh on this GameObject, on the declared layer, with the shared
+        /// view material. Nothing is drawn until the first frame rebuilds.</summary>
         public void Initialize(SimWorld world, FrameClock frames, Palette palette)
         {
             World = world;
@@ -103,29 +94,24 @@ namespace Facet.Game
             _dirty = true;
         }
 
-        /// <summary>
-        /// The flags a view's mesh is born with: the same hold on life as the GameObject that draws it.
+        /// <summary>The flags a view's mesh is born with: the same hold on life as the GameObject that
+        /// draws it.
         ///
-        /// The mesh is not a component, so Unity neither destroys it with its object nor keeps it alive with
-        /// one: a mesh with no <see cref="HideFlags.DontSave"/> is swept away by a scene unload that the
-        /// object drawing it survives. That is exactly the pair the Editor's map preview makes - its objects
-        /// are <c>HideAndDontSave</c> so a Play-mode transition leaves the preview alone - and it is the rule
-        /// the rest of what a view makes already follows, the shared material in <see cref="ProcMesh"/> and
-        /// the HUD's pixel texture both being <c>DontSave</c> for the same reason.
-        /// </summary>
+        /// A mesh is not a component, so Unity neither destroys nor keeps it alive with its object: one
+        /// with no <see cref="HideFlags.DontSave"/> is swept away by a scene unload the drawing object
+        /// survives. That is exactly the pair the Editor's map preview makes - its objects are
+        /// <c>HideAndDontSave</c> so a Play-mode transition leaves it alone - and the rule the shared
+        /// material in <see cref="ProcMesh"/> and the HUD's pixel texture already follow.</summary>
         private static HideFlags MeshFlagsFor(GameObject owner)
             => (owner.hideFlags & HideFlags.DontSave) != 0 ? HideFlags.DontSave : HideFlags.None;
 
         private Mesh NewMesh() => new Mesh { name = _meshName, hideFlags = _meshFlags };
 
-        /// <summary>
-        /// The mesh to fill this frame, made again if it is gone.
+        /// <summary>The mesh to fill this frame, made again if it is gone.
         ///
-        /// The view owns its mesh's lifetime but not its survival: an object marked <c>DontSave</c> can still
-        /// be destroyed under a running script - by a scene close, by the Editor's own asset unload - and a
-        /// mesh that has gone is a mesh to redraw, not a reason to throw. Remaking it re-points the filter
-        /// that was given the old one, so the renderer shows what this frame appends rather than nothing.
-        /// </summary>
+        /// An object marked <c>DontSave</c> can still be destroyed under a running script, and a gone mesh
+        /// is one to redraw rather than a reason to throw. Remaking it re-points the filter that held the
+        /// old one, so the renderer shows what this frame appends.</summary>
         private Mesh AcquireMesh()
         {
             if (_mesh != null) return _mesh;
@@ -146,12 +132,9 @@ namespace Facet.Game
             _mesh = null;
         }
 
-        /// <summary>
-        /// Attach the MeshFilter + MeshRenderer pair this view draws through, configured the one way
-        /// that is correct for flat unlit geometry, and put the object on the layer's z-plane and
-        /// sorting order. Tile coordinates are world coordinates in FACET, so a view on the wrong
-        /// z-plane drifts away from what the cursor clicks on.
-        /// </summary>
+        /// <summary>Attach the MeshFilter + MeshRenderer pair this view draws through, configured for
+        /// flat unlit geometry, and put the object on the layer's z-plane and sorting order. Tile
+        /// coordinates are world coordinates, so a wrong z-plane drifts from what the cursor clicks.</summary>
         private void AttachRenderer(Palette.Layer layer, Material material)
         {
             var filter = gameObject.AddComponent<MeshFilter>();
@@ -172,17 +155,13 @@ namespace Facet.Game
         /// Called once per view; a map change goes through <see cref="Rebind"/> instead.</summary>
         protected virtual void OnInitialized() { }
 
-        /// <summary>
-        /// Point this view at a different simulation - a different map - without rebuilding any of the
-        /// mesh machinery: the mesh, the material and the pooled sprites stay, and only what they are
-        /// filled from changes. The next frame rebuilds from the new world.
+        /// <summary>Point this view at a different simulation without rebuilding the mesh machinery: the
+        /// mesh, material and pooled sprites stay, and the next frame rebuilds from the new world.
         ///
-        /// A view that cached anything sized or positioned by the old map drops it in
-        /// <see cref="OnWorldRebound"/>: the grid's own tile grid, the wave-entry markers, the belt
-        /// revision it last drew. Those are exactly the caches that would otherwise keep drawing the
-        /// previous map, which is why the hook exists rather than <see cref="Initialize"/> being called
-        /// a second time.
-        /// </summary>
+        /// Anything cached and sized by the old map is dropped in <see cref="OnWorldRebound"/> - the tile
+        /// grid, the wave-entry markers, the last belt revision - because those would otherwise keep
+        /// drawing the previous map. That is why the hook exists rather than <see cref="Initialize"/>
+        /// being called again.</summary>
         public void Rebind(SimWorld world)
         {
             World = world ?? throw new System.ArgumentNullException(nameof(world));
@@ -231,10 +210,9 @@ namespace Facet.Game
             AppendQuad(from - right, from + right, to + right, to - right, color);
         }
 
-        /// <summary>One filled chevron (a triangle) pointing along <paramref name="direction"/>, at
-        /// <paramref name="back"/> behind and <paramref name="length"/> ahead of the centre. With the
-        /// right-hand point first and the tip last, the winding stays counter-clockwise for all four
-        /// directions, so no caller needs a per-direction special case.</summary>
+        /// <summary>One filled chevron pointing along <paramref name="direction"/>, at
+        /// <paramref name="back"/> behind and <paramref name="length"/> ahead of the centre. Right-hand
+        /// point first, tip last, so the winding stays counter-clockwise for all four directions.</summary>
         protected void AppendChevron(Vector2 centre, Dir direction, float back, float halfWidth,
             float length, Color color)
         {
@@ -249,18 +227,13 @@ namespace Facet.Game
             AppendPolygon(_chevron, Vector2.zero, color, color, 0f);
         }
 
-        /// <summary>
-        /// Draw one frame. The rebuild gate: ask the view whether it wants a rebuild, and add the two
-        /// reasons every view shares - the zoom moved the pixel size past the tolerance, so a
-        /// screen-space constant stays a true number of pixels, and the mesh it draws into is gone, so
-        /// there is nothing to draw into at all. An invalid frame is skipped rather than drawn at zero zoom.
+        /// <summary>Draw one frame. The rebuild gate: ask the view for a rebuild, then add the two
+        /// shared reasons - the zoom moved the pixel size past tolerance (keeping screen-space constants
+        /// true), and the mesh is gone. An invalid frame is skipped rather than drawn at zero zoom.
         ///
-        /// It is a method and not only a message because the gate has a second caller: the Editor's
-        /// map preview draws these same views with no game running, so Unity's frame messages never
-        /// arrive and the frames are handed in by hand - one per Scene view repaint. That is the whole
-        /// reason a map can be looked at without pressing Play, and it is why the frame is a parameter
-        /// here rather than always the clock's own.
-        /// </summary>
+        /// A method rather than only a message because the Editor's map preview draws these views with no
+        /// game running, so frames are handed in by hand - one per Scene view repaint. That is why a map
+        /// can be seen without pressing Play, and why the frame is a parameter rather than the clock's.</summary>
         public void Draw(in ViewFrame frame)
         {
             if (_frames == null || _palette == null) return;
@@ -286,8 +259,8 @@ namespace Facet.Game
         }
 
         /// <summary>Unity's own call, for the frames it drives: whatever the clock holds. A play-mode
-        /// call - see the class comment on <see cref="ExecuteAlways"/>: in the editor a view draws when
-        /// its caller hands it a frame, and the preview is the caller that has frames at all.</summary>
+        /// call - see the class comment on <see cref="ExecuteAlways"/>; in the editor a view draws only
+        /// when its caller hands it a frame.</summary>
         private void LateUpdate()
         {
             if (!Application.isPlaying || _frames == null) return;
@@ -301,12 +274,9 @@ namespace Facet.Game
         /// <summary>Reset the sprite pool cursor before drawing this frame's overrides.</summary>
         protected void BeginSprites() => _spritesUsed = 0;
 
-        /// <summary>
-        /// Draw one sprite centred on a world position, scaled so its width and height are
-        /// 2 * <paramref name="halfExtent"/> tiles (<paramref name="halfExtent"/> 0 keeps the
-        /// sprite's native size), then offset and rotated. A centred sprite pivot is assumed - the
-        /// Unity default. Sprites are pooled and live just behind the view's mesh.
-        /// </summary>
+        /// <summary>Draw one sprite centred on a world position, scaled so its width and height are
+        /// 2 * <paramref name="halfExtent"/> tiles (<paramref name="halfExtent"/> 0 keeps native size),
+        /// then offset and rotated. A centred pivot is assumed; sprites are pooled behind the mesh.</summary>
         protected void DrawSprite(Sprite sprite, Vector2 centre, float halfExtent,
             float rotation, Vector2 offset, Color tint)
         {
@@ -342,13 +312,10 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>
-        /// Draw one shape icon from a view's icon set: the authored Sprite when the style names one,
-        /// otherwise the procedural silhouette with its own outline. A <paramref name="tint"/>
-        /// recolours either form - how a silenced turret's ammo goes grey - and null keeps the style's
-        /// fill. The one place every view that draws a shape as an icon goes through, so a re-skinned
-        /// shape looks the same on a belt, in the ground, on a machine and on an enemy.
-        /// </summary>
+        /// <summary>Draw one shape icon: the authored Sprite when the style names one, otherwise the
+        /// procedural silhouette with its outline. A <paramref name="tint"/> recolours either form (how
+        /// a silenced turret's ammo goes grey); null keeps the style's fill. The one place every view
+        /// that draws a shape as an icon goes through.</summary>
         protected void AppendIcon(ShapeIconSet icons, ShapeType shape, Vector2 centre, Color? tint)
         {
             if (shape == ShapeType.None) return;

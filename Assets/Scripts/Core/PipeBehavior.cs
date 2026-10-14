@@ -3,11 +3,9 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// The crossing piece. Eats anything delivered to it, carries the item for its definition's
-    /// interval (0.25 s), and drops it on the belt two cells ahead in its facing - jumping exactly one
-    /// tile, which may be another belt (a crossing) or bare ground (a gap). It is transport, not a
-    /// machine with a diet: every shape is accepted and nothing jams. A blocked landing holds the item
-    /// at the far end instead of losing it.
+    /// The crossing piece. Eats anything delivered, carries it for its definition's interval (0.25 s),
+    /// and drops it on the belt two cells ahead in its facing - jumping one tile, belt or bare ground.
+    /// Every shape is accepted and nothing jams; a blocked landing holds the item at the far end.
     /// </summary>
     internal sealed class PipeBehavior : IMachineBehavior
     {

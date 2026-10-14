@@ -1,12 +1,9 @@
 namespace Facet.Core
 {
     /// <summary>
-    /// Mines the shape patch under the machine and pushes it onto the belt it faces. Deliberately
-    /// matched to one belt: the drill's definition interval (one second) is the belt's own one item
-    /// per second, so a drill exactly saturates a line rather than outrunning it.
-    ///
-    /// A drill facing anything but a belt with room simply waits with its cooldown expired - it never
-    /// mines into nowhere. Waiting is the honest signal for "this stage is the bottleneck".
+    /// Mines the shape patch under the machine and pushes it onto the belt it faces. Its interval (one
+    /// second) matches the belt's one item per second, so it saturates a line rather than outrunning it;
+    /// a drill facing no belt with room waits rather than mining into nowhere.
     /// </summary>
     internal sealed class DrillBehavior : IMachineBehavior
     {

@@ -1,11 +1,10 @@
 namespace Facet.Core
 {
     /// <summary>
-    /// The Core is also the bank. A belt that delivers into its footprint is emptied: a circle
-    /// becomes one spendable stockpile, anything else (a stray half-circle) is destroyed - the sink
-    /// is the overflow drain as well as the mint. Delivery uses the same rule every machine uses:
-    /// the belt's own direction must point in, so "route the money home" is a layout problem, and
-    /// the resource lines flowing inward cross the ammunition lines flowing outward.
+    /// The Core is also the bank. A belt delivering into its footprint is emptied: a circle becomes one
+    /// spendable stockpile, anything else is destroyed, so the sink is the mint and the overflow drain.
+    /// Delivery uses the same rule every machine uses - the belt's direction must point in - making
+    /// "route the money home" a layout problem.
     /// </summary>
     public sealed class CoreSinkSystem
     {
@@ -57,8 +56,7 @@ namespace Facet.Core
                 _events.Banked(cell);
             }
 
-            // Anything else is the overflow drain: a stray half-circle arriving at the Core is
-            // destroyed, which is a fact visible on the belt rather than an event worth reporting.
+            // Anything else is the overflow drain: a stray half-circle is destroyed, no event reported.
         }
     }
 }

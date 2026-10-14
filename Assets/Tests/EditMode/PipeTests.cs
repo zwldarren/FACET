@@ -40,8 +40,8 @@ namespace Facet.Tests
         public void Pipe_LetsTwoBeltsCross()
         {
             // The layout the pipe exists for: a vertical line whose middle tile is a horizontal belt.
-            // Both lines run along the top of the map, clear of the Core's own footprint - a belt
-            // pointing into the Core would be banked, which is a different test's business.
+            // Both lines run along the top of the map, clear of the Core's footprint - a belt pointing into
+            // the Core would be banked, which is a different test's business.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(5, 0), Dir.North, 1);
             Sim.Place(world, BuildKind.Pipe, new Int2(5, 1), Dir.North);

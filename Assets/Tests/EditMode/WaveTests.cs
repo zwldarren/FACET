@@ -4,20 +4,17 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// EditMode tests for the wave clock and the end of a run: the opening the player's first building
-    /// arms, the countdown every wave then runs, spawning, what counts as a cleared wave, whether a jam
-    /// really is enough to lose, and what a restart puts back. The tests that need a real map fight on
-    /// <see cref="Sim.RigMap"/>, the tests' own: a corridor, two veins, one door, two waves. The ones
-    /// that need a run to END on a clear - the win, the clock's last tick - build their own one-wave map.
+    /// EditMode tests for the wave clock and the end of a run: the opening the first building arms, the
+    /// countdown every wave runs, spawning, clearing, jams that lose the run, and restart. Tests needing a
+    /// real map fight on <see cref="Sim.RigMap"/>; ones needing a run to END build their own one-wave map.
     /// </summary>
     public class WaveTests
     {
         [Test]
         public void FirstWave_WaitsForTheFirstBuilding_ThenCountsDown()
         {
-            // The opening's clock is the player's to start. Nothing ticks until they put something down -
-            // so reading the map and planning the first line cost no time at all - and the countdown the
-            // table declares runs from that building rather than from the run.
+            // The opening's clock is the player's to start: nothing ticks until they put something down, so
+            // reading the map costs no time, and the table's countdown runs from that building, not the run.
             SimWorld world = Sim.Rig();
             float countdown = world.Map.Waves[0].Intermission;
 
@@ -29,8 +26,8 @@ namespace Facet.Tests
                 "the countdown the table declares is waiting there, not running");
             Assert.Greater(countdown, 0f, "a first wave with no countdown would open as soon as it is armed");
 
-            // Five minutes of doing nothing, which is longer than the whole table could hold: the clock has
-            // not moved a tick. That is the whole point of the arming rule - the time is the player's.
+            // Five minutes of doing nothing, longer than the whole table could hold: the clock has not moved
+            // a tick. That is the arming rule's point - the time is the player's.
             Sim.Tick(world, (int)(5 * 60 * SimConfig.TickRate));
 
             Assert.AreEqual(0, world.Waves.CurrentWave, "a run nobody has built in never starts a wave");
@@ -38,8 +35,8 @@ namespace Facet.Tests
             Assert.AreEqual(0, world.Enemies.AliveCount);
             Assert.AreEqual(GameStatus.Playing, world.Status, "waiting to build is neither winning nor losing");
 
-            // The first building arms it. A belt counts: a belt is something the player built, and waiting
-            // for a machine would leave the clock stopped while they laid the line that machine feeds.
+            // The first building arms it. A belt counts, since waiting for a machine would leave the clock
+            // stopped while they laid the line that machine feeds.
             Assert.IsTrue(world.TryPlaceBelt(new Int2(11, 12), Dir.East), "a belt to arm the clock with");
             world.Tick(InputCommand.None);
 
@@ -47,9 +44,8 @@ namespace Facet.Tests
             Assert.AreEqual(countdown - SimConfig.TickDt, world.Waves.IntermissionRemaining, Sim.Tol,
                 "counting from the tick the building landed on");
 
-            // One tick short of the whole countdown from that building: still waiting. Rounded up the
-            // way WaveDirector.SecondsToTicks does, so a fractional table value cannot leave this
-            // budget short by a tick the follow-up does not cover.
+            // One tick short of the whole countdown: still waiting. Rounded up the way WaveDirector.SecondsToTicks
+            // does, so a fractional table value cannot leave this budget short by a tick the follow-up misses.
             Sim.Tick(world, (int)System.MathF.Ceiling(countdown * SimConfig.TickRate) - 2);
             Assert.AreEqual(0, world.Waves.CurrentWave, "a countdown that has not run out has not started it");
 
@@ -58,8 +54,8 @@ namespace Facet.Tests
             Assert.AreEqual(WavePhase.Running, world.Waves.Phase, "the clock is on the wave now");
             Assert.IsFalse(world.Waves.Finished, "with the whole table still ahead of it");
 
-            // The group's own delay, generously rounded: the schedule is a float countdown, so it can
-            // land a tick either side of the number in the table.
+            // The group's own delay, generously rounded: the schedule is a float countdown, so it can land
+            // a tick either side of the table's number.
             int delay = (int)(world.Map.Waves[0].Groups[0].FirstDelay * SimConfig.TickRate);
             Sim.Tick(world, delay + 5);
 
@@ -70,8 +66,8 @@ namespace Facet.Tests
         [Test]
         public void FirstWave_CanBeCalledEarly_BeforeAnyBuildingArmsIt()
         {
-            // The other lever, unchanged: N starts the wave now, and on a Held opening that means before a
-            // single building exists. Nothing forces a player to wait for the clock they started.
+            // The other lever: N starts the wave now, and on a Held opening that means before a single
+            // building exists - nothing forces a player to wait for the clock they started.
             SimWorld world = Sim.Rig();
 
             world.Waves.StartNextWave();
@@ -89,10 +85,9 @@ namespace Facet.Tests
         [Test]
         public void EveryWave_CountsDown_AndStartsItself_TheFirstIncluded()
         {
-            // The line the arming rule draws: it only holds the opening. The map is built here because the
-            // rig's opening has its own test above, and this one's first countdown is 0 - the only wait
-            // that can open on the very tick it is armed. The intermission under test is the one before
-            // wave 2, which is the table's 3.
+            // The line the arming rule draws: it only holds the opening. This map's first countdown is 0 (the
+            // only wait that opens on the tick it is armed) and the intermission under test is wave 2's, the
+            // table's 3; the rig's opening has its own test above.
             var map = new MapDefinition("two waves", 20, 12, Sim.TestCircles,
                 new ShapePatch[0],
                 new[] { new Int2(1, 1) },
@@ -129,10 +124,9 @@ namespace Facet.Tests
         [Test]
         public void N_StartsTheNextWaveEarly_AndOnlyOnce()
         {
-            // Through InputCommand, not around it: pressing N is the input source latching a one-shot
-            // into the command, and the tick that consumes it is the only thing that can turn that into
-            // a wave. Calling StartNextWave() directly tests the director and leaves the wiring
-            // untested. On the rig the press cuts the opening's sixty seconds down to nothing.
+            // Through InputCommand, not around it: pressing N latches a one-shot into the command, and the tick
+            // that consumes it is what turns that into a wave - calling StartNextWave() directly would leave the
+            // wiring untested. On the rig the press cuts the opening's sixty seconds to nothing.
             SimWorld world = Sim.Rig();
 
             world.Tick(new InputCommand(startWavePressed: true));
@@ -146,10 +140,9 @@ namespace Facet.Tests
         [Test]
         public void TheHudButtonsRequest_StartsTheWave_AndIsDroppedWhilePaused()
         {
-            // The HUD's button cannot press a key, so it asks the world for the same thing the N key
-            // latches into a command. A request is one tick wide and is never queued: one that lands
-            // while the world is stopped (paused, or already won) is thrown away, so clicking the
-            // button and pausing in the same breath cannot start a wave the player never asked for.
+            // The HUD's button cannot press a key, so it asks the world for the same thing N latches into a
+            // command. A request is one tick wide and never queued: one landing while the world is stopped
+            // (paused, or already won) is thrown away, so it cannot start a wave the player never asked for.
             SimWorld world = Sim.Rig();
 
             Assert.AreEqual(WavePhase.Held, world.Waves.Phase, "the opening waits for a building or a request");
@@ -174,13 +167,10 @@ namespace Facet.Tests
         [Test]
         public void N_OnTheTickTheWaveIsCleared_DoesNotReopenAFinishedRun()
         {
-            // The last enemy dies in the enemies step of the tick whose wave step then clears the
-            // wave, so a press arriving in that tick finds a wave still on the clock unless the
-            // command is applied after the wave step. On a one-wave map the clear is also the win,
-            // and the press must not reopen it. The map is built here - the claim is about the clock's
-            // last tick, not about how many waves a map ships - and the clearing tick is found by
-            // running the identical rig once: the same map and the same commands reproduce it exactly,
-            // which is the property the replay test pins.
+            // The last enemy dies in the enemies step of the tick whose wave step then clears the wave, so a
+            // press arriving in that tick finds a wave still on the clock unless the command is applied after the
+            // wave step. On a one-wave map the clear is also the win, and the press must not reopen it. The
+            // clearing tick is found by running the identical rig once - the same map and commands reproduce it.
             int clearTick = ClearingTick();
 
             SimWorld world = DefendedAndStarted();
@@ -201,12 +191,9 @@ namespace Facet.Tests
             Assert.IsFalse(world.Waves.HasWaveToStart, "and nothing is left to start");
         }
 
-        /// <summary>A one-wave map with a gun beside its one lane, fed by hand every tick: the wave
-        /// walks in, the gun kills it, and the clear is the win. The minimal rig that can actually end.
-        /// The rig ships a 0-second opening and builds its gun before any tick runs, so the clock is
-        /// armed and spent on the very first tick - which is the tick this helper ticks, press or no
-        /// press; the press rides the same tick, and the determinism of that tick is what the tests
-        /// here are about.</summary>
+        /// <summary>A one-wave map with a gun beside its lane, fed by hand each tick: the wave walks in, the
+        /// gun kills it, the clear is the win. Its 0-second opening and pre-built gun arm and spend the clock on
+        /// the first tick - which this helper ticks, press or no press - and whose determinism these tests pin.</summary>
         private static SimWorld DefendedAndStarted()
         {
             SimWorld world = Sim.OneWaveWorld();
@@ -246,11 +233,9 @@ namespace Facet.Tests
         [Test]
         public void OneFedCannon_HoldsTheWave_AndAJamInItsLineDoesNot()
         {
-            // The wave, two ways. The defence is the same build both times - a drill on the rig's second
-            // vein, a decomposer mid-line, and a cannon covering the lane into the Core's north face,
-            // eating what the line delivers. The only difference is one jammed segment in the input run.
-            // The claim is wave 1's: a fed cannon holds it and hands the clock to the intermission; a
-            // jammed line means the Core pays for it.
+            // The wave, two ways: the same defence both times (a drill on the rig's second vein, a decomposer
+            // mid-line, and a cannon covering the lane into the Core's north face), differing only in one jammed
+            // segment. A fed cannon holds the wave and hands the clock to the intermission; a jammed line loses.
             SimWorld held = Sim.Rig();
             Sim.BuildRigDefence(held, out _);
             Prime(held);
@@ -267,8 +252,8 @@ namespace Facet.Tests
             SimWorld jammed = Sim.Rig();
             Sim.BuildRigDefence(jammed, out Int2 trunk);
 
-            // Jammed before the line is primed: this is a line that never delivered anything, which is
-            // what a wrong-shape delivery earlier in the run leaves behind.
+            // Jammed before the line is primed: a line that never delivered anything, what a wrong-shape
+            // delivery earlier in the run leaves behind.
             Assert.IsTrue(jammed.Belts.TryJam(trunk), "one wrong-shape delivery, and that is the whole run");
             jammed.Waves.StartNextWave();
             for (int i = 0; i < 180 * SimConfig.TickRate && jammed.Status == GameStatus.Playing; i++)
@@ -286,10 +271,9 @@ namespace Facet.Tests
         }
 
         /// <summary>
-        /// Let the line fill before calling the wave, which is what a player does with the time the
-        /// opening countdown gives them: a belt is 1 tile/s, so the drill &gt; decomposer &gt; gun route,
-        /// plus the decomposer's 1.5 s split, is a handful of seconds of latency before the first shot is
-        /// even possible - and the rig's opening allows sixty of them.
+        /// Let the line fill before calling the wave, as a player would with the opening countdown's time: the
+        /// drill &gt; decomposer &gt; gun route plus the decomposer's 1.5 s split takes a few seconds before the
+        /// first shot is possible, and the rig's opening allows sixty.
         /// </summary>
         private static void Prime(SimWorld world) => Sim.Tick(world, (int)(35 * SimConfig.TickRate));
 
@@ -332,9 +316,8 @@ namespace Facet.Tests
         [Test]
         public void FullRun_ReplaysIdentically_FromTheSameCommands()
         {
-            // The whole point of an engine-free simulation: the same map and the same input produce
-            // the same run, so a bug is reproducible from a save plus a command log. A hash-order or
-            // float-order leak anywhere in the systems would show up here and nowhere else.
+            // The point of an engine-free simulation: the same map and input produce the same run, so a bug is
+            // reproducible from a save plus a command log. A hash- or float-order leak would show up only here.
             SimWorld a = Sim.Rig();
             SimWorld b = Sim.Rig();
             Rig(a);
@@ -342,9 +325,8 @@ namespace Facet.Tests
 
             for (int i = 0; i < 100 * SimConfig.TickRate; i++)
             {
-                // The wave is started once the ammo line has had time to fill: a cannon that is still
-                // waiting for its first half-circle would watch the Core fall without firing, and the
-                // test would prove determinism about a run that never fought.
+                // The wave starts once the ammo line has filled: a cannon still waiting for its first half-circle
+                // would watch the Core fall without firing, proving determinism about a run that never fought.
                 var cmd = new InputCommand(cursorCell: new Int2(10, 15), startWavePressed: i == 40 * SimConfig.TickRate);
                 a.Tick(cmd);
                 b.Tick(cmd);
@@ -362,8 +344,8 @@ namespace Facet.Tests
             Assert.AreEqual(a.Projectiles.Count, b.Projectiles.Count);
         }
 
-        /// <summary>The same fixed build in both worlds, so the replay test fights something instead of
-        /// watching an empty map - the rig's own opening, paid for out of the rig's own budget.</summary>
+        /// <summary>The same fixed build in both worlds, so the replay test fights something instead of watching
+        /// an empty map - the rig's own opening, paid for out of the rig's own budget.</summary>
         private static void Rig(SimWorld world) => Sim.BuildRig(world, out _);
     }
 }

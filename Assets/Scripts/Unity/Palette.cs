@@ -4,21 +4,16 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// Everything FACET draws, as one asset: the shared material, every colour and outline
-    /// thickness, and the per-view geometry (radii, insets, chevrons, alphas) and layer depths.
-    /// The design doc's art rule is "colour says which side it is on, polygon count says how
-    /// damaged it is" - so this asset is the single source of truth for the look of the game,
-    /// and a re-skin is a duplicate of this asset rather than a code change. One number is deliberately
-    /// not here: an enemy's body radius is derived from the simulation's spacing rule
-    /// (<see cref="Balance.EnemySpacing"/>), so the drawn body and the room a walker keeps cannot drift
-    /// apart.
+    /// <summary>Everything FACET draws, as one asset: the shared material, every colour and outline
+    /// thickness, the per-view geometry (radii, insets, chevrons, alphas) and layer depths. The art rule
+    /// "colour says which side it is on, polygon count says how damaged it is" makes this the single
+    /// source of truth for the look, so a re-skin is a duplicate of this asset, not a code change. One
+    /// number is deliberately absent: an enemy's body radius derives from
+    /// <see cref="Balance.EnemySpacing"/>, so the drawn body and the room a walker keeps cannot drift.
     ///
-    /// Palette is light: a near-white map on a slightly darker void, with dark flat shapes and one
-    /// dark outline, so a hundred small coloured parts stay readable against the ground. Thicknesses
-    /// are in screen pixels because FACET has no textures and no fixed zoom: a width that is constant
-    /// in world units would be wrong at every zoom but one.
-    /// </summary>
+    /// Palette is light: a near-white map on a darker void, dark flat shapes and one dark outline, so a
+    /// hundred small coloured parts stay readable. Thicknesses are in screen pixels because FACET has no
+    /// textures and no fixed zoom; a constant world-unit width would be wrong at every zoom but one.</summary>
     [CreateAssetMenu(menuName = "FACET/Palette", fileName = "Palette")]
     public sealed class Palette : ScriptableObject
     {
@@ -157,6 +152,11 @@ namespace Facet.Game
         public Layer ProjectileLayer = new Layer(-0.10f, 6);
         public Layer CursorLayer = new Layer(-0.2f, 10);
 
+        /// <summary>Where the off-screen locator draws: in front of the placement ghost, so the arrow is not
+        /// hidden by it. It is the only view whose geometry is screen geometry, sitting at the open screen's
+        /// edge whatever the map does, so it is never confused with a tile.</summary>
+        public Layer RadarLayer = new Layer(-0.3f, 12);
+
         [Header("Belts")]
         public BeltLook Belts = new BeltLook();
 
@@ -181,6 +181,9 @@ namespace Facet.Game
         [Header("Placement ghost")]
         public CursorLook Cursor = new CursorLook();
 
+        [Header("Out-of-view locator")]
+        public RadarLook Radar = new RadarLook();
+
         [Header("Per-content visual overrides")]
         [Tooltip("Tick an entry's Override to replace that content's built-in look - a sprite for the " +
             "Core, the shapes, an enemy or a machine body, or a different procedural silhouette/colour. " +
@@ -188,14 +191,14 @@ namespace Facet.Game
             "Assets/Data/Palette.asset to re-skin one thing without touching code.")]
         public VisualCatalog Visuals = new VisualCatalog();
 
-        /// <summary>Body colour for a machine. Keyed on what the machine <em>does</em> rather than on
-        /// its tile kind, so the second gun reads as a turret the moment its row says so.</summary>
+        /// <summary>Body colour for a machine, keyed on what it <em>does</em> rather than its tile kind,
+        /// so the second gun reads as a turret the moment its row says so.</summary>
         public Color BodyColor(BehaviorKind behavior)
             => behavior == BehaviorKind.Turret ? TurretBody : MachineBody;
 
-        /// <summary>Body colour for an enemy. Every kind is named - a third enemy does not get to
-        /// borrow the Spike's colour and a player's "why does it look the same" question: the switch
-        /// says there is no colour for it yet. The roster test walks the same enum.</summary>
+        /// <summary>Body colour for an enemy; every kind is named, so a third enemy cannot borrow the
+        /// Spike's colour - the switch says there is no colour for it yet. The roster test walks the same
+        /// enum.</summary>
         public Color EnemyColor(EnemyKind kind)
         {
             switch (kind)
@@ -225,11 +228,9 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>
-        /// The shipped silhouette of each shape - the one place that decides what a shape looks like.
-        /// A patch in the ground, an item on a belt, a machine's held item and an enemy's weakness all
-        /// come through here, so a new mineral is a colour and a case rather than four drawings.
-        /// </summary>
+        /// <summary>The one place that decides a shape's shipped silhouette: a ground patch, a belt item, a
+        /// machine's held item and an enemy's weakness all come through here, so a new mineral is a colour
+        /// and a case rather than four drawings.</summary>
         public ProcShape ProcShapeOf(ShapeType shape)
         {
             switch (shape)
@@ -255,25 +256,21 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>
-        /// The icon set every view that draws a shape as an icon builds its set from - a belt item, a
-        /// ground patch, an enemy's weakness, a machine's held item, a shot. One set covers every shape
-        /// in the content table, so adding a mineral does not add a parameter here.
-        /// </summary>
+        /// <summary>The icon set every view that draws a shape as an icon builds from - a belt item, a
+        /// ground patch, an enemy's weakness, a machine's held item, a shot. One set covers every shape in
+        /// the content table.</summary>
         public ShapeIconSet ShapeIcons(float radius, float outlinePixels)
             => new ShapeIconSet(this, Visuals.Items, radius, outlinePixels);
 
-        /// <summary>The material every view shares: the assigned asset when there is one, otherwise
-        /// a runtime-built fallback on the vertex-colour shader - which is what keeps a scene with no
-        /// Palette wired, and the PlayMode tests, runnable.</summary>
+        /// <summary>The material every view shares: the assigned asset, or a runtime-built fallback on the
+        /// vertex-colour shader, which keeps an unwired scene and the PlayMode tests runnable.</summary>
         public Material ResolveViewMaterial()
         {
             return ViewMaterial != null ? ViewMaterial : ProcMesh.UnlitMaterial();
         }
 
-        /// <summary>Where one view draws: its z-plane and its sorting order within it. Tile
-        /// coordinates are world coordinates, so a view at the wrong Z drifts away from what the
-        /// cursor clicks on.</summary>
+        /// <summary>Where one view draws: its z-plane and sorting order. Tile coordinates are world
+        /// coordinates, so a view at the wrong Z drifts from what the cursor clicks on.</summary>
         [Serializable]
         public sealed class Layer
         {
@@ -382,8 +379,7 @@ namespace Facet.Game
         public sealed class EnemyLook
         {
             /// <summary>Body radius in tiles: half of <see cref="Balance.EnemySpacing"/>, the simulation's
-            /// own rule for how close two walkers may stand - so a re-skinned palette cannot make two
-            /// enemies overlap. A 0.84-wide body fills a walkable lane without hiding the tile grid.</summary>
+            /// rule for how close two walkers may stand, so a re-skin cannot make two enemies overlap.</summary>
             public float BodyRadius => Balance.EnemySpacing * 0.5f;
 
             [Tooltip("Weakness-icon radius. Roughly half the body, so it reads as a label, not a second enemy.")]
@@ -454,6 +450,74 @@ namespace Facet.Game
             public float ChevronLength = 0.26f;
             public float ChevronBack = 0.16f;
             public float ChevronHalfWidth = 0.22f;
+        }
+
+        /// <summary>The out-of-view locator: what an arrow pointing at something the player cannot see is
+        /// made of. Every size is in <em>screen pixels</em> rather than tiles, because the arrow is a mark on
+        /// the window: a fixed world-unit size would shrink to nothing at exactly the zoom where the player
+        /// most needs to be told a wave is off screen. The one world-unit number is the fade's distance band,
+        /// which is the map's, in tiles.</summary>
+        [Serializable]
+        public sealed class RadarLook
+        {
+            [Tooltip("How far in from the edge of the open screen an arrow sits. The panels' own strips are " +
+                "already given up by the locator's rectangle; this is the clearance so an arrow never " +
+                "touches the card it just stepped around.")]
+            public float EdgeInsetPixels = 16f;
+
+            [Tooltip("Arrow length, tip to base, in pixels.")]
+            public float MarkerLengthPixels = 22f;
+
+            [Tooltip("Arrow half-width at its base, in pixels.")]
+            public float MarkerHalfWidthPixels = 11f;
+
+            [Tooltip("Two enemies whose arrows would land this close together on the edge are one arrow: a " +
+                "wave walking in from one door is a single piece of news, not sixteen.")]
+            public float MergePixels = 46f;
+
+            [Tooltip("Cap on the arrows drawn at once. Beyond it a subject joins the nearest arrow of its " +
+                "kind rather than adding another, and the count that arrow carries stays true.")]
+            public int MaxMarkers = 12;
+
+            [Tooltip("One dot per enemy the arrow stands for, stacked along the edge - up to this many, of " +
+                "this size, this far apart. Past the cap the dots stop; a row of pips an edge cannot hold is " +
+                "a row of pips nobody can count.")]
+            public int MaxPips = 6;
+            public float PipRadiusPixels = 3f;
+            public float PipGapPixels = 8f;
+
+            [Tooltip("The arrow is brightest this close to what the player is looking at and dimmest this " +
+                "far: distance is what says whether an off-screen wave is news or an emergency.")]
+            public float NearTiles = 14f;
+            public float FarTiles = 48f;
+            public float AlphaNear = 0.95f;
+            public float AlphaFar = 0.35f;
+
+            [Tooltip("An arrow whose enemies are hitting something right now does not fade with distance: it " +
+                "pulses at full strength over this many ticks, because that is the one arrow the player has " +
+                "to look at.")]
+            public int UrgentPulseTicks = 20;
+            public float UrgentPulseLow = 0.45f;
+
+            [Tooltip("The Core's own arrow: the run's one home marker, in the Core's colour and deliberately " +
+                "quieter than a threat - it is navigation, not a warning.")]
+            public float CoreMarkerScale = 0.8f;
+            public float CoreAlpha = 0.5f;
+
+            [Tooltip("How long after the Core is hit the danger frame holds, in ticks: long enough to see at " +
+                "any frame rate, short enough that it marks the hit rather than the aftermath.")]
+            public int DangerTicks = 18;
+
+            [Tooltip("The danger frame: the band drawn around the open screen while the Core is being chewed " +
+                "off camera, and how loud it is. It says look back without saying where, so it stays thin and " +
+                "translucent - the arrows are what say where.")]
+            public float DangerThicknessPixels = 10f;
+            public float DangerAlpha = 0.3f;
+
+            [Tooltip("A jam marker: the square's half size in pixels. A jam is the one thing off-screen the " +
+                "player can fix with a single click, so it is marked in the red a jammed segment wears on the " +
+                "belt itself.")]
+            public float JamMarkerHalfPixels = 8f;
         }
     }
 }

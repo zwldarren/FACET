@@ -7,12 +7,10 @@ using UnityEngine;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The map asset and the conversion that makes it a map.
-    ///
-    /// The asset is the Editor's carrier: what a designer paints, and what the painting window writes
-    /// into. The simulation never sees it - it sees the <see cref="MapDefinition"/> <see cref="MapAsset.ToCore"/>
-    /// hands over - so the whole of this file is about that boundary being exact: painted cells in, cells
-    /// and patches out, and nothing invented on the way.
+    /// The map asset and the conversion that makes it a map. The asset is the Editor's carrier - what a designer
+    /// paints and the painting window writes into - while the simulation only sees the <see cref="MapDefinition"/>
+    /// <see cref="MapAsset.ToCore"/> hands over. This file is about that boundary being exact: painted cells in,
+    /// cells and patches out, nothing invented on the way.
     /// </summary>
     public class MapAssetTests
     {
@@ -52,9 +50,8 @@ namespace Facet.Tests
         [Test]
         public void ToCore_APaintedMap_IsTheMapTheSimulationRunsOn()
         {
-            // The Core takes the block at (2,2)..(5,5), so everything painted here is deliberately
-            // outside it: the Core keeps its tiles, and a rock dropped on one is a map error rather than
-            // a test of the conversion.
+            // The Core takes the block at (2,2)..(5,5), so everything painted here is deliberately outside it:
+            // the Core keeps its tiles, and a rock dropped on one is a map error, not a test of the conversion.
             _asset.Paint(4, 7, TerrainKind.Rock);
             _asset.Paint(5, 7, TerrainKind.Rock);
             _asset.Paint(7, 8, TerrainKind.Water);
@@ -79,8 +76,8 @@ namespace Facet.Tests
             Assert.AreEqual(TerrainKind.Ground, map.TerrainAt(new Int2(4, 4)),
                 "the Core's own tiles are not terrain, however the map is painted");
 
-            // A painted vein crosses as one rectangle per row it spans, which is the shape the runtime
-            // states ore in - and it carries the mineral, because ore without one is not a patch at all.
+            // A painted vein crosses as one rectangle per row it spans - the shape the runtime states ore in -
+            // and it carries the mineral, because ore without one is not a patch at all.
             Assert.AreEqual(1, map.Patches.Length, "two adjacent cells in a row are one patch");
             Assert.AreEqual(new Int2(8, 2), map.Patches[0].Origin);
             Assert.AreEqual(2, map.Patches[0].Width);
@@ -92,8 +89,8 @@ namespace Facet.Tests
             Assert.AreEqual(6, map.Waves[0].Total, "four Spikes and two Bulwarks");
             Assert.AreEqual(0, map.Waves[1].Total, "and the second wave is the empty one it was authored as");
 
-            // And the map it describes is one a world can actually be built on: the point of the
-            // conversion is that both halves of the game agree about it.
+            // And the map it describes is one a world can actually be built on: the point of the conversion is
+            // that both halves of the game agree about it.
             var world = new SimWorld(map, new SimConfig());
             Assert.AreEqual(new Int2(2, 2), world.Core.Cell);
             Assert.AreEqual(TerrainKind.Rock, world.Terrain.KindAt(new Int2(5, 7)));
@@ -107,9 +104,8 @@ namespace Facet.Tests
         [Test]
         public void ToCore_AMapWithNoObstacles_HandsOverNoTerrainArrayAtAll()
         {
-            // "All plain ground" is what a null terrain array already means to the runtime, so a map
-            // painted purely with ground hands over nothing rather than a grid of zeroes. It is the same
-            // choice the shipped maps make, and it keeps the two forms of the same map identical.
+            // A null terrain array already means "all plain ground" to the runtime, so a map painted purely with
+            // ground hands over nothing rather than a grid of zeroes - the same choice the shipped maps make.
             MapDefinition map = _asset.ToCore();
 
             Assert.IsNull(map.Terrain, "nothing was painted, so there is no terrain to state");
@@ -131,8 +127,8 @@ namespace Facet.Tests
             Assert.AreEqual(1, painted.Patches.Length);
             Assert.AreEqual(ShapeType.Circle, painted.Patches[0].Shape);
 
-            // Painting over it is what a designer does when they change their mind, and what they must
-            // not be left with is a rock that still yields a mineral.
+            // Painting over it is what a designer does when they change their mind: what they must not be left
+            // with is a rock that still yields a mineral.
             _asset.Paint(3, 3, TerrainKind.Rock);
 
             Assert.AreEqual(0, _asset.Ore.Length, "the mineral went with the vein");
@@ -142,8 +138,8 @@ namespace Facet.Tests
         [Test]
         public void PaintOre_TwiceOnOneCell_KeepsOneCell()
         {
-            // The window paints with a dragged pointer, so the same cell arrives more than once. A
-            // second paint is a change of mineral, not a second vein.
+            // The window paints with a dragged pointer, so the same cell arrives more than once: a second
+            // paint is a change of mineral, not a second vein.
             _asset.PaintOre(3, 3, ShapeType.Circle);
             _asset.PaintOre(3, 3, ShapeType.Square);
 
@@ -156,9 +152,8 @@ namespace Facet.Tests
         [Test]
         public void Validate_AVeinWrittenByTheBrush_IsNotAProblem()
         {
-            // The two rules the writer exists to keep: the array never says ore, and the list never
-            // names a cell twice. A brush stroke that broke either would be a map error no designer
-            // could see - so the same call that paints is held to them.
+            // The two rules the writer keeps: the array never says ore, and the list never names a cell twice. A
+            // brush stroke breaking either would be a map error no designer could see, so painting is held to them.
             _asset.PaintOre(7, 7, ShapeType.Circle);
             List<MapProblem> problems = _asset.Validate();
 
@@ -169,8 +164,8 @@ namespace Facet.Tests
         [Test]
         public void Validate_ATerrainArrayHandwrittenToSayOre_IsReported()
         {
-            // What a hand edit of the array buys: nothing, because the ore list is what the conversion
-            // claims cells from - so it is named rather than silently ignored.
+            // What a hand edit of the array buys: nothing, because the ore list is what the conversion claims
+            // cells from - so it is named rather than silently ignored.
             _asset.Terrain = TerrainLayout.Rects(12, 10, new TerrainRect(new Int2(7, 7), 1, 1, TerrainKind.Ore));
 
             AssertProblem(_asset.Validate(), MapProblemKind.OreInTerrain, new Int2(7, 7));
@@ -179,8 +174,8 @@ namespace Facet.Tests
         [Test]
         public void Validate_TwoEntriesForOneCell_IsReportedAsTheSecondOneBeingIgnored()
         {
-            // Hand-appending an entry for a cell the list already has is an edit that does nothing: the
-            // first entry is the one that counts, here and in the conversion alike.
+            // Hand-appending an entry for a cell the list already has is an edit that does nothing: the first
+            // entry is the one that counts, here and in the conversion alike.
             _asset.Ore = new[]
             {
                 new MapAsset.OreCell { Cell = new Vector2Int(7, 7), Shape = ShapeType.Circle },
@@ -231,9 +226,8 @@ namespace Facet.Tests
         [Test]
         public void Resize_DoesNotShearTheMap()
         {
-            // The terrain array is a flat grid, so the naive "copy the first n cells" resize turns a
-            // wider map into a diagonal smear: row 0 of the old map becomes row 0 and part of row 1 of
-            // the new one. This is the test that would catch it.
+            // The terrain array is a flat grid, so a naive "copy the first n cells" resize turns a wider map into
+            // a diagonal smear: row 0 of the old map runs into row 1 of the new. This test catches it.
             _asset.Paint(0, 0, TerrainKind.Rock);
             _asset.Paint(0, 1, TerrainKind.Water);
 
@@ -274,10 +268,9 @@ namespace Facet.Tests
 
         // ------------------------------------------------------------------ the structural edits
         //
-        // The lists used to be the interface: every editor that wanted a door appended one by hand,
-        // copy to a List, reassign the array, remember the bounds and the dedupe - and nothing said
-        // back. The operations now own the dance and answer "changed", which is what automated tests
-        // can finally reach: the stroke surfaces used to be the only proof these rules held.
+        // The lists used to be the interface: editors appended doors by hand, copied to a List, reassigned the
+        // array and remembered the bounds and dedupe, with nothing to answer "changed". The operations now own
+        // that and return whether anything changed, which automated tests can reach.
 
         [Test]
         public void StructuralEdits_AnswerWhetherAnythingChanged()
@@ -325,9 +318,8 @@ namespace Facet.Tests
         [Test]
         public void Queries_AnswerAboutTheAsset_AndWriteNothing()
         {
-            // A repaint used to be able to resize the map on its way through Validate - a mutation
-            // wearing a query's signature, with no Undo entry and no dirty flag. Everything on the
-            // read path now floors and lays out for itself, inside the answer, not inside the asset.
+            // A repaint used to resize the map on its way through Validate - a mutation wearing a query's
+            // signature, no Undo entry, no dirty flag. The read path now floors and lays out inside its answer.
             _asset.Width = 0;
             _asset.Height = 5;
             _asset.Terrain = new TerrainKind[3];
@@ -367,9 +359,9 @@ namespace Facet.Tests
         [Test]
         public void TheHash_IsThePictureNotTheAuthoringOrder()
         {
-            // The same map, two hand-written spellings: the ore list in the other insertion order,
-            // each carrying a junk entry for a cell off the map. What draws is one picture either
-            // way, and the digest used to read the raw list - it hashed the junk and the order.
+            // The same map, two hand-written spellings: the ore list in the other insertion order, each with a
+            // junk entry off the map. What draws is one picture either way, but the digest used to hash the raw
+            // list - junk and order included.
             _asset.PaintOre(2, 6, ShapeType.Circle);
             _asset.PaintOre(3, 6, ShapeType.Circle);
             int forward = _asset.ContentHash();
@@ -395,9 +387,9 @@ namespace Facet.Tests
         [Test]
         public void TheWalk_ClaimsCells_TheWayTheConversionClaimsThem()
         {
-            // The conversion's rule is that the FIRST ore entry for a cell counts, whatever it says;
-            // the walk shares that rule rather than owning a second one, because the whole point of
-            // one canonical walk is that the picture and the patches are the same enumeration twice.
+            // The conversion's rule is that the FIRST ore entry for a cell counts, whatever it says; the walk
+            // shares that rule, since one canonical walk means the picture and the patches are the same
+            // enumeration twice.
             _asset.Ore = new[]
             {
                 new MapAsset.OreCell { Cell = new Vector2Int(5, 5), Shape = ShapeType.None },
@@ -411,9 +403,8 @@ namespace Facet.Tests
         [Test]
         public void TheWalk_KeepsTheDoorPositionTheWaveTableNames()
         {
-            // Doors are drawn numbered with the position a wave group names them by, so an off-map
-            // door is invisible but still occupies its position: dropping it from the walk would
-            // renumber every door behind it against the wave table.
+            // Doors are drawn numbered by the position a wave group names them by, so an off-map door is
+            // invisible but still occupies its slot: dropping it from the walk would renumber every door behind it.
             _asset.SpawnPoints = new[] { new Vector2Int(0, 9), new Vector2Int(40, 2), new Vector2Int(11, 0) };
             DrawnMap drawn = _asset.DrawableView();
 
@@ -427,8 +418,8 @@ namespace Facet.Tests
         [Test]
         public void TheWalk_IsWhatTheConversionRunsOn()
         {
-            // Every cell the picture draws and every cell the runtime gets are the same answer - the
-            // agreement the four hand-walks used to be hoped for and never tested.
+            // Every cell the picture draws and every cell the runtime gets are the same answer - the agreement
+            // the four hand-walks used to be hoped for and never tested.
             _asset.Paint(1, 8, TerrainKind.Void);
             _asset.PaintOre(6, 1, ShapeType.HalfSquare);
 
@@ -447,8 +438,8 @@ namespace Facet.Tests
             Assert.AreEqual(ShapeType.None, drawn.MineralAt(0, 0), "plain ground carries no mineral");
         }
 
-        /// <summary>The problem of that kind at that cell, so a test asks about the one rule it broke
-        /// rather than about the whole list - these maps carry other problems on purpose.</summary>
+        /// <summary>The problem of that kind at that cell, so a test asks about the one rule it broke rather
+        /// than the whole list - these maps carry other problems on purpose.</summary>
         private static void AssertProblem(List<MapProblem> problems, MapProblemKind kind, Int2 cell)
         {
             for (int i = 0; i < problems.Count; i++)
@@ -457,8 +448,8 @@ namespace Facet.Tests
             Assert.Fail("expected a " + kind + " problem at " + cell + ", got:\n" + Describe(problems));
         }
 
-        /// <summary>No problem of that kind anywhere: the rules about a vein being written half at a time
-        /// are asked as an absence, because the whole point is that a brush cannot reach them.</summary>
+        /// <summary>No problem of that kind anywhere: the rules about a vein written half at a time are asked
+        /// as an absence, because the point is that a brush cannot reach them.</summary>
         private static void AssertNoProblem(List<MapProblem> problems, MapProblemKind kind)
         {
             for (int i = 0; i < problems.Count; i++)

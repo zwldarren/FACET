@@ -3,26 +3,19 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// The cursor: with a building selected, the ghost that shows where the next placement would land,
-    /// whether it would be allowed there, and what it would be: the belt's chevron, a machine's body and
-    /// facing, and a turret's range ring. Green means buildable, amber means the stockpile cannot cover
-    /// it, red means something is already there (or, for a drill, that there is no shape patch under it)
-    /// - which is the feedback that makes dragging a run across an existing build predictable rather
-    /// than surprising.
-    ///
-    /// With nothing selected there is no ghost, because nothing is being built: the cursor *reads*. The
-    /// tile under the pointer carries a border - the accent over anything worth reading (a building, a
-    /// vein in the ground, a wave's doorway), a plain edge over bare ground - and whatever the info card
-    /// is describing stays marked while the mouse moves away from it, so the card and the map cannot
-    /// disagree about which building "it" is. A turret's range ring follows the read building too.
+    /// <summary>The cursor. With a building selected it is the ghost that shows where the next placement
+    /// would land, whether it would be allowed, and what it would be: the belt's chevron, a machine's body
+    /// and facing, a turret's range ring. Green is buildable, amber means the stockpile cannot cover it, red
+    /// means something is already there (or, for a drill, no shape patch under it) - feedback that makes
+    /// dragging a run across an existing build predictable. With nothing selected there is no ghost, because
+    /// nothing is being built: the cursor reads. The tile under the pointer carries a border - the accent over
+    /// anything worth reading (a building, a vein, a doorway), a plain edge over bare ground - and the info
+    /// card's subject stays marked while the mouse moves away, so the card and the map cannot disagree.
     ///
     /// Its rebuild reasons are its own - the cursor cell and whether it is worth reading, the selected
-    /// building and facing, whether the placement is valid and affordable, the inspected cell and what it
-    /// holds - plus the gate's zoom reason, because the border and the ring are screen-space constants.
-    /// The stockpile moving also dirties it: a cell the player cannot afford turns green the tick a
-    /// delivery banks.
-    /// </summary>
+    /// building and facing, validity and affordability, the inspected cell and its contents - plus the gate's
+    /// zoom reason, since the border and the ring are screen-space constants. The stockpile moving also
+    /// dirties it: a cell the player cannot afford turns green the tick a delivery banks.</summary>
     [DefaultExecutionOrder(120)]
     public sealed class CursorView : MeshView
     {
@@ -53,8 +46,8 @@ namespace Facet.Game
             bool valid = kind.HasValue && visible && World.CanPlace(kind.Value, cell);
             bool affordable = kind.HasValue && World.Economy.CanAfford(kind.Value);
 
-            // What the inspected cell holds, so the marker and the ring follow a building being placed
-            // or removed under the pin rather than describing the tile it used to be.
+            // What the inspected cell holds, so the marker and ring follow a building placed or removed under the
+            // pin rather than describing the tile it used to be.
             bool pinned = World.CanInspect(inspected);
             BuildKind? pinnedTurret = null;
             if (pinned && World.Machines.TryGet(inspected, out MachineState machine) &&
@@ -83,8 +76,7 @@ namespace Facet.Game
 
         protected override void AppendFrame(in ViewFrame frame)
         {
-            // Nothing selected: no ghost to draw, because the next click builds nothing. What the
-            // cursor draws instead is what it would read.
+            // Nothing selected: no ghost, because the next click builds nothing - instead draw what it would read.
             if (!_seenKind.HasValue)
             {
                 if (_seenVisible) AppendReadBorder(_seenCell, _seenReadable, pinned: false);
@@ -123,9 +115,9 @@ namespace Facet.Game
             }
             else
             {
-                // A machine is a single tile with a facing, so the ghost is its footprint plus the arrow
-                // it will be built facing - except the machines with no facing, whose ports are read off
-                // the belts around them, where an arrow would promise what Q/E cannot turn.
+                // A machine is one tile with a facing, so the ghost is its footprint plus the build arrow - except the
+                // machines with no facing, whose ports are read off surrounding belts, where an arrow would promise
+                // what Q/E cannot turn.
                 Color body = edge;
                 body.a = look.BodyAlpha;
                 float bodyInset = look.BodyInset;
@@ -142,16 +134,12 @@ namespace Facet.Game
                 AppendRangeRing(Centre(_seenCell), kind, _seenValid ? Colors.RangeRing : Colors.CursorBlocked);
         }
 
-        /// <summary>
-        /// The read cursor - what a click with nothing selected would describe. Over something worth
-        /// reading (a building, a vein, a doorway) it is the HUD's accent, the colour the info card marks
-        /// what it is talking about with; over bare ground it is a plain dark edge, which is also the
-        /// honest answer to "what is here": nothing.
-        ///
-        /// The pinned cell draws the same border thicker and pushed in, whether or not the pointer is on
-        /// it: it is what the info card is describing, and the player has to be able to see which
-        /// building that is from wherever the mouse has gone.
-        /// </summary>
+        /// <summary>The read cursor - what a click with nothing selected would describe. Over something worth
+        /// reading (a building, a vein, a doorway) it is the HUD's accent, the colour the info card marks its
+        /// subject with; over bare ground it is a plain dark edge, the honest answer to "what is here": nothing.
+        /// The pinned cell draws the same border thicker and pushed in, whether or not the pointer is on it: it is
+        /// what the info card is describing, and the player must be able to see which building that is from
+        /// wherever the mouse has gone.</summary>
         private void AppendReadBorder(Int2 cell, bool readable, bool pinned)
         {
             Palette.CursorLook look = Colors.Cursor;
@@ -162,8 +150,8 @@ namespace Facet.Game
             float scale = pinned ? 1.6f : 1f;
             float thickness = Mathf.Min(Colors.CursorEdgePixels * WorldPerPixel * scale, look.MaxEdgeThickness);
 
-            // Pushed a little way in so the pinned ring and the pointer's own ring can never be read as
-            // one shape at a far zoom; capped so the four edges cannot cross each other either.
+            // Pushed in so the pinned ring and the pointer's ring cannot read as one shape at a far zoom; capped so
+            // the four edges cannot cross either.
             float inset = pinned ? Mathf.Min(thickness, 0.25f) : 0f;
             AppendBorder(new Vector2(cell.X, cell.Y), 1f, thickness, inset, colour);
 
@@ -178,13 +166,11 @@ namespace Facet.Game
 
         private static Vector2 Centre(Int2 cell) => new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
 
-        /// <summary>Does a placement of this kind show its facing? The rule lives on the machine
-        /// definition (<see cref="MachineDef.UsesFacing"/>) because the HUD that names a built building's
-        /// facing needs the same answer.
-        ///
-        /// The run's table and not <see cref="ContentDatabase.Default"/>: a custom table can make any
-        /// building a converter or a splitter, and a ghost that read the shipped numbers would then
-        /// disagree with the ring the same method draws beside it.</summary>
+        /// <summary>Does a placement of this kind show its facing? The rule lives on the machine definition
+        /// (<see cref="MachineDef.UsesFacing"/>), because the HUD that names a built building's facing needs the
+        /// same answer. It reads the run's table, not <see cref="ContentDatabase.Default"/>: a custom table can
+        /// make any building a converter or a splitter, and a ghost reading the shipped numbers would disagree
+        /// with the ring the same method draws beside it.</summary>
         private bool HasFacing(BuildKind kind) => World.Content.Machine(kind).UsesFacing;
 
         /// <summary>An inset border around a cell, as four quads.</summary>
@@ -208,11 +194,9 @@ namespace Facet.Game
                 new Vector2(origin.x + b, origin.y + b), new Vector2(origin.x + inner, origin.y + b), color);
         }
 
-        /// <summary>
-        /// The ring every turret is placed for - and, with nothing selected, the ring of the turret the
-        /// info card is describing. It is a thin annulus built from quads rather than a scaled outline,
-        /// so its width stays a constant number of screen pixels at any zoom.
-        /// </summary>
+        /// <summary>The ring every turret is placed for - and, with nothing selected, the ring of the turret the
+        /// info card describes. A thin annulus of quads rather than a scaled outline, so its width stays a constant
+        /// number of screen pixels at any zoom.</summary>
         private void AppendRangeRing(Vector2 centre, BuildKind turret, Color color)
         {
             float radius = World.Content.Turret(turret).Range;

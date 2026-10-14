@@ -6,24 +6,24 @@ using UnityEngine;
 namespace Facet.EditorTools
 {
     /// <summary>
-    /// The wave table half of the <see cref="MapEditorWindow"/>: a foldout per wave and a plain block
-    /// per group, and the add/remove operations behind its buttons - each one a
-    /// <see cref="MapEdit.Session"/> around the asset's own structural edit, so the copy-append-reassign
-    /// dance, the bounds and the Undo record live below this file and not in it.
+    /// The wave table half of the <see cref="MapEditorWindow"/>: a foldout per wave and a plain block per group,
+    /// and the add/remove operations behind its buttons - each one a <see cref="MapEdit.Session"/> around the
+    /// asset's own structural edit, so the copy-append-reassign dance, the bounds and the Undo record live below
+    /// this file and not in it.
     /// </summary>
     public sealed partial class MapEditorWindow
     {
-        /// <summary>Whether each wave's foldout is open. The window's own state, not the map's: nothing
-        /// in the asset says how a wave should be looked at.</summary>
+        /// <summary>Whether each wave's foldout is open. The window's own state, not the map's: nothing in the
+        /// asset says how a wave should be looked at.</summary>
         private readonly List<bool> _waveOpen = new List<bool>();
 
         /// <summary>
-        /// The wave table, a foldout per wave and a plain block per group. Deliberately not a
-        /// ReorderableList: this window has to build headlessly as well as by hand, and a widget with
-        /// fewer moving parts has fewer ways to break in a batch build.
+        /// The wave table, a foldout per wave and a plain block per group. Deliberately not a ReorderableList:
+        /// this window has to build headlessly as well as by hand, and a widget with fewer moving parts has fewer
+        /// ways to break in a batch build.
         ///
-        /// Every button only records which row it wants changed; the change itself waits until the loops
-        /// are done, so removing a wave cannot renumber the row the loop is about to draw.
+        /// Every button only records which row it wants changed; the change itself waits until the loops are
+        /// done, so removing a wave cannot renumber the row the loop is about to draw.
         /// </summary>
         private void DrawWaveTable(MapAsset asset)
         {
@@ -106,10 +106,9 @@ namespace Facet.EditorTools
             if (addGroupTo >= 0) AddGroup(asset, addGroupTo);
         }
 
-        /// <summary>Add an empty wave. How many enemies a wave should hold is the designer's answer, and
-        /// the validation panel says the wave has none until it is given some. The append, the array
-        /// identity and the bounds are the asset's own edit operation; the record-once and the dirty
-        /// flag are the session's.</summary>
+        /// <summary>Add an empty wave. How many enemies a wave should hold is the designer's answer, and the
+        /// validation panel says the wave has none until it is given some. The append, the array identity and the
+        /// bounds are the asset's own edit operation; the record-once and the dirty flag are the session's.</summary>
         private static void AddWave(MapAsset asset)
         {
             using (var edit = new MapEdit.Session(asset, "Add wave")) edit.AddWave();
@@ -134,9 +133,9 @@ namespace Facet.EditorTools
         }
 
         /// <summary>
-        /// Whether a wave is open is the window's own state - nothing in the map says how to look at it -
-        /// so it is the one thing kept here rather than read back off the asset. Waves are only ever added
-        /// and removed, so stretching the list keeps each open wave with its own row.
+        /// Whether a wave is open is the window's own state - nothing in the map says how to look at it - so it
+        /// is the one thing kept here rather than read back off the asset. Waves are only ever added and removed,
+        /// so stretching the list keeps each open wave with its own row.
         /// </summary>
         private void SyncWaveFoldouts(int waves)
         {

@@ -5,10 +5,10 @@ using UnityEngine;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The map editor's tile↔pixel arithmetic, tested off the IMGUI that normally hosts it. Every
+    /// The map editor's tile-to-pixel arithmetic, tested off the IMGUI that normally hosts it. Every
     /// hazard the window's own comments used to worry about - the y-flip, the fit, the clamps, the
-    /// scrollbars that quietly eat the mouse - is an assertion here, and not one of them needs a
-    /// mouse, a window, or a human watching for the grid to stop answering.
+    /// scrollbars that quietly eat the mouse - is an assertion here, and none of them needs a mouse, a
+    /// window, or a human watching for the grid to stop answering.
     /// </summary>
     public class GridViewTests
     {
@@ -36,8 +36,8 @@ namespace Facet.Tests
         [Test]
         public void TooSmallAView_KeepsTheTilesReadable_AtTheCostOfScrollbars()
         {
-            // The floor wins over the fit: below two pixels a tile stops reading as a tile at any
-            // zoom, and a map that stops fitting is the honest answer, not a smeared one.
+            // The floor wins over the fit: below two pixels a tile stops reading as a tile at any zoom, and a
+            // map that stops fitting is the honest answer, not a smeared one.
             GridFrame frame = GridFrame.Layout(new Rect(0f, 0f, 20f, 20f), MapW, MapH, 1f, Vector2.zero);
 
             Assert.AreEqual(GridFrame.MinCellSize, frame.Cell, 1e-4f);
@@ -54,9 +54,9 @@ namespace Facet.Tests
             Assert.AreEqual(View.width - GridFrame.ScrollbarThickness, frame.Hit.width, 1e-4f);
             Assert.AreEqual(View.height - GridFrame.ScrollbarThickness, frame.Hit.height, 1e-4f);
 
-            // A point on the vertical bar's strip: inside the content, and explicitly not a tile -
-            // the bar takes the mouse after the window has had its turn, and painting under it would
-            // be the brush answering a drag that never touched the map.
+            // A point on the vertical bar's strip: inside the content, explicitly not a tile - the bar
+            // takes the mouse after the window has had its turn, and painting under it would answer a drag
+            // that never touched the map.
             Assert.IsFalse(frame.TryCellAt(new Vector2(View.xMax - 8f, 100f), out _, out _));
             Assert.IsFalse(frame.TryCellAt(new Vector2(100f, View.yMax - 8f), out _, out _));
         }
@@ -88,8 +88,8 @@ namespace Facet.Tests
                 "the map's y = 0 row is the last one drawn");
             Assert.AreEqual(0f, frame.CellRect(0, MapH - 1).y, 1e-4f, "and the top of the screen is the far end of y");
 
-            // Draw and hit-test read the same walk, so every cell's own centre must read back as
-            // that cell - at the corners too, where an off-by-one row would show up.
+            // Draw and hit-test read the same walk, so every cell's own centre must read back as that
+            // cell - at the corners too, where an off-by-one row would show up.
             int[][] corners =
             {
                 new[] { 0, 0 }, new[] { MapW - 1, 0 }, new[] { 0, MapH - 1 }, new[] { MapW - 1, MapH - 1 },

@@ -1,9 +1,7 @@
 namespace Facet.Core
 {
-    /// <summary>
-    /// One rectangle of terrain, the way a map written in code states it. <see cref="ShapePatch"/> is
-    /// the same idea for ore, and exists separately because a patch also names a mineral.
-    /// </summary>
+    /// <summary>One rectangle of terrain, the way a map written in code states it. <see cref="ShapePatch"/>
+    /// is the same idea for ore, separate because a patch also names a mineral.</summary>
     public readonly struct TerrainRect
     {
         public readonly Int2 Origin;
@@ -21,22 +19,15 @@ namespace Facet.Core
     }
 
     /// <summary>
-    /// Turns rectangles into the cell array a <see cref="MapDefinition"/> carries.
-    ///
-    /// The array is the runtime form and the rectangles are the authoring form for the callers that write a
-    /// map down in code - the tests, whose maps are a ridge here and a pond there, where an 80x48 literal
-    /// would be unreadable and a rectangle says it in one line. A map painted in the Editor already knows
-    /// every cell and needs no rectangle at all. Both end up as the same row-major array, so the simulation
-    /// only ever reads one shape of data.
+    /// Turns rectangles into the cell array a <see cref="MapDefinition"/> carries. The array is the
+    /// runtime form and rectangles the authoring form for code-written maps (the tests), where an
+    /// 80x48 literal would be unreadable; both end up as the same row-major array.
     /// </summary>
     public static class TerrainLayout
     {
-        /// <summary>
-        /// Build a width x height cell array from rectangles, in order. A later rectangle paints over an
-        /// earlier one, so a map reads as layers of paint, and anything hanging off the edge is clipped
-        /// rather than refused - a rectangle is a statement about a region, and half of a region the map
-        /// does not have is still a statement.
-        /// </summary>
+        /// <summary>Build a width x height cell array from rectangles, in order. A later rectangle paints
+        /// over an earlier one, so a map reads as layers of paint, and anything off the edge is clipped
+        /// rather than refused.</summary>
         public static TerrainKind[] Rects(int width, int height, params TerrainRect[] rects)
         {
             var cells = new TerrainKind[width * height];

@@ -13,19 +13,18 @@ namespace Facet.Core
     /// <summary>
     /// The ground: one <see cref="TerrainKind"/> per tile, plus the mineral under the ore tiles.
     ///
-    /// This is the layer that makes a map something other than a rectangle. It is stamped once from the
-    /// map's data and never moves during a run - it is the map, not a thing that happens on it - so it
-    /// needs no revision counter and no tick step, and a restart re-stamps the identical layout.
+    /// Stamped once from the map's data and never moved during a run - it is the map, not a thing that
+    /// happens on it - so it needs no revision counter and no tick step, and a restart re-stamps the
+    /// identical layout.
     ///
     /// <b>Terrain is deliberately not a <see cref="TileKind"/>.</b> The kind array answers "what is
-    /// standing on this tile" and this one answers "what is the ground"; a cell holding a drill on a vein
-    /// is <see cref="TileKind.Drill"/> above <see cref="TerrainKind.Ore"/>, and both answers survive the
-    /// other's changes. Keeping them in one byte was what made every terrain rule a special case of a
-    /// building rule - a patch was "not a building but also not nothing" in five different places - and
-    /// it is why a second kind of ground used to cost an edit in every one of them.
+    /// standing on this tile"; this one answers "what is the ground". A drill on a vein is
+    /// <see cref="TileKind.Drill"/> above <see cref="TerrainKind.Ore"/>, and both answers survive the
+    /// other's changes - keeping them in one byte made every terrain rule a special case of a building
+    /// rule.
     ///
-    /// The rules that read both layers live here rather than in each caller, so "may a walker stand
-    /// here", "may a belt be laid here" and "may a machine be built here" are each one answer.
+    /// The rules that read both layers live here, so "may a walker stand here", "may a belt be laid
+    /// here" and "may a machine be built here" are each one answer.
     /// </summary>
     public sealed class TerrainField
     {
@@ -45,9 +44,8 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// The ground at a cell. Out of bounds reads as <see cref="TerrainKind.Void"/> rather than as
-        /// ground: every caller that asks is asking whether something may be there, and off the map the
-        /// answer is no.
+        /// The ground at a cell. Out of bounds reads as <see cref="TerrainKind.Void"/>: every caller is
+        /// asking whether something may be there, and off the map the answer is no.
         /// </summary>
         public TerrainKind KindAt(Int2 cell)
             => _grid.InBounds(cell) ? _kind[_grid.Index(cell)] : TerrainKind.Void;
@@ -64,22 +62,20 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// May a walker stand here? Both halves of the rule in one place: the ground has to be open, and
-        /// nothing solid may be standing on it. The Core's footprint is open ground - reaching it is the
-        /// wave's whole purpose - while a belt is open too, because a conveyor is flat.
+        /// May a walker stand here? The ground has to be open and nothing solid may stand on it. The
+        /// Core's footprint is open ground - reaching it is the wave's purpose - and a belt is open too,
+        /// because a conveyor is flat.
         /// </summary>
         public bool Walkable(Int2 cell)
             => _grid.InBounds(cell) && !_grid.Get(cell).IsMachine() && KindAt(cell).Walkable();
 
         /// <summary>
         /// May transport be laid here? In bounds, nothing standing there, and ground that takes one -
-        /// which is ground and ore, so a belt run can cross a vein.
+        /// ground and ore, so a belt run can cross a vein.
         ///
-        /// Ore qualifying is the point rather than a technicality. A drill pushes its item onto the tile
-        /// beside it, so inside a wider vein every neighbour is ore - a 3x3 patch was nine cells of ore
-        /// with the middle one unworkable, and the drill standing on it mined nothing forever with no way
-        /// for the player to see why. Transport crosses ore; only the machine rule
-        /// (<see cref="CanPlaceMachine"/>) reserves a patch for the drill that mines it.
+        /// Ore qualifying is the point, not a technicality: a drill pushes its item onto the tile beside
+        /// it, so inside a wider vein every neighbour is ore. Transport crosses ore; only the machine
+        /// rule (<see cref="CanPlaceMachine"/>) reserves a patch for the drill that mines it.
         /// </summary>
         public bool CanLayBelt(Int2 cell)
             => _grid.InBounds(cell) && _grid.Get(cell) == TileKind.Empty && KindAt(cell).AllowsBelt();
@@ -127,10 +123,9 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// Put a tile back to bare ground after whatever stood on it is removed. This is the whole of
-        /// what a removal owes the map now: terrain lives in this field and is never written over, so
-        /// handing the tile back is one line instead of the "was there a patch under here?" bookkeeping
-        /// that a belt crossing a vein used to need.
+        /// Put a tile back to bare ground after whatever stood on it is removed. Terrain lives in this
+        /// field and is never written over, so a removal owes the map exactly this one line - no "was
+        /// there a patch under here?" bookkeeping.
         /// </summary>
         public void Release(Int2 cell)
         {
@@ -139,17 +134,14 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// Stamp a map's ground: its terrain array and its patches, through the map's own rule
-        /// (<see cref="MapDefinition.StampTerrain"/>) - which is also the rule
-        /// <see cref="MapValidation"/> walks, so the map a designer is told about and the map a world is
-        /// built from are the same map by construction.
+        /// Stamp a map's ground - terrain array and patches - through the map's own rule
+        /// (<see cref="MapDefinition.StampTerrain"/>), the same rule <see cref="MapValidation"/> walks, so
+        /// the map a designer is told about and the map a world is built from are one by construction.
         ///
-        /// Called at world construction and again on restart, and it starts from plain ground: a restart
-        /// re-stamps the identical layout, which is what makes "the ground never moves" true of a restart
-        /// as well as of a tick. Nothing here depends on the Core having been placed first - the Core's
-        /// tiles come from the map's own <see cref="MapDefinition.CoreCell"/> - and the Core keeps them
-        /// whatever the ground says, because a rock drawn over the thing the player defends would be a
-        /// map that cannot be played.
+        /// Called at construction and on restart, starting from plain ground, so a restart re-stamps the
+        /// identical layout. Nothing here depends on the Core being placed first - its tiles come from the
+        /// map's own <see cref="MapDefinition.CoreCell"/> and it keeps them whatever the ground says,
+        /// because rock over the thing the player defends would be a map that cannot be played.
         /// </summary>
         public void Stamp(MapDefinition map)
         {
@@ -168,9 +160,8 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// Every tile of ore with its mineral, in stable linear-index order - the map of where each
-        /// resource lives, which is what the ground's icons are drawn from. Ore is asked for by name
-        /// rather than filtered out of "all terrain" because the icons are the only reader: rock, water
+        /// Every tile of ore with its mineral, in stable linear-index order - the map the ground's icons
+        /// are drawn from. Ore is asked for by name because the icons are the only reader; rock, water
         /// and the void are drawn straight off the grid by their own view.
         /// </summary>
         public void GetOre(List<OreSnapshot> into)

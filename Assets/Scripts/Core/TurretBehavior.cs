@@ -3,19 +3,11 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// The twist, in code. Every tick, for every turret, in map order:
-    ///
-    ///   1. A delivery of the wrong shape at any of its inputs **jams that belt cell**. It does not
-    ///      matter whether the turret wanted to shoot or was cooling down - the doc's rule is about the
-    ///      delivery, and the jam is what silences everything downstream of that segment.
-    ///   2. A delivery of the right shape arms the turret. The item stays on the belt, not in the turret:
-    ///      a turret with nothing in range banks its ammo on the belt behind it and its line backs up.
-    ///   3. If it is armed, has a target in range, and its cooldown has expired, it eats that item and
-    ///      fires. So the fire rate is min(spec rate, what the line actually delivers): one belt is one
-    ///      item per second, so a turret fed by one belt fires one shot per second.
-    ///
-    /// Nothing here can fire without a shape arriving, which is the entire mechanic: damage is a
-    /// throughput property of the layout, not a purchase.
+    /// The twist, in code. Every tick, for every turret: a wrong-shape delivery at any input jams that
+    /// belt cell, regardless of whether the turret wanted to shoot; a right-shape delivery arms it, and
+    /// the item stays on the belt (so an idle turret banks ammo behind it and its line backs up); and if
+    /// armed, in range and off cooldown it eats the item and fires. Fire rate is min(spec rate, delivered
+    /// rate): damage is a throughput property of the layout, not a purchase.
     /// </summary>
     internal sealed class TurretBehavior : IMachineBehavior
     {
@@ -47,9 +39,8 @@ namespace Facet.Core
             ctx.Events.ShotFired(cell, spec.Ammo, spec.Damage);
         }
 
-        /// <summary>The enemy this turret's ammunition is worth the most against - the nearest one
-        /// weak to it, or the nearest in range at all - and the barrel turned toward it. Which enemy
-        /// that is comes from the field itself, so the turret does not walk its slots.</summary>
+        /// <summary>The enemy this turret's ammo is worth the most against - the nearest weak to it, or
+        /// the nearest in range - with the barrel turned toward it. Chosen by the field, not by walking slots.</summary>
         private static void Aim(ref MachineState turret, in MachineTickContext ctx, Vec2 centre,
             float range, ShapeType ammo)
         {

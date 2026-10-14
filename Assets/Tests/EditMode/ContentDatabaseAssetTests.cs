@@ -7,10 +7,10 @@ using UnityEngine;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The Editor carrier's conversion to the engine-free table. The property that matters is that it
-    /// is <b>additive</b>: an asset with no rows is the shipped game, and a row changes exactly what it
-    /// names and nothing else. That is what lets the shipped asset exist while the code defaults stay
-    /// the single source of truth for everything nobody has retuned.
+    /// The Editor carrier's conversion to the engine-free table. The property that matters is that it is
+    /// <b>additive</b>: an asset with no rows is the shipped game, and a row changes exactly what it
+    /// names and nothing else - which lets the shipped asset exist while the code defaults stay the
+    /// source of truth for everything nobody has retuned.
     /// </summary>
     public class ContentDatabaseAssetTests
     {
@@ -125,14 +125,11 @@ namespace Facet.Tests
         [Test]
         public void ARowKeyedById_LandsOnTheBuildingItNames_WhateverTheDropdownSays()
         {
-            // The reason a row may carry an id at all: an enum value inserted above a building moves every
-            // later ordinal, so an asset authored before the insert would retune its new neighbour. With the
-            // id filled in, the row still lands on the building it names.
-            //
-            // A machine row overrides its whole definition, defaults included - so the fields here are
-            // whatever the slot's shipped row says, apart from the cost. (ContentDatabase now refuses a
-            // table whose rows contradict each other - a turret with no gun - so an id-keyed row cannot
-            // arrive in a slot's clothes and leave them unbuttoned.)
+            // The reason a row may carry an id: an enum value inserted above a building moves every later
+            // ordinal, so an asset authored before the insert would retune its new neighbour. With the id
+            // filled in, the row still lands on the building it names.
+            // A machine row overrides its whole definition, defaults included, so the fields here are
+            // whatever the slot's shipped row says apart from the cost.
             _asset.Machines = new[]
             {
                 new ContentDatabaseAsset.MachineRow
@@ -156,8 +153,8 @@ namespace Facet.Tests
         public void ARowWithNoId_IsKeyedByItsDropdown()
         {
             // The other half of the rule, and the behaviour every row had before ids existed: a hand-added
-            // row that names nothing is keyed by the dropdown. (Consistent row fields for the same reason
-            // as ARowKeyedById above: the row describes a converter, because that is the slot it fills.)
+            // row that names nothing is keyed by the dropdown. (The row describes a converter because that
+            // is the slot it fills.)
             _asset.Machines = new[]
             {
                 new ContentDatabaseAsset.MachineRow
@@ -181,8 +178,6 @@ namespace Facet.Tests
             // 0 in a row means "unset", not "indestructible", for the same additive reason every other
             // field is an override: an asset authored before buildings had health must not silently make
             // its rows invulnerable, and an enemy row must not lose its aggressive-scan reach.
-            // (The wall's row names its own behaviourless identity, because a row overrides its whole
-            // definition and the table now refuses a row that claims to be a turret with no gun.)
             _asset.Machines = new[]
             {
                 new ContentDatabaseAsset.MachineRow { Id = "wall", Cost = 3, Name = "Wall",
@@ -209,9 +204,9 @@ namespace Facet.Tests
         [Test]
         public void EveryRow_IsTheInverseOfItsDefinition()
         {
-            // FromDef and ToDef have to invert each other. CreateContentDatabase writes an asset through one
-            // and merge reads it back through the other, so a field the pair dropped would make a refreshed
-            // asset quietly disagree with the table it was copied from.
+            // FromDef and ToDef must invert each other. CreateContentDatabase writes an asset through one
+            // and merge reads it back through the other, so a dropped field would make a refreshed asset
+            // quietly disagree with the table it was copied from.
             ContentDatabase shipped = ContentDatabase.Default;
 
             foreach (BuildKind kind in shipped.BuildKinds)

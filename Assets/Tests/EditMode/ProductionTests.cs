@@ -4,10 +4,9 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// EditMode tests for the production half of the chain: the drill that mines a patch, and the
-    /// decomposer that splits a circle into the two half-circles a cannon eats. Together with the
-    /// Core sink they are the only source of both currency and ammunition, so a bug here is a bug
-    /// in "you cannot buy damage".
+    /// EditMode tests for the production half of the chain: the drill that mines a patch and the decomposer
+    /// that splits a circle into the two half-circles a cannon eats. With the Core sink they are the only
+    /// source of both currency and ammunition, so a bug here is a bug in "you cannot buy damage".
     /// </summary>
     public class ProductionTests
     {
@@ -58,14 +57,11 @@ namespace Facet.Tests
         [Test]
         public void Drill_MinesTheInteriorOfAWidePatch_ByThreadingABeltOverTheVein()
         {
-            // The reason transport may cross ore, as a test. A drill pushes onto the tile beside it, so
-            // inside a 3x3 vein every neighbour of the middle cell is ore: the centre took a drill and
-            // then mined nothing, forever, with nothing on screen to say why. Nine cells of ore, eight
-            // of them usable.
-            //
-            // A belt laid across the vein is what makes the middle one work, and the cost is the drill
-            // that would have stood on the belt's own cell. That trade is the rule, so both halves of it
-            // are asserted here: the centre cell mines, and every cell of the vein is still ore.
+            // The reason transport may cross ore, as a test: a drill pushes onto the tile beside it, so inside a
+            // 3x3 vein every neighbour of the middle cell is ore - the centre took a drill and then mined nothing,
+            // forever, with nothing on screen to say why. A belt laid across the vein is what makes the middle one
+            // work, at the cost of the drill that would have stood on the belt's cell. Both halves are asserted:
+            // the centre cell mines, and every cell of the vein is still ore.
             SimWorld world = Sim.NewWorld(20, 12);
 
             for (int y = 0; y < 3; y++)
@@ -82,8 +78,8 @@ namespace Facet.Tests
             Sim.LayRun(world, overOre, Dir.North, 1);            // one belt over the vein, then off it
             Sim.LayRun(world, new Int2(5, 7), Dir.West, 3);      // (5,7) (4,7) (3,7), west and away
 
-            // The trade, one line each way: the ore cell the belt crosses can no longer take the drill
-            // that would have mined it, and the drill's own cell can no longer take a belt.
+            // The trade, one line each way: the ore cell the belt crosses can no longer take the drill that
+            // would have mined it, and the drill's own cell can no longer take a belt.
             Assert.IsFalse(world.CanPlace(BuildKind.Drill, overOre), "one cell cannot hold both");
             Assert.IsFalse(world.CanPlaceBelt(centre), "the drill is standing there");
 
@@ -100,13 +96,10 @@ namespace Facet.Tests
         [Test]
         public void EveryBuilding_GivesTheGroundBack_WhenRemoved()
         {
-            // The invariant the belt-on-ore rule leans on, stated once for the whole table instead of
-            // for the two kinds that happen to stand on a patch today. Removing a building must clear the
-            // building and not the ground: ore is the map's data, and no player action may erase it.
-            //
-            // A patch is the only terrain a building can stand on, so it is also the only terrain a
-            // removal can silently destroy - which is exactly why this loops over BuildCatalog rather
-            // than naming kinds.
+            // The invariant the belt-on-ore rule leans on, stated once for the whole table rather than for the
+            // two kinds that stand on a patch today. Removing a building must clear the building, not the ground:
+            // ore is the map's data, and no player action may erase it. A patch is the only terrain a building can
+            // stand on, so also the only terrain a removal can silently destroy - hence looping over BuildCatalog.
             foreach (BuildKind kind in BuildCatalog.All)
             {
                 SimWorld world = Sim.NewWorld(20, 12);
@@ -114,8 +107,8 @@ namespace Facet.Tests
                 var bare = new Int2(12, 6);
                 world.Terrain.SetOre(ore, ShapeType.Square);
 
-                // A drill mines ore; every other kind wants bare ground. Belts are the one kind that
-                // takes either, which is the point of the rule.
+                // A drill mines ore; every other kind wants bare ground. Belts are the one kind that takes
+                // either, which is the point of the rule.
                 bool onOre = kind == BuildKind.Drill || kind == BuildKind.Belt;
                 Int2 cell = onOre ? ore : bare;
 
@@ -162,8 +155,8 @@ namespace Facet.Tests
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), ShapeType.Circle));
             Sim.Tick(world, 90);
 
-            // The circle is a second of travel plus a 1.5 s split: at t=3 the first half is on the
-            // output belt and the second is still buffered behind it.
+            // The circle is a second of travel plus a 1.5 s split: at t=3 the first half is on the output
+            // belt and the second is still buffered behind it.
             Assert.AreEqual(ShapeType.HalfCircle, Sim.ShapeAt(world, new Int2(5, 2)),
                 "a circle comes out as halves");
 
@@ -180,9 +173,9 @@ namespace Facet.Tests
         [Test]
         public void Decomposer_SaturatesItsOutputBelt_AndCirclesQueueBehindIt()
         {
-            // The bottleneck puzzle, as numbers: the split consumes 0.67 circles/s against the input
-            // belt's 1/s, so circles back up behind a fed decomposer, while its halves leave at the
-            // belt's own 1/s - one decomposer is one cannon's worth of full-rate ammo, no more.
+            // The bottleneck puzzle, as numbers: the split consumes 0.67 circles/s against the input belt's 1/s,
+            // so circles back up behind a fed decomposer, while its halves leave at the belt's own 1/s - one
+            // decomposer is one cannon's worth of full-rate ammo, no more.
             SimWorld world = Sim.NewWorld(32, 12);
             Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);
             Sim.Place(world, BuildKind.Decomposer, new Int2(4, 2), Dir.East);
@@ -231,8 +224,8 @@ namespace Facet.Tests
         [Test]
         public void Decomposer_JamsABeltThatDeliversAHalfCircleBack()
         {
-            // The twist holds at the splitter's own input: a line that loops a half-circle back into
-            // the decomposer is a wrong-shape delivery, and it jams like any other.
+            // The twist holds at the splitter's own input: a line that loops a half-circle back into the
+            // decomposer is a wrong-shape delivery, and it jams like any other.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);
             Sim.Place(world, BuildKind.Decomposer, new Int2(4, 2), Dir.East);
@@ -249,11 +242,10 @@ namespace Facet.Tests
         [Test]
         public void Decomposer_SecondOutlet_LetsTheSecondHalfLeaveToo()
         {
-            // Same machine, same feed, one belt out or two. A single outlet can only ever carry one
-            // half away, so the other waits inside and the decomposer is throttled to the belt's 1/s;
-            // with a belt on each of two sides both halves are away within a tick of the split and the
-            // machine runs at its own 1.33 halves/s. The outlets are not stored anywhere: they are the
-            // belts pointing away from the machine, read fresh on every push.
+            // Same machine, same feed, one belt out or two. A single outlet can only carry one half away, so the
+            // other waits inside and the decomposer is throttled to the belt's 1/s; with a belt on each of two
+            // sides both halves are away within a tick of the split and the machine runs at its own 1.33 halves/s.
+            // The outlets are not stored: they are the belts pointing away, read fresh on every push.
             SimWorld one = FedDecomposer(secondOutlet: false);
             SimWorld two = FedDecomposer(secondOutlet: true);
 
@@ -272,8 +264,8 @@ namespace Facet.Tests
         }
 
         /// <summary>
-        /// A decomposer at (4,2) fed by one circle, with its outlet east and - optionally - north too.
-        /// Both outlets are one belt long and dead-ended, so a half that arrives stays where it landed.
+        /// A decomposer at (4,2) fed by one circle, outlet east and - optionally - north too. Both outlets are
+        /// one belt long and dead-ended, so a half that arrives stays where it landed.
         /// </summary>
         private static SimWorld FedDecomposer(bool secondOutlet)
         {

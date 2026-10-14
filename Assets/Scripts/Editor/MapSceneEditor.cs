@@ -6,43 +6,18 @@ using UnityEngine;
 namespace Facet.EditorTools
 {
     /// <summary>
-    /// The Scene view as a map editing surface: the map drawn by the game's own views, a brush chosen from
-    /// an overlay, and a stroke that goes straight into the <see cref="MapAsset"/> on screen.
+    /// The Scene view as a map editing surface: the map drawn by the game's own views, a brush chosen from an
+    /// overlay, and a stroke that goes straight into the <see cref="MapAsset"/> on screen. It is the missing
+    /// half of <see cref="MapPreview"/> - the brush - because a map is a picture of the world the player will
+    /// walk (the width of a rock ridge, the mouth a wave walks in at), and the Scene view is where that
+    /// picture already belongs.
     ///
-    /// It exists because the painting window can only say what a tile <em>is</em> - a grid of tones and a
-    /// legend, at whatever size the window happens to be - while a map is a picture of the world the player
-    /// will walk: the width of a rock ridge, the mouth a wave walks in at, the distance between the two.
-    /// The Scene view is where that picture already belongs, and <see cref="MapPreview"/> is already how it
-    /// is drawn there with no Play mode; this is the missing half, the brush.
-    ///
-    /// Five things are worth knowing before reading it.
-    ///
-    /// <b>It is entered, not always on.</b> Nothing here runs until <c>FACET ▸ Edit Map in Scene</c> names a
-    /// map - by <see cref="MapEditTarget"/>, which is also what draws it. A Scene view that painted
-    /// whenever a map asset happened to be selected would be a Scene view that can no longer select
-    /// anything, so the mode is asked for, and left with Done, with Escape, or with the menu item that
-    /// stops it.
-    ///
-    /// <b>A stroke is one undo entry.</b> The press opens a <see cref="MapEdit.Session"/> and the release
-    /// closes it: the asset is recorded once, not per cell, because a drag is one edit the designer made,
-    /// and a Ctrl+Z that stepped back a single tile would be a Ctrl+Z that does not undo what was done.
-    /// The painting window's grid holds a stroke the same way - the protocol, like the brush itself, is
-    /// shared rather than restated.
-    ///
-    /// <b>Erasing is the Shift key, not the right button.</b> The right button already belongs to the view
-    /// - it looks around, and it has to keep doing that while a map is being painted - so "take it away" is
-    /// the modifier that means it everywhere else in the editor.
-    ///
-    /// <b>The brush owns the mouse only over the map.</b> A click that lands on a tile is consumed, so the
-    /// Scene view cannot read it as a click on the world behind the map and drop the selection the map is
-    /// being edited from. A click outside the map is left alone, so everything else in the Scene view still
-    /// answers while a brush is in hand. Alt still orbits and the view tools still pan, because moving the
-    /// camera is not painting.
-    ///
-    /// <b>And the pointer is read through the map's own plane.</b> The map is flat and lies where the game
-    /// draws it, so the tile under the pointer is the view's ray met with that plane - which is what makes
-    /// the brush land where it looks like it lands, at any zoom and from any angle, rather than a screen
-    /// rectangle divided by a cell size that is only right in the one camera the preview will draw.
+    /// Invariants: it is entered, not always on, so the Scene view can still select (see
+    /// <see cref="MapEditTarget"/>); a stroke is one <see cref="MapEdit.Session"/> - one undo entry - opened by
+    /// the press and closed by the release; erasing is Shift, because the right button already belongs to the
+    /// view; the brush owns the mouse only over the map, so a click outside it is left to the Scene view; and
+    /// the pointer is read through the map's own plane, so the brush lands where it looks like it lands at any
+    /// zoom and from any angle.
     /// </summary>
     [InitializeOnLoad]
     internal static class MapSceneEditor
@@ -50,16 +25,16 @@ namespace Facet.EditorTools
         private const string BrushKey = "Facet.MapScene.Brush";
         private const string OreKey = "Facet.MapScene.Ore";
 
-        /// <summary>Where the overlay sits in the view: clear of the tab strip above it and of the view
-        /// tools down the left edge, which is where a panel in the other corner would be unusable.</summary>
+        /// <summary>Where the overlay sits in the view: clear of the tab strip above it and of the view tools
+        /// down the left edge.</summary>
         private const float PanelX = 48f;
         private const float PanelY = 66f;
         private const float PanelWidth = 620f;
         private const float PanelHeight = 62f;
 
         /// <summary>The hovered tile is marked at a z in front of every layer of the map - in front of the
-        /// cursor layer rather than on the ground - because the mark is the Scene view's own and not part
-        /// of the map; drawn at the map's own z it would z-fight the ground it is drawn over.</summary>
+        /// cursor layer rather than on the ground - because the mark is the Scene view's own; at the map's own
+        /// z it would z-fight the ground it is drawn over.</summary>
         private const float HighlightZ = -0.3f;
 
         private static readonly Color HoverFill = new Color(1f, 1f, 1f, 0.20f);
@@ -69,14 +44,14 @@ namespace Facet.EditorTools
         /// it, and the outline API takes an array.</summary>
         private static readonly Vector3[] Corners = new Vector3[4];
 
-        /// <summary>The stroke in progress - one <see cref="MapEdit.Session"/>, hence one undo entry,
-        /// between the press that began it and its release. A drag that began elsewhere - on the
-        /// overlay, on a handle - is not a stroke and must not paint the map.</summary>
+        /// <summary>The stroke in progress - one <see cref="MapEdit.Session"/>, hence one undo entry -
+        /// between the press that began it and its release. A drag that began elsewhere - on the overlay, on a
+        /// handle - is not a stroke and must not paint the map.</summary>
         private static MapEdit.Session _stroke;
 
-        /// <summary>Whether the stroke in progress erases. Latched where the stroke began rather than read
-        /// per event, so letting go of Shift in the middle of a drag does not turn the rest of it into the
-        /// other gesture - and so the undo entry's name matches everything it undoes.</summary>
+        /// <summary>Whether the stroke in progress erases. Latched where the stroke began rather than read per
+        /// event, so letting go of Shift in the middle of a drag does not turn the rest of it into the other
+        /// gesture - and so the undo entry's name matches everything it undoes.</summary>
         private static bool _erasing;
 
         static MapSceneEditor()
@@ -85,8 +60,8 @@ namespace Facet.EditorTools
         }
 
         /// <summary>The brush in hand. Session state rather than a field, because a script reload rebuilds
-        /// every static in this class: saving a file should not put the ground brush back in a hand that
-        /// was holding the water brush.</summary>
+        /// every static in this class: saving a file should not put the ground brush back in a hand that was
+        /// holding the water brush.</summary>
         private static MapBrush Brush
         {
             get
@@ -97,9 +72,9 @@ namespace Facet.EditorTools
             set => SessionState.SetInt(BrushKey, (int)value);
         }
 
-        /// <summary>The mineral the ore brush paints. Read back through <c>IsShape</c> for the same reason
-        /// the brush is read back through the array: session state outlives a recompile, and a shape the
-        /// enum no longer has would be a brush that refuses to paint without saying why.</summary>
+        /// <summary>The mineral the ore brush paints. Read back through <c>IsShape</c> for the same reason the
+        /// brush is read back through the array: session state outlives a recompile, and a shape the enum no
+        /// longer has would be a brush that refuses to paint without saying why.</summary>
         private static ShapeType Ore
         {
             get
@@ -173,11 +148,10 @@ namespace Facet.EditorTools
                 return;
             }
 
-            // The tool in hand is the view's own: the hand wins over the brush, which is also a way out of
-            // a brush that is in the way. What is asked here is which tool is *in hand* - Tools.current,
-            // the same answer the tool strip highlights. Tools.viewTool is a different question: it says
-            // which option the View tool is set to - pan, orbit, zoom, FPS - and Unity can leave that
-            // answered while the hand is away, which left a designer whose strip said Move with a brush
+            // The tool in hand is the view's own: the hand wins over the brush, which is also a way out of a
+            // brush that is in the way. It is Tools.current - the answer the tool strip highlights - not
+            // Tools.viewTool, which says which option the View tool is set to and which Unity can leave
+            // answered while the hand is away; reading it left a designer whose strip said Move with a brush
             // that refused every click, and an overlay blaming a tool that was not in hand.
             if (Tools.current == Tool.View)
             {
@@ -189,9 +163,8 @@ namespace Facet.EditorTools
         }
 
         /// <summary>
-        /// Escape, which is what a hand holding one thing expects it to mean: with a stroke running it ends
-        /// the stroke - what has been painted stays, and one Ctrl+Z takes it back - and with none it gives
-        /// the Scene view back the way it was found.
+        /// Escape ends the stroke in progress - what has been painted stays, and one Ctrl+Z takes it back -
+        /// or, with none, gives the Scene view back the way it was found.
         /// </summary>
         private static void HandleKeyboard(Event current)
         {
@@ -205,9 +178,9 @@ namespace Facet.EditorTools
         }
 
         /// <summary>
-        /// The mouse, once the overlay has been drawn. The mark over the pointer's tile is drawn whatever
-        /// the pointer is doing, because it is the only thing that says where a stroke would land; the
-        /// stroke itself is only begun by a press that landed on the map with no modifier on it.
+        /// The mouse, once the overlay has been drawn. The mark over the pointer's tile is drawn whatever the
+        /// pointer is doing, because it is the only thing that says where a stroke would land; the stroke
+        /// itself is only begun by a press that landed on the map with no modifier on it.
         /// </summary>
         private static void HandleMouse(MapAsset asset, Event current)
         {
@@ -215,10 +188,10 @@ namespace Facet.EditorTools
 
             if (!over)
             {
-                // Nothing is marked and nothing is painted while the pointer is off the map, and a drag
-                // that wanders back on carries on: a brush is a brush. What ends a stroke is letting the
-                // button go, or taking the pointer out of the Scene view altogether - the second one
-                // because there is no longer a drag to come back with.
+                // Nothing is marked and nothing is painted while the pointer is off the map, and a drag that
+                // wanders back on carries on: a brush is a brush. What ends a stroke is letting the button go,
+                // or taking the pointer out of the Scene view altogether - the second because there is no
+                // longer a drag to come back with.
                 if (current.type == EventType.MouseUp || current.type == EventType.MouseLeaveWindow)
                     EndStroke();
                 return;
@@ -259,17 +232,17 @@ namespace Facet.EditorTools
             }
         }
 
-        /// <summary>One cell of the stroke in hand, through the session and the brush both painting
-        /// surfaces share: the record and the dirty flag are the session's, written once for the edit,
-        /// and what a brush writes is <see cref="MapPainting"/>'s answer - so the Scene view and the
-        /// window cannot come out meaning different things by a rock.</summary>
+        /// <summary>One cell of the stroke in hand, through the session and brush both painting surfaces share:
+        /// the record and the dirty flag are the session's, and what a brush writes is
+        /// <see cref="MapPainting"/>'s answer, so the Scene view and the window cannot come out meaning
+        /// different things by a rock.</summary>
         private static void Paint(Int2 cell)
         {
             _stroke?.Paint(cell.X, cell.Y, Brush, Ore, _erasing);
         }
 
-        /// <summary>Close the stroke in progress, if there is one. What has been painted stays - one
-        /// Ctrl+Z takes the whole drag back - and the asset is already dirty from the press.</summary>
+        /// <summary>Close the stroke in progress, if there is one. What has been painted stays - one Ctrl+Z
+        /// takes the whole drag back - and the asset is already dirty from the press.</summary>
         private static void EndStroke()
         {
             _stroke?.Dispose();
@@ -277,9 +250,9 @@ namespace Facet.EditorTools
         }
 
         /// <summary>
-        /// The tile under a point in the Scene view: the view's ray met with the plane the game draws the
-        /// map in. One piece of arithmetic for every camera, and false in the two cases where it has no
-        /// answer - a view edge-on to the map, and a map behind the camera.
+        /// The tile under a point in the Scene view: the view's ray met with the plane the game draws the map
+        /// in. One piece of arithmetic for every camera, and false in the two cases with no answer - a view
+        /// edge-on to the map, and a map behind the camera.
         /// </summary>
         private static bool TryCell(Vector2 guiPoint, out Int2 cell)
         {
@@ -296,18 +269,17 @@ namespace Facet.EditorTools
             return true;
         }
 
-        /// <summary>Whether a tile is one of the map's own. The brush is not offered the world past the
-        /// map's edge: a tile there is a tile the asset could not hold. The answer is the asset's own
-        /// <see cref="MapAsset.InBounds"/>, so the Scene view and the painting window cannot disagree
-        /// about where the map ends.</summary>
+        /// <summary>Whether a tile is one of the map's own. The brush is not offered the world past the map's
+        /// edge: a tile there is a tile the asset could not hold. The answer is the asset's own
+        /// <see cref="MapAsset.InBounds"/>, so the Scene view and the painting window cannot disagree about
+        /// where the map ends.</summary>
         private static bool Inside(MapAsset asset, Int2 cell)
             => asset != null && asset.InBounds(cell.X, cell.Y);
 
         /// <summary>
         /// The tile the brush would paint. The Core brush marks the footprint it will take rather than one
-        /// tile, because what that brush writes is the footprint's lower-left corner: a one-tile mark would
-        /// say the Core is one tile big. During a stroke the mark is the tile itself, so that what a drag is
-        /// painting is where the pointer is.
+        /// tile, because what that brush writes is the footprint's lower-left corner; during a stroke the mark
+        /// is the tile itself, so that what a drag is painting is where the pointer is.
         /// </summary>
         private static void DrawHighlight(Int2 cell)
         {
@@ -400,8 +372,8 @@ namespace Facet.EditorTools
         }
 
         /// <summary>
-        /// What the overlay says about the brush: the mouse contract while there is nothing in the way of
-        /// it, and the one thing to do about it when there is.
+        /// What the overlay says about the brush: the mouse contract while there is nothing in the way of it,
+        /// and the one thing to do about it when there is.
         /// </summary>
         private static string Hint(SceneView view)
         {

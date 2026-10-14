@@ -6,14 +6,11 @@ using UnityEngine;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The brush, over the asset it writes.
-    ///
-    /// Two surfaces paint one map - the painting window's grid and the Scene view's own editor - and both
-    /// go through <see cref="MapPainting"/>, so this file is about that one answer being the right one:
-    /// every brush in the enum is offered, every brush writes what its name says, erasing is one answer
-    /// whatever is in hand, and the Core an editor draws is the Core the runtime will build. A second
-    /// implementation of any of it would be a map that means something different depending on which
-    /// surface painted it.
+    /// The brush, over the asset it writes. Two surfaces paint one map - the painting window's grid and
+    /// the Scene view's own editor - and both go through <see cref="MapPainting"/>, so this file is about
+    /// that one answer being right: every brush in the enum is offered, every brush writes what its name
+    /// says, erasing is one answer whatever is in hand, and the Core an editor draws is the Core the
+    /// runtime will build.
     /// </summary>
     public class MapPaintingTests
     {
@@ -95,7 +92,7 @@ namespace Facet.Tests
         [Test]
         public void Stroke_WithNoMineral_PaintsNothingAtAll()
         {
-            // ShapeType.None is a shape the enum has and not one a vein can carry: the brush refuses it
+            // ShapeType.None is a shape the enum has but not one a vein can carry: the brush refuses it
             // rather than writing an ore tile that yields nothing.
             MapPainting.Stroke(_asset, MapBrush.Ore, ShapeType.None, 4, 4, erase: false);
 

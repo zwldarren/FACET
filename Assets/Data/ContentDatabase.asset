@@ -15,19 +15,19 @@ MonoBehaviour:
   Shapes:
   - Shape: 0
     Name: Nothing
-    Glyph: "\xB7"
+    Glyph: nothing
   - Shape: 1
     Name: Circle
-    Glyph: "\u25CB"
+    Glyph: circle
   - Shape: 2
     Name: Half-circle
-    Glyph: "\u25E0"
+    Glyph: half-circle
   - Shape: 3
     Name: Square
-    Glyph: "\u25A1"
+    Glyph: square
   - Shape: 4
     Name: Half-square
-    Glyph: "\u25AD"
+    Glyph: half-square
   Recipes:
   - Id: decompose
     Input: 1

@@ -27,13 +27,30 @@ output — so a line is wired by laying belts at it, not by configuring it.
 | right mouse | delete for a full refund; on a jammed segment it **clears the jam** instead |
 | `Space` / `P` | pause / resume |
 | `N` | start the next wave early — every wave also starts itself when its countdown runs out |
+| `C` | put the Core back in the middle of the view, from anywhere on the map |
+| `H` | open or close the controls card — the keyboard and the restart button, over the map |
 | `R` | restart the run |
 
-The HUD is four clickable regions: a status card top-left (map, wave, Core health, turret and jam
-diagnostics, the last second's events — its edge stripes warning-coloured whenever something needs
-you), a controls card top-right, the build bar along the bottom (tiles tinted when the stockpile
-cannot cover them), and an info card above it. Beside the status card floats the **stockpile**: the
-shape the run banks, in that shape's own colour. A refused placement says why in a **toast**.
+The HUD is four clickable regions: a status card top-left (map and wave, the Core's health and the wave
+clock as two bars, what is coming as a row of chips — the count, the enemy, and the shape it is weak to —
+and two diagnostic lines that speak only when something needs them: a jam or a starved gun, what is out of
+view — with the card's edge strip warning-coloured whenever any of those need you), a controls cluster
+top-right (pause, and a help button that opens the keyboard and the restart button over the map; `H` opens
+it too), the build bar along the bottom (tiles tinted when the stockpile cannot cover them, with a line
+showing how far from covering them), and an info card above it. Beside the status card floats the
+**stockpile**: the shape the run banks, in that shape's own colour. A refused placement says why in a
+**toast**, and whatever is under the pointer says what it is and what it is doing in a **tooltip** beside
+the cursor — the map is readable at the pointer whether or not a building is selected.
+
+A map is bigger than a screen, so the edge of the screen answers *where*: the **locator** points at
+everything the player can neither see nor click. A wave off-view is one chevron in the colour of its nearest
+walker, dotted once per enemy; a jammed segment off-view is a red mark, because that is a tile a right-click
+has to reach; the Core is a pale mark, because it is the way back. Out of view means what it says — a walker
+under the build bar or the status card is as unfindable as one off the display, so the locator works off the
+HUD's own panel boxes, and an arrow is stepped back along its sight line until it clears the card it would
+otherwise sit under. While the Core is being chewed on out of view the screen wears a warning frame. The
+status card says the same thing in numbers, off the same answer, so the arrows and the sentence cannot
+disagree.
 
 The rules a run is played against:
 
@@ -106,7 +123,7 @@ definitions (`ContentDatabaseAsset.ToCore()`, `MapAsset.ToCore()`).
 
 The scene wires `Assets/Data/Palette.asset` (the whole look: material, colours, line widths, geometry,
 and a per-content Sprite or procedural override block) and `Assets/Data/ContentDatabase.asset` (every
-cost, turret and enemy stat, shape glyph and conversion recipe). Every row of both is an **override**,
+cost, turret and enemy stat, shape word and conversion recipe). Every row of both is an **override**,
 so a kind with no row keeps the shipped value and an asset is purely additive; edit a value and it
 takes effect on the next Play, with no recompile.
 

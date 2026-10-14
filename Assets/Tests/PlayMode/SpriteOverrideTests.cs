@@ -9,10 +9,10 @@ using UnityEngine.TestTools;
 namespace Facet.PlayTests
 {
     /// <summary>
-    /// The Phase-0 claim, checked where it actually matters: a Sprite override on the Palette
-    /// reaches the views. A view built with an untouched Palette must create no sprite at all (the
-    /// default look is untouched), and one built with a ticked override must draw the assigned
-    /// Sprite while still drawing its functional overlays in the mesh.
+    /// The Phase-0 claim, checked where it actually matters: a Sprite override on the Palette reaches the
+    /// views. A view built with an untouched Palette must create no sprite at all (the default look is
+    /// untouched), and one built with a ticked override must draw the assigned Sprite while still drawing
+    /// its functional overlays in the mesh.
     /// </summary>
     public class SpriteOverrideTests
     {
@@ -109,7 +109,7 @@ namespace Facet.PlayTests
         /// A world for a renderer test to draw. Any world will do, so it is made here rather than loaded: a
         /// sprite override is about what a view does with a style, and a test that borrowed a shipped map
         /// would fail for reasons that have nothing to do with sprites. The stockpile is large so that
-        /// placing the machine under test is never the thing that fails, and the cell it goes on is clear
+        /// placing the machine under test is never the thing that fails; the cell it goes on is clear
         /// ground - the Core of a 32x20 map is (14,8)..(17,11).
         /// </summary>
         private static SimWorld SpriteWorld()

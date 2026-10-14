@@ -6,15 +6,15 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The walkers themselves, and the doors they walk in at: two things the flow field alone cannot
-    /// do. Walkers keep a body's width between them, however stacked a wave arrives; and a doorway,
-    /// the map's tile kept walkable, refuses every machine that would seal it.
+    /// The walkers and the doors they walk in at: two things the flow field alone cannot do. Walkers
+    /// keep a body's width between them however stacked a wave arrives; and a doorway, the map's tile
+    /// kept walkable, refuses every machine that would seal it.
     /// </summary>
     public class EnemyTests
     {
         /// <summary>
         /// A door in the middle of the north edge of a featureless map, with a Core that outlasts the
-        /// test: what is measured here is where the walkers stand, not who wins.
+        /// test: what is measured is where the walkers stand, not who wins.
         /// </summary>
         private static SimWorld DoorWorld(int enemies, float interval)
             => new SimWorld(
@@ -40,7 +40,7 @@ namespace Facet.Tests
         }
 
         /// <summary>The reason a click on this tile is refused, and the gesture that reports it: a press
-        /// that never moved, then the release - which is what a one-tile click is.</summary>
+        /// that never moved, then the release - what a one-tile click is.</summary>
         private static RejectionReason RefusalFor(SimWorld world, BuildKind kind, Int2 cell)
         {
             world.Tick(Gesture.Aim(cell, kind));
@@ -56,10 +56,9 @@ namespace Facet.Tests
         [Test]
         public void EnemiesSetDownOnOneSpot_WalkOnAsABodyEach()
         {
-            // The worst case the rule has to undo: three enemies put on the same point, which is where
-            // a group of one door lands them when it enters faster than the lane drains. The separation
-            // pass moves a body no faster than the walker moves itself, so this is a shade under a
-            // second of pulling apart - and one body's width is where it ends.
+            // The worst case the rule has to undo: three enemies on one point, where a group from one
+            // door lands them when it enters faster than the lane drains. The separation pass moves a body
+            // no faster than the walker moves itself, so this is a shade under a second of pulling apart.
             SimWorld world = Sim.NewEnduringWorld();
             for (int i = 0; i < 3; i++) world.Enemies.Spawn(EnemyKind.Spike, new Vec2(5.5f, 3.5f));
 
@@ -76,13 +75,13 @@ namespace Facet.Tests
         {
             // The pile the player actually sees: a whole wave arriving at once. Every enemy stops on the
             // same ring around the Core, so without the rule the ring is one sprite with a queue of
-            // attackers stacked on it. Twelve fit around that ring at a body's width, and that is where
-            // they have to end up - still in reach of the Core, or the fix would be a bug of its own.
+            // attackers stacked on it. Twelve fit around that ring at a body's width, still in reach of
+            // the Core - or the fix would be a bug of its own.
             SimWorld world = DoorWorld(enemies: 12, interval: 0.5f);
             world.Waves.StartNextWave();
 
-            // Long enough for the whole wave to walk in - the ring is fifteen tiles of walking from the
-            // door - and to take up its places.
+            // Long enough for the whole wave to walk in (the ring is fifteen tiles of walking from the
+            // door) and take up its places.
             Sim.Tick(world, 30 * 25);
 
             Assert.AreEqual(12, world.Enemies.AliveCount, "the whole wave arrived");
@@ -96,7 +95,7 @@ namespace Facet.Tests
         public void ADoorway_IsTheMaps_SoNoMachineMayStandOnIt()
         {
             // The exploit this rule exists for: plug the wave's door with a wall and every enemy spawns
-            // inside the wall - and a wave held at its door by two circles of wall is a wave the player
+            // inside the wall, so a wave held at its door by two circles of wall is a wave the player
             // never has to fight. The map's door is not the player's tile.
             SimWorld world = Sim.Rig();                            // a map with a door on it
             Int2 door = world.Map.SpawnPoints[0];
@@ -119,10 +118,9 @@ namespace Facet.Tests
             Assert.IsTrue(world.CanPlaceBelt(door), "a belt over a door blocks nothing");
             Assert.IsTrue(world.TryPlaceBelt(door, Dir.East));
 
-            // And the wave that walks in there still walks in: the door was never plugged. The walk down
-            // the corridor to the Core is the rig's own, so this waits on the Core's first hit instead of
-            // on a stopwatch - two minutes, which is longer than the walk and the wave's own schedule
-            // together.
+            // And the wave that walks in there still walks in. The walk down the corridor to the Core is
+            // the rig's own, so this waits on the Core's first hit rather than a stopwatch - two minutes,
+            // longer than the walk and the wave's own schedule together.
             world.Waves.StartNextWave();
             for (int i = 0; i < 120 * SimConfig.TickRate && world.Events.CountOf(SimEventKind.CoreDamaged) == 0; i++)
                 world.Tick(InputCommand.None);
@@ -136,9 +134,8 @@ namespace Facet.Tests
         public void ABeltOnADoor_StillRefusesAMachineAsADoorway()
         {
             // A belt may cross a door, so one tile can be both taken and forbidden at once. The refusal
-            // has to name the rule the placement actually failed on - the doorway, which CanPlace reads
-            // before it ever reads the tile - because a toast naming the belt would send the player off to
-            // clear a tile a machine may not stand on even when it is clear.
+            // must name the rule it actually failed on - the doorway, which CanPlace reads before the tile -
+            // or a toast naming the belt would send the player to clear a tile that is already clear.
             SimWorld world = Sim.Rig();
             Int2 door = world.Map.SpawnPoints[0];
             Assert.IsTrue(world.TryPlaceBelt(door, Dir.East), "a belt is walkable: it may cross a door");

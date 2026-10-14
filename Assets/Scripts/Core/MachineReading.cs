@@ -26,18 +26,15 @@ namespace Facet.Core
     }
 
     /// <summary>
-    /// The one statement of what a machine means to the player: the catalogue's lines for the build
-    /// bar and the inspect card, the live sentence for what a building is doing right now, its badge
-    /// shape and its animated work fraction - all dispatched on the machine's <em>behaviour</em>, so a
-    /// new row in the content table is described, badged and animated without any view learning it.
+    /// The one statement of what a machine means to the player: the catalogue's lines, the live sentence
+    /// for what a building is doing, its badge shape and its animated work fraction - all dispatched on
+    /// the machine's <em>behaviour</em>, so a new content row is described, badged and animated with no
+    /// view learning it.
     ///
-    /// This module exists because the same three questions ("what is it", "what is it doing", "what
-    /// does its facing mean") used to be answered in parallel by the HUD's narration, the snapshot's
-    /// badge dispatch and the renderer's draw dispatch - and only the latter two threw on an unknown
-    /// behaviour, while the HUD quietly called everything "TRANSPORT". Every dispatch here enumerates
-    /// every <see cref="BehaviorKind"/> by name and throws on anything else, the discipline
-    /// <see cref="MachineField"/>'s badges already hold themselves to. The tests are the same seam:
-    /// what the HUD would print is asserted through this interface, not through a MonoBehaviour.
+    /// Every dispatch here enumerates every <see cref="BehaviorKind"/> by name and throws on anything
+    /// else, the discipline <see cref="MachineField"/>'s badges hold themselves to - a new behaviour must
+    /// be given a role, a line and a badge by name, never silently inherit one. The tests are the same
+    /// seam: what the HUD would print is asserted through this interface, not a MonoBehaviour.
     ///
     /// Strings and severity only - no colours, no fonts, no layout. The view formats and tints.
     /// </summary>
@@ -49,10 +46,9 @@ namespace Facet.Core
         /// the tick mines through it and the note describes it, so neither can drift.</summary>
         public static Int2 DrillLanding(Int2 cell, Dir direction) => cell + direction.Offset();
 
-        /// <summary>The cell a pipe drops its carried shape onto: two tiles along its facing,
-        /// jumping exactly one. One statement - the tick delivers through it and the note describes
-        /// it, so the picture cannot drift from the simulation, which is the deal the snapshot
-        /// masks make elsewhere in this assembly.</summary>
+        /// <summary>The cell a pipe drops its carried shape onto: two tiles along its facing, jumping
+        /// exactly one. One statement - the tick delivers through it and the note describes it, so the
+        /// picture cannot drift from the simulation.</summary>
         public static Int2 PipeLanding(Int2 cell, Dir direction) => cell + direction.Offset() * 2;
 
         // ---------------------------------------------------------------- the catalogue
@@ -181,10 +177,9 @@ namespace Facet.Core
         // ---------------------------------------------------------------- the live card
 
         /// <summary>
-        /// What this building is doing right now, dispatched on its behaviour. Every sentence is
-        /// about a state the player can act on, and the geometry a sentence names - a drill's
-        /// landing, a pipe's - comes from the same functions the tick delivers through, so the card
-        /// cannot describe a machine the simulation does not have.
+        /// What this building is doing right now, dispatched on its behaviour. The geometry a sentence
+        /// names (a drill's landing, a pipe's) comes from the same functions the tick delivers through,
+        /// so the card cannot describe a machine the simulation does not have.
         /// </summary>
         public static ReadingNote LiveNote(SimWorld world, Int2 cell, in MachineSnapshot machine)
         {
@@ -199,7 +194,7 @@ namespace Facet.Core
                     return world.TileGrid.Get(onto).Eats()
                         ? new ReadingNote("mining " + Glyph(content, world.Terrain.OreAt(cell)) + " onto " + onto,
                             NoteSeverity.Neutral)
-                        : new ReadingNote("nothing to push onto at " + onto + " — lay a belt facing it",
+                        : new ReadingNote("nothing to push onto at " + onto + " - lay a belt facing it",
                             NoteSeverity.Warn);
                 }
 
@@ -207,16 +202,16 @@ namespace Facet.Core
                 {
                     RecipeDef recipe = content.Recipe(def.RecipeId);
                     if (machine.OutMask.IsEmpty)
-                        return new ReadingNote("no outlet — lay a belt pointing away from it", NoteSeverity.Warn);
+                        return new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
 
                     if (machine.Work > 0f)
                         return new ReadingNote("splitting " + Glyph(content, recipe.Input) + " · " +
                             Percent(machine.Work) + "% through", NoteSeverity.Neutral);
 
                     return machine.Shape == recipe.Output
-                        ? new ReadingNote("holding " + Glyph(content, recipe.Output) + " — every outlet is full",
+                        ? new ReadingNote("holding " + Glyph(content, recipe.Output) + " - every outlet is full",
                             NoteSeverity.Warn)
-                        : new ReadingNote("idle — waiting for " + Glyph(content, recipe.Input),
+                        : new ReadingNote("idle - waiting for " + Glyph(content, recipe.Input),
                             NoteSeverity.Neutral);
                 }
 
@@ -224,23 +219,23 @@ namespace Facet.Core
                 {
                     Int2 lands = PipeLanding(cell, machine.Direction);
                     return machine.Shape == ShapeType.None
-                        ? new ReadingNote("empty — nothing delivered", NoteSeverity.Neutral)
+                        ? new ReadingNote("empty - nothing delivered", NoteSeverity.Neutral)
                         : new ReadingNote("carrying " + Glyph(content, machine.Shape) + " to " + lands + " · " +
                             Percent(machine.Work) + "% across", NoteSeverity.Neutral);
                 }
 
                 case BehaviorKind.Splitter:
                     if (machine.OutMask.IsEmpty)
-                        return new ReadingNote("no outlet — lay a belt pointing away from it", NoteSeverity.Warn);
+                        return new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
 
                     return machine.Shape == ShapeType.None
                         ? new ReadingNote("dealing whatever arrives round robin", NoteSeverity.Neutral)
-                        : new ReadingNote("holding " + Glyph(content, machine.Shape) + " — every outlet is full",
+                        : new ReadingNote("holding " + Glyph(content, machine.Shape) + " - every outlet is full",
                             NoteSeverity.Warn);
 
                 case BehaviorKind.Sorter:
                     if (machine.OutMask.IsEmpty)
-                        return new ReadingNote("no outlet — lay a belt pointing away from it", NoteSeverity.Warn);
+                        return new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
 
                     return new ReadingNote(Glyph(content, def.Filter) + " leaves by the side it faces · the rest take " +
                         "the other outlets", NoteSeverity.Neutral);
@@ -249,7 +244,7 @@ namespace Facet.Core
                 {
                     TurretDef spec = content.Turret(machine.Build);
                     if (!machine.Armed)
-                        return new ReadingNote("starved — no " + Glyph(content, spec.Ammo) + " waiting on its lines",
+                        return new ReadingNote("starved - no " + Glyph(content, spec.Ammo) + " waiting on its lines",
                             NoteSeverity.Warn);
 
                     return new ReadingNote(machine.HasTarget ? "armed · a target in range" : "armed · nothing in range",
@@ -273,7 +268,7 @@ namespace Facet.Core
         public static string FacingNote(in MachineDef def, in MachineSnapshot machine, ContentDatabase content)
         {
             if (def.Behavior == BehaviorKind.None && def.Tile != TileKind.Belt)
-                return "no facing — a wall only stands in the way";
+                return "no facing - a wall only stands in the way";
             if (!def.UsesFacing) return "ports read off the belts around it";
 
             switch (machine.Behavior)
@@ -299,19 +294,17 @@ namespace Facet.Core
         /// pointing away is an output, both masks straight off <see cref="MachineSnapshot"/>.</summary>
         public static string Ports(in MachineSnapshot machine)
             => machine.InMask.IsEmpty && machine.OutMask.IsEmpty
-                ? "no belts wired — a belt pointing in feeds it, one pointing away empties it"
+                ? "no belts wired - a belt pointing in feeds it, one pointing away empties it"
                 : "in " + Dirs(machine.InMask) + "  ·  out " + Dirs(machine.OutMask);
 
         // ---------------------------------------------------------------- the badge and the spin
 
         /// <summary>
-        /// What the building draws on itself. Keyed on the machine's <em>behaviour</em>, not on its
-        /// tile kind: a converter shows what its recipe is making, a turret its diet, a sorter the
-        /// shape it routes. The two converters therefore show the two different minerals without
-        /// this method naming either of them - a cutter's badge is simply the second recipe's output.
+        /// What the building draws on itself. Keyed on the machine's <em>behaviour</em>, not its tile
+        /// kind: a converter shows what its recipe makes, a turret its diet, a sorter the shape it routes.
         ///
-        /// Every behaviour that shows nothing says so by name; the fallback is a throw, because a
-        /// new behaviour silently badge-less is the bug this file's whole design argues against.
+        /// Every behaviour that shows nothing says so by name; the fallback is a throw, because a new
+        /// behaviour silently badge-less is the bug this file's design argues against.
         /// </summary>
         public static ShapeType Badge(in MachineState m, in MachineDef def, ContentDatabase content)
         {
@@ -408,12 +401,10 @@ namespace Facet.Core
 
         private static string Glyph(ContentDatabase content, ShapeType shape) => content.Shape(shape).Glyph;
 
+        /// <summary>A recipe's yield counted out in a sentence: the shape is spelled as a word, so a count
+        /// above one is said as "2 x ...".</summary>
         private static string Repeat(string text, int count)
-        {
-            var sb = new StringBuilder(text.Length * Math.Max(count, 1));
-            for (int i = 0; i < count; i++) sb.Append(text);
-            return sb.ToString();
-        }
+            => count <= 1 ? text : count + " x " + text;
 
         private static int Percent(float fraction)
             => (int)MathF.Round(fraction * 100f, MidpointRounding.AwayFromZero);

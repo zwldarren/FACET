@@ -18,13 +18,10 @@ namespace Facet.Core
         /// <summary>True once it has stopped to hit something - the Core, or a machine in reach.</summary>
         public bool Attacking;
 
-        /// <summary>
-        /// The walk this one chose when it spawned: true to flank (follow the threat-weighted field),
-        /// false to overrun (follow the plain shortest way). The choice is the whole route weighed once
-        /// at the door - <see cref="PathField.FlankAt"/> - and is kept for the enemy's life, so a
-        /// field rebuilt under a walking wave never dithers it between the two; the wave's next spawn
-        /// weighs the new ground instead.
-        /// </summary>
+        /// <summary>The walk this one chose when it spawned: true to flank (follow the threat-weighted
+        /// field), false to overrun (the plain shortest way). The choice is the whole route weighed once at
+        /// the door - <see cref="PathField.FlankAt"/> - and kept for the enemy's life, so a field rebuilt
+        /// under a walking wave never dithers it; the wave's next spawn weighs the new ground instead.</summary>
         public bool AvoidsFire;
     }
 
@@ -40,39 +37,31 @@ namespace Facet.Core
         public bool Attacking;
     }
 
-    /// <summary>
-    /// Every enemy on the map, plus the four things that happen to them: walking at the Core, being
-    /// shot, stopping to tear down whatever machine stands in the way, and giving each other room.
+    /// <summary>Every enemy on the map, plus the four things that happen to them: walking at the Core,
+    /// being shot, stopping to tear down whatever machine stands in the way, and giving each other room.
     ///
     /// <b>Machines block and are attackable; belts are walked over.</b> An enemy walks a
     /// <see cref="PathField"/>'s flow toward the Core - around machines, not through them - the plain
-    /// shortest way unless it weighed the ground at its door and chose to flank the guns' coverage
-    /// instead. It stops the moment
-    /// an attackable machine is within <see cref="EnemyDef.AggroRange"/>, and charges one it notices
-    /// within <see cref="EnemyDef.DetectionRange"/>: aggressive targeting, not just obstacle
-    /// avoidance, so a building beside the path is a target rather than scenery. Between two machines
-    /// in reach of its notice, the turret is the one it charges - the wave hunts the guns, which is why
-    /// a bare gun wants a wall between it and the lane. When the flow has no
-    /// direction for a cell (the Core is sealed in), it walks straight at the Core and chews through
-    /// whatever blocks the way; a standing enemy is always within its own reach of the blocker it is
-    /// pressed against, so the siege resolves itself. Belts are walkable and unattackable,
-    /// deliberately: a belt is a flat conveyor, and the 1-cost cell must not become the cheapest wall.
+    /// shortest way unless it weighed the ground at its door and chose to flank the guns' coverage. It stops
+    /// when an attackable machine is within <see cref="EnemyDef.AggroRange"/> and charges one it notices
+    /// within <see cref="EnemyDef.DetectionRange"/>: aggressive targeting, not just obstacle avoidance, so a
+    /// building beside the path is a target rather than scenery. Between two machines in reach, the turret is
+    /// the one it charges - the wave hunts the guns, which is why a bare gun wants a wall between it and the
+    /// lane. When the flow has no direction (the Core is sealed in), it walks straight at the Core and chews
+    /// through whatever blocks the way; a standing enemy is always within reach of the blocker it is pressed
+    /// against, so the siege resolves itself. Belts are walkable and unattackable deliberately: the 1-cost
+    /// cell must not become the cheapest wall.
     ///
     /// The Core's rules are untouched: reaching the attack ring stops an enemy and drains
-    /// <see cref="CoreState.Hp"/> at its own damage and interval.
-    ///
-    /// <b>Walkers keep their distance from each other.</b> One separation pass per tick pushes any pair
-    /// closer than <see cref="Balance.EnemySpacing"/> apart (see <see cref="Separate"/>), so a wave
-    /// walks in as bodies rather than one sprite.
-    /// </summary>
+    /// <see cref="CoreState.Hp"/> at its own damage and interval. <b>Walkers keep their distance from each
+    /// other:</b> one separation pass per tick pushes any pair closer than <see cref="Balance.EnemySpacing"/>
+    /// apart (see <see cref="Separate"/>).</summary>
     public sealed class EnemyField
     {
-        /// <summary>
-        /// Slack on the Core's reach ring. The ring position is computed by scaling a vector, so the
-        /// radius it lands on is <c>reach * (1 +- 1e-7)</c>: without this, an enemy that arrives ends up
-        /// standing a float hair outside the ring, fails the range test every tick, and hovers there
-        /// forever without attacking. A thousandth of a tile is far below anything visible.
-        /// </summary>
+        /// <summary>Slack on the Core's reach ring. The ring position is computed by scaling a vector, so
+        /// the radius it lands on is <c>reach * (1 +- 1e-7)</c>: without this, an enemy that arrives stands a
+        /// float hair outside the ring, fails the range test every tick, and hovers forever. A thousandth of
+        /// a tile is far below anything visible.</summary>
         private const float ReachEpsilon = 1e-3f;
 
         private EnemyState[] _enemies;
@@ -124,12 +113,11 @@ namespace Facet.Core
             _nextId = 1;
         }
 
-        /// <summary>Create one enemy. Returns its id, which is what shots home in on.
-        ///
-        /// The field is synced here rather than trusted to have been stepped this tick: a spawner
-        /// outside the tick - a test, mostly - can place a building and spawn in the same breath, and
-        /// the flanking judgement (<see cref="EnemyState.AvoidsFire"/>) must read the ground as it
-        /// stands, not as the last rebuild left it. Sync is a no-op when nothing changed.</summary>
+        /// <summary>Create one enemy. Returns its id, which is what shots home in on. The field is synced
+        /// here rather than trusted to have been stepped this tick: a spawner outside the tick - a test,
+        /// mostly - can place a building and spawn in the same breath, and the flanking judgement
+        /// (<see cref="EnemyState.AvoidsFire"/>) must read the ground as it stands. Sync is a no-op when
+        /// nothing changed.</summary>
         public int Spawn(EnemyKind kind, Vec2 position)
         {
             if (_count == _enemies.Length)
@@ -154,8 +142,8 @@ namespace Facet.Core
                 AttackCooldown = 0f,
 
                 // The one decision a walker makes for itself, at the door: flank the covered way or
-                // overrun it. The field is rebuilt on the same revision the spawner's tick used, so
-                // the judgement reads the ground as it stands this tick.
+                // overrun it. The field is rebuilt on the same revision the spawner's tick used, so the
+                // judgement reads the ground as it stands.
                 AvoidsFire = _paths.FlankAt(_grid.CellAt(position)),
             };
 
@@ -165,12 +153,10 @@ namespace Facet.Core
             return id;
         }
 
-        /// <summary>
-        /// Advance every enemy, in this order each: hold at the Core's ring and hit it; stop and hit an
-        /// attackable machine in reach; walk one step along the flow field toward the Core; or, when the
-        /// flow has no direction, walk straight at the Core and hit whatever blocks the way. One
-        /// separation pass afterwards gives the walkers their own room.
-        /// </summary>
+        /// <summary>Advance every enemy, in this order each: hold at the Core's ring and hit it; stop and
+        /// hit an attackable machine in reach; walk one step along the flow field toward the Core; or, when
+        /// the flow has no direction, walk straight at the Core and hit what blocks the way. One separation
+        /// pass afterwards gives the walkers their own room.</summary>
         public void Step(float dt, ref CoreState core)
         {
             Vec2 centre = core.Center;
@@ -185,9 +171,9 @@ namespace Facet.Core
                 EnemyDef spec = _content.Enemy(e.Kind);
                 float distance = (centre - e.Position).Magnitude;
 
-                // 1. The Core, first: an enemy inside the ring hits it even if a machine is also in
-                // reach, so a defence built right on the Core cannot distract an enemy from losing the
-                // run. Unchanged from the straight-line days, including the exact landing on the ring.
+                // 1. The Core, first: an enemy inside the ring hits it even if a machine is also in reach,
+                // so a defence built on the Core cannot distract an enemy from losing the run. Unchanged
+                // from the straight-line days, including the exact landing on the ring.
                 if (distance <= stopAt)
                 {
                     e.Attacking = true;
@@ -202,25 +188,23 @@ namespace Facet.Core
                 }
 
                 // 2. Machines, nearest first: inside the attack reach it stops and hits the machine;
-                // between the reach and the notice range it charges it - leaving its path and heading
-                // for the building, which is what stops a machine two tiles off the lane from being
-                // furniture. The scan covers both, and the nothing-can-be-closer-than-the-nearest
-                // invariant still holds for the attack decision, because a preferred turret beyond
-                // reach falls back to the nearest machine inside it. The
-                // same cooldown covers the Core and every machine, so the damage rate is the enemy's
-                // rate whatever it is hitting. A gun is charged before a granary anywhere in reach of
-                // its notice, nearer or not - the turret is what is killing the wave, so it is what
-                // the wave kills first, which is why a bare gun wants a wall between it and the lane
-                // it covers.
+                // between the reach and the notice range it charges it - leaving its path for the
+                // building, which stops a machine two tiles off the lane from being furniture. The scan
+                // covers both, and the nothing-can-be-closer-than-the-nearest invariant still holds,
+                // because a preferred turret beyond reach falls back to the nearest machine inside it.
+                // The same cooldown covers the Core and every machine, so the damage rate is the
+                // enemy's whatever it hits. A gun is charged before a granary anywhere in reach of its
+                // notice, nearer or not - the turret is what is killing the wave, and a bare gun wants a
+                // wall between it and the lane it covers.
                 float notice = MathF.Max(spec.AggroRange, spec.DetectionRange);
                 if (_machines.TryFindNearest(e.Position, notice, out Int2 target, preferTurrets: true))
                 {
                     float gap = (_grid.CellCenter(target) - e.Position).Magnitude;
 
-                    // A machine the walker can actually chew outranks one it can only dream of: when
-                    // the preferred gun sits beyond reach - behind the wall this posture invites -
-                    // charging it would pin the walker against the wall forever, attacking neither.
-                    // Chew the blocker; the scan re-hunts the gun the moment it is gone.
+                    // A machine the walker can actually chew outranks one it can only dream of: when the
+                    // preferred gun sits beyond reach - behind the wall this posture invites - charging it
+                    // would pin the walker against the wall forever, attacking neither. Chew the blocker;
+                    // the scan re-hunts the gun the moment it is gone.
                     if (gap > spec.AggroRange
                         && _machines.TryFindNearest(e.Position, spec.AggroRange, out Int2 reachable))
                     {
@@ -248,10 +232,9 @@ namespace Facet.Core
                 e.Attacking = false;
                 float step = spec.Speed * dt;
 
-                // 3. The flow field - the one this walker chose at the door - steer at the centre of
-                // the next cell on the way to the Core, and land exactly on it rather than stepping
-                // past it: overshooting would oscillate around the centre the way it would around the
-                // Core's ring.
+                // 3. The flow field - the one this walker chose at the door - steer at the centre of the
+                // next cell on the way to the Core, and land exactly on it rather than stepping past:
+                // overshooting would oscillate around the centre as it would around the Core's ring.
                 Int2 cell = _grid.CellAt(e.Position);
                 if (_paths.TryDirection(cell, e.AvoidsFire, out Dir dir))
                 {
@@ -259,27 +242,23 @@ namespace Facet.Core
                     continue;
                 }
 
-                // 4. Sealed out: no way from here, so walk straight at the Core like an enemy always
-                // used to - but never into a solid cell. A standing enemy is always within its own reach
-                // of the blocker (1.6 >= sqrt 2), so step 2 chews it down next tick.
+                // 4. Sealed out: no way from here, so walk straight at the Core as an enemy always did -
+                // but never into a solid cell. A standing enemy is always within reach of the blocker
+                // (1.6 >= sqrt 2), so step 2 chews it down next tick.
                 e.Position = Advance(e.Position, centre, step);
             }
 
             Separate(dt);
         }
 
-        /// <summary>
-        /// The walkers' own collision: any two closer than <see cref="Balance.EnemySpacing"/> push each
-        /// other apart by half the overlap each. Symmetric by construction - every pair is walked once
-        /// and both halves are accumulated before anything moves, so the result does not depend on pair
-        /// order - and the push goes through <see cref="Advance"/> capped at the walker's own speed, so
-        /// separation can neither shove a walker into a solid cell nor teleport a deep pile clear in one
-        /// tick. Exactly-overlapping walkers part along X: an axis fixed by the code, not by whatever
-        /// the map happened to be doing, so a replay still matches.
-        ///
-        /// Spawning is deliberately not special-cased: a door is one tile, so a fast group can be set
-        /// down stacked, and this pass - not the door - is what pulls the arrival out of the queue.
-        /// </summary>
+        /// <summary>The walkers' own collision: any two closer than <see cref="Balance.EnemySpacing"/> push
+        /// each other apart by half the overlap each. Symmetric by construction - every pair is walked once
+        /// and both halves accumulated before anything moves, so the result does not depend on pair order -
+        /// and the push goes through <see cref="Advance"/> capped at the walker's own speed, so separation can
+        /// neither shove a walker into a solid cell nor teleport a deep pile clear in one tick.
+        /// Exactly-overlapping walkers part along X, an axis fixed by the code, so a replay still matches.
+        /// Spawning is deliberately not special-cased: this pass, not the door, pulls a stacked arrival out
+        /// of the queue.</summary>
         private void Separate(float dt)
         {
             if (_count < 2) return;
@@ -315,9 +294,9 @@ namespace Facet.Core
 
                 ref EnemyState e = ref _enemies[i];
 
-                // A push never moves a walker faster than that walker moves itself: the pass resolves
-                // an overlap at walking pace - a few ticks for a pair that spawned on the same spot,
-                // invisible for the hundredth of a tile the ordinary case closes by.
+                // A push never moves a walker faster than it moves itself: the pass resolves an overlap at
+                // walking pace - a few ticks for a pair that spawned on the same spot, invisible for the
+                // hundredth of a tile the ordinary case closes by.
                 float cap = _content.Enemy(e.Kind).Speed * dt;
                 if (cap <= 0f) continue;
                 if (length > cap) push = push * (cap / length);
@@ -326,18 +305,15 @@ namespace Facet.Core
             }
         }
 
-        /// <summary>May a walker enter this cell? Ground and ore are open, and so are belts and the Core;
-        /// a machine is a wall whether or not it happens to have HP left, and so is the map's own rock,
-        /// water and void. One rule, stated once, in <see cref="TerrainField.Walkable"/>.</summary>
+        /// <summary>May a walker enter this cell? Ground and ore are open, and so are belts and the Core; a
+        /// machine is a wall whether or not it has HP left, and so is the map's rock, water and void. One
+        /// rule, stated once, in <see cref="TerrainField.Walkable"/>.</summary>
         private bool Open(Int2 cell) => _terrain.Walkable(cell);
 
-        /// <summary>
-        /// Walk one step from <paramref name="from"/> toward <paramref name="to"/>, landing exactly on it
-        /// when the step reaches it - and never into a solid cell: a blocked step slides along one axis,
-        /// then the other, and stands still if both are closed. That guard is what presses a charging
-        /// enemy against the machine it is headed for instead of through it, and it is the same guard
-        /// that keeps the siege honest.
-        /// </summary>
+        /// <summary>Walk one step from <paramref name="from"/> toward <paramref name="to"/>, landing exactly
+        /// on it when the step reaches it - and never into a solid cell: a blocked step slides along one
+        /// axis, then the other, and stands still if both are closed. That guard presses a charging enemy
+        /// against the machine it is headed for instead of through it, and keeps the siege honest.</summary>
         private Vec2 Advance(Vec2 from, Vec2 to, float step)
         {
             Vec2 delta = to - from;
@@ -354,13 +330,10 @@ namespace Facet.Core
 
             return from;
         }
-        /// <summary>
-        /// Hits one enemy for what the shot is worth against it: a shot whose ammunition matches the
-        /// enemy's weakness lands its full damage, and anything else lands a quarter of it. So a
-        /// turret's damage number is what it does to the enemy it was built for, not a flat rate
-        /// against the whole roster, and <see cref="TurretDef.Ammo"/> and
-        /// <see cref="EnemyDef.Weakness"/> are a real choice rather than a label on the card.
-        /// </summary>
+        /// <summary>Hits one enemy for what the shot is worth against it: ammunition matching the enemy's
+        /// weakness lands its full damage, anything else a quarter. So a turret's damage is what it does to
+        /// the enemy it was built for, not a flat rate against the roster, and <see cref="TurretDef.Ammo"/>
+        /// and <see cref="EnemyDef.Weakness"/> are a real choice rather than a label on the card.</summary>
         public void ApplyDamage(int id, float baseDamage, ShapeType ammo)
         {
             if (!_slotById.TryGetValue(id, out int slot)) return;
@@ -392,16 +365,12 @@ namespace Facet.Core
         /// purpose: nobody may hold a reference into an array that kills reorder.</summary>
         public EnemyState EnemyAt(int index) => _enemies[index];
 
-        /// <summary>
-        /// The enemy a turret fed <paramref name="ammo"/> should shoot: the nearest one weak to it,
-        /// or the nearest in range at all when nothing weak is there. The weakness rule makes which
-        /// enemy a shot lands on worth four times the damage, so a turret prefers the enemy it was
-        /// built for - but it never holds its fire while something it can still scratch is in range,
-        /// because a resisted shot is some damage and a held one is none. Ties go to the lower slot,
-        /// so which of two equidistant enemies a turret picks is a function of the map state and not
-        /// of anything the caller did. False when nothing is in range, in which case the outputs are
-        /// unusable.
-        /// </summary>
+        /// <summary>The enemy a turret fed <paramref name="ammo"/> should shoot: the nearest one weak to it,
+        /// or the nearest in range at all when nothing weak is there. A weakness match is worth four times the
+        /// damage, so a turret prefers the enemy it was built for - but it never holds fire while something it
+        /// can still scratch is in range, because a resisted shot is some damage and a held one is none. Ties
+        /// go to the lower slot, so which of two equidistant enemies it picks is a function of the map state,
+        /// not the caller. False when nothing is in range, in which case the outputs are unusable.</summary>
         public bool TryFindPreferred(Vec2 centre, float range, ShapeType ammo, out int id, out Vec2 position)
         {
             float bestSq = range * range;

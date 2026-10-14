@@ -1,12 +1,10 @@
 namespace Facet.Core
 {
     /// <summary>
-    /// The object the player defends. Sim-owned state; the view only reads it.
-    /// Enemies path toward <see cref="Cell"/> and drain <see cref="Hp"/>;
-    /// reaching zero is the loss condition.
-    ///
-    /// It occupies a <see cref="Size"/> x <see cref="Size"/> block of tiles, so <see cref="Cell"/> is
-    /// the block's lower-left tile, not its middle - the middle of a 4x4 block is not a tile.
+    /// The object the player defends. Sim-owned state; the view only reads it. Enemies path toward
+    /// <see cref="Cell"/> and drain <see cref="Hp"/>; zero is the loss condition. It occupies a
+    /// <see cref="Size"/> x <see cref="Size"/> block, so <see cref="Cell"/> is the lower-left tile, not
+    /// the middle - the middle of a 4x4 block is not a tile.
     /// </summary>
     public struct CoreState
     {

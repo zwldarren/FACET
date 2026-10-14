@@ -7,10 +7,9 @@ using UnityEngine;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The visual-override layer, unit-tested without a scene. It exists so that a re-skin is an
-    /// asset edit: every entry is override-only, so an untouched Palette must resolve to exactly the
-    /// built-in look, and a ticked one must resolve to itself. The tests pin both, plus the
-    /// silhouettes the procedural path draws.
+    /// The visual-override layer, unit-tested without a scene. It exists so a re-skin is an asset edit:
+    /// every entry is override-only, so an untouched Palette resolves to exactly the built-in look and a
+    /// ticked one resolves to itself. The tests pin both, plus the silhouettes the procedural path draws.
     /// </summary>
     public class VisualCatalogTests
     {
@@ -59,8 +58,7 @@ namespace Facet.Tests
         public void AKindWithNoEntry_HasNoAuthoredLook_AndThatIsEveryKindByDefault()
         {
             // The property that makes "add a building = an enum value plus a content row" true: the block is
-            // keyed by kind rather than naming the kinds, so a kind nobody has re-skinned simply has no
-            // entry - and no switch has to learn about a building that did not exist when it was written.
+            // keyed by kind rather than naming the kinds, so a kind nobody has re-skinned simply has no entry.
             var machines = new MachineVisuals();
             var shapes = new ShapeVisuals();
 
@@ -98,8 +96,8 @@ namespace Facet.Tests
         [Test]
         public void ANullEntry_InTheList_IsSkippedRatherThanFatal()
         {
-            // The Inspector leaves a null when a row is deleted, exactly as it does for the content
-            // asset's rows; resolving a look must not trip over it.
+            // The Inspector leaves a null when a row is deleted, exactly as for the content asset's rows;
+            // resolving a look must not trip over it.
             var machines = new MachineVisuals { Entries = new MachineVisuals.Entry[] { null } };
             var shapes = new ShapeVisuals { Entries = new ShapeVisuals.Entry[] { null } };
 

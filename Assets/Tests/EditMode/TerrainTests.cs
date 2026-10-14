@@ -5,21 +5,17 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The ground, as the simulation reads it: what a map's terrain data becomes in a world, and what
-    /// the three things that move do about it.
-    ///
-    /// A map used to be a rectangle of buildable ground with ore in it, so "terrain" was one special
-    /// case (a patch takes a belt and only a drill) and one rule ("is a machine here" was the whole of
-    /// walkability). Rock, water and the void outside the map are what turned that into a layer of its
-    /// own, and these are the rules that layer is supposed to hold to.
+    /// The ground as the simulation reads it: what a map's terrain data becomes in a world, and what
+    /// the three things that move do about it. Rock, water and the void turned "is a machine here" into
+    /// a layer of its own, and these pin the rules that layer holds to.
     /// </summary>
     public class TerrainTests
     {
         [Test]
         public void Terrain_StampsTheMapsGround_AndOnlyTheMaps()
         {
-            // A rock field, a void band along the top, and bare ground everywhere else: the three
-            // answers a world has to give back, including the default one for a map that never said.
+            // A rock field, a void band along the top, bare ground elsewhere: the three answers a world
+            // gives back, including the default for a map that never said.
             SimWorld world = TerrainWorld(12, 10, TerrainLayout.Rects(12, 10,
                 new TerrainRect(new Int2(2, 2), 6, 4, TerrainKind.Rock),
                 new TerrainRect(new Int2(0, 8), 12, 2, TerrainKind.Void)));
@@ -29,8 +25,8 @@ namespace Facet.Tests
             Assert.AreEqual(TerrainKind.Void, world.Terrain.KindAt(new Int2(1, 9)), "the band is void");
             Assert.AreEqual(TerrainKind.Ground, world.Terrain.KindAt(new Int2(10, 7)), "and the rest is ground");
 
-            // A map with no terrain array at all is plain ground: the shape every map used to be, and
-            // what keeps "a map with no obstacles" from being a special case anywhere.
+            // A map with no terrain array is plain ground: the shape every map used to be, and what keeps
+            // "a map with no obstacles" from being a special case anywhere.
             SimWorld plain = Sim.NewWorld(12, 10);
             Assert.IsNull(plain.Map.Terrain);
             Assert.AreEqual(TerrainKind.Ground, plain.Terrain.KindAt(new Int2(0, 0)));
@@ -40,10 +36,10 @@ namespace Facet.Tests
         [Test]
         public void Terrain_TheCoreKeepsItsTiles_EvenWhereTheMapDisagrees()
         {
-            // The Core is stamped before the ground, so a map whose terrain data covers the Core's own
-            // tiles still produces a playable world - the thing being defended cannot be buried by a
-            // rock the author drew over it. MapValidation is what tells the author it happened; this
-            // asserts that the world, at least, is not broken by it.
+            // The Core is stamped before the ground, so a map whose terrain covers the Core's own tiles
+            // still produces a playable world - the thing being defended cannot be buried by rock the
+            // author drew over it. MapValidation is what tells the author; this asserts the world, at
+            // least, is not broken by it.
             var core = new Int2(4, 3);
             SimWorld world = TerrainWorld(12, 10,
                 TerrainLayout.Rects(12, 10, new TerrainRect(core, 4, 4, TerrainKind.Rock)));
@@ -68,8 +64,8 @@ namespace Facet.Tests
         [Test]
         public void Terrain_AMapCanPutItsCoreWhereItLikes()
         {
-            // The centre of a rectangle is a fine place for a tutorial's Core and a poor one for a map
-            // that is not a rectangle, so the map states it and the world obeys.
+            // The centre of a rectangle is a fine place for a tutorial's Core and a poor one for an
+            // irregular map, so the map states it and the world obeys.
             var map = new MapDefinition("corner", 12, 10, Sim.TestCircles, new ShapePatch[0],
                 new Int2[0], new WaveDefinition[0],
                 TerrainLayout.Rects(12, 10, new TerrainRect(new Int2(0, 6), 4, 4, TerrainKind.Rock)),
@@ -87,10 +83,10 @@ namespace Facet.Tests
         [Test]
         public void Terrain_RockIsAWallToWalkers_SoTheWaveFindsTheGate()
         {
-            // The claim a map's own rock makes: a wave walks around it, in the flow field, without the
-            // player having built anything. A full-height rock wall with one gate at the bottom, and a
-            // walker on the far side of it: if the ground were not read by the path field the walker
-            // would walk straight through the rock, and if the gate were not read it would never arrive.
+            // The claim a map's own rock makes: a wave walks around it in the flow field without the
+            // player building anything. A full-height rock wall with one gate at the bottom, and a walker
+            // on the far side: if the ground were not read by the path field the walker would cross the
+            // rock, and if the gate were not read it would never arrive.
             const int width = 20;
             const int height = 12;
 
@@ -153,9 +149,8 @@ namespace Facet.Tests
         public void Terrain_ABeltFacingRock_StallsAtFullProgress()
         {
             // A belt pointed at something that will never take an item settles at progress 1 - the same
-            // thing it does at a wall the player built. Rock does not eat the item and does not jam the
-            // line; it simply is not a destination, which is what the last cell of a wrong turn looks
-            // like.
+            // as at a wall the player built. Rock does not eat the item and does not jam the line; it is
+            // simply not a destination, which is what the last cell of a wrong turn looks like.
             SimWorld world = TerrainWorld(12, 10,
                 TerrainLayout.Rects(12, 10, new TerrainRect(new Int2(6, 2), 2, 2, TerrainKind.Rock)));
 
@@ -174,8 +169,8 @@ namespace Facet.Tests
         public void Terrain_Restart_LeavesTheGroundExactlyAsTheMapDrewIt()
         {
             // Terrain is the map, and nothing the player does may change it - including the one action
-            // that wipes the run. A restart rebuilds from the map's own data, so the vein has to be in
-            // that data to come back: this is the map's re-stamping, not a leftover in a field.
+            // that wipes the run. A restart rebuilds from the map's own data, so the vein has to be in that
+            // data to come back: this is re-stamping, not a leftover in a field.
             var ore = new Int2(10, 8);
             var map = new MapDefinition("terrain", 16, 12, Sim.TestCircles,
                 new[] { new ShapePatch(ore, 2, 1, ShapeType.Square) }, new Int2[0], new WaveDefinition[0],

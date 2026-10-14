@@ -5,10 +5,10 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// The inspect cursor: nothing selected, so the left button reads the map instead of building on
-    /// it. What a view draws from this - the cursor's border, the info card - is the views' business;
-    /// what is proved here is the state they read: which tile is pinned, and that a command with no
-    /// selection places nothing.
+    /// The inspect cursor: nothing selected, so the left button reads the map instead of building on it.
+    /// What a view draws from this - the cursor's border, the info card - is the views' business; proved
+    /// here is the state they read: which tile is pinned, and that a command with no selection places
+    /// nothing.
     /// </summary>
     public class InspectTests
     {
@@ -31,8 +31,8 @@ namespace Facet.Tests
         public void ACommandWithNoSelection_PlacesNothing()
         {
             // The click that reads a building is the same press that used to build one. With nothing
-            // selected it must do neither: no drill on the patch under the cursor, no run behind it,
-            // and no circles spent.
+            // selected it must do neither: no drill on the patch under the cursor, no run behind it, no
+            // circles spent.
             SimWorld world = Sim.NewWorld(16, 10);
             world.Terrain.SetOre(Ore, ShapeType.Circle);
             int circles = world.Economy.Circles;
@@ -105,9 +105,9 @@ namespace Facet.Tests
         [Test]
         public void AskingForTheSameBuildingTwice_DropsTheSelection()
         {
-            // The digits and the bar's tiles are two doors onto one latch, so "again" belongs to the
-            // input source: press 1 twice and nothing is selected, which is the read cursor the run
-            // opens in. The world is only ever told what the selection ended up being.
+            // The digits and the bar's tiles are two doors onto one latch, so "again" belongs to the input
+            // source: press 1 twice and nothing is selected, the read cursor the run opens in. The world is
+            // only ever told what the selection ended up being.
             var input = new BuildInput();
 
             input.RequestSelect(BuildKind.Drill);

@@ -7,10 +7,9 @@ namespace Facet.Tests
 {
     /// <summary>
     /// The terrain view, driven by hand the way <see cref="MeshViewDrawTests"/> drives its counting view:
-    /// a frame in, one mesh out. What is pinned here is the cheap end of the terrain layer - that a map
-    /// with nothing but ground and ore on it costs the terrain view no geometry at all, and that rock
-    /// and water are what it exists to draw. The PlayMode suite pins a map with a ground of its own
-    /// drawing it, through the driver's own views; this is where a plain map exists to be measured.
+    /// a frame in, one mesh out. What is pinned is the cheap end of the terrain layer - a map with only
+    /// ground and ore costs the terrain view no geometry, and rock and water are what it exists to draw.
+    /// The PlayMode suite pins a map with a ground of its own drawing it through the driver's own views.
     /// </summary>
     public class TerrainRendererTests
     {

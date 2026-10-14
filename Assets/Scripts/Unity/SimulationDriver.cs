@@ -4,11 +4,9 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// The bridge between Unity and the simulation: owns one <see cref="SimWorld"/> and
-    /// advances it at a fixed <see cref="SimConfig.TickRate"/> Hz regardless of frame rate.
-    /// This is the ONLY component you need to add to a scene - it builds the views itself.
-    /// </summary>
+    /// <summary>The bridge between Unity and the simulation: owns one <see cref="SimWorld"/> and
+    /// advances it at a fixed <see cref="SimConfig.TickRate"/> Hz regardless of frame rate. The ONLY
+    /// component a scene needs - it builds the views itself.</summary>
     [DefaultExecutionOrder(-100)]
     public sealed class SimulationDriver : MonoBehaviour
     {
@@ -49,18 +47,16 @@ namespace Facet.Game
 
         public Palette Colors => palette;
 
-        /// <summary>Where the player is in the campaign. It outlives every world it builds, which is
-        /// the whole reason it is not a field on <see cref="SimWorld"/>.</summary>
+        /// <summary>Where the player is in the campaign; it outlives every world it builds, which is
+        /// why it is not a field on <see cref="SimWorld"/>.</summary>
         public CampaignState Campaign { get; private set; }
 
-        /// <summary>
-        /// The progression this run walks: the maps the scene's map set names, in its order, so which map is
-        /// next is one answer for the driver, the campaign and the HUD.
-        /// </summary>
+        /// <summary>The progression this run walks: the maps the scene's map set names, in order, so
+        /// which map is next is one answer for the driver, the campaign and the HUD.</summary>
         public MapCatalog Catalog { get; private set; }
 
-        /// <summary>The content table this run was built with, whether it came from the asset or the
-        /// shipped defaults. Read by the HUD so what it prints is the same table the tick runs on.</summary>
+        /// <summary>The content table this run was built with, from the asset or the shipped defaults;
+        /// the HUD reads it so it prints the same table the tick runs on.</summary>
         public ContentDatabase Content { get; private set; }
 
         /// <summary>How far the renderer is between the previous and the current tick, 0..1.</summary>
@@ -79,12 +75,16 @@ namespace Facet.Game
         private Camera _camera;
         private float _accumulator;
 
-        /// <summary>Every mesh view, so a map change can point them all at the new world. Gathered as
-        /// they are built rather than looked up by name, so a view added later cannot be forgotten.</summary>
+        /// <summary>Every mesh view, gathered as built rather than looked up by name so a view added
+        /// later cannot be forgotten when a map change points them at the new world.</summary>
         private readonly List<MeshView> _views = new List<MeshView>();
 
         /// <summary>The camera rig, whose pan bounds are the map's size and so have to follow it.</summary>
         private CameraRig _rig;
+
+        /// <summary>The out-of-view locator, which needs the camera only the rig's owner knows; re-handed
+        /// on every map change with the rig.</summary>
+        private ThreatRadarView _radar;
 
         /// <summary>The HUD, for its panels' claim on the mouse. Null until the views are built (and
         /// for a driver that never built any).</summary>
@@ -92,27 +92,23 @@ namespace Facet.Game
 
         private void Awake()
         {
-            // Tile coordinates ARE world coordinates here: the views build their meshes in tile
-            // space, and the cursor turns a screen point straight into a tile. So this object has to
-            // sit at the origin, or everything drawn drifts away from everything clicked. Pinned in
-            // code rather than left to scene authoring, because the symptom is a silent offset that
-            // looks like a mesh bug.
+            // Tile coordinates ARE world coordinates: the views build in tile space and the cursor turns
+            // a screen point straight into a tile, so this object must sit at the origin or everything
+            // drawn drifts from everything clicked. Pinned in code because the symptom is a silent offset.
             transform.position = Vector3.zero;
 
             if (palette == null)
             {
-                // Keeps a scene that has not been wired to a Palette asset runnable, and says so
-                // rather than drawing in whatever colour a null reference happens to produce.
+                // Keeps an unwired scene runnable, and says so rather than drawing a null reference's colour.
                 Debug.LogWarning("FACET: no Palette assigned - using code defaults. " +
                     "Assign one (Assets > Create > FACET > Palette) to tune colours and line widths.", this);
                 palette = ScriptableObject.CreateInstance<Palette>();
                 palette.hideFlags = HideFlags.DontSave;
             }
 
-            // The campaign, and the content every map of it will be played with: the content table is
-            // converted once here, so a map change costs one SimWorld. The catalog is built once too, from
-            // the map set the scene is wired to - and a campaign with no maps in it is a game with nothing
-            // to play, which is said out loud rather than started.
+            // The campaign and the content every map is played with: the content table is converted once
+            // here, so a map change costs one SimWorld. The catalog is built once from the wired map set;
+            // a campaign with no maps is said out loud rather than started.
             Catalog = MapCatalog.From(campaign);
             if (Catalog == null)
             {
@@ -156,10 +152,8 @@ namespace Facet.Game
         private void Update()
         {
             // Unity can call Update on an instance whose Awake never completed: a script reload during
-            // play restores the scene - the one that happens when the Editor's "Reload Domain" is off
-            // and the sources change under a running game - without re-awaking what it restores. There
-            // is nothing to advance then: the driver stands down rather than throwing once per frame,
-            // and its Awake's own bail (no camera) has already done the same.
+            // play restores the scene without re-awaking it. The driver stands down rather than throwing
+            // once per frame, as its Awake's own no-camera bail already does.
             if (_input == null)
             {
                 enabled = false;
@@ -174,18 +168,14 @@ namespace Facet.Game
                 Debug.Log("FACET: " + (World.Paused ? "paused" : "resumed") + " at tick " + World.TickCount, this);
             }
 
-            // Sample the devices once, then hand the same latched command to every tick this frame:
-            // a click that arrived between two ticks must be applied once, not once per catch-up tick.
-            // The HUD has first claim on the mouse: while the pointer is over a panel the buttons do
-            // not reach the world, so pressing the start-wave button cannot also drop a belt under it.
+            // Sample the devices once, then hand the same latched command to every tick this frame, so a
+            // click between two ticks applies once, not once per catch-up tick. The HUD has first claim on
+            // the mouse, so pressing a panel button cannot also drop a belt under it.
             _input.Sample(_camera, World, _hud != null && _hud.PointerOverHud);
 
-            // N means "go on" in both states a run can be in: start the next wave while a map is still
-            // being fought, and carry on to the next map once it is won. The world drops a start-wave
-            // request that arrives after the run ended, so this is the only reader that acts on it
-            // there - and the one-shot is consumed here either way, so the new map does not spend the
-            // same press a second time: every map's opening waits for the player's first building, and N
-            // cuts that wait short like any other.
+            // N means "go on" in both run states: start the next wave mid-map, and carry on to the next map
+            // once won. The world drops a post-run start-wave request, so this is the only reader here - and
+            // the one-shot is consumed either way, so the new map does not spend the same press twice.
             if (World.Status == GameStatus.Won && _input.StartWaveRequested)
             {
                 _input.ConsumeOneShots();
@@ -194,6 +184,9 @@ namespace Facet.Game
 
             InputCommand cmd = _input.Snapshot();
             CursorCell = cmd.CursorCell;
+            // Handed to the HUD for the cursor tooltip: the input latch owns the devices, so the HUD
+            // cannot sample the tile itself, and reading is not building.
+            if (_hud != null) _hud.SetCursor(CursorCell);
 
             _accumulator += Time.deltaTime;
 
@@ -211,17 +204,16 @@ namespace Facet.Game
             // Drop the leftover backlog rather than trying to catch up forever.
             if (ticks >= MaxTicksPerFrame) _accumulator = 0f;
 
-            // Recorded as it happens rather than on a keypress, so the campaign's own count is right
-            // whatever got the player here. Idempotent, so polling every frame is the honest way to
-            // read an edge the world does not report.
+            // Recorded as it happens rather than on a keypress, so the count is right whatever got the
+            // player here; idempotent, so polling every frame is the honest way to read an unreported edge.
             if (World.Status == GameStatus.Won) Campaign.MarkCleared();
 
             Alpha = World.Paused || World.Status != GameStatus.Playing
                 ? 1f
                 : Mathf.Clamp01(_accumulator / SimConfig.TickDt);
 
-            // Publish the frame views draw in. Written once here, after the tick loop and after
-            // WorldPerPixel was refreshed, so every view in this frame reads the same value.
+            // Publish the frame views draw in, written once after the tick loop and the WorldPerPixel
+            // refresh, so every view reads the same value.
             Frames.Frame = new ViewFrame(Alpha, WorldPerPixel, CursorCell);
         }
 
@@ -232,21 +224,18 @@ namespace Facet.Game
                 : 0.02f;
         }
 
-        /// <summary>
-        /// Swap in the map the campaign is now on, without reloading the scene.
+        /// <summary>Swap in the map the campaign is now on, without reloading the scene.
         ///
-        /// The world is <em>replaced</em> rather than reset: a world is one run, its fields are sized by
-        /// its map, and its map is fixed for its lifetime - so a new map is a new world, built from its
-        /// own data with the same content table. The views take a rebind rather than a rebuild, because
-        /// their meshes, material and pooled sprites are the same objects either way.
-        /// </summary>
+        /// The world is <em>replaced</em> rather than reset: a world is one run, sized and fixed by its
+        /// map, so a new map is a new world built from its own data with the same content table. The
+        /// views rebind rather than rebuild, their meshes and sprites being the same objects either way.</summary>
         public void LoadMap()
         {
             World = NewWorld(Catalog.At(Campaign.MapIndex));
             ReportMapProblems(World.Map);
 
-            // The frame the views are about to draw has to describe the new world: no leftover backlog
-            // of ticks from the old one, and no cursor parked on a tile that may not exist.
+            // The frame the views are about to draw must describe the new world: no leftover tick backlog,
+            // no cursor on a tile that may not exist.
             _accumulator = 0f;
             Alpha = 1f;
             CursorCell = new Int2(-1, -1);
@@ -254,8 +243,11 @@ namespace Facet.Game
 
             for (int i = 0; i < _views.Count; i++) _views[i].Rebind(World);
             // The run opens on the Core: the map can be taller than the screen, and the Core is what the
-            // player is defending and the thing they have to find first.
+            // player defends and must find first.
             if (_rig != null) _rig.Initialize(World.TileGrid, World.Core.Center, Campaign.IsFirstMap);
+            // The locator follows the rig: its Core marker points at the same focus point, and the tutorial
+            // card is up on this map or it is not.
+            if (_radar != null) _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
             if (_hud != null)
                 _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog);
 
@@ -263,14 +255,11 @@ namespace Facet.Game
                 " - " + World.Map.Name, this);
         }
 
-        /// <summary>
-        /// Say what is wrong with a map's own data, once, when it is loaded.
+        /// <summary>Say what is wrong with a map's own data, once, when it is loaded.
         ///
-        /// A map is data, and the mistakes data makes do not throw: a ridge drawn across a lane leaves a
-        /// wave standing at its door, which reads as a hung game rather than as a bad map. The rules are
-        /// <see cref="MapValidation"/>'s, so this reports exactly what the painting window shows a
-        /// designer while they draw and what the test suite refuses to ship.
-        /// </summary>
+        /// A map is data, and data's mistakes do not throw: a ridge across a lane leaves a wave standing
+        /// at its door, reading as a hung game. The rules are <see cref="MapValidation"/>'s, so this
+        /// reports what the painting window shows and what the test suite refuses to ship.</summary>
         private void ReportMapProblems(MapDefinition map)
         {
             List<MapProblem> problems = MapValidation.Validate(map);
@@ -307,6 +296,11 @@ namespace Facet.Game
             AddMeshView<ProjectileRenderer>("Shots");
             AddMeshView<CursorView>("Cursor");
 
+            // The locator last but one: it reads the same frame every view reads and the camera the rig is
+            // about to move, and draws over everything the map can put on screen.
+            _radar = AddMeshView<ThreatRadarView>("ThreatRadar");
+            _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
+
             _hud = AddView<HudView>("Hud");
             _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog);
 
@@ -334,10 +328,9 @@ namespace Facet.Game
 
         private void OnDrawGizmosSelected()
         {
-            // Edit mode has no catalog yet (it is built in Awake, from the same serialized field), so the
-            // gizmo asks the map set directly rather than drawing the wrong map's rectangle - and draws
-            // nothing at all when there is no campaign to ask, which is the state the driver refuses to
-            // start in and not something to draw a guess about.
+            // Edit mode has no catalog yet (it is built in Awake from the same field), so the gizmo asks
+            // the map set directly rather than drawing the wrong map's rectangle, and draws nothing when
+            // there is no campaign to ask.
             MapCatalog catalog = Catalog ?? MapCatalog.From(campaign);
             if (catalog == null) return;
 

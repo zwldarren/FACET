@@ -75,22 +75,18 @@ namespace Facet.Core
     }
 
     /// <summary>
-    /// The rules a map has to satisfy to be playable, as one engine-free function - so the Editor's
-    /// painting surfaces, the test suite and a map baked out of the campaign are all held to the same
-    /// answer.
+    /// The rules a map must satisfy to be playable, as one engine-free function - the Editor's painting
+    /// surfaces, the test suite and a campaign-baked map are all held to the same answer.
     ///
-    /// The expensive check is the only one worth having: a flood over the grid from the Core's footprint,
-    /// asking whether each door can actually be walked from, and whether each vein can actually be
-    /// reached by a belt. A map is a set of rectangles, a ground and a wave table, and the mistakes those
-    /// make are exactly the ones nothing else catches - a ridge drawn all the way across a lane, a rock
-    /// dropped on a door, a patch walled off behind water. None of them throws; they produce a wave that
-    /// stands still, which reads as a hung game rather than as a bug.
+    /// The expensive check is the flood over the grid from the Core's footprint: can each door be walked
+    /// from, can each vein be reached by a belt. These are the mistakes nothing else catches - a ridge
+    /// across a lane, a rock on a door, a patch walled off behind water - and none of them throws; they
+    /// produce a wave that stands still, which reads as a hung game rather than a bug.
     ///
     /// It walks the ground through <see cref="MapDefinition.StampTerrain"/> - the same rule
     /// <see cref="TerrainField.Stamp"/> builds a world with - so the map being judged and the map the
-    /// simulation will run are the same map, patches and all. Buildings are deliberately not part of it:
-    /// a map is validated as the player first sees it, with nothing built. Whether a defence can then
-    /// hold is a balance question, not a data error.
+    /// simulation runs are one, patches and all. Buildings are deliberately excluded: a map is validated
+    /// as the player first sees it, with nothing built; whether a defence holds is balance, not data error.
     /// </summary>
     public static class MapValidation
     {
@@ -105,9 +101,9 @@ namespace Facet.Core
             return problems;
         }
 
-        /// <summary>The caller-owned-list form. Private, because a validation runs once per map load or
-        /// once per editor pass - nobody validates per frame - so no caller has ever needed to reuse its
-        /// list, and the allocating overload is the whole public answer.</summary>
+        /// <summary>The caller-owned-list form. Private, because validation runs once per map load or
+        /// editor pass - nobody validates per frame - so the allocating overload is the whole public
+        /// answer.</summary>
         private static void Validate(MapDefinition map, List<MapProblem> into)
         {
             if (map == null) throw new ArgumentNullException(nameof(map));
@@ -120,8 +116,7 @@ namespace Facet.Core
             CheckTerrainSize(map, into);
 
             // The array's own rule, asked with the cheap ones: it is about the data as written down, not
-            // about the ground a world would be built with, so a map whose Core does not fit still gets
-            // its half-written veins named.
+            // the ground a world would be built with, so a Core that does not fit still gets its veins named.
             CheckOreInTerrain(map, into);
 
             // Everything left is asked from the Core outwards, so a Core that does not fit is the one
@@ -146,10 +141,9 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// The ground the map really has, as the world would be built from it. Asked rather than
-        /// re-derived: this is <see cref="MapDefinition.StampTerrain"/>, which is the same call
-        /// <see cref="TerrainField.Stamp"/> makes, so a rule that changes there cannot leave this walking
-        /// a map nobody will ever play.
+        /// The ground the map really has. This calls <see cref="MapDefinition.StampTerrain"/>, the same
+        /// call <see cref="TerrainField.Stamp"/> makes, so a rule that changes there cannot leave this
+        /// walking a map nobody will ever play.
         /// </summary>
         private static TerrainKind[] GroundOf(MapDefinition map)
         {
@@ -170,13 +164,13 @@ namespace Facet.Core
 
         /// <summary>
         /// Ground under the Core that is not plain. The Core keeps its tiles, so the world is playable
-        /// either way - but a map whose own data disagrees with where it puts the Core is a map whose
-        /// author has lost track of one of the two, and that is worth saying.
+        /// either way - but a map whose data disagrees with where it puts the Core has lost track of one
+        /// of the two, which is worth saying.
         ///
-        /// This asks the map's <em>data</em> - <see cref="MapDefinition.AuthoredGroundAt"/>, the map's
-        /// own per-cell ground - not the ground the world would be built with: the world zeroes the
-        /// Core's tiles after patching, so its ground keeps plain ground under the Core by construction
-        /// and asking it here could never find anything. The disagreement is the finding.
+        /// Asks the map's <em>data</em> (<see cref="MapDefinition.AuthoredGroundAt"/>), not the ground the
+        /// world would be built with: the world zeroes the Core's tiles after patching, so that ground is
+        /// plain there by construction and asking it could never find anything. The disagreement is the
+        /// finding.
         /// </summary>
         private static void CheckCoreGround(MapDefinition map, List<MapProblem> into)
         {
@@ -222,13 +216,11 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// The terrain array stating ore, which is a map no writer in the game produces - the painting
-        /// surfaces write a vein as an ore-list entry and leave the ground under it plain, and the ore
-        /// list is what the conversion claims cells from. Two ways to get here, and both are worth
-        /// naming: with <em>no</em> vein listed at the cell the world still gets an ore tile, one that
-        /// only a drill may stand on and that yields nothing when it does; with a vein already listed
-        /// there, the byte says what the entry says and is the half-write that leaves an ore tile behind
-        /// the moment the entry is taken away by hand.
+        /// The terrain array stating ore, which no writer in the game produces - painting writes a vein
+        /// as an ore-list entry and leaves the ground under it plain. Two ways to get here: with <em>no</em>
+        /// vein listed the world still gets an ore tile, one only a drill may stand on and that yields
+        /// nothing; with a vein already listed, the byte duplicates the entry and leaves an ore tile behind
+        /// the moment that entry is removed by hand.
         /// </summary>
         private static void CheckOreInTerrain(MapDefinition map, List<MapProblem> into)
         {
