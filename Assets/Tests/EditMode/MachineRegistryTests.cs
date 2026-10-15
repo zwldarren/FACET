@@ -124,9 +124,9 @@ namespace Facet.Tests
             Assert.AreEqual(BehaviorKind.Cutter, snapshot.Behavior);
             Assert.AreEqual(Dir.North, snapshot.Direction);
 
-            int before = world.Economy.Circles;
+            int before = world.Economy.Shapes;
             Assert.IsTrue(world.TryRemoveBuilding(lane), "and either tile takes the machine away");
-            Assert.AreEqual(before + world.Economy.CostOf(BuildKind.Cutter), world.Economy.Circles,
+            Assert.AreEqual(before + world.Economy.CostOf(BuildKind.Cutter), world.Economy.Shapes,
                 "for one machine's worth of refund, not two");
             Assert.IsFalse(world.Machines.Has(cell), "which clears the tile it stood on");
             Assert.IsFalse(world.Machines.Has(lane), "and the lane with it");
@@ -134,9 +134,9 @@ namespace Facet.Tests
 
             SimWorld blade = Sim.NewWorld(20, 12);
             Sim.Place(blade, BuildKind.Cutter, cell, Dir.North);
-            int paid = blade.Economy.Circles;
+            int paid = blade.Economy.Shapes;
             Assert.IsTrue(blade.TryRemoveBuilding(cell), "and the tile it was placed on does the same");
-            Assert.AreEqual(paid + blade.Economy.CostOf(BuildKind.Cutter), blade.Economy.Circles,
+            Assert.AreEqual(paid + blade.Economy.CostOf(BuildKind.Cutter), blade.Economy.Shapes,
                 "for the same one refund");
             Assert.IsFalse(blade.Machines.Has(lane), "with the lane gone too");
         }

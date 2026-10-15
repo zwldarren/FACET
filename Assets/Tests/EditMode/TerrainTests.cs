@@ -66,7 +66,7 @@ namespace Facet.Tests
         {
             // The centre of a rectangle is a fine place for a tutorial's Core and a poor one for an
             // irregular map, so the map states it and the world obeys.
-            var map = new MapDefinition("corner", 12, 10, Sim.TestCircles, new ShapePatch[0],
+            var map = new MapDefinition("corner", 12, 10, Sim.TestShapes, new ShapePatch[0],
                 new Int2[0], new WaveDefinition[0],
                 TerrainLayout.Rects(12, 10, new TerrainRect(new Int2(0, 6), 4, 4, TerrainKind.Rock)),
                 coreCell: new Int2(2, 2));
@@ -172,7 +172,7 @@ namespace Facet.Tests
             // that wipes the run. A restart rebuilds from the map's own data, so the vein has to be in that
             // data to come back: this is re-stamping, not a leftover in a field.
             var ore = new Int2(10, 8);
-            var map = new MapDefinition("terrain", 16, 12, Sim.TestCircles,
+            var map = new MapDefinition("terrain", 16, 12, Sim.TestShapes,
                 new[] { new ShapePatch(ore, 2, 1, Quad.Square) }, new Int2[0], new WaveDefinition[0],
                 TerrainLayout.Rects(16, 12, new TerrainRect(new Int2(1, 1), 3, 3, TerrainKind.Water)));
 
@@ -193,7 +193,7 @@ namespace Facet.Tests
         /// <summary>A world on a map whose whole point is its ground: no ore but what a test stamps, no
         /// waves, and a stockpile that never runs dry.</summary>
         private static SimWorld TerrainWorld(int width, int height, TerrainKind[] terrain)
-            => new SimWorld(new MapDefinition("terrain", width, height, Sim.TestCircles,
+            => new SimWorld(new MapDefinition("terrain", width, height, Sim.TestShapes,
                 new ShapePatch[0], new Int2[0], new WaveDefinition[0], terrain), new SimConfig());
 
         private static bool Has(TerrainKind[] ground, TerrainKind kind)

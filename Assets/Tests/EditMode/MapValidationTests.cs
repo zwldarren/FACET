@@ -103,11 +103,11 @@ namespace Facet.Tests
             // map has a vein because the generator needs one to demand from; that rule has its own test.
             var vein = new[] { new ShapePatch(new Int2(2, 2), 1, 1, Quad.Circle) };
 
-            var scripted = new MapDefinition("generated", 16, 12, Sim.TestCircles, vein,
+            var scripted = new MapDefinition("generated", 16, 12, Sim.TestShapes, vein,
                 new[] { new Int2(0, 10) }, new WaveDefinition[0], generatedWaves: 4);
             AssertNoProblem(MapValidation.Validate(scripted), MapProblemKind.NoWaves);
 
-            var endless = new MapDefinition("endless", 16, 12, Sim.TestCircles, vein,
+            var endless = new MapDefinition("endless", 16, 12, Sim.TestShapes, vein,
                 new[] { new Int2(0, 10) }, new WaveDefinition[0], generatedWaves: -1);
             AssertNoProblem(MapValidation.Validate(endless), MapProblemKind.NoWaves);
         }
@@ -119,7 +119,7 @@ namespace Facet.Tests
             // an empty pool and every generated wave arrives with nothing in it: a bounded run won without a
             // fight, and an endless one that advances through empty waves for ever. The empty-wave rule never
             // sees it, because that rule only ever reads the authored table.
-            var noOre = new MapDefinition("no ore", 16, 12, Sim.TestCircles, new ShapePatch[0],
+            var noOre = new MapDefinition("no ore", 16, 12, Sim.TestShapes, new ShapePatch[0],
                 new[] { new Int2(0, 10) }, new WaveDefinition[0], generatedWaves: 6);
 
             List<MapProblem> problems = MapValidation.Validate(noOre);
@@ -128,7 +128,7 @@ namespace Facet.Tests
             AssertNoProblem(problems, MapProblemKind.NoWaves);
 
             // One vein is all it takes, and then the rule is quiet.
-            var withOre = new MapDefinition("ore", 16, 12, Sim.TestCircles,
+            var withOre = new MapDefinition("ore", 16, 12, Sim.TestShapes,
                 new[] { new ShapePatch(new Int2(2, 2), 1, 1, Quad.Circle) },
                 new[] { new Int2(0, 10) }, new WaveDefinition[0], generatedWaves: 6);
 
@@ -145,7 +145,7 @@ namespace Facet.Tests
             // the authored table too.
             var circleVein = new[] { new ShapePatch(new Int2(2, 2), 1, 1, Quad.Circle) };
 
-            var unbuildable = new MapDefinition("unbuildable", 16, 12, Sim.TestCircles, circleVein,
+            var unbuildable = new MapDefinition("unbuildable", 16, 12, Sim.TestShapes, circleVein,
                 new[] { new Int2(0, 10) },
                 new[]
                 {
@@ -160,7 +160,7 @@ namespace Facet.Tests
 
             // The same map asking for something it can build is clean, so the rule is about the demand rather
             // than about the map being an unusual one.
-            var buildable = new MapDefinition("buildable", 16, 12, Sim.TestCircles, circleVein,
+            var buildable = new MapDefinition("buildable", 16, 12, Sim.TestShapes, circleVein,
                 new[] { new Int2(0, 10) },
                 new[]
                 {
@@ -175,8 +175,8 @@ namespace Facet.Tests
         public void Validate_AGroupWithNoDemand_IsAWaveNobodyCanMatch()
         {
             // A group's weakness is one exact item now, and a group that names none can only ever be shot at
-            // a quarter damage: a wave nobody can beat rather than a hard one, and invisible at runtime.
-            var map = new MapDefinition("no demand", 16, 12, Sim.TestCircles, new ShapePatch[0],
+            // a half damage: a wave nobody can beat rather than a hard one, and invisible at runtime.
+            var map = new MapDefinition("no demand", 16, 12, Sim.TestShapes, new ShapePatch[0],
                 new[] { new Int2(0, 10) },
                 new[] { new WaveDefinition(0f, new SpawnGroup(EnemyKind.Runner, 3, 0, 0f, 1f, Shape.None)) });
 
@@ -253,7 +253,7 @@ namespace Facet.Tests
         /// about it and see one problem come back.</summary>
         private static MapDefinition Map(int width, int height, Int2[] doors,
             ShapePatch[] patches = null, TerrainKind[] terrain = null)
-            => new MapDefinition("case", width, height, Sim.TestCircles, patches, doors,
+            => new MapDefinition("case", width, height, Sim.TestShapes, patches, doors,
                 new[] { Wave(2) }, terrain);
 
         /// <summary>A wave that walks in at the last door and is otherwise unremarkable.</summary>

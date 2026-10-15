@@ -91,8 +91,9 @@ namespace Facet.Game
         public string Name = "New Map";
         [Min(1)] public int Width = 64;
         [Min(1)] public int Height = 40;
-        [Tooltip("Circles in the stockpile when the run starts - the bootstrap budget.")]
-        public int StartCircles = 80;
+        [Tooltip("Complete shapes in the stockpile when the run starts - the bootstrap budget. One full " +
+            "circle and one full square are worth the same: the currency is a complete shape.")]
+        public int StartShapes = 80;
 
         [Header("Core")]
         [Tooltip("Lower-left tile of the Core's footprint. Leave at (-1,-1) to centre it on the map.")]
@@ -115,7 +116,8 @@ namespace Facet.Game
 
         [Header("Progression")]
         [Tooltip("The operator machines this map hands the player. Progression is this set rather than a map " +
-            "ordinal: map 1 unlocks the cutter, map 2 the second mineral and the rotator, map 3 the stacker. " +
+            "ordinal: both shipped maps hand over the cutter and the rotator, and a map that taught " +
+            "combination would name the stacker here. " +
             "A locked machine cannot be built at all, and the wave generator never demands a shape this map's " +
             "minerals and unlocked operators cannot build.")]
         public Operators Unlocked = Operators.All;
@@ -250,7 +252,7 @@ namespace Facet.Game
             int width = Mathf.Max(1, Width);
             int height = Mathf.Max(1, Height);
 
-            return new MapDefinition(Name, width, height, StartCircles,
+            return new MapDefinition(Name, width, height, StartShapes,
                 patches: OrePatches(width, height),
                 spawnPoints: SpawnPointArray(),
                 waves: WaveDefinitions(),

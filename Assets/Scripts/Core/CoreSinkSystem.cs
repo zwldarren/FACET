@@ -1,8 +1,10 @@
 namespace Facet.Core
 {
     /// <summary>
-    /// The Core is also the bank. A belt delivering into its footprint is emptied: a circle becomes one
-    /// spendable stockpile, anything else is destroyed, so the sink is the mint and the overflow drain.
+    /// The Core is also the bank. A belt delivering into its footprint is emptied: a <b>complete shape</b>
+    /// (<see cref="Shape.IsFull"/>) becomes one spendable unit, anything less is destroyed, so the sink is
+    /// the mint and the overflow drain. One full circle and one full square bank the same, which is what
+    /// makes the rule a fact about the algebra rather than about which vein the map happens to have.
     /// Delivery uses the same rule every machine uses - the belt's direction must point in - making
     /// "route the money home" a layout problem.
     /// </summary>
@@ -50,13 +52,14 @@ namespace Facet.Core
             if (_grid.Get(cell + belt.Direction.Offset()) != TileKind.Core) return;
 
             _belts.TryTakeItem(cell, out Shape shape);
-            if (shape == Shape.Full(Quad.Circle))
+            if (shape.IsFull)
             {
                 _economy.Bank(1);
-                _events.Banked(cell);
+                _events.Banked(cell, shape);
             }
 
-            // Anything else is the overflow drain: a stray half-circle is destroyed, no event reported.
+            // Anything less than complete is the overflow drain: a stray half is destroyed, no event
+            // reported.
         }
     }
 }

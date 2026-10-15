@@ -41,13 +41,24 @@ namespace Facet.Core
         public readonly int Width;
         public readonly int Height;
 
-        /// <summary>Circles the run starts with: the bootstrap budget for the first drill, its line home,
-        /// and the first defence.</summary>
-        public readonly int StartCircles;
+        /// <summary>Shapes the run starts with: the bootstrap budget for the first drill, its line home,
+        /// and the first defence. The unit is a complete shape whatever mineral it is made of - see
+        /// <see cref="CurrencyMineral"/> for the one this map's money is drawn as.</summary>
+        public readonly int StartShapes;
 
         public readonly ShapePatch[] Patches;
         public readonly Int2[] SpawnPoints;
         public readonly WaveDefinition[] Waves;
+
+        /// <summary>
+        /// The mineral this map's money is <em>drawn</em> as: the first vein the map lists, or a circle for
+        /// a map with no veins at all. The rule is not restricted to it - the Core banks <em>any</em>
+        /// complete shape (<see cref="Shape.IsFull"/>) - but a mark needs a mineral and a sentence needs a
+        /// noun, and the map's own ore is the coin the player will actually see arriving. Derived from the
+        /// patches rather than authored, so a repainted vein cannot leave the HUD naming a mineral the map
+        /// does not have.
+        /// </summary>
+        public readonly Quad CurrencyMineral;
 
         /// <summary>
         /// The operator machines this map has unlocked. Progression is this set rather than the map's
@@ -80,7 +91,7 @@ namespace Facet.Core
         /// every map had before the field existed.</summary>
         public readonly Int2 CoreCell;
 
-        public MapDefinition(string name, int width, int height, int startCircles,
+        public MapDefinition(string name, int width, int height, int startShapes,
             ShapePatch[] patches, Int2[] spawnPoints, WaveDefinition[] waves,
             TerrainKind[] terrain = null, Int2? coreCell = null,
             Operators unlocked = Operators.All, int seed = 0, int generatedWaves = 0)
@@ -88,7 +99,7 @@ namespace Facet.Core
             Name = name;
             Width = width;
             Height = height;
-            StartCircles = startCircles;
+            StartShapes = startShapes;
             Patches = patches ?? new ShapePatch[0];
             SpawnPoints = spawnPoints ?? new Int2[0];
             Waves = waves ?? new WaveDefinition[0];
@@ -97,6 +108,11 @@ namespace Facet.Core
             Unlocked = unlocked;
             Seed = seed;
             GeneratedWaves = generatedWaves;
+
+            // The money, named off the map's own veins rather than authored beside them: the first mineral
+            // the patch list yields, which is the one a drill on this map will first put on a belt.
+            Quad[] minerals = MineralList();
+            CurrencyMineral = minerals.Length > 0 ? minerals[0] : Quad.Circle;
         }
 
         /// <summary>
@@ -131,7 +147,7 @@ namespace Facet.Core
         /// the map data - is what flips it, so an authored map stays what the editor drew. Everything else
         /// is carried over as-is; the run's seed remains the host's per-run decision.</summary>
         public MapDefinition WithEndless()
-            => new MapDefinition(Name, Width, Height, StartCircles, Patches, SpawnPoints, Waves,
+            => new MapDefinition(Name, Width, Height, StartShapes, Patches, SpawnPoints, Waves,
                 Terrain, CoreCell, Unlocked, Seed, -1);
 
         /// <summary>Centre of a spawn point in world units, where enemies are created. The index is

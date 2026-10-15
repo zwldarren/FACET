@@ -100,8 +100,10 @@ namespace Facet.Game
         [Tooltip("Wave entry points: brighter while the next wave is counting down.")]
         public Color SpawnMarker = new Color(0.851f, 0.290f, 0.259f, 1f);
 
-        [Tooltip("Circle mineral: the currency. Banked at the Core, spent on buildings - and the colour " +
-            "every circle quadrant wears, wherever it is drawn.")]
+        [Tooltip("Circle mineral: one of the two minerals, and - on a map whose veins are circles - the " +
+            "colour of its money. The currency itself is a complete shape, circle or square, so this is a " +
+            "mineral's colour rather than the bank's: it is what every circle quadrant wears, wherever it " +
+            "is drawn.")]
         public Color CircleMineral = new Color(1f, 0.780f, 0.280f, 1f);
 
         [Tooltip("Square mineral: the second chain's food, mined from square patches and the colour every " +

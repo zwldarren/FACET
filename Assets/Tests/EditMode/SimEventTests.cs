@@ -85,7 +85,7 @@ namespace Facet.Tests
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(7, 4), Dir.East, 1);
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 4), Sim.Circle));
-            int before = world.Economy.Circles;   // read after the belt was paid for
+            int before = world.Economy.Shapes;   // read after the belt was paid for
 
             world.Events.Clear();
             Sim.Tick(world, 60);
@@ -94,7 +94,7 @@ namespace Facet.Tests
             Assert.IsTrue(world.Events.TryLast(SimEventKind.Banked, out SimEvent banked));
             Assert.AreEqual(new Int2(7, 4), banked.Cell);
             Assert.AreEqual(Sim.Circle, banked.Shape);
-            Assert.AreEqual(before + 1, world.Economy.Circles, "and the stockpile moved by one");
+            Assert.AreEqual(before + 1, world.Economy.Shapes, "and the stockpile moved by one");
         }
 
         [Test]
@@ -189,7 +189,7 @@ namespace Facet.Tests
             for (int i = 0; i < 10; i++)
             {
                 events.Tick = i;
-                events.Banked(new Int2(i, 0));
+                events.Banked(new Int2(i, 0), Sim.Circle);
             }
 
             Assert.AreEqual(4, events.Count, "the ring holds its capacity");
@@ -216,12 +216,12 @@ namespace Facet.Tests
             var events = new SimEventBuffer(capacity: 8);
 
             events.Tick = 0;
-            events.Banked(new Int2(0, 0));
+            events.Banked(new Int2(0, 0), Sim.Circle);
             events.Tick = 10;
-            events.Banked(new Int2(10, 0));
+            events.Banked(new Int2(10, 0), Sim.Circle);
             events.Jammed(new Int2(11, 0), Sim.Square);
             events.Tick = 20;
-            events.Banked(new Int2(20, 0));
+            events.Banked(new Int2(20, 0), Sim.Circle);
 
             Assert.AreEqual(3, events.CountSince(SimEventKind.Banked, 0), "the whole stream");
             Assert.AreEqual(2, events.CountSince(SimEventKind.Banked, 10), "sinceTick itself is inside");
@@ -248,7 +248,7 @@ namespace Facet.Tests
             for (int i = 0; i < 6; i++)
             {
                 events.Tick = i;          // ticks 0..5: the ring wraps, the two oldest are overwritten
-                events.Banked(new Int2(i, 0));
+                events.Banked(new Int2(i, 0), Sim.Circle);
             }
 
             Assert.AreEqual(2, events.Dropped);
@@ -258,7 +258,7 @@ namespace Facet.Tests
             Assert.IsFalse(events.DroppedSince(6), "a window opened after the last drop has all its events");
 
             events.Tick = 9;
-            events.Banked(new Int2(9, 0));
+            events.Banked(new Int2(9, 0), Sim.Circle);
             // A full ring never catches up: every new event evicts an old one, so this push is itself a drop.
             // What a reader can prove is the narrower fact it needs - a window opening after the last eviction
             // lost nothing it should have seen.
@@ -285,7 +285,7 @@ namespace Facet.Tests
             Assert.IsFalse(events.DroppedSince(0), "nor the one the first second of the HUD asks");
 
             events.Tick = 0;
-            events.Banked(new Int2(1, 0));
+            events.Banked(new Int2(1, 0), Sim.Circle);
             Assert.IsFalse(events.DroppedSince(-30), "still whole after the first event");
         }
 
@@ -294,7 +294,8 @@ namespace Facet.Tests
         {
             // The click the player complains about: the stockpile cannot cover a belt, so nothing appears on
             // the map. Silence there reads as a broken button, so the tick reports the refusal with reason and
-            // price - which lets the HUD say "not enough circles" instead of nothing at all.
+            // price - which lets the HUD say "not enough circles" (or squares, on a square map) instead of
+            // nothing at all.
             SimWorld world = BrokeWorld();
             Click(world, new Int2(2, 2), BuildKind.Belt);
 
@@ -368,13 +369,13 @@ namespace Facet.Tests
             // The boundary of the reporting above: the cells a belt *drag* sweeps are skipped like blocked
             // ones - a run that stops at a dry stockpile is visible on the map, and a drag over an existing
             // build must not shout once per cell.
-            SimWorld world = BrokeWorld(circles: 2);
+            SimWorld world = BrokeWorld(shapes: 2);
             Sim.Drag(world, new Int2(1, 1), new Int2(6, 1));
 
             Assert.IsTrue(world.Belts.Has(new Int2(1, 1)), "the run got its two cells");
             Assert.IsTrue(world.Belts.Has(new Int2(2, 1)));
             Assert.IsFalse(world.Belts.Has(new Int2(3, 1)), "and stopped when the stockpile did");
-            Assert.AreEqual(0, world.Economy.Circles);
+            Assert.AreEqual(0, world.Economy.Shapes);
             Assert.AreEqual(0, world.Events.CountOf(SimEventKind.PlacementRejected),
                 "the cells the drag swept are skipped, not reported");
         }
@@ -401,8 +402,8 @@ namespace Facet.Tests
         }
 
         /// <summary>A world with next to nothing to spend - the state "not enough circles" is about.</summary>
-        private static SimWorld BrokeWorld(int circles = 0)
-            => new SimWorld(Sim.TestMap(16, 10, circles), new SimConfig());
+        private static SimWorld BrokeWorld(int shapes = 0)
+            => new SimWorld(Sim.TestMap(16, 10, shapes), new SimConfig());
 
         [Test]
         public void TwoIdenticalRuns_ReportIdenticalStreams()
@@ -437,7 +438,7 @@ namespace Facet.Tests
                 }
             }
 
-            Assert.AreEqual(a.Economy.Circles, b.Economy.Circles);
+            Assert.AreEqual(a.Economy.Shapes, b.Economy.Shapes);
         }
     }
 }

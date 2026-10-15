@@ -88,7 +88,7 @@ namespace Facet.Tests
             // The line the arming rule draws: it only holds the opening. This map's first countdown is 0 (the
             // only wait that opens on the tick it is armed) and the intermission under test is wave 2's, the
             // table's 3; the rig's opening has its own test above.
-            var map = new MapDefinition("two waves", 20, 12, Sim.TestCircles,
+            var map = new MapDefinition("two waves", 20, 12, Sim.TestShapes,
                 new ShapePatch[0],
                 new[] { new Int2(1, 1) },
                 new[]
@@ -289,14 +289,14 @@ namespace Facet.Tests
             world.Core.Hp = 1f;
 
             Assert.Greater(world.Enemies.AliveCount, 0, "a wave is in progress and on the map");
-            Assert.Less(world.Economy.Circles, world.Map.StartCircles, "the build spent real circles");
+            Assert.Less(world.Economy.Shapes, world.Map.StartShapes, "the build spent real shapes");
 
             world.Tick(new InputCommand(restartPressed: true));
 
             Assert.AreEqual(GameStatus.Playing, world.Status);
             Assert.AreEqual(0, world.TickCount);
             Assert.AreEqual(world.Config.CoreMaxHp, world.Core.Hp, Sim.Tol, "the Core is whole again");
-            Assert.AreEqual(world.Map.StartCircles, world.Economy.Circles, "the stockpile is reset too");
+            Assert.AreEqual(world.Map.StartShapes, world.Economy.Shapes, "the stockpile is reset too");
             Assert.AreEqual(0, world.Economy.TotalBanked);
             Assert.AreEqual(0, world.Enemies.AliveCount);
             Assert.AreEqual(0, world.Projectiles.Count);
@@ -319,7 +319,7 @@ namespace Facet.Tests
             // §5: one seed per run, shown in the HUD. The map's authored seed is the default - it is what
             // the engine-free tests and a demo that must replay exactly run on - but a host that injects
             // a source gets a run whose seed is its own, and a restart is a new run: it draws again.
-            var map = new MapDefinition("seeded", 24, 16, Sim.TestCircles,
+            var map = new MapDefinition("seeded", 24, 16, Sim.TestShapes,
                 new[] { new ShapePatch(new Int2(2, 2), 1, 1, Quad.Circle) },
                 new[] { new Int2(12, 14) },
                 new WaveDefinition[0],
@@ -344,7 +344,7 @@ namespace Facet.Tests
             // Endless mode is not a second mode: it is the generator with no bound (§5), so the clock's
             // answer to "how many waves are there" is zero and the HUD prints the wave number alone. What
             // must never happen is the run reporting itself finished - there is no last wave to clear.
-            var map = new MapDefinition("endless", 24, 16, Sim.TestCircles,
+            var map = new MapDefinition("endless", 24, 16, Sim.TestShapes,
                 new[] { new ShapePatch(new Int2(2, 2), 1, 1, Quad.Circle) },
                 new[] { new Int2(12, 14) },
                 new WaveDefinition[0],
@@ -404,7 +404,7 @@ namespace Facet.Tests
             Assert.AreEqual(a.Core.Hp, b.Core.Hp, 0f, "the two runs diverged");
             Assert.AreEqual(a.ShotsFired, b.ShotsFired);
             Assert.AreEqual(a.Belts.JamCount, b.Belts.JamCount);
-            Assert.AreEqual(a.Economy.Circles, b.Economy.Circles);
+            Assert.AreEqual(a.Economy.Shapes, b.Economy.Shapes);
             Assert.AreEqual(a.Enemies.AliveCount, b.Enemies.AliveCount);
             Assert.AreEqual(a.Waves.CurrentWave, b.Waves.CurrentWave);
             Assert.AreEqual(a.Projectiles.Count, b.Projectiles.Count);

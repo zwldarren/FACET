@@ -98,7 +98,7 @@ namespace Facet.PlayTests
             map.Name = "test ground";
             map.Width = 32;
             map.Height = 20;
-            map.StartCircles = 80;
+            map.StartShapes = 80;
             map.Terrain = TerrainLayout.Rects(32, 20,
                 new TerrainRect(new Int2(2, 2), 6, 4, TerrainKind.Rock),
                 new TerrainRect(new Int2(20, 12), 4, 4, TerrainKind.Water),
@@ -117,7 +117,7 @@ namespace Facet.PlayTests
             map.Name = "test wide";
             map.Width = 48;
             map.Height = 12;
-            map.StartCircles = 80;
+            map.StartShapes = 80;
             map.SpawnPoints = new[] { new Vector2Int(45, 2) };
             map.Waves = new[] { OneWave() };
             return map;
@@ -328,7 +328,7 @@ namespace Facet.PlayTests
             yield return null;
 
             Assert.AreEqual(driver.Catalog.At(1).Name, driver.World.Map.Name, "the world is the next map now");
-            Assert.AreEqual(driver.Catalog.At(1).StartCircles, driver.World.Economy.Circles, "with the map's own budget");
+            Assert.AreEqual(driver.Catalog.At(1).StartShapes, driver.World.Economy.Shapes, "with the map's own budget");
             Assert.AreEqual(0, driver.World.TickCount, "and as a fresh run");
             Assert.AreEqual(GameStatus.Playing, driver.World.Status);
 

@@ -62,6 +62,15 @@ namespace Facet.Core
 
         public bool IsEmpty => Code == 0;
 
+        /// <summary>
+        /// Does this item fill <em>every</em> quadrant? That is the currency: the Core banks a complete
+        /// shape and destroys anything else, so one full circle and one full square are worth the same
+        /// unit of money and a half is worth nothing at all. Asked as completeness rather than as identity
+        /// with one mineral, which is what makes the rule a property of the algebra instead of of the map
+        /// the player happens to be on.
+        /// </summary>
+        public bool IsFull => FilledCount == QuadrantCount;
+
         /// <summary>Is there content at this quadrant? The question the cut mask and the stack test both
         /// ask, so neither compares against <see cref="Quad.Empty"/> on its own.</summary>
         public bool Has(int quadrant) => At(quadrant) != Quad.Empty;
@@ -99,8 +108,8 @@ namespace Facet.Core
             => new Shape(Pack(NW, nw) | Pack(NE, ne) | Pack(SE, se) | Pack(SW, sw));
 
         /// <summary>The item a vein of this mineral yields: all four quadrants of it. What the drill mines
-        /// and what the Core banks - a full circle is one currency, and anything else delivered is
-        /// destroyed.</summary>
+        /// and what the Core banks - a full shape is one currency whichever mineral it is made of
+        /// (<see cref="IsFull"/>), and anything less than complete is destroyed.</summary>
         public static Shape Full(Quad mineral) => Of(mineral, mineral, mineral, mineral);
 
         /// <summary>One quadrant of a mineral: the atom every chain is built up from.</summary>

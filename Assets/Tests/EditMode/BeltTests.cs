@@ -393,7 +393,7 @@ namespace Facet.Tests
             // drill's output, so the drill turns to face it. The map is this test's own - the drag is on trial.
             const int Dragged = 4;                          // cells the run leaves the drill for
             var drill = new Int2(4, 2);
-            var map = new MapDefinition("drill run", 16, 12, Sim.TestCircles,
+            var map = new MapDefinition("drill run", 16, 12, Sim.TestShapes,
                 new[] { new ShapePatch(drill, 1, 1, Quad.Circle) }, new Int2[0], new WaveDefinition[0]);
             var world = new SimWorld(map, new SimConfig());
 

@@ -57,7 +57,8 @@ namespace Facet.EditorTools
         {
             EditorGUILayout.LabelField("Map", EditorStyles.boldLabel);
             asset.Name = TextField(asset, "Name", asset.Name, "Rename map");
-            asset.StartCircles = IntField(asset, "Start circles", asset.StartCircles, "Edit the map's stockpile");
+            asset.StartShapes = IntField(asset, "Start shapes", asset.StartShapes,
+                "Edit the map's stockpile: complete shapes banked to begin with");
 
             // Progression. The operator set is the campaign's ladder, so it is edited here beside the map
             // rather than inferred from the map's ordinal - a map teaches exactly what its author says.

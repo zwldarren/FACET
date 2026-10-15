@@ -19,9 +19,9 @@ namespace Facet.Core
 
         Belt = 1,
 
-        /// <summary>The defended object, and the bank: a belt that delivers into it turns a circle
-        /// into spendable stockpile. Not buildable by the player, and its HP is the fail state. Walkable -
-        /// reaching it is what a wave is for.</summary>
+        /// <summary>The defended object, and the bank: a belt that delivers into it turns a complete
+        /// shape into spendable stockpile. Not buildable by the player, and its HP is the fail state.
+        /// Walkable - reaching it is what a wave is for.</summary>
         Core = 2,
 
         // 3 was ShapePatch. Retired and not to be reused: terrain became its own layer

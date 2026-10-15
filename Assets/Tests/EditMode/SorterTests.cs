@@ -15,7 +15,8 @@ namespace Facet.Tests
     ///
     /// Worlds use the 20x12 test map with the hub at (4,5), lines kept clear of the Core so the sink cannot
     /// eat the items under test. The shipped filter is "anything with a circle in it", so the shipped tests
-    /// read as "money goes where it faces, everything else carries on".
+    /// read as "circle-bearing items go where it faces, everything else carries on" - a mineral predicate and
+    /// not the currency rule, which is completeness and out of this filter's reach.
     /// </summary>
     public class SorterTests
     {
@@ -67,7 +68,7 @@ namespace Facet.Tests
         public void AShapeThatMerelyContainsTheMineral_TakesTheFilteredWayToo()
         {
             // The difference between a mineral predicate and a list of exact shapes, as one item: a
-            // circle-top/square-bottom mixed round is not a circle, but it *bears* one - so the money rule
+            // circle-top/square-bottom mixed round is not a circle, but it *bears* one - so the predicate
             // catches it without the player having to name all fifty mixed items by hand.
             SimWorld world = Routed(out Int2 filtered, out Int2 other);
 
@@ -122,7 +123,7 @@ namespace Facet.Tests
         public void BothShapes_CanShareOneLine()
         {
             // The point of the building: one input line, two destinations, the sorter separating them -
-            // what turns "keep money and ammo apart" from a layout puzzle into one building's job.
+            // what turns "keep two minerals apart" from a layout puzzle into one building's job.
             SimWorld world = Routed(out Int2 filtered, out Int2 other);
 
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), Sim.Circle));

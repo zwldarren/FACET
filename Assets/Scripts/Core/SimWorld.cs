@@ -108,7 +108,7 @@ namespace Facet.Core
             Enemies = new EnemyField(Content, Events, TileGrid, Terrain, Machines, _paths);
             Projectiles = new ProjectileField();
             Waves = new WaveDirector(Enemies, map, Events, Config.FreshSeed);
-            Economy = new EconomyState(Content, map.StartCircles);
+            Economy = new EconomyState(Content, map.StartShapes);
 
             _machineSystem = new MachineSystem(TileGrid, Terrain, Belts, Machines, Enemies, Projectiles,
                 Content, Events);
@@ -210,7 +210,7 @@ namespace Facet.Core
             Waves.Reset();
             _machineSystem.Reset();
             _build.Reset();
-            Economy.Reset(Map.StartCircles);
+            Economy.Reset(Map.StartShapes);
 
             Paused = false;
             Status = GameStatus.Playing;

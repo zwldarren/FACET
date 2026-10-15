@@ -20,7 +20,7 @@ namespace Facet.Tests
         /// </summary>
         private static SimWorld DoorWorld(int enemies, float interval)
             => new SimWorld(
-                new MapDefinition("door", 20, 12, Sim.TestCircles, new ShapePatch[0],
+                new MapDefinition("door", 20, 12, Sim.TestShapes, new ShapePatch[0],
                     new[] { new Int2(10, 1) },
                     new[] { new WaveDefinition(0f, new SpawnGroup(EnemyKind.Runner, enemies, 0, 0f, interval, Sim.Circle)) }),
                 new SimConfig { CoreMaxHp = 1000000f });

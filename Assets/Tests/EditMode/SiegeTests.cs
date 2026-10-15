@@ -29,7 +29,7 @@ namespace Facet.Tests
         /// into and stay, pressing at the ridge with nothing to bite.
         /// </summary>
         private static MapDefinition SealedMap()
-            => new MapDefinition("sealed", 20, 24, Sim.TestCircles, new ShapePatch[0],
+            => new MapDefinition("sealed", 20, 24, Sim.TestShapes, new ShapePatch[0],
                 new Int2[0], new WaveDefinition[0],
                 TerrainLayout.Rects(20, 24,
                     new TerrainRect(new Int2(0, 9), 6, 1, TerrainKind.Rock),
@@ -99,7 +99,7 @@ namespace Facet.Tests
             var nearGap = new Int2(10, 9);
             var farGap = new Int2(0, 9);
             SimWorld world = new SimWorld(
-                new MapDefinition("plugged", 20, 24, Sim.TestCircles, new ShapePatch[0],
+                new MapDefinition("plugged", 20, 24, Sim.TestShapes, new ShapePatch[0],
                     new Int2[0], new WaveDefinition[0],
                     TerrainLayout.Rects(20, 24,
                         new TerrainRect(new Int2(1, 9), 9, 1, TerrainKind.Rock),
@@ -130,7 +130,7 @@ namespace Facet.Tests
             // along a line the walker can see, so it walks round the rock and hits the wall from beside it
             // - instead of standing in the rock's column and chewing a wall it cannot reach.
             SimWorld world = new SimWorld(
-                new MapDefinition("rock in the lane", 20, 12, Sim.TestCircles, new ShapePatch[0],
+                new MapDefinition("rock in the lane", 20, 12, Sim.TestShapes, new ShapePatch[0],
                     new Int2[0], new WaveDefinition[0],
                     TerrainLayout.Rects(20, 12, new TerrainRect(new Int2(10, 9), 1, 1, TerrainKind.Rock)),
                     coreCell: new Int2(8, 4)),
@@ -337,7 +337,7 @@ namespace Facet.Tests
             SimWorld world = Sim.NewWorld(20, 12);
             var gun = new Int2(5, 5);
             Sim.Place(world, BuildKind.Turret, gun, Dir.North);
-            int paid = world.Economy.Circles;
+            int paid = world.Economy.Shapes;
             world.Enemies.Spawn(EnemyKind.Runner, new Vec2(5.5f, 6.5f), Sim.Circle);
 
             for (int i = 0; i < 1200 && world.Machines.Has(gun); i++)
@@ -345,7 +345,7 @@ namespace Facet.Tests
 
             Assert.IsFalse(world.Machines.Has(gun), "the unarmed gun is chewed down");
             Assert.AreEqual(TileKind.Empty, world.TileGrid.Get(gun), "and its tile goes back to ground");
-            Assert.AreEqual(paid, world.Economy.Circles, "destruction is not a refund");
+            Assert.AreEqual(paid, world.Economy.Shapes, "destruction is not a refund");
             Assert.IsTrue(world.Events.TryLast(SimEventKind.BuildingDestroyed, out SimEvent gone));
             Assert.AreEqual(gun, gone.Cell);
             Assert.AreEqual(BuildKind.Turret, gone.Building);

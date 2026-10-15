@@ -133,11 +133,11 @@ namespace Facet.Tests
         {
             // The economy reads the injected table too, so a retuned cost is a real constraint, not just a
             // HUD string.
-            MachineDef dearTurret = Turret(BuildKind.Turret, cost: Sim.TestCircles + 1);
+            MachineDef dearTurret = Turret(BuildKind.Turret, cost: Sim.TestShapes + 1);
 
             SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig(), Rewrite(machine: dearTurret));
 
-            Assert.AreEqual(Sim.TestCircles + 1, world.Content.Machine(BuildKind.Turret).Cost);
+            Assert.AreEqual(Sim.TestShapes + 1, world.Content.Machine(BuildKind.Turret).Cost);
             Assert.IsFalse(world.Economy.CanAfford(BuildKind.Turret),
                 "the start stockpile cannot cover the retuned cost");
             Assert.IsFalse(world.TryPlace(BuildKind.Turret, new Int2(2, 2), Dir.East));

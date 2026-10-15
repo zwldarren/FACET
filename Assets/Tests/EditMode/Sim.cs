@@ -20,7 +20,7 @@ namespace Facet.Tests
 
         /// <summary>The stockpile a unit-test world starts with: large enough that only economy tests
         /// ever have to think about the economy.</summary>
-        public const int TestCircles = 100000;
+        public const int TestShapes = 100000;
 
         // ---------------------------------------------------------------- the design's named items
         //
@@ -56,9 +56,9 @@ namespace Facet.Tests
         public static readonly Shape Composite = Shape.Of(Quad.Circle, Quad.Circle, Quad.Square, Quad.Square);
 
         /// <summary>A featureless map of the given size: no patches, spawn points or waves, and
-        /// <paramref name="startCircles"/> banked. Unit tests draw their own terrain on it.</summary>
-        public static MapDefinition TestMap(int width, int height, int startCircles = TestCircles)
-            => new MapDefinition("test", width, height, startCircles,
+        /// <paramref name="startShapes"/> banked. Unit tests draw their own terrain on it.</summary>
+        public static MapDefinition TestMap(int width, int height, int startShapes = TestShapes)
+            => new MapDefinition("test", width, height, startShapes,
                 new ShapePatch[0], new Int2[0], new WaveDefinition[0]);
 
         /// <summary>
@@ -159,11 +159,11 @@ namespace Facet.Tests
         ///
         /// The group's demand is a top half-circle, which is what <see cref="FeedOneWaveGun"/> loads: six
         /// health against four matched damage is the two shots this rig has always taken, where a resisted
-        /// round would take eight.
+        /// round would take three.
         /// </summary>
         public static SimWorld OneWaveWorld()
         {
-            var map = new MapDefinition("one wave", 20, 12, TestCircles,
+            var map = new MapDefinition("one wave", 20, 12, TestShapes,
                 new ShapePatch[0],
                 new[] { new Int2(13, 10) },
                 new[] { new WaveDefinition(0f, new SpawnGroup(EnemyKind.Runner, 1, 0, 1f, 1f, TopHalfCircle)) });

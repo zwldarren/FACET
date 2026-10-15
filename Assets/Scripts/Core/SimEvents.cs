@@ -48,7 +48,8 @@ namespace Facet.Core
         /// <summary>A jammed segment was cleared. The offending item is destroyed with it.</summary>
         JamCleared = 3,
 
-        /// <summary>A circle reached the Core and became spendable. <c>Cell</c> is the delivering belt.
+        /// <summary>A complete shape reached the Core and became spendable. <c>Cell</c> is the delivering
+        /// belt, <c>Shape</c> the currency it paid in.
         /// </summary>
         Banked = 4,
 
@@ -115,7 +116,7 @@ namespace Facet.Core
         public readonly EnemyKind Enemy;
 
         /// <summary>The shape involved, where one is: the item a jam is made of, the round a shot was
-        /// fired with, the full circle that banked. Nothing where no shape is.</summary>
+        /// fired with, the complete shape that banked. Nothing where no shape is.</summary>
         public readonly Shape Shape;
 
         /// <summary>The building involved, for the events about one
@@ -240,7 +241,7 @@ namespace Facet.Core
         // LastDropTick they depend on.
 
         /// <summary>How many events of one kind happened on or after <paramref name="sinceTick"/>.
-        /// The window question a ticker asks ("circles banked in the last second"), answered without
+        /// The window question a ticker asks ("shapes banked in the last second"), answered without
         /// the reader walking the ring.</summary>
         public int CountSince(SimEventKind kind, int sinceTick)
         {
@@ -289,13 +290,16 @@ namespace Facet.Core
         public void JamCleared(Int2 cell)
             => Push(SimEventKind.JamCleared, cell);
 
-        /// <summary>One circle reached the Core and became currency. A full circle is the only thing the
-        /// Core banks - anything else it destroys - so the shape is the caller's invariant rather than a
-        /// parameter: <see cref="CoreSinkSystem"/> guards on <c>Shape.Full(Quad.Circle)</c> before calling
-        /// here, and a second banking path, or a change to what counts as currency, has to keep that
-        /// guard or this event will report a circle for whatever was really banked.</summary>
-        public void Banked(Int2 cell)
-            => Push(SimEventKind.Banked, cell, amount: 1f, shape: Shape.Full(Quad.Circle));
+        /// <summary>
+        /// One complete shape reached the Core and became currency. It is the shape that was <em>really</em>
+        /// banked rather than a fixed mark, because the Core banks a full circle and a full square alike: a
+        /// reader flashing "the money landed" draws the coin the player is actually paid in. The caller's
+        /// guard is <see cref="Shape.IsFull"/> - <see cref="CoreSinkSystem"/> checks it before calling here,
+        /// and a second banking path, or a change to what counts as currency, has to keep that guard or this
+        /// event will name a currency for whatever was really delivered.
+        /// </summary>
+        public void Banked(Int2 cell, Shape shape)
+            => Push(SimEventKind.Banked, cell, amount: 1f, shape: shape);
 
         public void ShotFired(Int2 cell, Shape ammo, float damage)
             => Push(SimEventKind.ShotFired, cell, amount: damage, shape: ammo);

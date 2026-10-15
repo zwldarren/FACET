@@ -56,7 +56,7 @@ namespace Facet.Tests
         /// <paramref name="terrain"/>: the stockpile every unit test starts with, no doors and no waves.</summary>
         private static SimWorld TerrainWorld(string name, TerrainKind[] terrain)
             => new SimWorld(
-                new MapDefinition(name, 12, 10, Sim.TestCircles, new ShapePatch[0],
+                new MapDefinition(name, 12, 10, Sim.TestShapes, new ShapePatch[0],
                     new Int2[0], new WaveDefinition[0], terrain),
                 new SimConfig());
 

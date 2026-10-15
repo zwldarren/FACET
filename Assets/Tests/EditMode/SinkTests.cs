@@ -20,8 +20,8 @@ namespace Facet.Tests
         /// A drill at (3,6) pushes onto the belt at (4,6), which feeds the <em>back</em> of a cutter flowing
         /// east at (5,6) - so the machine cuts top from bottom, the top half is the piece on its left and
         /// keeps the fed lane, and the bottom half leaves a lane over to (5,5)'s front. The top half then has
-        /// the Core as its customer, two belts away, and the Core eats anything (it banks circles and
-        /// destroys the rest), which makes it the one drain that can never back up. The surplus lane is the
+        /// the Core as its customer, two belts away, and the Core eats anything (it banks the complete shapes
+        /// and destroys the rest), which makes it the one drain that can never back up. The surplus lane is the
         /// one under test: a belt at (6,5) that runs into bare ground, or into a sink.
         /// </summary>
         private static void BuildFork(SimWorld world, bool sink)

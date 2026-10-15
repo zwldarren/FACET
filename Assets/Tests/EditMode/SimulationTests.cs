@@ -125,13 +125,13 @@ namespace Facet.Tests
             // input. This is R's path with the key taken out.
             SimWorld world = Sim.NewWorld(20, 12);
             Assert.IsTrue(world.TryPlaceBelt(new Int2(5, 5), Dir.East));
-            Assert.Less(world.Economy.Circles, world.Map.StartCircles, "the belt was paid for");
+            Assert.Less(world.Economy.Shapes, world.Map.StartShapes, "the belt was paid for");
 
             world.RequestRestart();
             world.Tick(InputCommand.None);
 
             Assert.IsFalse(world.Belts.Has(new Int2(5, 5)), "the line is gone");
-            Assert.AreEqual(world.Map.StartCircles, world.Economy.Circles, "and the stockpile is back to the start");
+            Assert.AreEqual(world.Map.StartShapes, world.Economy.Shapes, "and the stockpile is back to the start");
             Assert.AreEqual(0, world.TickCount, "the run is at tick zero again");
             Assert.AreEqual(GameStatus.Playing, world.Status);
         }

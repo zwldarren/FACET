@@ -28,7 +28,7 @@ namespace Facet.Tests
             _asset.Name = "Painted";
             _asset.Width = 12;
             _asset.Height = 10;
-            _asset.StartCircles = 55;
+            _asset.StartShapes = 55;
             _asset.CoreCell = new Vector2Int(2, 2);
             _asset.SpawnPoints = new[] { new Vector2Int(0, 9), new Vector2Int(11, 0) };
             _asset.Waves = new[]
@@ -77,7 +77,7 @@ namespace Facet.Tests
             Assert.AreEqual("Painted", map.Name);
             Assert.AreEqual(12, map.Width);
             Assert.AreEqual(10, map.Height);
-            Assert.AreEqual(55, map.StartCircles);
+            Assert.AreEqual(55, map.StartShapes);
             Assert.AreEqual(new Int2(2, 2), map.CoreCell, "the Core goes where the asset put it");
             Assert.AreEqual(new[] { new Int2(0, 9), new Int2(11, 0) }, map.SpawnPoints);
 
@@ -206,7 +206,7 @@ namespace Facet.Tests
         public void Validate_AGroupWithNoDemand_IsReported()
         {
             // The wave rule the rework added, and the reason a group carries a shape at all: a group weak to
-            // nothing can only ever be shot at a quarter damage, so the map is a wave nobody can beat rather
+            // nothing can only ever be shot at a half damage, so the map is a wave nobody can beat rather
             // than a hard one. Painting is where a designer finds that out.
             _asset.Waves = new[]
             {
@@ -420,7 +420,7 @@ namespace Facet.Tests
             Assert.AreNotEqual(open, painted, "a painted tile changes what draws");
 
             _asset.Name = "renamed";
-            _asset.StartCircles = 4242;
+            _asset.StartShapes = 4242;
             Assert.AreEqual(painted, _asset.ContentHash(),
                 "what nothing draws changes nothing: the name and the stockpile are not pixels");
 

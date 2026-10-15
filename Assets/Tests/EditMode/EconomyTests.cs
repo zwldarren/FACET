@@ -4,15 +4,16 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// EditMode tests for the economy: circles are the only currency, they become spendable only by
-    /// being belted into the Core, every building is paid for, and every removal refunds in full.
+    /// EditMode tests for the economy: a <em>complete</em> shape is the currency - a full circle and a
+    /// full square bank the same, and anything less is destroyed - it becomes spendable only by being
+    /// belted into the Core, every building is paid for, and every removal refunds in full.
     /// The small worlds here use the 20x12 test map, whose Core sits at (8,4)-(11,7).
     /// </summary>
     public class EconomyTests
     {
         /// <summary>A test map with a chosen starting stockpile - the economy's own test rig.</summary>
-        private static SimWorld PoorWorld(int startCircles, int width = 20, int height = 12)
-            => new SimWorld(new MapDefinition("poor", width, height, startCircles,
+        private static SimWorld PoorWorld(int startShapes, int width = 20, int height = 12)
+            => new SimWorld(new MapDefinition("poor", width, height, startShapes,
                 new ShapePatch[0], new Int2[0], new WaveDefinition[0]), new SimConfig());
 
         [Test]
@@ -20,9 +21,9 @@ namespace Facet.Tests
         {
             // The opening budget is a map number, not a simulation constant, so the rig's 80 and a
             // hand-made map's 3 both arrive exactly as authored.
-            Assert.AreEqual(80, Sim.Rig().Economy.Circles, "the rig's budget, to the circle");
-            Assert.AreEqual(3, PoorWorld(3).Economy.Circles);
-            Assert.AreEqual(0, PoorWorld(0).Economy.Circles, "and a map that funds nothing opens with nothing");
+            Assert.AreEqual(80, Sim.Rig().Economy.Shapes, "the rig's budget, to the shape");
+            Assert.AreEqual(3, PoorWorld(3).Economy.Shapes);
+            Assert.AreEqual(0, PoorWorld(0).Economy.Shapes, "and a map that funds nothing opens with nothing");
         }
 
         [Test]
@@ -31,11 +32,11 @@ namespace Facet.Tests
             SimWorld world = PoorWorld(50);
 
             Sim.Place(world, BuildKind.Turret, new Int2(2, 2), Dir.East);
-            Assert.AreEqual(50 - world.Content.Machine(BuildKind.Turret).Cost, world.Economy.Circles,
+            Assert.AreEqual(50 - world.Content.Machine(BuildKind.Turret).Cost, world.Economy.Shapes,
                 "the turret is paid for");
 
             Assert.IsTrue(world.TryRemoveBuilding(new Int2(2, 2)));
-            Assert.AreEqual(50, world.Economy.Circles,
+            Assert.AreEqual(50, world.Economy.Shapes,
                 "and refunded in full: the cost gates expansion speed, not experimentation");
         }
 
@@ -45,7 +46,7 @@ namespace Facet.Tests
             SimWorld world = PoorWorld(3);
 
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 3);
-            Assert.AreEqual(0, world.Economy.Circles);
+            Assert.AreEqual(0, world.Economy.Shapes);
 
             Assert.IsFalse(world.TryPlaceBelt(new Int2(4, 1), Dir.East), "the fourth belt is unaffordable");
             Assert.IsFalse(world.Belts.Has(new Int2(4, 1)), "so it was never laid");
@@ -66,7 +67,7 @@ namespace Facet.Tests
             Assert.IsTrue(world.Belts.Has(new Int2(3, 1)), "three belts were affordable");
             Assert.IsFalse(world.Belts.Has(new Int2(4, 1)), "and the run simply stops there");
             Assert.IsFalse(world.Belts.Has(new Int2(6, 1)));
-            Assert.AreEqual(0, world.Economy.Circles);
+            Assert.AreEqual(0, world.Economy.Shapes);
         }
 
         [Test]
@@ -76,11 +77,11 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 2);
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), Sim.Circle));
             Assert.IsTrue(world.Belts.TryJam(new Int2(1, 1)));
-            int before = world.Economy.Circles;
+            int before = world.Economy.Shapes;
 
             Assert.IsTrue(world.TryRemoveBuilding(new Int2(1, 1)), "right-click clears the jam");
 
-            Assert.AreEqual(before, world.Economy.Circles, "nothing was removed, so nothing is refunded");
+            Assert.AreEqual(before, world.Economy.Shapes, "nothing was removed, so nothing is refunded");
             Assert.IsTrue(world.Belts.Has(new Int2(1, 1)), "the belt stays");
             Assert.IsFalse(world.Belts.IsJammed(new Int2(1, 1)), "the jam goes");
         }
@@ -91,14 +92,40 @@ namespace Facet.Tests
             SimWorld world = PoorWorld(10);
             // Belt at (7,5) points east into the Core's west edge; the one behind it carries in.
             Sim.LayRun(world, new Int2(6, 5), Dir.East, 2);
-            int before = world.Economy.Circles;
+            int before = world.Economy.Shapes;
 
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(6, 5), Sim.Circle));
             Sim.Tick(world, 90);
 
-            Assert.AreEqual(before + 1, world.Economy.Circles, "one circle delivered is one circle banked");
+            Assert.AreEqual(before + 1, world.Economy.Shapes, "one full circle delivered is one shape banked");
             Assert.AreEqual(1, world.Economy.TotalBanked);
             Assert.AreEqual(0, Sim.ItemCount(world), "and the item is consumed, not parked");
+        }
+
+        /// <summary>
+        /// The rule the currency was re-cut to: the Core banks a complete <em>shape</em>, not a circle, so a
+        /// full square pays exactly what a full circle pays. A map whose ore is square is therefore a map
+        /// whose money still works, which is the whole reason the rule reads completeness rather than
+        /// mineral.
+        /// </summary>
+        [Test]
+        public void ASquareDeliveredToTheCore_BanksTheSameAsACircle()
+        {
+            SimWorld squares = PoorWorld(10);
+            Sim.LayRun(squares, new Int2(6, 5), Dir.East, 2);
+            int before = squares.Economy.Shapes;
+
+            Assert.IsTrue(squares.Belts.TrySpawnItem(new Int2(6, 5), Sim.Square));
+            Sim.Tick(squares, 90);
+
+            Assert.AreEqual(before + 1, squares.Economy.Shapes, "a full square is one shape banked");
+            Assert.AreEqual(1, squares.Economy.TotalBanked);
+            Assert.AreEqual(0, Sim.ItemCount(squares), "and it is consumed like a circle");
+
+            // The event carries the coin that actually landed, so a view flashing "the money arrived" draws
+            // the shape the player is paid in rather than a circle on a square map.
+            Assert.IsTrue(squares.Events.TryLast(SimEventKind.Banked, out SimEvent banked));
+            Assert.AreEqual(Sim.Square, banked.Shape);
         }
 
         [Test]
@@ -106,12 +133,12 @@ namespace Facet.Tests
         {
             SimWorld world = PoorWorld(10);
             Sim.LayRun(world, new Int2(6, 5), Dir.East, 2);
-            int before = world.Economy.Circles;
+            int before = world.Economy.Shapes;
 
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(6, 5), Sim.TopHalfCircle));
             Sim.Tick(world, 90);
 
-            Assert.AreEqual(before, world.Economy.Circles, "ammunition is not money");
+            Assert.AreEqual(before, world.Economy.Shapes, "an incomplete shape is not money, ammunition or not");
             Assert.AreEqual(0, world.Economy.TotalBanked);
             Assert.AreEqual(0, Sim.ItemCount(world), "the sink is the overflow drain as well as the mint");
         }
@@ -123,12 +150,12 @@ namespace Facet.Tests
             // Same cell as the banking test, facing away: the delivery rule is the belt's direction.
             Sim.LayRun(world, new Int2(6, 5), Dir.West, 1);
             Sim.LayRun(world, new Int2(7, 5), Dir.West, 1);
-            int before = world.Economy.Circles;
+            int before = world.Economy.Shapes;
 
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 5), Sim.Circle));
             Sim.Tick(world, 90);
 
-            Assert.AreEqual(before, world.Economy.Circles);
+            Assert.AreEqual(before, world.Economy.Shapes);
             Assert.IsTrue(world.Belts.HasItemAt(new Int2(6, 5)),
                 "the circle waits at the dead end, still an item, never spendable");
         }
@@ -139,8 +166,8 @@ namespace Facet.Tests
         // second no matter what feeds it, and its latency is its length.
 
         /// <summary>A world with one patch and the Core pinned at (8,4), for the rate tests.</summary>
-        private static SimWorld RateWorld(int startCircles = 1000)
-            => new SimWorld(new MapDefinition("rates", 30, 12, startCircles,
+        private static SimWorld RateWorld(int startShapes = 1000)
+            => new SimWorld(new MapDefinition("rates", 30, 12, startShapes,
                 new[] { new ShapePatch(new Int2(24, 5), 3, 2, Quad.Circle) },
                 new Int2[0], new WaveDefinition[0], coreCell: new Int2(8, 4)), new SimConfig());
 
