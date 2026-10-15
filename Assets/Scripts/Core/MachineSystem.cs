@@ -103,5 +103,18 @@ namespace Facet.Core
             cooldown = MathF.Max(0f, cooldown - dt);
             return cooldown <= 0f;
         }
+
+        /// <summary>
+        /// The one book-keeping every machine that holds something has to answer the same way: did it fail to
+        /// pass that something on this tick? <see cref="MachineState.StallTicks"/> counts the run, and every
+        /// caller reports on every tick - a machine that waited and no longer does reads as zero, not as a
+        /// decaying average, because "is this stopped" is a question about now.
+        ///
+        /// Said once here because the alternatives drift: a behaviour that increments only at its own
+        /// give-up point counts seconds where the HUD counts ticks, and one that forgets to clear leaves a
+        /// machine reading as stopped after the line was fixed.
+        /// </summary>
+        public static void Waiting(ref MachineState machine, bool waiting)
+            => machine.StallTicks = waiting ? machine.StallTicks + 1 : 0;
     }
 }

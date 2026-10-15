@@ -126,7 +126,7 @@ namespace Facet.Tests
                 Assert.AreEqual(onOre, world.Terrain.HasOre(cell), "removing " + kind + " took the ground with it");
                 Assert.AreEqual(TileKind.Empty, world.TileGrid.Get(cell),
                     "and nothing is standing on the " + kind + "'s tile: the ground is not a tile kind");
-                Assert.AreEqual(Sim.TestCircles, world.Economy.Circles, "the " + kind + " was fully refunded");
+                Assert.AreEqual(Sim.TestShapes, world.Economy.Shapes, "the " + kind + " was fully refunded");
             }
         }
 
@@ -254,6 +254,75 @@ namespace Facet.Tests
 
             Assert.IsTrue(world.Belts.HasItemAt(input),
                 "circles arrive faster than the cut eats them, so the input backs up");
+        }
+
+        [Test]
+        public void ACutter_WhoseSecondLaneGoesNowhere_ReadsAsStalled()
+        {
+            // The stoppage the HUD could not see: the machine has eaten its item and the displaced piece has
+            // nowhere to go. Nothing upstream of it is ever "blocked" (the cutter would take those items) and
+            // nothing was refused, so this used to be a factory standing still in silence.
+            SimWorld world = CutterRig(secondLane: false);
+            Sim.Tick(world, 600);
+
+            MachineState cutter = Sim.MachineAt(world, new Int2(4, 6));
+            Assert.Greater(cutter.OutputCount2, 0,
+                "the second lane's slot is holding the piece it cannot pass on");
+            Assert.AreEqual(Shape.None, cutter.Carried,
+                "and the machine has stopped eating, which is what makes the line behind it queue");
+            Assert.GreaterOrEqual(cutter.StallTicks, MachineField.StallTicks,
+                "and it has been saying so for longer than the HUD's threshold");
+
+            world.Machines.CountStalled(out int stalled);
+            Assert.AreEqual(1, stalled, "one machine, which is the number the card prints");
+
+            var stopped = new System.Collections.Generic.List<Int2>();
+            world.Machines.GetStalled(stopped);
+            Assert.AreEqual(1, stopped.Count);
+            Assert.AreEqual(new Int2(4, 6), stopped[0], "and the locator is pointed at the machine itself");
+        }
+
+        [Test]
+        public void ACutter_WithBothLanesWired_IsNotStalled()
+        {
+            // The other half of the claim, and the reason the counter is worth printing: a machine that is
+            // merely busy - its input backed up behind a slower cut, which is every healthy cutter - is not
+            // stopped, and the HUD must not say it is.
+            SimWorld world = CutterRig(secondLane: true);
+            Sim.Tick(world, 600);
+
+            MachineState cutter = Sim.MachineAt(world, new Int2(4, 6));
+            Assert.Less(cutter.StallTicks, MachineField.StallTicks, "both pieces have somewhere to go");
+            Assert.IsTrue(world.Belts.HasItemAt(new Int2(4, 5)),
+                "the line behind it is backed up, which is the busy case and not the stopped one");
+
+            world.Machines.CountStalled(out int stalled);
+            Assert.AreEqual(0, stalled);
+        }
+
+        /// <summary>
+        /// A drill, one belt cell, and a cutter flowing north with the lane the belt fed wired out to a sink -
+        /// the smallest line whose second lane can be the problem. With <paramref name="secondLane"/> the
+        /// displaced piece's lane is wired to a sink of its own as well.
+        /// </summary>
+        private static SimWorld CutterRig(bool secondLane)
+        {
+            SimWorld world = Sim.NewWorld(20, 12);
+            world.Terrain.SetOre(new Int2(4, 4), Quad.Circle);
+            Sim.Place(world, BuildKind.Drill, new Int2(4, 4), Dir.North);
+            Sim.LayRun(world, new Int2(4, 5), Dir.North, 1);                   // into the cutter's fed tile
+            Sim.Place(world, BuildKind.Cutter, new Int2(4, 6), Dir.North);    // tiles (4,6) and (5,6)
+
+            Sim.LayRun(world, new Int2(4, 7), Dir.North, 1);                  // the piece that keeps the lane
+            Sim.Place(world, BuildKind.Sink, new Int2(4, 8), Dir.North);
+
+            if (secondLane)
+            {
+                Sim.LayRun(world, new Int2(5, 7), Dir.North, 1);              // the displaced piece's lane
+                Sim.Place(world, BuildKind.Sink, new Int2(5, 8), Dir.North);
+            }
+
+            return world;
         }
 
         [Test]

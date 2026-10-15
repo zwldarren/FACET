@@ -3,8 +3,10 @@ namespace Facet.Core
     /// <summary>
     /// Routes by shape: what the machine's filter matches leaves by the side it faces, every other shape
     /// by the other wired outlets. The filter is a row's own (<see cref="MachineDef.Filter"/>) and has two
-    /// modes - "anything with this mineral" or "exactly this item" - so one building answers both "keep the
-    /// money off the ammo line" and "send the top half-circles this way and the rest that way".
+    /// modes - "anything with this mineral" or "exactly this item" - so one building answers both "keep one
+    /// mineral off the other line" and "send the top half-circles this way and the rest that way". It cannot
+    /// name the currency, which is a <em>complete</em> shape rather than a mineral: completeness is not one
+    /// of the filter's modes.
     ///
     /// Reads its ports off the surrounding belts like a splitter, holds one item with no cooldown, and
     /// blocks a needed outlet (backpressure, not loss) rather than misroute.
@@ -28,8 +30,16 @@ namespace Facet.Core
                 sorter.Carried = Shape.None;
 
             // Still holding: the routed outlet had no room, or the item has nowhere to go. Waiting is
-            // the honest signal for a mis-wired stage, the same as a drill facing bare ground.
-            if (!sorter.Carried.IsEmpty) return;
+            // the honest signal for a mis-wired stage, the same as a drill facing bare ground - and it is
+            // counted, so a stage that has stopped reads on the HUD as well as on its own card.
+            if (!sorter.Carried.IsEmpty)
+            {
+                MachineClock.Waiting(ref sorter, waiting: true);
+                return;
+            }
+
+            // Empty again: whatever happens next, this machine is not waiting on an outlet.
+            MachineClock.Waiting(ref sorter, waiting: false);
 
             // Take from any side that delivers, in the same fixed order every ported machine uses.
             if (MachineDelivery.TryTakeInput(ctx.Belts, cell, in def, out Shape shape))

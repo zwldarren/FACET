@@ -33,17 +33,25 @@ namespace Facet.Core
                 if (rotator.Cooldown > 0f)
                 {
                     rotator.Cooldown = MathF.Max(0f, rotator.Cooldown - ctx.Dt);
-                    if (rotator.Cooldown > 0f) return;   // still turning
+                    if (rotator.Cooldown > 0f)
+                    {
+                        MachineClock.Waiting(ref rotator, waiting: false);    // still turning
+                        return;
+                    }
 
                     rotator.Carried = rotator.Carried.RotatedCW();
                 }
 
                 // Turned, and waiting only for room. It leaves on the tick its turn completes when the outlet
                 // is free; when it is not, this is where the machine waits, and the item is not turned again.
-                if (MachineDelivery.TryPushOutSide(ctx.Belts, cell, rotator.Direction, rotator.Carried))
-                    rotator.Carried = Shape.None;
+                bool pushed = MachineDelivery.TryPushOutSide(ctx.Belts, cell, rotator.Direction, rotator.Carried);
+                if (pushed) rotator.Carried = Shape.None;
+
+                MachineClock.Waiting(ref rotator, waiting: !pushed);
                 return;
             }
+
+            MachineClock.Waiting(ref rotator, waiting: false);
 
             if (!MachineDelivery.TryFindDietDelivery(ctx.Belts, cell, rotator.Direction, in def,
                     out Int2 delivery, out _)) return;

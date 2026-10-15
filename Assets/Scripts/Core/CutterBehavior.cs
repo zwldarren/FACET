@@ -32,6 +32,20 @@ namespace Facet.Core
 
         public void Step(ref MachineState cutter, Int2 cell, in MachineTickContext ctx)
         {
+            // The machine answers "am I waiting on an outlet" at every one of its exits, so the counter the
+            // HUD reads cannot drift from the tick's own decision to stop.
+            MachineClock.Waiting(ref cutter, Cut(ref cutter, cell, in ctx));
+        }
+
+        /// <summary>
+        /// One tick of the fork, reporting <b>whether it is waiting on an outlet</b> - the state
+        /// <see cref="MachineState.StallTicks"/> counts. Three ways it can be waiting, and they are the three
+        /// the machine's own comments below name: a lane at its buffer, a split whose two pieces have nowhere
+        /// to go yet, and an item it cannot take because a slot still holds something else. Cooldown and
+        /// intake are not waiting: the machine is working, or nothing is coming.
+        /// </summary>
+        private static bool Cut(ref MachineState cutter, Int2 cell, in MachineTickContext ctx)
+        {
             MachineDef def = ctx.Content.Machine(cutter.Build);
 
             MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, cutter.Direction, in def);
@@ -56,10 +70,10 @@ namespace Facet.Core
                 (Shape straight, Shape displaced) = Pieces(cutter.Carried, flow);
                 bool room = (straight.IsEmpty || cutter.OutputCount < SlotBuffer)
                             && (displaced.IsEmpty || cutter.OutputCount2 < SlotBuffer);
-                if (!room) return;   // both pieces leave at once, so the split waits for both slots
+                if (!room) return true;   // both pieces leave at once, so the split waits for both slots
 
                 cutter.Cooldown -= ctx.Dt;
-                if (cutter.Cooldown > 0f) return;
+                if (cutter.Cooldown > 0f) return false;   // still cutting
 
                 cutter.Carried = Shape.None;
                 if (!straight.IsEmpty)
@@ -74,7 +88,7 @@ namespace Facet.Core
                     cutter.OutputCount2++;
                 }
 
-                return;
+                return false;
             }
 
             // Intake: the first delivery the diet accepts whose two pieces this machine can actually
@@ -83,20 +97,21 @@ namespace Facet.Core
             // because three halves the player built are three halves and not whatever was cut last. The
             // wait is a stall, like the stacker's: the machine stops, visibly and safely. Both of the
             // machine's tiles are fed on: a belt laid into the back of either one delivers.
-            if (cutter.OutputCount >= SlotBuffer || cutter.OutputCount2 >= SlotBuffer) return;
+            if (cutter.OutputCount >= SlotBuffer || cutter.OutputCount2 >= SlotBuffer) return true;
             if (!MachineDelivery.TryFindDietDelivery(ctx.Belts, cell, flow, in def,
-                    out Int2 delivery, out Shape shape)) return;
+                    out Int2 delivery, out Shape shape)) return false;
 
             (Shape arriving, Shape other) = Pieces(shape, flow);
-            if (!Fits(cutter.OutputCount, cutter.OutputShape, arriving)) return;
-            if (!Fits(cutter.OutputCount2, cutter.OutputShape2, other)) return;
+            if (!Fits(cutter.OutputCount, cutter.OutputShape, arriving)) return true;
+            if (!Fits(cutter.OutputCount2, cutter.OutputShape2, other)) return true;
 
             // The take can still refuse a jammed segment: nothing is committed unless the item really
             // left the belt, so a refused take cannot mint a copy of it inside the machine.
-            if (!ctx.Belts.TryTakeItem(delivery, out Shape taken)) return;
+            if (!ctx.Belts.TryTakeItem(delivery, out Shape taken)) return false;
 
             cutter.Carried = taken;
             cutter.Cooldown = def.Interval;
+            return false;
         }
 
         /// <summary>

@@ -82,6 +82,11 @@ namespace Facet.Game
         /// a player whose font lacks it. See <see cref="HudIcons"/>.</summary>
         private HudIcons _icons;
 
+        /// <summary>The money mark the HUD is wearing right now: the complete shape of this map's mineral.
+        /// A map change moves it from one mineral to another, and the coin on the stockpile and on every
+        /// cost tile is repainted when it moves. See <see cref="UpdateMoneyMarks"/>.</summary>
+        private Shape _moneyDrawn = Shape.None;
+
         // ------------------------------------------------------------------ the canvas and its panels
 
         private RectTransform _canvasRoot;
@@ -124,7 +129,9 @@ namespace Facet.Game
         /// question <see cref="ThreatRadarView"/> asks and reads the same answer, so the two cannot disagree
         /// about what is out of view.</summary>
         private readonly List<EnemySnapshot> _radarEnemies = new List<EnemySnapshot>();
-        private readonly List<Int2> _radarJams = new List<Int2>();
+        private readonly List<Int2> _radarStopped = new List<Int2>();
+        private readonly List<Int2> _radarBlocked = new List<Int2>();
+        private readonly List<Int2> _radarStalled = new List<Int2>();
         private ThreatRadar.Marker[] _radarMarkers = new ThreatRadar.Marker[0];
         private readonly ThreatRadar.ScreenReader _screen = new ThreatRadar.ScreenReader();
 
@@ -216,10 +223,19 @@ namespace Facet.Game
             var view = _screen.Measure(_camera, ShowTutorial, look.EdgeInsetPixels, _pickerUp);
 
             _world.Enemies.GetEnemies(_radarEnemies);
-            _world.Belts.GetJammed(_radarJams);
+
+            // Everything that has stopped, wherever it stopped: a jammed segment, a segment whose line ends in
+            // the air, and a machine holding a piece it cannot pass on. One list because the locator has one
+            // answer - a place to go - and the same three the arrows are made from, so the sentence and the
+            // marks cannot name different sets.
+            _world.Belts.GetJammed(_radarStopped);
+            _world.Belts.GetBlocked(_radarBlocked);
+            _radarStopped.AddRange(_radarBlocked);
+            _world.Machines.GetStalled(_radarStalled);
+            _radarStopped.AddRange(_radarStalled);
 
             float pixels = Screen.height > 0 ? Screen.height : 1f;
-            ThreatRadar.Collect(view, _radarEnemies, _radarJams, ThreatRadar.CoreCentre(_world),
+            ThreatRadar.Collect(view, _radarEnemies, _radarStopped, ThreatRadar.CoreCentre(_world),
                 look.MergePixels * (2f * _camera.orthographicSize / pixels), _radarMarkers,
                 out ThreatRadar.Summary summary);
 
@@ -245,6 +261,14 @@ namespace Facet.Game
         /// toast's clearance and the driver's camera rig all read, so no two pieces of the frame can disagree
         /// about whether the card is there.</summary>
         private bool ShowTutorial => _campaign != null && _campaign.IsFirstMap;
+
+        /// <summary>
+        /// The coin this run is paid in, as a mark: the <em>complete</em> shape of the map's own mineral.
+        /// The rule is any complete shape - a full square banks exactly what a full circle banks
+        /// (<see cref="Shape.IsFull"/>) - and this is the one of them the HUD draws, because the mineral
+        /// under the player's own drills is the money they will see arriving.
+        /// </summary>
+        private Shape MoneyShape => Shape.Full(_world.Map.CurrencyMineral);
 
         /// <summary>Point the HUD at a world, its palette, and where the player is in the campaign. Called
         /// on every map change, which is why the canvas is built once and kept: a map change rebinds the
@@ -287,6 +311,7 @@ namespace Facet.Game
             if (_world == null || _palette == null || _canvasRoot == null) return;
 
             RefreshScale();
+            UpdateMoneyMarks();
 
             // The HUD owns its panels: the pointer being over one is reported to the input source, so a
             // click on a button cannot also build under it. This update runs after the driver's, so it
@@ -568,13 +593,13 @@ namespace Facet.Game
             HudText body = Label(root, "body", 13f, FontStyle.Normal, TextAnchor.UpperLeft, wrap: true);
             HudUi.TopLeft(body.Rect, 14f * _scale, 42f * _scale, rect.width - 28f * _scale, 158f * _scale);
             body.Set(
-                "1. Mine circle ore and carry it back to the Core on belts.\n" +
-                "2. Ore is spendable once it reaches the Core.\n" +
+                "1. Mine ore and carry it back to the Core on belts.\n" +
+                "2. A complete shape - all four quadrants - is spendable once it reaches the Core.\n" +
                 "3. A cutter forks a belt: what comes in its back runs straight on out its front, and the\n" +
                 "   other half leaves a lane over. Q/E turns the whole fork, blade and all.\n" +
                 "4. A line that goes nowhere backs up and stops its machine: lay one more belt, or put a\n" +
                 "   Sink (X) on the end to eat what nothing wants. A jammed red segment takes a right-click.\n" +
-                "5. Feed a turret (0) the round the demand figure shows - anything else deals a quarter.",
+                "5. Feed a turret (0) the round the demand figure shows - anything else deals a half.",
                 _palette.HudText);
 
             panel.Root.gameObject.SetActive(ShowTutorial);
@@ -649,14 +674,11 @@ namespace Facet.Game
             panel.Number = Label(panel.Root, "number", 26f, FontStyle.Bold, TextAnchor.MiddleLeft);
             HudUi.TopLeft(panel.Number.Rect, 0f, 0f, rect.width, rect.height);
 
-            HudIcons.Icon icon = _icons.Mark(Shape.Full(Quad.Circle));
-            if (icon.Valid)
-            {
-                panel.Icon = HudUi.Icon(panel.Root, "icon", icon);
-                float side = Mathf.Min(28f * _scale, rect.height - 4f * _scale);
-                HudUi.TopLeft(panel.Icon.rectTransform, rect.width, (rect.height - side) * 0.5f, side, side);
-                panel.Icon.gameObject.SetActive(false);
-            }
+            HudIcons.Icon coin = _icons.Mark(MoneyShape);
+            panel.Icon = HudUi.Icon(panel.Root, "icon", coin);
+            float side = Mathf.Min(28f * _scale, rect.height - 4f * _scale);
+            HudUi.TopLeft(panel.Icon.rectTransform, rect.width, (rect.height - side) * 0.5f, side, side);
+            panel.Icon.gameObject.SetActive(false);
 
             return panel;
         }
@@ -721,14 +743,10 @@ namespace Facet.Game
                 HudUi.TopLeft(tile.Cost.Rect, 0f, 9f * _scale, tileWidth - 8f * _scale, 15f * _scale);
                 tile.Cost.Set(_world.Content.Machine(kind).Cost.ToString(), _palette.MachineIdle);
 
-                HudIcons.Icon icon = _icons.Mark(Shape.Full(Quad.Circle));
-                if (icon.Valid)
-                {
-                    tile.CostIcon = HudUi.Icon(tile.Root, "costIcon", icon);
-                    HudUi.TopLeft(tile.CostIcon.rectTransform, tileWidth, 10f * _scale, 13f * _scale,
-                        13f * _scale);
-                    tile.CostIcon.gameObject.SetActive(false);
-                }
+                tile.CostIcon = HudUi.Icon(tile.Root, "costIcon", _icons.Mark(MoneyShape));
+                HudUi.TopLeft(tile.CostIcon.rectTransform, tileWidth, 10f * _scale, 13f * _scale,
+                    13f * _scale);
+                tile.CostIcon.gameObject.SetActive(false);
 
                 tile.Name = Label(tile.Root, "name", 13f, FontStyle.Bold, TextAnchor.MiddleCenter);
                 HudUi.TopLeft(tile.Name.Rect, 4f * _scale, 27f * _scale, tileWidth - 8f * _scale, 20f * _scale);
@@ -771,7 +789,7 @@ namespace Facet.Game
         /// narrower table simply has fewer tabs.
         ///
         /// Locked buildings stay inside their tab: the ladder is worth seeing, and the tile says LOCKED
-        /// itself, so a tab that vanished until map 3 would hide the campaign's whole progression.
+        /// itself, so a tab that vanished until a map handed its operator over would hide the progression.
         /// </summary>
         private void BuildRoleTabs(BarPanel panel, RectTransform root, BuildKind[] kinds)
         {
@@ -1160,9 +1178,10 @@ namespace Facet.Game
             switch (refusal.Reason)
             {
                 case RejectionReason.NoFunds:
-                    return "NOT ENOUGH " + Plural(Shape.MineralName(Quad.Circle), 2).ToUpperInvariant() +
+                    return "NOT ENOUGH " + Plural(Shape.MineralName(_world.Map.CurrencyMineral), 2)
+                               .ToUpperInvariant() +
                            " - " + def.Name + " costs " + Mathf.RoundToInt(refusal.Amount) + ", you have " +
-                           _world.Economy.Circles;
+                           _world.Economy.Shapes;
                 case RejectionReason.Occupied:
                     return "BLOCKED - something already stands on " + refusal.Cell;
                 case RejectionReason.BadGround:
@@ -1183,6 +1202,36 @@ namespace Facet.Game
 
         // ------------------------------------------------------------------ stockpile
 
+        /// <summary>
+        /// Keep every money mark on the HUD on the run's own coin. Two marks read it - the stockpile's and
+        /// each cost tile's - and both are repainted from here rather than at their own call sites, so a map
+        /// change cannot leave the previous map's mineral on one of them. The comparison is the shape itself,
+        /// which is a <see cref="uint"/>: a frame where the map has not changed costs one integer compare.
+        /// </summary>
+        private void UpdateMoneyMarks()
+        {
+            Shape money = MoneyShape;
+            if (money == _moneyDrawn) return;
+
+            _moneyDrawn = money;
+            HudIcons.Icon coin = _icons.Mark(money);
+
+            if (_stockpile != null && _stockpile.Icon != null) Paint(_stockpile.Icon, coin);
+            if (_bar == null) return;
+
+            for (int i = 0; i < _bar.Tiles.Count; i++)
+                if (_bar.Tiles[i].CostIcon != null) Paint(_bar.Tiles[i].CostIcon, coin);
+        }
+
+        /// <summary>Point one mark at one rasterised item. An icon the palette cannot draw carries no
+        /// texture, and a <see cref="RawImage"/> with none draws nothing rather than a white square - so a
+        /// mineral with no shipped mark leaves the number bare instead of lying about it.</summary>
+        private static void Paint(RawImage mark, HudIcons.Icon icon)
+        {
+            mark.texture = icon.Texture;
+            mark.uvRect = icon.Uv;
+        }
+
         private void UpdateStockpile()
         {
             BuildKind? selected = _world.SelectedKind;
@@ -1192,15 +1241,15 @@ namespace Facet.Game
             if (_toastAlpha > 0f)
                 numberColour = WithAlpha(_palette.HudWarn, _toastAlpha);
 
-            int circles = _world.Economy.Circles;
-            if (circles != _stockpileCount)
+            int shapes = _world.Economy.Shapes;
+            if (shapes != _stockpileCount)
             {
-                _stockpileCount = circles;
-                _stockpile.Number.Set(circles.ToString(), numberColour);
+                _stockpileCount = shapes;
+                _stockpile.Number.Set(shapes.ToString(), numberColour);
 
                 // The shape follows the number rather than sitting in a column of its own: the readout grows
-                // rightwards and stays glued to the card. Drawn, not typed - the circle character is not in
-                // every font a player has, and this mark must never be a gap.
+                // rightwards and stays glued to the card. Drawn, not typed - the character for a mineral is
+                // not in every font a player has, and this mark must never be a gap.
                 if (_stockpile.Icon != null)
                 {
                     float used = _stockpile.Number.PreferredWidth;
@@ -1255,12 +1304,13 @@ namespace Facet.Game
             bool starved = armed < total;
             int jams = _world.Belts.JamCount;
             int blocked = _world.Belts.BlockedCount;
+            _world.Machines.CountStalled(out int stalled);
             bool hurting = _world.Core.HealthFraction <= 0.4f;
             ThreatRadar.Summary outOfView = ReadOutOfView();
             bool coreHit = ThreatRadar.CoreIsBeingHit(_world, _palette.Radar.DangerTicks);
 
             _status.Stripe.Set(
-                jams > 0 || blocked > 0 || starved || hurting || coreHit || outOfView.Urgent
+                jams > 0 || blocked > 0 || stalled > 0 || starved || hurting || coreHit || outOfView.Urgent
                     ? _palette.HudWarn : _palette.HudAccent);
 
             _status.Title.Set(TitleLine(), _palette.HudAccent);
@@ -1274,10 +1324,10 @@ namespace Facet.Game
             _status.News.Set(WaveNews(), _palette.HudText);
             UpdateComposition();
 
-            string production = ProductionLine(jams, blocked, starved, total);
+            string production = ProductionLine(jams, blocked, stalled, starved, total);
             bool productionNews = production != null;
             _status.Production.Show(productionNews);
-            if (productionNews) _status.Production.Set(production, ProductionColour(jams, blocked, starved));
+            if (productionNews) _status.Production.Set(production, ProductionColour(jams, blocked, stalled, starved));
 
             string threat = ThreatWarning(in outOfView);
             bool threatNews = threat != null;
@@ -1303,7 +1353,23 @@ namespace Facet.Game
         /// at all. The block is the one that used to be silent - a line ending in the air reddened nothing,
         /// so a factory came to a standstill with nothing on the HUD to say why.
         /// </summary>
-        private string ProductionLine(int jams, int blocked, bool starved, int total)
+        /// <summary>
+        /// The production line, said only when something is wrong: a segment that cannot pass its item on
+        /// first - it stops the run, not just one machine - then a machine holding a piece its outlets will not
+        /// take, then a gun that cannot shoot, then, once a wave
+        /// is walking in, the absence of anything to shoot it with. When the defence is fed and the belts
+        /// are clear the line stays silent: "all clear" printed every second is a line nobody reads. Null
+        /// means no news, and the line is hidden.
+        ///
+        /// Jammed and blocked are two words for one symptom, and both are counted here because they are the
+        /// two ways a <em>belt</em> stops: a jam is an item a machine refused, a block is an item with nowhere
+        /// to go at all. The block is the one that used to be silent - a line ending in the air reddened nothing,
+        /// so a factory came to a standstill with nothing on the HUD to say why. The stalled machine is the
+        /// third of the three and the last one to have been silent: a machine that has eaten its item and
+        /// cannot pass it on is neither a jam nor a block, so without the count here the belts behind it queue
+        /// and the card says nothing.
+        /// </summary>
+        private string ProductionLine(int jams, int blocked, int stalled, bool starved, int total)
         {
             if (jams > 0 && blocked > 0)
                 return jams + " jammed, " + blocked + " blocked   ·   right-click to clear";
@@ -1313,6 +1379,15 @@ namespace Facet.Game
 
             if (blocked > 0)
                 return blocked + " blocked - a line ends in the air   ·   right-click to clear";
+
+            if (stalled > 0)
+                // The third way a line stops, and the one that had no words before: the machine has eaten its
+                // item and cannot pass it on, so the belts behind it queue and nothing upstream is ever
+                // "blocked". Both causes are one sentence - a lane that was never wired and a lane whose belt
+                // is full are the same fact to the machine - and clicking the one the locator points at is
+                // where the two are told apart.
+                return stalled + " machine" + (stalled == 1 ? "" : "s") +
+                       " stalled - an outlet is full or missing   ·   click one to read it";
 
             if (starved)
                 // The chamber is universal, so a starved gun is not missing the right shape - it is missing
@@ -1328,8 +1403,8 @@ namespace Facet.Game
             return null;
         }
 
-        private Color ProductionColour(int jams, int blocked, bool starved)
-            => jams > 0 || blocked > 0 || starved ? _palette.HudWarn : _palette.HudText;
+        private Color ProductionColour(int jams, int blocked, int stalled, bool starved)
+            => jams > 0 || blocked > 0 || stalled > 0 || starved ? _palette.HudWarn : _palette.HudText;
 
         /// <summary>What is out of view, said in the register the arrows cannot: how many, how far, and
         /// whether it is hitting anything. The arrows are drawn from the same <see cref="ThreatRadar.Summary"/>,
@@ -1356,11 +1431,10 @@ namespace Facet.Game
                 if (outOfView.Urgent) text.Append("   ·   hitting something");
             }
 
-            if (outOfView.HasJams)
+            if (outOfView.HasStops)
                 AppendSeparator(text)
-                    .Append(outOfView.Jams)
-                    .Append(outOfView.Jams == 1 ? " jam" : " jams")
-                    .Append(" out of view");
+                    .Append(outOfView.Stops)
+                    .Append(" stopped out of view");
 
             if (outOfView.CoreIsOut)
                 AppendSeparator(text).Append("the Core is out of view   ·   C goes back to it");
@@ -1845,7 +1919,7 @@ namespace Facet.Game
                 // the way is a belt to lay now, a tenth of the way is a plan for later. A locked tile has no
                 // cost to save toward, so its line stays empty.
                 if (!tile.Locked && !tile.Affordable && _world.Content.Machine(tile.Kind).Cost > 0)
-                    tile.Afford.Set(Mathf.Clamp01(_world.Economy.Circles / (float)_world.Content.Machine(tile.Kind).Cost),
+                    tile.Afford.Set(Mathf.Clamp01(_world.Economy.Shapes / (float)_world.Content.Machine(tile.Kind).Cost),
                         _palette.CursorNoFunds);
                 else tile.Afford.Set(0f, Color.clear);
             }
@@ -1863,7 +1937,7 @@ namespace Facet.Game
         ///
         /// A kind this map has not unlocked is drawn as a locked tile: grey, its role replaced by LOCKED,
         /// and no cost. It stays on the bar rather than disappearing because the ladder is worth seeing -
-        /// "the rotator exists and map 2 hands it over" is the campaign's whole progression - but it cannot
+        /// "the rotator exists and some map hands it over" is the progression - but it cannot
         /// be selected, and <see cref="SelectKind"/> is where that is enforced for the click as well as the
         /// key.
         /// </summary>
@@ -1928,7 +2002,7 @@ namespace Facet.Game
         // ------------------------------------------------------------------ the bar's two levels
 
         /// <summary>Open a role's tab. Browsing is not selecting: the tab decides what the bar shows and
-        /// nothing else, so a player can look at what map 3 will hand them without dropping the belt in
+        /// nothing else, so a player can look at what a later map will hand them without dropping the belt in
         /// hand - and the selection, when it changes, opens its own tab in
         /// <see cref="UpdateBuildBar"/>.</summary>
         private void OpenRoleTab(MachineRole role)
@@ -2112,7 +2186,7 @@ namespace Facet.Game
             _info.BuildStripe.Set(category);
             _info.BuildTitle.Set(def.Name, _palette.HudText);
             _info.BuildRight.Set(
-                def.Cost + " " + Plural(Shape.MineralName(Quad.Circle), def.Cost) + "   " +
+                def.Cost + " " + Plural(Shape.MineralName(_world.Map.CurrencyMineral), def.Cost) + "   " +
                 (locked ? "LOCKED" : RoleOf(kind)),
                 _palette.MachineIdle);
 
@@ -2246,7 +2320,7 @@ namespace Facet.Game
                 InspectLine("holding " + Mathf.CeilToInt(_world.Core.Hp) + " / " +
                     Mathf.CeilToInt(_world.Core.MaxHp) + " health",
                     hurting ? _palette.HudWarn : _palette.HudGood);
-                InspectLine("full circles belted into it become spendable - anything else is destroyed",
+                InspectLine("a complete shape belted into it becomes spendable - anything less is destroyed",
                     _palette.MachineIdle);
                 InspectLine("losing it loses the run", _palette.MachineIdle);
                 FinishInspect();
@@ -2824,7 +2898,7 @@ namespace Facet.Game
         // ------------------------------------------------------------------ banner
 
         /// <summary>The one thing that has to be unmissable: the run is over, or the game is paused.
-        /// An ended run also reports itself - shots fired, circles banked - so "do better" has numbers.</summary>
+        /// An ended run also reports itself - shots fired, shapes banked - so "do better" has numbers.</summary>
         private void UpdateBanner()
         {
             // The banner's own gate: a run's end and a pause are events, and the sentence they ask for does
@@ -2896,7 +2970,7 @@ namespace Facet.Game
         private string StatsLine()
         {
             return _world.ShotsFired + " shots fired · " + _world.Economy.TotalBanked + " " +
-                Plural(Shape.MineralName(Quad.Circle), _world.Economy.TotalBanked) + " banked";
+                Plural(Shape.MineralName(_world.Map.CurrencyMineral), _world.Economy.TotalBanked) + " banked";
         }
 
         // ------------------------------------------------------------------ the buttons' dressing
@@ -3007,8 +3081,8 @@ namespace Facet.Game
         private string Stats(BuildKind kind) =>
             MachineReading.Stats(_world.Content.Machine(kind), _world.Content, _world.Config);
 
-        /// <summary>The item's own words, pluralised the way the sentence reading it needs: "3 circle
-        /// banked" is the HUD's mistake to avoid, not the algebra's.</summary>
+        /// <summary>The item's own words, pluralised the way the sentence reading it needs: "3 banked
+        /// circles" is the HUD's mistake to avoid, not the algebra's.</summary>
         private static string Plural(string word, int count)
             => count == 1 ? word : word + "s";
 

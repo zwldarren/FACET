@@ -314,9 +314,6 @@ namespace Facet.Game
             /// <summary>Enemies out of view, whether or not they got an arrow of their own.</summary>
             public readonly int Threats;
 
-            /// <summary>Jammed segments out of view.</summary>
-            public readonly int Jams;
-
             /// <summary>Tiles to the nearest enemy out of view, or <see cref="float.MaxValue"/> when there
             /// is none to be near.</summary>
             public readonly float Nearest;
@@ -327,16 +324,22 @@ namespace Facet.Game
             /// <summary>Is the Core off the screen?</summary>
             public readonly bool CoreIsOut;
 
+            /// <summary>How many places have stopped out of view: a jammed segment, a segment whose line ends
+            /// in the air, or a machine holding a piece it cannot pass on. One number, because to a player all
+            /// three are one piece of news - something has stopped out there, on a tile they cannot see - and
+            /// the card's production line is where the three are told apart.</summary>
+            public readonly int Stops;
+
             public bool HasThreats => Threats > 0;
-            public bool HasJams => Jams > 0;
+            public bool HasStops => Stops > 0;
 
             /// <summary>Anything worth an arrow at all.</summary>
-            public bool HasAnything => HasThreats || HasJams || CoreIsOut;
+            public bool HasAnything => HasThreats || HasStops || CoreIsOut;
 
-            public Summary(int threats, int jams, float nearest, bool urgent, bool coreIsOut)
+            public Summary(int threats, int stops, float nearest, bool urgent, bool coreIsOut)
             {
                 Threats = threats;
-                Jams = jams;
+                Stops = stops;
                 Nearest = nearest;
                 Urgent = urgent;
                 CoreIsOut = coreIsOut;
@@ -360,18 +363,21 @@ namespace Facet.Game
         /// state always draws the same arrows. Nothing is allocated: the markers go into a caller-owned
         /// array, and the lists are the ones the views already reuse.
         /// </summary>
-        /// <param name="jams">Jammed and blocked belt cells (<see cref="BeltField.GetJammed"/> and
-        /// <see cref="BeltField.GetBlocked"/> together), or empty. Both are one subject because both are one
-        /// piece of news out of view: a line has stopped, on a tile the player has to go and look at.</param>
+        /// <param name="stops">Every place a line has stopped - jammed and blocked belt cells
+        /// (<see cref="BeltField.GetJammed"/> and <see cref="BeltField.GetBlocked"/>) together with the stalled
+        /// machines (<see cref="MachineField.GetStalled"/>), or empty. All three are one subject because all
+        /// three are one piece of news out of view: a line has stopped, on a tile the player has to go and look
+        /// at. The caller builds the one list, so the arrows and the card's "N stopped" cannot count different
+        /// sets.</param>
         /// <param name="core">The Core's centre, in world units.</param>
         /// <param name="into">Where the arrows go; at most <see cref="Array.Length"/> of them.</param>
         /// <param name="summary">What was found, including what no arrow had room for.</param>
         /// <returns>How many markers were written.</returns>
         public static int Collect(in Viewport view, IReadOnlyList<EnemySnapshot> enemies,
-            IReadOnlyList<Int2> jams, Vector2 core, float mergeDistance, Marker[] into, out Summary summary)
+            IReadOnlyList<Int2> stops, Vector2 core, float mergeDistance, Marker[] into, out Summary summary)
         {
             int written = 0;
-            int threats = 0, jamsOut = 0;
+            int threats = 0, stopsOut = 0;
             float nearest = float.MaxValue;
             bool urgent = false;
 
@@ -396,15 +402,15 @@ namespace Facet.Game
                 }
             }
 
-            if (jams != null)
+            if (stops != null)
             {
-                for (int i = 0; i < jams.Count; i++)
+                for (int i = 0; i < stops.Count; i++)
                 {
-                    Int2 cell = jams[i];
+                    Int2 cell = stops[i];
                     var at = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
                     if (view.IsOpen(at)) continue;
 
-                    jamsOut++;
+                    stopsOut++;
                     var marker = new Marker(Subject.Jam, view.EdgeTowards(at, out Vector2 direction),
                         direction, 1, view.Distance(at), false, default);
                     written = FoldOrAdd(into, written, in marker, mergeSq);
@@ -419,7 +425,7 @@ namespace Facet.Game
                 written = FoldOrAdd(into, written, in marker, mergeSq);
             }
 
-            summary = new Summary(threats, jamsOut, nearest, urgent, coreIsOut);
+            summary = new Summary(threats, stopsOut, nearest, urgent, coreIsOut);
             return written;
         }
 

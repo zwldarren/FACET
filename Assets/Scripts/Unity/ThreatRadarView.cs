@@ -35,6 +35,11 @@ namespace Facet.Game
         /// there, and it is on a tile you cannot see"); the card's line is where the two are told apart.</summary>
         private readonly List<Int2> _blocked = new List<Int2>();
 
+        /// <summary>Machines holding a piece their outlets will not take - the third way a line stops, and the
+        /// third mark on the same list: the machine has eaten its item, so nothing upstream of it is ever
+        /// "blocked" and the stoppage has no other way of showing.</summary>
+        private readonly List<Int2> _stalled = new List<Int2>();
+
         /// <summary>Marker scratch, sized to the palette's cap: the arrows are folded into it and drawn
         /// straight out of it, so a wave off-screen costs no allocation per frame.</summary>
         private ThreatRadar.Marker[] _markers = new ThreatRadar.Marker[0];
@@ -100,6 +105,8 @@ namespace Facet.Game
             world.Belts.GetJammed(_jams);
             world.Belts.GetBlocked(_blocked);
             _jams.AddRange(_blocked);
+            world.Machines.GetStalled(_stalled);
+            _jams.AddRange(_stalled);
 
             int arrows = ThreatRadar.Collect(view, _enemies, _jams, ThreatRadar.CoreCentre(world),
                 look.MergePixels * pixel, _markers, out ThreatRadar.Summary summary);

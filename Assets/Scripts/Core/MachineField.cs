@@ -107,6 +107,26 @@ namespace Facet.Core
         /// drain is doing its job, since a sink that works looks exactly like a sink that is fed nothing.
         /// Nothing reads it back: the card prints it and a test may count it.</summary>
         public int Swallowed;
+
+        /// <summary>
+        /// How many ticks in a row this machine has held something its outlets would not take: the cutter
+        /// with a full lane, the sorter waiting on the side it faces, the pipe whose landing belt is busy,
+        /// the rotator turned and waiting for room, the stacker with a finished round and nowhere to put it.
+        /// Reset the tick anything moves.
+        ///
+        /// It is the one way a line stops that nothing else on the HUD names. A <b>jam</b> is a machine's
+        /// refusal and a <b>blocked</b> segment is an item with nowhere to go at all, but a machine holding a
+        /// piece an outlet merely would not take is neither: the belts behind it are not blocked (the machine
+        /// <em>would</em> take them) and nothing was refused. Without this counter the line stands still and
+        /// the screen says nothing at all - which is what it is here to end.
+        ///
+        /// Two waits are deliberately <em>not</em> counted, so that the number stays one piece of news: a
+        /// drill's (its wait is its own one-second clock, not an outlet, and a lane that has genuinely
+        /// dead-ended behind it is already <see cref="BeltField.BlockedCount"/>), and a stacker waiting for a
+        /// piece that fits (a design, not a stoppage - the item it cannot merge is one the player spent a
+        /// chain building). A turret's wait for a target is <see cref="Armed"/>'s other state, "starved".
+        /// </summary>
+        public int StallTicks;
     }
 
     /// <summary>One machine, flattened for the view layer.</summary>
@@ -478,6 +498,38 @@ namespace Facet.Core
 
                 total++;
                 if (m.Armed) armed++;
+            }
+        }
+
+        /// <summary>
+        /// How long a machine has to have been waiting on an outlet before the HUD calls it stopped: one
+        /// second at the fixed tick rate. Long enough that a full lane the line is about to drain is not
+        /// news, short enough that a factory standing still says so while the player is still looking at it.
+        /// </summary>
+        public static readonly int StallTicks = (int)SimConfig.TickRate;
+
+        /// <summary>How many machines have been holding something they cannot pass on for at least
+        /// <see cref="StallTicks"/> - <see cref="MachineState.StallTicks"/>'s "how many", and the number the
+        /// HUD's production line says out loud. Machines, not tiles: a cutter standing on two is one.</summary>
+        public void CountStalled(out int stalled)
+        {
+            stalled = 0;
+            for (int k = 0; k < _occupied.Count; k++)
+                if (_state[_occupied[k]].StallTicks >= StallTicks) stalled++;
+        }
+
+        /// <summary>Which machines those are, in the registry's stable order - <see cref="BeltField.GetJammed"/>'s
+        /// counterpart for a machine rather than a segment, so the locator can point at a stoppage the player
+        /// cannot see. A dedicated walk for the same reason: a stalled machine is a place to go and look.</summary>
+        public void GetStalled(List<Int2> into)
+        {
+            into.Clear();
+            for (int k = 0; k < _occupied.Count; k++)
+            {
+                int i = _occupied[k];
+                if (_state[i].StallTicks < StallTicks) continue;
+
+                into.Add(_grid.CellOf(i));
             }
         }
 

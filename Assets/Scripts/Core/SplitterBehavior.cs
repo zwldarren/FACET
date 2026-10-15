@@ -20,7 +20,16 @@ namespace Facet.Core
                 MachineDelivery.TryPushOut(ctx.Belts, ref splitter, cell, splitter.Carried))
                 splitter.Carried = Shape.None;
 
-            if (!splitter.Carried.IsEmpty) return;
+            // Still holding: every outlet it may use is full or jammed. That is a stoppage the belts behind
+            // it cannot see - the hub takes nothing, so nothing upstream is ever "blocked" - which is why it
+            // is counted here.
+            if (!splitter.Carried.IsEmpty)
+            {
+                MachineClock.Waiting(ref splitter, waiting: true);
+                return;
+            }
+
+            MachineClock.Waiting(ref splitter, waiting: false);
 
             // Take from any side that delivers, in the same fixed order every ported machine uses.
             if (MachineDelivery.TryTakeInput(ctx.Belts, cell, in def, out Shape shape))

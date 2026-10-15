@@ -27,16 +27,29 @@ namespace Facet.Core
             if (!stacker.Carried.IsEmpty && !stacker.Carried2.IsEmpty)
             {
                 stacker.Cooldown -= ctx.Dt;
-                if (stacker.Cooldown > 0f) return;
+                if (stacker.Cooldown > 0f)
+                {
+                    MachineClock.Waiting(ref stacker, waiting: false);   // fusing
+                    return;
+                }
 
                 stacker.OutputShape = Shape.Stacked(stacker.Carried, stacker.Carried2);
                 stacker.OutputCount = 1;
                 stacker.Carried = Shape.None;
                 stacker.Carried2 = Shape.None;
+                MachineClock.Waiting(ref stacker, waiting: false);
                 return;
             }
 
-            if (stacker.OutputCount > 0) return;   // the last union has not left yet
+            // The last union has not left yet: the one wait on this machine that is a stoppage rather than a
+            // design. Holding a single piece for a second one is the other case, and is not counted.
+            if (stacker.OutputCount > 0)
+            {
+                MachineClock.Waiting(ref stacker, waiting: true);
+                return;
+            }
+
+            MachineClock.Waiting(ref stacker, waiting: false);
 
             // Intake, in the ports' scan order. The first piece is anything the diet accepts; the second
             // must be disjoint from it, and a delivery that overlaps is skipped rather than stopped on -

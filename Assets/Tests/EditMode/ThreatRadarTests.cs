@@ -268,16 +268,18 @@ namespace Facet.Tests
             Assert.AreEqual(4, into[0].Count, "all of them accounted for by the arrow that stands");
         }
 
-        /// <summary>A jam is the one thing off-screen the player can fix with a single right-click, so it is
-        /// located for the same reason a wave is: not to be warned about, but to be found.</summary>
+        /// <summary>A stopped line is the one thing off-screen the player can fix with a single right-click, so
+        /// it is located for the same reason a wave is: not to be warned about, but to be found. Belt segments
+        /// and stalled machines alike - the caller hands over one list, because to the locator they are one
+        /// subject.</summary>
         [Test]
-        public void JamsAreLocated_AsLongAsTheyAreOutOfReachOfTheCursor()
+        public void StoppedLinesAreLocated_AsLongAsTheyAreOutOfReachOfTheCursor()
         {
             int arrows = ThreatRadar.Collect(Screen, NoEnemies,
                 new[] { new Int2(35, 20), new Int2(12, 26), new Int2(20, 20) },   // off, under a card, in view
                 Centre, 1f, Markers(4, out ThreatRadar.Marker[] into), out ThreatRadar.Summary summary);
 
-            Assert.AreEqual(2, summary.Jams, "the two the player can neither see nor click");
+            Assert.AreEqual(2, summary.Stops, "the two the player can neither see nor click");
             Assert.AreEqual(2, arrows);
             Assert.AreEqual(ThreatRadar.Subject.Jam, into[0].What);
             Assert.AreEqual(ThreatRadar.Subject.Jam, into[1].What);
