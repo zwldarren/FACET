@@ -62,7 +62,7 @@ echo
 echo "Next, once per repository:"
 echo "  GitHub -> Settings -> Pages -> Source: Deploy from a branch -> main / docs -> Save."
 echo "  The site lands at https://<owner>.github.io/<repository>/ - for this checkout,"
-echo "  https://zwldarren.github.io/CS526-demo/"
+echo "  https://zwldarren.github.io/FACET/"
 echo
 echo "Then, every publish:"
 echo "  git add docs && git commit -m 'build(pages): publish the WebGL player' && git push"

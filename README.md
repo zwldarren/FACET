@@ -3,7 +3,7 @@
 A 2D top-down factory-defence prototype: an enemy's weakness is a shape, and what your factory
 builds is what your guns fire. Unity 6 (`6000.3.23f1`), 2D, built for WebGL.
 
-**Playable build:** <https://zwldarren.github.io/CS526-demo/>
+**Playable build:** <https://zwldarren.github.io/FACET/>
 
 The names this codebase uses for its own concepts are in [GLOSSARY.md](GLOSSARY.md).
 
