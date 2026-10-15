@@ -52,6 +52,7 @@ namespace Facet.Core
             _byBehavior[(int)BehaviorKind.Splitter] = new SplitterBehavior();
             _byBehavior[(int)BehaviorKind.Sorter] = new SorterBehavior();
             _byBehavior[(int)BehaviorKind.Turret] = new TurretBehavior();
+            _byBehavior[(int)BehaviorKind.Sink] = new SinkBehavior();
 
             // A content row asking for an unregistered behaviour would build and silently do nothing.
             // Refuse to start instead: register new behaviours above and no call site must remember this.

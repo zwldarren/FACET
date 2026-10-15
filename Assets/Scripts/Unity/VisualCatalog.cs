@@ -408,7 +408,7 @@ namespace Facet.Game
 
     /// <summary>
     /// The quadrant figures a view draws on itself or in the ground - a belt item, a carried item, a
-    /// turret's last round, an enemy's weakness, an ore patch, a sorter's badge. Resolved once from the same
+    /// turret's chambered round, an enemy's weakness, an ore patch, a sorter's badge. Resolved once from the same
     /// per-mineral overrides the belt items use, so a re-skin stays consistent everywhere; each use supplies
     /// its own item radius.
     ///

@@ -14,6 +14,10 @@ namespace Facet.Tests
     /// what the gun would deign to eat - is deliberately gone. Nothing a belt can deliver is refused now:
     /// the punishment for the wrong shape moved to the damage roll, and the answer to a mismatched line is
     /// the briefing rather than a jam to clear.
+    ///
+    /// The chamber holds one round and loads it whether or not there is anything to shoot: loading is the
+    /// line's half of the gun and firing is the target's, and the tests below read both halves separately -
+    /// a gun with no ammo is silent, a gun with ammo and no target is loaded and waiting.
     /// </summary>
     public class TurretTests
     {
@@ -161,8 +165,8 @@ namespace Facet.Tests
             // and the aim is read after one tick.
             SimWorld world = TurretWorld();
 
-            // Arm the gun with nothing in range, so the round stays on the belt: the aim can then be read on
-            // the tick the targets appear, which is the tick the gun fires.
+            // Load the gun with nothing in range, so the round sits in the chamber: the aim can then be read
+            // on the tick the targets appear, which is the tick the gun fires.
             Assert.IsTrue(world.Belts.TrySpawnItem(DeliveryCell, Demand));
             for (int i = 0; i < 60 && !Sim.ArmedAt(world, Turret); i++) world.Tick(InputCommand.None);
             Assert.IsTrue(Sim.ArmedAt(world, Turret), "the round reached the gun's input and waited there");
@@ -203,7 +207,7 @@ namespace Facet.Tests
         public void Turret_StillShootsAResistedEnemy_WhenNothingWeakIsInRange()
         {
             // The preference is not a refusal: with only a mismatched target in range the gun plinks away at
-            // a quarter damage, and six resisted rounds still bring six health down. Its walk to the Core
+            // a quarter damage, and ten resisted rounds still bring ten health down. Its walk to the Core
             // passes 3+ tiles from the gun, inside the 7-tile range the whole way - a held shot is none, and
             // holding fire while something it can still scratch is in range would be strictly worse.
             SimWorld world = TurretWorld();
@@ -212,10 +216,10 @@ namespace Facet.Tests
             TopUp(world, Demand, 400, DeliveryCell);
 
             Assert.AreEqual(0, world.Enemies.AliveCount, "the Tank is down");
-            Assert.AreEqual(6, world.ShotsFired,
+            Assert.AreEqual(10, world.ShotsFired,
                 world.Content.Enemy(EnemyKind.Tank).Hp + " hp against a quarter of " +
                 world.Content.Turret(BuildKind.Turret).Damage +
-                " is exactly six shots - a held shot is none");
+                " is exactly ten shots - a held shot is none");
         }
 
         [Test]
@@ -259,8 +263,13 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void ArmedTurret_WithoutATarget_BanksAmmoOnTheBelt()
+        public void ArmedTurret_WithoutATarget_HoldsItsRoundInTheChamber()
         {
+            // Loading is the belt's business and firing is the target's. A gun that only ate when something
+            // was already in range could never be seen to load - its badge stayed blank and its own line
+            // backed up at the muzzle - so the round goes into the chamber as soon as it arrives, and waits
+            // there. The badge is that round, which is how "what is my line feeding the gun" stays readable
+            // before the wave is even in sight.
             SimWorld world = TurretWorld();
 
             Assert.IsTrue(world.Belts.TrySpawnItem(DeliveryCell, Demand));
@@ -268,16 +277,19 @@ namespace Facet.Tests
 
             Assert.AreEqual(0, world.ShotsFired, "nothing to shoot at");
             Assert.IsTrue(Sim.ArmedAt(world, Turret), "but the turret is loaded and says so");
-            Assert.IsTrue(world.Belts.HasItemAt(DeliveryCell), "the round is still on the belt, not wasted");
+            Assert.AreEqual(Demand, Sim.MachineAt(world, Turret).Carried,
+                "and what it is loaded with is what the badge draws");
+            Assert.IsFalse(world.Belts.HasItemAt(DeliveryCell),
+                "the round is in the chamber, not still queued on the belt");
         }
 
         [Test]
-        public void Turret_DoesNotConsume_WhileItIsCoolingDown()
+        public void Turret_LoadsWhileItIsCoolingDown_AndFiresTheMomentItIsReady()
         {
-            // The design's own words - "with no target or while cooling down it does not consume; ammo queues
-            // visibly on the belt". A three-second gun against the one-second belt opens the window wide
-            // enough to read: the second round arrives at the muzzle two seconds before the gun is ready and
-            // must still be lying there afterwards.
+            // The design's own words - "with no target or while cooling down it does not consume" - used to
+            // mean the round waited on the belt. It waits in the chamber now, which is the same backpressure
+            // one cell further in and the reason the gun can fire the instant a target appears: a three-second
+            // gun against the one-second belt gets its second round loaded two seconds early and holds it.
             var slow = new TurretDef(BuildKind.Turret, "Turret", damage: 4f, fireInterval: 3f, range: 7f,
                 projectileSpeed: 14f);
             SimWorld world = new SimWorld(Sim.TestMap(W, H), new SimConfig { CoreMaxHp = 1000000f },
@@ -293,30 +305,37 @@ namespace Facet.Tests
             Assert.IsTrue(world.Belts.TrySpawnItem(DeliveryCell, Demand));
             Sim.Tick(world, 30);
             Assert.AreEqual(1, world.ShotsFired, "two seconds later the gun is still cooling down");
-            Assert.IsTrue(world.Belts.HasItemAt(DeliveryCell),
-                "so the round queues on the belt rather than being eaten");
-            Assert.IsTrue(Sim.ArmedAt(world, Turret), "and the gun reads as armed, not as starved");
+            Assert.IsTrue(Sim.ArmedAt(world, Turret), "and reads as armed, not as starved");
+            Assert.IsFalse(world.Belts.HasItemAt(DeliveryCell),
+                "because the round is loaded and waiting in the chamber, not on the belt");
+            Assert.AreEqual(Demand, Sim.MachineAt(world, Turret).Carried, "loaded and ready to fire");
 
             Sim.Tick(world, 90);
             Assert.AreEqual(2, world.ShotsFired, "and it fires the moment it is off cooldown");
         }
 
         [Test]
-        public void TheChamber_KeepsTheLastRoundItFired_AsItsBadge()
+        public void TheChamber_ShowsTheRoundItWillFireNext_AsItsBadge()
         {
-            // A universal chamber holds nothing between shots, so the honest badge is what the line most
-            // recently fed it - the only way a player can see which shape their factory is actually making.
+            // A universal chamber holds one round, so the honest badge is the one it is holding: the player
+            // reads their line's output off the gun itself, and an empty badge means an empty gun.
             SimWorld world = TurretWorld();
             world.Enemies.Spawn(EnemyKind.Runner, new Vec2(13.5f, 7.5f), Sim.Square);
 
             TopUp(world, Sim.Circle, 300, DeliveryCell);
 
             Assert.Greater(world.ShotsFired, 0);
+
+            // The Runner is weak to a square, so a circle round is resisted and it takes six of them; once it
+            // is down there is nothing to shoot at and the next delivery stays in the chamber.
+            Sim.Tick(world, 120);
+            Assert.AreEqual(0, world.Enemies.AliveCount, "the resisted round still brought it down");
             Assert.AreEqual(Sim.Circle, Sim.MachineAt(world, Turret).Carried,
-                "the badge is the last round fired, not an empty chamber");
+                "the badge is the round waiting in the chamber, not one already fired");
 
             Assert.IsTrue(world.Machines.TryGetSnapshot(Turret, out MachineSnapshot snapshot));
             Assert.AreEqual(Sim.Circle, snapshot.Shape, "and the view reads that same badge");
+            Assert.IsTrue(snapshot.Armed, "a loaded gun is armed whether or not anything is in range");
         }
 
         [Test]

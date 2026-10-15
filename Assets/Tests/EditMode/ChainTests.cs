@@ -1,3 +1,4 @@
+using System;
 using Facet.Core;
 using NUnit.Framework;
 
@@ -12,8 +13,8 @@ namespace Facet.Tests
     ///
     /// The chain that used to run here ended in a mortar firing half-squares at a Bulwark that only a
     /// half-circle could hurt; both guns and both weaknesses are gone, so those tests are rewritten around
-    /// the replacement rule rather than deleted: the same 6-hp archetype now costs two matched rounds and
-    /// six resisted ones.
+    /// the replacement rule rather than deleted: the 6-hp Runner costs two matched rounds, the tank's ten
+    /// cost three, and a mismatched round is a quarter of that in both cases.
     ///
     /// Worlds use the 20x12 test map, unkillable so a Core breach cannot end a measurement mid-run.
     /// </summary>
@@ -23,16 +24,17 @@ namespace Facet.Tests
         private static readonly Int2 Cutter = new Int2(7, 9);
         private static readonly Int2 Turret = new Int2(7, 11);
 
-        /// <summary>The item this file's chain is asked for: the piece a north-facing cutter pushes out of
-        /// its front outlet, which is the only piece the turret is wired to receive.</summary>
-        private static readonly Shape Demand = Sim.TopHalfSquare;
+        /// <summary>The item this file's chain is asked for: the piece a cutter flowing north sends out of the
+        /// front of the tile the belt fed - the left half-square, which is the only piece the turret is wired
+        /// to receive.</summary>
+        private static readonly Shape Demand = Sim.LeftHalfSquare;
 
         /// <summary>
         /// Lays the second chain up the middle of the test map: a drill on a square vein at (3,9) mining
-        /// east, three belt cells into a cutter at (7,9) facing north, one belt north out of it, and the
-        /// turret at (7,11) - so the chain's product is the top half-square and nothing else. (The bottom
-        /// half leaves by the cutter's other outlet, which this layout deliberately does not wire: half the
-        /// product is not the round the briefing asked for, which is the whole point of orientation.)
+        /// east, three belt cells into a cutter at (7,9) flowing north, one belt north out of it, and the
+        /// turret at (7,11) - so the chain's product is the left half-square and nothing else. (The right half
+        /// leaves by the front of the lane tile one over, which this layout deliberately does not wire: half
+        /// the product is not the round the briefing asked for, which is the whole point of aiming the cut.)
         /// </summary>
         private static SimWorld SecondChain()
         {
@@ -50,10 +52,10 @@ namespace Facet.Tests
         [Test]
         public void TheSecondChain_RunsFromAPatch_ToAKill()
         {
-            // Mine a square, cut it, belt the piece, fire: the whole chain, headless. Six health against
-            // four matched damage is two rounds - where the same round against an enemy demanding something
-            // else would be a quarter of that, and the belt's one-per-second ceiling is what makes the
-            // difference between holding a wave and watching the Core fall.
+            // Mine a square, cut it, belt the piece, fire: the whole chain, headless. The tank's ten
+            // health against four matched damage is three rounds - where the same round against an enemy
+            // demanding something else would be a quarter of that, and the belt's one-per-second ceiling
+            // is what makes the difference between holding a wave and watching the Core fall.
             SimWorld world = SecondChain();
             Assert.Greater(world.Enemies.Spawn(EnemyKind.Tank, new Vec2(13.5f, 10.5f), Demand), 0);
 
@@ -61,15 +63,18 @@ namespace Facet.Tests
 
             Assert.AreEqual(0, world.Enemies.AliveCount, "the chain brought the enemy down");
             Assert.AreEqual(1, world.Events.CountOf(SimEventKind.EnemyKilled));
-            Assert.AreEqual(2, world.ShotsFired, "two matched rounds: 6 hp against 4 damage, rounded up");
+            int expected = (int)MathF.Ceiling(world.Content.Enemy(EnemyKind.Tank).Hp
+                / world.Content.Turret(BuildKind.Turret).Damage);
+            Assert.AreEqual(expected, world.ShotsFired,
+                "matched rounds: the tank's health against the gun's damage, rounded up");
         }
 
         [Test]
         public void TheGun_HasNoAmmoTable_SoTheRoundIsWhateverTheLineDelivered()
         {
             // What a mortar's diet used to decide is the line's business now. The turret's row carries
-            // any-shape as its diet - the universal chamber - so the interesting claim is that the item on
-            // its input belt is the chain's own product, and that the chamber would take anything else too.
+            // any-shape as its diet - the universal chamber - so the interesting claim is that the round the
+            // gun is holding is the chain's own product, and that the chamber would take anything else too.
             SimWorld world = SecondChain();
 
             MachineState chamber = default;
@@ -81,8 +86,9 @@ namespace Facet.Tests
             }
 
             Assert.IsTrue(chamber.Armed, "the gun is armed by its own chain");
-            Assert.AreEqual(Demand, Sim.ShapeAt(world, new Int2(7, 10)),
-                "and the round waiting for it is the piece the cutter's front outlet made");
+            Assert.AreEqual(Demand, chamber.Carried,
+                "and the round in its chamber is the piece the cutter's blade tile put out - the belt behind " +
+                "it is empty because the gun took it as soon as it arrived");
 
             Assert.AreEqual(FilterMode.Any, ContentDatabase.Default.Machine(BuildKind.Turret).Diet.Mode,
                 "the chamber's diet is 'anything a belt can carry' - there is no ammo row to satisfy");
@@ -93,24 +99,25 @@ namespace Facet.Tests
         [Test]
         public void OneSquare_BecomesTwoHalfSquares()
         {
-            // The cut line's own shape, not a machine's: one square in, one top half out the north and one
-            // bottom half out the south, at the same moment. Neither outlet can carry two, so the pieces
-            // that cannot leave yet wait inside their own slot - which is what makes wiring both sides worth
-            // doing rather than a way to lose a piece.
+            // The cut's own shape, not a machine's: one square in, the left half out the front of the tile the
+            // belt fed and the right half out the front of the lane tile beside it, at the same moment. Neither
+            // front can carry two, so the pieces that cannot leave yet wait inside their own slot - which is
+            // what makes wiring both fronts worth doing rather than a way to lose a piece.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             var input = new Int2(4, 9);
 
             Sim.LayRun(world, input, Dir.East, 1);                  // into the cutter
             Sim.Place(world, BuildKind.Cutter, new Int2(5, 9), Dir.North);
-            Sim.LayRun(world, new Int2(5, 10), Dir.North, 1);       // the front (top) outlet
-            Sim.LayRun(world, new Int2(5, 8), Dir.South, 1);        // the back (bottom) outlet
+            Sim.LayRun(world, new Int2(5, 10), Dir.North, 1);       // the blade tile's front
+            Sim.LayRun(world, new Int2(6, 10), Dir.North, 1);       // and the lane tile's, one over
 
             Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Square));
             Sim.Tick(world, 30 * 6);
 
-            Assert.AreEqual(Sim.TopHalfSquare, Sim.ShapeAt(world, new Int2(5, 10)), "the top half went north");
-            Assert.AreEqual(Sim.BottomHalfSquare, Sim.ShapeAt(world, new Int2(5, 8)),
-                "and the bottom half went south, in the same cycle");
+            Assert.AreEqual(Sim.LeftHalfSquare, Sim.ShapeAt(world, new Int2(5, 10)),
+                "the piece on the machine's left kept the lane the belt fed");
+            Assert.AreEqual(Sim.RightHalfSquare, Sim.ShapeAt(world, new Int2(6, 10)),
+                "and the piece on its right left a lane over, in the same cycle");
             Assert.AreEqual(2, Sim.ItemCount(world), "one square became exactly two halves, no more");
             Assert.IsFalse(world.Belts.HasItemAt(input), "the input was eaten, not dropped");
 
@@ -126,27 +133,27 @@ namespace Facet.Tests
             // machine, fed off the same belt, cuts a circle and then a square - the delivered shape picks
             // the piece, and neither is a wrong-shape delivery.
             //
-            // Both outlets are wired, as they would be on a line: a slot counts pieces of one shape, so a
-            // cutter whose other side is queueing holds the next item on its belt rather than rewriting what
+            // Both fronts are wired, as they would be on a line: a slot counts pieces of one shape, so a
+            // cutter whose other lane is queueing holds the next item on its belt rather than rewriting what
             // is already queued behind it - which is a stall, and the layout is what avoids it.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             var input = new Int2(4, 9);
             var output = new Int2(5, 10);
-            var other = new Int2(5, 8);
+            var other = new Int2(6, 10);
 
             Sim.LayRun(world, input, Dir.East, 1);
             Sim.Place(world, BuildKind.Cutter, new Int2(5, 9), Dir.North);
             Sim.LayRun(world, output, Dir.North, 1);
-            Sim.LayRun(world, other, Dir.South, 1);   // the cut's other piece, out the opposite side
+            Sim.LayRun(world, other, Dir.North, 1);   // the cut's other piece, out the lane one over
 
             Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Circle));
-            Assert.AreEqual(Sim.TopHalfCircle, TickUntilOutput(world, output), "a circle in, a half-circle out");
-            Assert.AreEqual(Sim.BottomHalfCircle, Sim.ShapeAt(world, other),
-                "with the other piece out of the outlet opposite the one it faces");
+            Assert.AreEqual(Sim.LeftHalfCircle, TickUntilOutput(world, output), "a circle in, a half-circle out");
+            Assert.AreEqual(Sim.RightHalfCircle, Sim.ShapeAt(world, other),
+                "with the other piece out of the lane the machine forks into");
             world.Belts.TryTakeItem(output, out _);
 
             Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Square));
-            Assert.AreEqual(Sim.TopHalfSquare, TickUntilOutput(world, output),
+            Assert.AreEqual(Sim.LeftHalfSquare, TickUntilOutput(world, output),
                 "the same machine takes the second mineral, with no table consulted");
 
             Assert.AreEqual(0, world.Belts.JamCount, "neither mineral is the wrong shape for a cutter");

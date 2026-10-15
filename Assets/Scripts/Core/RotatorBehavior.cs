@@ -26,7 +26,7 @@ namespace Facet.Core
         {
             MachineDef def = ctx.Content.Machine(rotator.Build);
 
-            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, in def);
+            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, rotator.Direction, in def);
 
             if (!rotator.Carried.IsEmpty)
             {
@@ -45,7 +45,7 @@ namespace Facet.Core
                 return;
             }
 
-            if (!MachineDelivery.TryFindDietDelivery(ctx.Belts, cell, in def,
+            if (!MachineDelivery.TryFindDietDelivery(ctx.Belts, cell, rotator.Direction, in def,
                     out Int2 delivery, out _)) return;
 
             // Nothing enters the machine unless it really left the belt: the scan answers "something is

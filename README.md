@@ -19,11 +19,11 @@ is wired by laying belts at it, not by configuring it.
 | Input | Action |
 |---|---|
 | `WASD` / arrows, mouse wheel | pan and zoom the camera |
-| click the build bar, or `1`–`9`, `0` | select a building (`0` is the turret); the same digit or tile again drops the selection |
-| `Q` / `E` | turn the placement ghost - a cutter's cut line and a rotator's outlet are chosen this way |
+| click the build bar, or `1`–`9`, `0`, `X` | select a building (`0` is the turret, `X` the sink); the same digit or tile again drops the selection. The bar is **two levels**: a row of tabs, one per role (transport, mining, processing, routing, waste, wall, defence), and under it that role's buildings. A digit opens whichever tab its building lives in, so the keys stay global |
+| `Q` / `E` | turn the placement ghost - a cutter's flow and cut line and a rotator's outlet are chosen this way; a cutter's ghost draws both of its tiles, the blade down the lane the belt runs in and a chevron per lane, so where the cut is made and which two ways the pieces leave are on the screen while you aim |
 | `Esc` | drop the selection: the cursor then only **reads** what is under it, which is the state a run opens in |
 | left mouse | place one belt, or land a machine; **drag** to lay a belt run or to aim a machine. With nothing selected, the same click pins whatever is under it and the info card describes *it* |
-| right mouse | delete for a full refund; on a jammed segment it **clears the jam** instead |
+| right mouse | delete for a full refund; on a jammed or blocked segment it **clears that segment** instead |
 | `Space` / `P` | pause / resume |
 | `N` | start the next wave early — every wave also starts itself when its countdown runs out |
 | `C` | put the Core back in the middle of the view, from anywhere on the map |
@@ -37,19 +37,21 @@ item". The machine's badge is the shape (or the mineral) it routes for.
 The HUD is four clickable regions: a status card top-left (map and wave, the run's **seed**, the Core's health
 and the wave clock as two bars, what is coming as a row of chips - the count, the enemy, and the exact shape it
 is weak to, drawn as a quadrant figure, for the next wave *and* the one after - and two diagnostic lines that
-speak only when something needs them: a jam or a starved gun, what is out of view - with the card's edge strip
-warning-coloured whenever any of those need you), a controls cluster top-right (pause, and a help button that
-opens the keyboard and the restart button over the map; `H` opens it too), the build bar along the bottom
-(the operators this map has not unlocked are greyed out and refuse to be selected, and tiles are tinted when
-the stockpile cannot cover them), and an info card above it. Beside the status card floats the **stockpile**:
+speak only when something needs them: a jam or a blocked segment, a starved gun, what is out of view - with the
+card's edge strip warning-coloured whenever any of those need you), a controls cluster top-right (pause, and a
+help button that opens the keyboard and the restart button over the map; `H` opens it too), the build bar along
+the bottom - **two levels, grouped by role**: a tab strip, then the buildings of whichever tab is open, with
+the operators this map has not unlocked greyed out and refusing to be selected and tiles tinted when the
+stockpile cannot cover them - and an info card above it. Beside the status card floats the **stockpile**:
 the shape the run banks, in that shape's own colour. A refused placement says why in a **toast**, and whatever
 is under the pointer says what it is and what it is doing in a **tooltip** beside the cursor — the map is
 readable at the pointer whether or not a building is selected.
 
 A map is bigger than a screen, so the edge of the screen answers *where*: the **locator** points at
 everything the player can neither see nor click. A wave off-view is one chevron in the colour of its nearest
-walker, dotted once per enemy; a jammed segment off-view is a red mark, because that is a tile a right-click
-has to reach; the Core is a pale mark, because it is the way back. Out of view means what it says — a walker
+walker, dotted once per enemy; a segment that has stopped off-view - jammed or blocked - is a red mark,
+because that is a tile the player has to reach; the Core is a pale mark, because it is the way back. Out of
+view means what it says — a walker
 under the build bar or the status card is as unfindable as one off the display, so the locator works off the
 HUD's own panel boxes, and an arrow is stepped back along its sight line until it clears the card it would
 otherwise sit under. While the Core is being chewed on out of view the screen wears a warning frame. The
@@ -65,18 +67,33 @@ the whole set is enumerable at build time.
 
 Three operators act on that space:
 
-* **The cutter** splits one item along the cut line its facing selects - the blade runs across the facing
-  arrow, not along it. Facing north or south cuts across (top
-  piece and bottom piece); facing east or west cuts down the middle (left and right). Both pieces leave at
-  once, one per outlet - the facing side takes the piece on that side, the side opposite takes the other - and
-  each outlet keeps its own buffer, so one blocked side never costs the other piece. Cutting a quarter yields
-  the quarter plus nothing, and that is why "an item can be cut at most twice" is a corollary rather than a
-  rule. The cut line itself is drawn - across the placement ghost and across every placed cutter - so which
-  two pieces a machine is aimed at is on the screen, not in this manual.
+* **The cutter** forks a belt. It stands on **two tiles**, one lane across the way it faces: the belt runs
+  into the back of the first, and one piece leaves by the front of each. The cut runs *along* that line - it
+  is the item's own centre line as it arrives - so the piece on the machine's left runs straight on down the
+  lane the belt fed and the piece on its right leaves a lane over. That is the whole point of the second
+  tile: a cutter can be dropped *into* a straight run rather than built a corner for. Flowing north or south
+  the halves are left and right, flowing east or west they are top and bottom, and **both cut lines are open
+  to it from the moment it is unlocked** - so a map with a cutter and no rotator can still make every half
+  and quarter of its minerals, in every orientation a cut produces. Re-aim the machine rather than hunting
+  for a rotator. Both pieces leave at
+  once, one per lane, and each lane keeps its own buffer, so one blocked lane never costs the other piece.
+  Cutting a quarter yields the quarter plus nothing, and that is why "an item can be cut at most twice" is a
+  corollary rather than a rule. Both tiles, the blade down the lane the belt runs in and a chevron per lane
+  are drawn on the placement ghost, and on every placed cutter - which also wears each lane's own pending
+  piece as a badge, so a blocked lane shows which half is waiting where. The ghost draws no pieces of its
+  own: the machine cuts whatever it is handed, and a preview that drew half circles would be drawing an
+  item rather than the machine.
+* **The sink is the ending every fork needs.** A cutter makes two pieces where a layout usually wants one,
+  and a lane nobody takes fills up: four pieces of buffer later the machine that made them stops, and with it
+  the lane that *was* being used. One tile, no outlet, eats anything delivered into it from **any of its four
+  sides**, costs less than the cutter it rescues, needs no unlock - and it clears a jammed segment on its way
+  through, which is the one intake rule the carrying machines may not follow.
 * **The rotator** turns an item a quarter clockwise, always clockwise: counter-clockwise is three of them in
   series, which is a logistics puzzle rather than a second machine. A half turn is *not* the identity - it
-  gives the complement piece on the same cut line - so the rotator is also the orientation fix: the briefing
-  asked for a top half-circle and the line is running bottom halves, and one turn repairs it.
+  gives the complement piece on the same cut line - so the rotator is the orientation fix: the briefing
+  asked for a top half-circle and the line is running bottom halves, and one turn repairs it. What it is
+  *not* is the way to change a cut's axis: an item's axis is chosen when it is cut, by aiming the cutter, and
+  a left half on a belt is a left half until a rotator turns it.
 * **The stacker** unions two items whose filled quadrants do not overlap: circle-left beside square-right is
   one round, and an overlapping second piece simply waits on its belt. That is a stall, not a jam - the item
   it cannot merge is one the player spent a chain building.
@@ -99,15 +116,20 @@ done.
   operators. Deep demands come with the tougher, slower archetype, so progression lives in the shapes asked
   for rather than in a stat table.
 * **Matched rounds do full damage, anything else a quarter.** There is one gun: a **universal chamber** that
-  eats any shape, one round per shot, no diet table and no splash. It does not consume while it has no target
-  or is cooling down, so ammunition queues visibly on the belt. It prefers the enemy its chambered round
-  actually hurts. Its real fire rate is `min(1/s, what its lines deliver)` — damage is a throughput property
-  of the layout *and* a shape property of the round.
+  eats any shape, one round per shot, no diet table and no splash. Its chamber holds **one round and loads it
+  whenever a belt delivers one**, target or no target — so a loaded gun is visible on its own badge, and its
+  line is not blamed for a rule about aiming. It fires only with something in range, and it prefers the enemy
+  its chambered round actually hurts. Its real fire rate is `min(1/s, what its lines deliver)` — damage is a
+  throughput property of the layout *and* a shape property of the round.
 * **A run's only randomness is its seed**, which the HUD prints: the wave generator is a seeded stream, so a
   run is reproducible from the number on the screen. The seed is drawn fresh every run — two runs of one map
   do not play out identically — and a map may pin a non-zero seed of its own to replay exactly.
 * **A belt is transport, not a machine:** it may cross a vein or a wave's doorway, and it never jams on a
-  wrong *destination* — a belt pointed at rock just stalls at full progress.
+  wrong *destination*. A belt pointed at bare ground, off the map or at a wall has nowhere to put its item,
+  and that cell is **blocked**: its bed goes amber, it joins the count on the status card and it is marked on
+  the radar. Unlike a jam it is *derived*, not latched - lay one more belt, or a sink, and the marker goes the
+  tick it lands, with no right-click anywhere in the cure. A cell queued behind one is not marked: only the
+  head of the line is the problem.
 * **The pipe jumps one tile** (two cells ahead), which is how two belts cross. The **sorter** routes by
   shape: what its filter matches leaves by the side it faces, everything else by the other outlets.
 * **Machines are solid and destructible; belts are walkable and are not.** Enemies follow a flow field

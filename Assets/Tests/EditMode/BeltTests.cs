@@ -79,6 +79,122 @@ namespace Facet.Tests
             CollectionAssert.AreEqual(new[] { new Int2(4, 5) }, cells, "and a cleared one stops being listed");
         }
 
+        /// <summary>
+        /// The one failure the HUD used to be blind to. A line that ends in the air is not jammed: nothing
+        /// refused the item and no machine is involved, so it reddened no bed, counted nothing and put no
+        /// marker on the radar - and the first symptom was a machine three tiles back that had quietly
+        /// stopped. It is derived rather than latched for the same reason: laying the missing belt is the
+        /// cure, and the marker has to go the tick it lands, without a right-click.
+        /// </summary>
+        [Test]
+        public void ALineThatEndsInTheAir_IsBlocked_UntilOneMoreBeltIsLaid()
+        {
+            SimWorld world = Sim.NewWorld(16, 10);
+            Sim.LayRun(world, new Int2(2, 5), Dir.East, 3);           // (2,5) (3,5) (4,5), and bare ground at (5,5)
+
+            Assert.AreEqual(0, world.Belts.BlockedCount, "an empty line has nothing parked on it");
+
+            world.Belts.TrySpawnItem(new Int2(2, 5), Sim.Circle);
+            Sim.Tick(world, 90);
+
+            Assert.IsTrue(world.Belts.HasItemAt(new Int2(4, 5)));
+            Assert.AreEqual(1f, Sim.ProgressAt(world, new Int2(4, 5)), Sim.ProgressTol, "parked at the exit edge");
+            Assert.IsTrue(world.Belts.IsBlocked(new Int2(4, 5)), "and it is going nowhere: say so");
+            Assert.IsFalse(world.Belts.IsJammed(new Int2(4, 5)),
+                "nothing refused it - this is a dead end, not a jam, and the two are different cures");
+            Assert.AreEqual(1, world.Belts.BlockedCount);
+
+            Sim.LayRun(world, new Int2(5, 5), Dir.East, 1);
+            Sim.Tick(world, 1);
+
+            Assert.IsFalse(world.Belts.IsBlocked(new Int2(4, 5)), "laying the line on is the whole cure");
+            Assert.AreEqual(0, world.Belts.BlockedCount);
+            Assert.IsTrue(world.Belts.HasItemAt(new Int2(5, 5)),
+                "and the item that was parked is on the new cell already - a second of waiting, no right-click");
+        }
+
+        /// <summary>
+        /// Backpressure is not a dead end. A machine that is full, a belt that is queued behind another and
+        /// a wall all have to read differently from bare ground, because "there is nowhere to put this" and
+        /// "there is somewhere, it is busy" want different answers from the player - and only one of them is
+        /// a mistake in the layout.
+        /// </summary>
+        [Test]
+        public void OnlyTheHeadOfALine_IsBlocked_AndOnlyWhenNothingTakesIt()
+        {
+            SimWorld world = Sim.NewWorld(20, 12);
+
+            // A belt queue behind a dead end: the head is blocked, the cells behind it are merely queued.
+            Sim.LayRun(world, new Int2(1, 2), Dir.East, 4);            // (1,2) .. (4,2), nothing at (5,2)
+            for (int x = 1; x <= 4; x++) world.Belts.TrySpawnItem(new Int2(x, 2), Sim.Circle);
+            Sim.Tick(world, 150);
+
+            Assert.IsTrue(world.Belts.IsBlocked(new Int2(4, 2)));
+            for (int x = 1; x <= 3; x++)
+                Assert.IsFalse(world.Belts.IsBlocked(new Int2(x, 2)),
+                    "cell (" + x + ",2) is queued behind the problem, not a problem of its own");
+            Assert.AreEqual(1, world.Belts.BlockedCount, "one dead end, one marker - not four");
+
+            // A belt into a wall: solid, docked, and taking nothing - so still a dead end.
+            Sim.LayRun(world, new Int2(8, 2), Dir.East, 1);
+            Sim.Place(world, BuildKind.Wall, new Int2(9, 2), Dir.East);
+            world.Belts.TrySpawnItem(new Int2(8, 2), Sim.Circle);
+            Sim.Tick(world, 60);
+
+            Assert.AreEqual(1f, Sim.ProgressAt(world, new Int2(8, 2)), Sim.ProgressTol);
+            Assert.IsTrue(world.Belts.IsBlocked(new Int2(8, 2)),
+                "a wall is something to hit and nothing to deliver to, and a player who aimed at one is told");
+
+            // A belt into a machine that eats: full or not, it is a destination, and an item waiting at its
+            // door is not a dead end. The gun is loaded with the first delivery, which is what leaves the
+            // second waiting.
+            Sim.LayRun(world, new Int2(8, 9), Dir.East, 1);
+            Sim.Place(world, BuildKind.Turret, new Int2(9, 9), Dir.East);
+
+            world.Belts.TrySpawnItem(new Int2(8, 9), Sim.Circle);
+            Sim.Tick(world, 31);
+            Assert.IsFalse(world.Belts.HasItemAt(new Int2(8, 9)), "the gun took that round into its chamber");
+
+            world.Belts.TrySpawnItem(new Int2(8, 9), Sim.Circle);
+            Sim.Tick(world, 31);
+
+            Assert.AreEqual(1f, Sim.ProgressAt(world, new Int2(8, 9)), Sim.ProgressTol);
+            Assert.IsFalse(world.Belts.IsBlocked(new Int2(8, 9)),
+                "a chamber that is full is somewhere to put an item, which is not the same as nowhere");
+        }
+
+        /// <summary>
+        /// The blocked cells are enumerable for the same reason the jammed ones are: "how many" is the HUD's
+        /// line, "which ones" is what a player whose dead end is off the screen has to be shown - and unlike a
+        /// jam, none of them needs a right-click, so the marker is a "lay the next belt here" sign.
+        /// </summary>
+        [Test]
+        public void GetBlocked_ListsEveryDeadEnd_AndNothingWhenTheLineIsFinished()
+        {
+            SimWorld world = Sim.NewWorld(16, 10);
+            Sim.LayRun(world, new Int2(2, 5), Dir.East, 2);            // (2,5) (3,5), bare ground at (4,5)
+            Sim.LayRun(world, new Int2(6, 2), Dir.South, 2);           // (6,2) (6,1), bare ground at (6,0)
+
+            var cells = new List<Int2>();
+            world.Belts.GetBlocked(cells);
+            Assert.AreEqual(0, cells.Count, "nothing parked, nothing to find");
+
+            world.Belts.TrySpawnItem(new Int2(3, 5), Sim.Circle);
+            world.Belts.TrySpawnItem(new Int2(6, 1), Sim.Circle);
+            Sim.Tick(world, 60);
+
+            world.Belts.GetBlocked(cells);
+            CollectionAssert.AreEqual(new[] { new Int2(6, 1), new Int2(3, 5) }, cells,
+                "every dead end, in the field's own index order");
+
+            Sim.LayRun(world, new Int2(4, 5), Dir.East, 1);
+            Sim.Tick(world, 1);
+
+            world.Belts.GetBlocked(cells);
+            CollectionAssert.AreEqual(new[] { new Int2(6, 1) }, cells,
+                "and a finished line stops being listed the tick it is finished");
+        }
+
         [Test]
         public void Throughput_IsTheSameFacingAnyDirection()
         {
@@ -311,7 +427,8 @@ namespace Facet.Tests
             // each tick, so a run dragged out of one wires itself up - the belt leaving southwards is an
             // outlet the moment it exists - and the machine keeps the facing it was placed with. (The drill
             // is the other case, above: its facing *is* its output, so a run leaving it turns it. A cutter is
-            // a third: its facing selects the cut line, not a piece's exit, so a drag leaves it alone too.)
+            // a third: its facing is the way the line runs through it, not the exit a piece takes, so a drag
+            // leaves it alone too.)
             SimWorld world = Sim.NewWorld(16, 12);
             var stacker = new Int2(2, 8);
 

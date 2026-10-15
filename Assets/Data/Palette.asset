@@ -38,7 +38,7 @@ MonoBehaviour:
   CursorOk: {r: 0.192, g: 0.706, b: 0.376, a: 1}
   CursorBlocked: {r: 0.851, g: 0.239, b: 0.239, a: 1}
   CursorNoFunds: {r: 0.945, g: 0.651, b: 0.253, a: 1}
-  HudPanel: {r: 0.055, g: 0.071, b: 0.098, a: 0.82}
+  HudPanel: {r: 0.055, g: 0.071, b: 0.098, a: 0.94}
   HudText: {r: 0.933, g: 0.949, b: 0.969, a: 1}
   HudAccent: {r: 0.353, g: 0.722, b: 1, a: 1}
   HudWarn: {r: 0.945, g: 0.451, b: 0.353, a: 1}

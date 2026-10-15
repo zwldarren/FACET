@@ -36,6 +36,17 @@ namespace Facet.Game
         [Tooltip("Outline thickness in screen pixels (design doc: 2 px).")]
         public float OutlinePixels = 2f;
 
+        [Tooltip("An item's interior seams - the lines between its quadrants, which are also the readout a " +
+            "cutter's cut line is aimed against - as a fraction of that outline. Two quadrants share every " +
+            "seam, so each draws half of it and the two halves make one line of this width: thinner than the " +
+            "rim, which is what keeps a small disc from reading as a cross.")]
+        public float SeamFraction = 0.5f;
+
+        [Tooltip("An item's outline never grows past this share of the item's own radius, however far the " +
+            "zoom is out. An outline is a constant number of screen pixels, so at the far end of the zoom a " +
+            "thirteen-pixel disc would wear a two-pixel ring - a third of what the player is looking at.")]
+        public float OutlineMaxRadiusFraction = 0.18f;
+
         [Tooltip("Cursor ghost border thickness in screen pixels.")]
         public float CursorEdgePixels = 5f;
 
@@ -47,6 +58,12 @@ namespace Facet.Game
 
         [Tooltip("A jammed belt segment - the twist's failure state, so it has to shout.")]
         public Color Jam = new Color(0.878f, 0.263f, 0.263f, 1f);
+
+        [Tooltip("A belt segment whose item has nowhere to go: the line ends in the air. Amber rather " +
+            "than the jam red because the cure is different - extend the line or put something that eats " +
+            "on the end, rather than clear the offending item - and because it is not a refusal: nobody " +
+            "turned this away.")]
+        public Color BeltBlocked = new Color(0.945f, 0.651f, 0.253f, 1f);
 
         [Tooltip("The bed of an ore patch in the ground. The mark itself is drawn in its mineral's colour.")]
         public Color ShapePatchBed = new Color(0.902f, 0.898f, 0.871f, 1f);
@@ -66,7 +83,7 @@ namespace Facet.Game
         [Tooltip("Turret bodies, one shade darker than the other machines.")]
         public Color TurretBody = new Color(0.239f, 0.278f, 0.345f, 1f);
 
-        [Tooltip("A machine icon with nothing to work on: a starved turret's last round, an idle operator.")]
+        [Tooltip("A machine icon with nothing to work on: a turret's empty chamber, an idle operator.")]
         public Color MachineIdle = new Color(0.749f, 0.776f, 0.816f, 1f);
 
         [Tooltip("Range ring drawn around the turret being placed.")]
@@ -107,8 +124,9 @@ namespace Facet.Game
         [Tooltip("Ghost preview where the build is legal but the stockpile cannot cover it.")]
         public Color CursorNoFunds = new Color(0.945f, 0.651f, 0.253f, 1f);
 
-        [Tooltip("HUD panel behind the readouts.")]
-        public Color HudPanel = new Color(0.055f, 0.071f, 0.098f, 0.82f);
+        [Tooltip("HUD panel behind the readouts. Near-opaque on purpose: at 0.82 the map's own shapes and " +
+            "grid lines showed through the cards, which is a busy background for small type on a dark fill.")]
+        public Color HudPanel = new Color(0.055f, 0.071f, 0.098f, 0.94f);
 
         [Tooltip("HUD body text.")]
         public Color HudText = new Color(0.933f, 0.949f, 0.969f, 1f);
@@ -350,6 +368,15 @@ namespace Facet.Game
             [Tooltip("Sorter: radius of the shape badge at its centre - which shape it routes.")]
             public float SorterIconRadius = 0.17f;
 
+            [Tooltip("Sink: inset from the tile edge, in tiles - the same kind of plain block a wall is, " +
+                "because both are the two buildings with no machinery on top.")]
+            public float SinkInset = 0.08f;
+            [Tooltip("Sink: half size of the pit at its centre. The one square on the map that is dark all " +
+                "the way through: what goes in does not come out, and it has to read that way from the far " +
+                "zoom as well, where a small hole showing the ground through would read as a gap in the " +
+                "floor.")]
+            public float SinkHoleHalfSize = 0.17f;
+
             [Tooltip("Outlet chevron, scaled down from the belt's: it points out the conversion direction " +
                 "without competing with the tile's own arrow.")]
             public float ChevronLength = 0.13f;
@@ -434,6 +461,10 @@ namespace Facet.Game
             public float ChevronLength = 0.26f;
             public float ChevronBack = 0.16f;
             public float ChevronHalfWidth = 0.22f;
+
+            [Tooltip("How far toward the front of its tile a ghost's facing chevron sits, so a machine that " +
+                "stands on two tiles can wear one per lane without either sitting on the blade between them.")]
+            public float ChevronOffset = 0.28f;
         }
 
         /// <summary>The out-of-view locator: what an arrow pointing at something the player cannot see is

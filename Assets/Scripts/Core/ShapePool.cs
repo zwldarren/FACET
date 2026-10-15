@@ -15,8 +15,11 @@ namespace Facet.Core
         /// <summary>Splits one item along a line, either way up.</summary>
         Cutter = 1,
 
-        /// <summary>Turns an item a quarter clockwise. Without it a half-circle only ever exists as mined
-        /// or as cut - there are no left or right pieces to be had.</summary>
+        /// <summary>Turns an item a quarter clockwise. It is not what lets a half exist - a cutter is aimed,
+        /// so both cut lines are open to it from the start, and the top half and the left half of one mineral
+        /// are equally available on a map with no rotator at all. What the rotator does is <em>repair</em>: a
+        /// piece already on a belt keeps the orientation its cut gave it, and only a turn can bring a left
+        /// half back round to a top half.</summary>
         Rotator = 2,
 
         /// <summary>Unions two disjoint items. Without it a mixed shape is impossible.</summary>
@@ -28,8 +31,14 @@ namespace Facet.Core
     /// <summary>
     /// Every item a map can make right now: the closure of the map's mined minerals under the operators
     /// that are unlocked. The wave generator draws weakness shapes from this set and nowhere else, which
-    /// is what gives the unlock ladder teeth - brief a left half-circle on a map with no rotator and the
+    /// is what gives the unlock ladder teeth - brief a mixed round on a map with no stacker and the
     /// wave is unwinnable through no fault of the player.
+    ///
+    /// The closure is wider than "one operator, one new shape" suggests, and the cutter is the reason: it
+    /// offers <em>both</em> of its cut lines from the moment it is unlocked, so a map that has one is
+    /// already good for every half and quarter of every mineral it mines, in every orientation a cut can
+    /// produce. The rotator reaches none of them that the cutter did not (see
+    /// <c>TheRotator_AddsNoItemsByItself</c>); what it adds is a way back from an orientation a cut chose.
     ///
     /// The enumeration is a breadth-first walk over at most 80 nodes, done once per pool: minerals are
     /// the roots, and an operator edge costs one step. The step count is the shape's <b>depth</b>, which
@@ -118,9 +127,10 @@ namespace Facet.Core
         /// <summary>
         /// The closure itself: a worklist starting at the mined minerals. Every item discovered is
         /// offered every unlocked operator - and, for the stacker, a union with <em>every</em> item found
-        /// so far, so a mixed shape the player can actually build is never missed. Depth is the operator
-        /// count, so the first time an item is reached is its shallowest - the worklist is breadth-first
-        /// and every edge costs one step.
+        /// so far, so a mixed shape the player can actually build is never missed. The walk is
+        /// breadth-first, so it guarantees that every reachable item is discovered - but its recorded
+        /// depth is only the first derivation it happened to reach the item by, which
+        /// <see cref="RelaxDepths"/> then replaces with the true minimum.
         /// </summary>
         private void Grow()
         {
@@ -149,8 +159,7 @@ namespace Facet.Core
                 if (!Has(Operators.Stacker)) continue;
 
                 // Against everything known so far, in both orders: the union is commutative but the
-                // "which arrived first" of a worklist is not, and the depth taken is the deeper side plus
-                // the step either way.
+                // "which arrived first" of a worklist is not.
                 for (int i = _shapes.Count - 1; i >= 0; i--)
                 {
                     Shape other = _shapes[i];
@@ -159,6 +168,67 @@ namespace Facet.Core
                     Add(Shape.Stacked(shape, other), Math.Max(depth, _depth[other.Code]) + 1, queue);
                 }
             }
+
+            RelaxDepths();
+        }
+
+        /// <summary>
+        /// Replace the walk's first-discovery depths with the true minimum operator count per item.
+        ///
+        /// First discovery is only the shallowest derivation when every edge costs one step, and a
+        /// stack edge does not: it costs the deeper of its two sides <em>plus one</em>. So an item can
+        /// be claimed the first time through a deeper pairing before its cheapest pairing is ever
+        /// examined - a half and a quarter only pair when the quarter is dequeued, and by then two
+        /// earlier-discovered quarters have usually stacked and moved on. On the shipped two-mineral
+        /// ladder that misfiled fourteen of the eighty: L-shaped three-quadrant items recorded at four
+        /// steps that take three, and every three-plus-one mixed round at five that takes four - which
+        /// pushed the wave generator's depth band past the tier the player is actually building in.
+        ///
+        /// The cure is the obvious relaxation over the same edges the walk walked: a cut or a turn
+        /// costs the source's depth plus one, a stack the deeper side's depth plus one, repeated until
+        /// nothing moves. Depths only ever fall, so this terminates at the true minimum; eighty items
+        /// make a handful of cheap passes.
+        /// </summary>
+        private void RelaxDepths()
+        {
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+
+                for (int i = 0; i < _shapes.Count; i++)
+                {
+                    Shape shape = _shapes[i];
+                    int through = _depth[shape.Code] + 1;
+
+                    var across = Shape.Cut(shape, false);
+                    var along = Shape.Cut(shape, true);
+                    Relax(across.a, through, ref changed);
+                    Relax(across.b, through, ref changed);
+                    Relax(along.a, through, ref changed);
+                    Relax(along.b, through, ref changed);
+                    Relax(shape.RotatedCW(), through, ref changed);
+
+                    for (int j = 0; j < _shapes.Count; j++)
+                    {
+                        Shape other = _shapes[j];
+                        if (shape.Overlaps(other)) continue;
+
+                        Relax(Shape.Stacked(shape, other),
+                            Math.Max(_depth[shape.Code], _depth[other.Code]) + 1, ref changed);
+                    }
+                }
+            }
+        }
+
+        /// <summary>Lower one item's depth to <paramref name="candidate"/> when the candidate is lower
+        /// and the item is one the pool holds. The flag is the fixpoint's "go round again".</summary>
+        private void Relax(Shape shape, int candidate, ref bool changed)
+        {
+            if (shape.IsEmpty || !_known[shape.Code] || candidate >= _depth[shape.Code]) return;
+
+            _depth[shape.Code] = candidate;
+            changed = true;
         }
 
         /// <summary>Record an item if it is new, and hand it to the worklist. Nothing is a shape: the empty

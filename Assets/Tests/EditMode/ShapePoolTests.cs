@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Facet.Core;
 using NUnit.Framework;
 
@@ -89,7 +90,7 @@ namespace Facet.Tests
 
             Assert.AreEqual(80, pool.Shapes.Count, "the closure of two minerals under all three operators");
             Assert.AreEqual(ShapePool.All.Count, pool.Shapes.Count, "which is the whole item space");
-            Assert.AreEqual(5, pool.MaxDepth, "the deepest round takes five operator steps");
+            Assert.AreEqual(4, pool.MaxDepth, "the deepest round takes four operator steps");
 
             foreach (Shape shape in ShapePool.All)
                 Assert.IsTrue(pool.CanProduce(shape), shape + " is in the state space but not in the closure");
@@ -277,6 +278,119 @@ namespace Facet.Tests
             Assert.GreaterOrEqual(depth, 0, via + " " + from + " produced " + shape + ", which the pool lacks");
             Assert.LessOrEqual(depth, ceiling, via + " " + from + " put " + shape + " deeper than one step");
         }
+
+        [Test]
+        public void EveryDepth_IsTheCheapestDerivation_NotJustTheFirstOneFound()
+        {
+            // A stack edge costs the deeper of its two sides PLUS ONE, not one step - so the
+            // breadth-first walk's first discovery of an item is not necessarily its cheapest
+            // derivation: a half and a quarter only pair up when the quarter is dequeued, and by then
+            // two earlier-discovered quarters have often stacked and claimed the item at a deeper
+            // count. On the shipped ladder that once misfiled fourteen of the eighty (an L-shaped
+            // two-plus-one at depth 4 that takes 3; the three-plus-one mixed rounds at 5 that take 4),
+            // which pushed the generator's depth band past the tier the player actually builds in.
+            // The verifier here is the definition, computed independently: relax every derivation
+            // edge to a fixpoint and compare.
+            foreach (Operators unlocked in new[]
+                     {
+                         Operators.Cutter | Operators.Stacker,
+                         Operators.Rotator | Operators.Stacker,
+                         Operators.All,
+                     })
+            {
+                var pool = new ShapePool(BothMinerals, unlocked);
+                var truth = MinimalDepths(pool);
+                string at = " (" + unlocked + ")";
+
+                Assert.AreEqual(pool.Shapes.Count, truth.Count, "the verifier saw a different closure" + at);
+
+                foreach (Shape shape in pool.Shapes)
+                    Assert.AreEqual(truth[shape.Code], pool.Depth(shape),
+                        shape + " is filed at depth " + pool.Depth(shape) + " but builds in " +
+                        truth[shape.Code] + operatorSteps(truth[shape.Code]) + at);
+            }
+        }
+
+        [Test]
+        public void TheThreePlusOneMixedRounds_StackTogether_AtFourStepsNotFive()
+        {
+            // The regression itself, named: the round the campaign's finale demands - three quadrants of
+            // one mineral and one of the other - is a mixed half (two stacked quarters) under a half, so
+            // it builds in four operator steps. Filing it at five put the generated exam's depth band
+            // past every tier but the deepest, so every generated wave briefed the same handful of
+            // rounds and the mid-game's "a new decision a wave" collapsed.
+            var pool = new ShapePool(BothMinerals, Operators.All);
+
+            Shape threeCircles = Shape.Of(Quad.Circle, Quad.Circle, Quad.Circle, Quad.Square);
+            Shape threeSquares = Shape.Of(Quad.Square, Quad.Square, Quad.Circle, Quad.Square);
+            Assert.AreEqual(4, pool.Depth(threeCircles), threeCircles.Describe() + " is a mixed half under a half");
+            Assert.AreEqual(4, pool.Depth(threeSquares), threeSquares.Describe() + " likewise, other mineral up");
+
+            // And the L-shaped three-quadrant items are a half under a quarter: three steps.
+            Shape lShaped = Shape.Of(Quad.Circle, Quad.Circle, Quad.Empty, Quad.Square);
+            Assert.AreEqual(3, pool.Depth(lShaped), lShaped.Describe() + " is a half plus a quarter");
+
+            Assert.AreEqual(4, pool.MaxDepth, "the ladder's deepest rung is the three-plus-one round");
+        }
+
+        /// <summary>The minimal operator count for every producible item, computed independently of
+        /// <see cref="ShapePool"/>: a fixpoint relaxation over cut, turn and stack edges, where a cut or
+        /// turn costs the source plus one and a stack the deeper side plus one.</summary>
+        private static Dictionary<uint, int> MinimalDepths(ShapePool pool)
+        {
+            List<Shape> shapes = new List<Shape>(pool.Shapes);
+            var depth = shapes.ToDictionary(s => s.Code, s => int.MaxValue);
+            foreach (Shape mineral in pool.Minerals) depth[mineral.Code] = 0;
+
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+
+                foreach (Shape shape in shapes)
+                {
+                    // An item no edge has reached yet has nothing to relax outwards - and its sentinel
+                    // would overflow if it tried.
+                    if (depth[shape.Code] == int.MaxValue) continue;
+
+                    int through = depth[shape.Code] + 1;
+                    var across = Shape.Cut(shape, false);
+                    var along = Shape.Cut(shape, true);
+                    var outputs = new List<Shape>
+                    {
+                        across.a, across.b,
+                        along.a, along.b,
+                        shape.RotatedCW(),
+                    };
+
+                    foreach (Shape output in outputs)
+                        changed |= Relax(depth, output, through);
+
+                    foreach (Shape other in shapes)
+                    {
+                        if (shape.Overlaps(other)) continue;
+                        if (depth[other.Code] == int.MaxValue) continue;   // an unreached side has no count to add
+                        changed |= Relax(depth, Shape.Stacked(shape, other),
+                            Math.Max(depth[shape.Code], depth[other.Code]) + 1);
+                    }
+                }
+            }
+
+            var solved = new Dictionary<uint, int>();
+            foreach (var pair in depth)
+                if (pair.Value != int.MaxValue) solved[pair.Key] = pair.Value;
+            return solved;
+        }
+
+        private static bool Relax(Dictionary<uint, int> depth, Shape shape, int candidate)
+        {
+            if (shape.IsEmpty || !depth.ContainsKey(shape.Code) || candidate >= depth[shape.Code]) return false;
+
+            depth[shape.Code] = candidate;
+            return true;
+        }
+
+        private static string operatorSteps(int count) => count == 1 ? " step" : " steps";
 
         /// <summary>The codes of every item in the state space, so a test can ask "is this one of the
         /// eighty" with one hash lookup instead of a scan per item.</summary>

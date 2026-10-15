@@ -25,6 +25,10 @@ namespace Facet.Core
         /// <summary>This mask plus one direction.</summary>
         public DirMask With(Dir direction) => new DirMask((byte)(Bits | (1 << (int)direction)));
 
+        /// <summary>This mask plus another: how the ports of a machine that stands on two tiles are
+        /// gathered into the one set its snapshot carries.</summary>
+        public DirMask With(DirMask other) => new DirMask((byte)(Bits | other.Bits));
+
         public override string ToString() => "DirMask(" + Bits + ")";
     }
 }

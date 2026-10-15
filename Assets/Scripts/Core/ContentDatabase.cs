@@ -38,7 +38,8 @@ namespace Facet.Core
 
         // 7 was Assembler. Retired and not to be reused: combining is the stacker's behaviour.
 
-        /// <summary>Splits one item along the line its facing selects, one piece per outlet.</summary>
+        /// <summary>Splits one item along the line its facing selects, out of the front of each of its two
+        /// tiles: one piece runs straight on, the other leaves a lane over.</summary>
         Cutter = 8,
 
         /// <summary>Turns one item a quarter clockwise, out the side it faces.</summary>
@@ -46,6 +47,11 @@ namespace Facet.Core
 
         /// <summary>Unions two disjoint items into one, out through any wired outlet.</summary>
         Stacker = 10,
+
+        /// <summary>Eats anything delivered into it and destroys it. The one behaviour with no outlet and
+        /// with no state that can hold, so it is the one machine that cannot back up - which is the whole of
+        /// what it is for.</summary>
+        Sink = 11,
     }
 
     /// <summary>A stable, human-readable identity for a piece of content. Strings, not enum ordinals: an
@@ -248,13 +254,15 @@ namespace Facet.Core
         /// the side it faces, a sorter sends its filtered shape out that side, and a turret's barrel rests
         /// where it faces - all six are placed by aiming them, and a view can draw that facing. False for
         /// the hubs that read their ports off the belts around them (a stacker, a splitter): their stored
-        /// facing is never read, so an arrow would promise what turning cannot set. Asked by the ghost that
-        /// draws the arrow and the HUD that names the side.</summary>
+        /// facing is never read, so an arrow would promise what turning cannot set. False for a sink too,
+        /// which eats from every side at once and has no outlet an arrow could point down.
+        /// Asked by the ghost that draws the arrow and the HUD that names the side.</summary>
         public bool UsesFacing
             => Tile == TileKind.Belt
                || (Behavior != BehaviorKind.None
                    && Behavior != BehaviorKind.Stacker
-                   && Behavior != BehaviorKind.Splitter);
+                   && Behavior != BehaviorKind.Splitter
+                   && Behavior != BehaviorKind.Sink);
 
         public MachineDef(ContentId id, BuildKind build, TileKind tile, BehaviorKind behavior, int cost,
             string name, string description, float interval,
@@ -524,14 +532,14 @@ namespace Facet.Core
                     interval: 1f, maxHp: 40f),
 
                 // The first operator, and the one the campaign teaches first: 1.5 s per pair, both pieces
-                // out at once, one per outlet. A quarter in yields the quarter plus nothing, so cutting
-                // twice is a corollary rather than a rule. The description says "across" on purpose - the
-                // cut line runs against the facing, and "along the line it faces" read as the cut
-                // following the arrow, which is the one aim a new player then never tries.
+                // out at once, one per lane. A quarter in yields the quarter plus nothing, so cutting
+                // twice is a corollary rather than a rule. The description names the two tiles, because a
+                // machine that turns a belt is a machine a player has to build a corner for - and this one
+                // forks the belt it is already standing in.
                 new MachineDef(new ContentId("cutter"), BuildKind.Cutter, TileKind.Cutter,
                     BehaviorKind.Cutter, cost: 15, name: "Cutter",
-                    description: "splits one shape in two · the cut runs across the facing: " +
-                                 "north/south cuts top/bottom",
+                    description: "splits one shape in two · two tiles wide: one piece runs straight on, " +
+                                 "the other leaves a lane over",
                     interval: 1.5f, maxHp: 60f),
 
                 // Well under a belt's one second per item, so the rotator never throttles a line: the
@@ -580,6 +588,16 @@ namespace Facet.Core
                     BehaviorKind.Turret, cost: 20, name: "Turret",
                     description: "eats any shape · what it fires is what the line delivered",
                     interval: 0f, maxHp: 80f),
+
+                // The drain, and the ending every fork needs: a cutter makes two pieces and a layout usually
+                // wants one, so without somewhere for the surplus to go its lane fills and the machine that
+                // made it stalls. Cheaper than the cutter it rescues, because a fix the player cannot afford
+                // is the same as no fix - and free of any unlock, since the cutter's first lesson is also the
+                // first way to get stuck.
+                new MachineDef(new ContentId("sink"), BuildKind.Sink, TileKind.Sink, BehaviorKind.Sink,
+                    cost: 4, name: "Sink",
+                    description: "eats anything delivered into it · nothing comes out",
+                    interval: 0f, maxHp: 30f),
             };
 
             var turrets = new[]
@@ -600,12 +618,13 @@ namespace Facet.Core
                     hp: 6f, speed: 1.5f, damage: 6f, attackInterval: 1f,
                     aggroRange: 1.6f, detectionRange: 2.5f),
 
-                // Slow, heavy, and the archetype a deep demand comes with: the same six health, but it
-                // walks at two-thirds the speed and hits the Core for ten. It notices defences further out
-                // than a Runner (3.2 against 2.5), so what stands between it and the Core has to hurt it,
-                // not just be in the way.
+                // Slow, heavy, and the archetype a deep demand comes with: ten health to the Runner's
+                // six, so it takes three matched shots where the Runner takes two - and ten resisted
+                // ones, where the Runner folds after six. It walks at two-thirds the speed and hits the
+                // Core for ten. It notices defences further out than a Runner (3.2 against 2.5), so what
+                // stands between it and the Core has to hurt it, not just be in the way.
                 new EnemyDef(new ContentId("tank"), EnemyKind.Tank, "Tank",
-                    hp: 6f, speed: 1f, damage: 10f, attackInterval: 1.25f, detectionRange: 3.2f),
+                    hp: 10f, speed: 1f, damage: 10f, attackInterval: 1.25f, detectionRange: 3.2f),
             };
 
             return new ContentDatabase(machines, turrets, enemies);

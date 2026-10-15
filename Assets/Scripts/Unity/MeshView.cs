@@ -196,6 +196,22 @@ namespace Facet.Game
             Color fill, Color outline, float outlineWidth)
             => ProcMesh.AppendPolygon(_vertices, _colors, _triangles, points, offset, fill, outline, outlineWidth);
 
+        /// <summary>The fill half of one convex CCW polygon, for a figure drawn in two passes.</summary>
+        protected void AppendPolygonFill(IReadOnlyList<Vector2> points, Vector2 offset, Color fill)
+            => ProcMesh.AppendPolygonFill(_vertices, _colors, _triangles, points, offset, fill);
+
+        /// <summary>The outline half of one convex CCW polygon, for a figure drawn in two passes.</summary>
+        protected void AppendPolygonOutline(IReadOnlyList<Vector2> points, Vector2 offset, Color outline,
+            float outlineWidth)
+            => ProcMesh.AppendPolygonOutline(_vertices, _colors, _triangles, points, offset, outline, outlineWidth);
+
+        /// <summary>One quadrant of a figure, outlined with the rim and the seams at their own widths - see
+        /// <see cref="ProcMesh.AppendQuadrantOutline"/>.</summary>
+        protected void AppendQuadrantOutline(IReadOnlyList<Vector2> points, Vector2 offset, Color outline,
+            float rimWidth, float seamWidth, bool verticalSeam, bool horizontalSeam)
+            => ProcMesh.AppendQuadrantOutline(_vertices, _colors, _triangles, points, offset, outline, rimWidth,
+                seamWidth, verticalSeam, horizontalSeam);
+
         /// <summary>One axis-aligned CCW quad from its min/max corners into the shared buffers.</summary>
         protected void AppendRect(float minX, float minY, float maxX, float maxY, Color color)
             => AppendQuad(new Vector2(minX, minY), new Vector2(maxX, minY),
@@ -208,23 +224,6 @@ namespace Facet.Game
             var right = new Vector2(-along.y, along.x).normalized * halfWidth;
 
             AppendQuad(from - right, from + right, to + right, to - right, color);
-        }
-
-        /// <summary>
-        /// The two ends of a cutter's cut line across <paramref name="cell"/>, drawn through the cell's
-        /// centre <b>perpendicular to the facing</b>: a cutter faced north or south cuts across (the top
-        /// piece and the bottom one), so its blade runs east-west; faced east or west it cuts down the
-        /// middle and the blade runs north-south. The one geometry the ghost and the placed machine both
-        /// draw, so the aim a player watches on the cursor is the aim the built cutter keeps.
-        /// </summary>
-        protected static (Vector2 from, Vector2 to) CutLineAcross(Int2 cell, Dir facing)
-        {
-            float centreX = cell.X + 0.5f;
-            float centreY = cell.Y + 0.5f;
-
-            return facing == Dir.East || facing == Dir.West
-                ? (new Vector2(centreX, cell.Y), new Vector2(centreX, cell.Y + 1f))
-                : (new Vector2(cell.X, centreY), new Vector2(cell.X + 1f, centreY));
         }
 
         /// <summary>One filled chevron pointing along <paramref name="direction"/>, at
@@ -335,11 +334,22 @@ namespace Facet.Game
         /// silhouette, so a full circle is a disc and a circle-left/square-right item is half a disc beside
         /// half a square.
         ///
+        /// <b>Every fill first, then every outline.</b> The quadrants tile the item, so an outline grown
+        /// outward from one of them lies inside its neighbour - and in a single mesh a later triangle paints
+        /// over an earlier one. Fill-then-outline per quadrant therefore let each quadrant's fill erase the
+        /// outline the quadrant before it drew along their shared axis, which left the figure's own seam cross
+        /// lopsided and off the item's centre: two passes are what keep the quarter seams (and the cut readout
+        /// they are) symmetrical about the middle. One mesh, so no depth buffer settles this for us.
+        ///
+        /// The second pass also gives the seams their own width (<see cref="Palette.SeamFraction"/>) and caps
+        /// the rim at a share of the figure's own radius (<see cref="Palette.OutlineMaxRadiusFraction"/>):
+        /// both are about the figure staying readable once the zoom has made it small, where an outline held
+        /// at a constant number of pixels would otherwise be most of what is on screen.
+        ///
         /// A quadrant whose mineral is overridden with a Sprite draws that sprite inside the quadrant
         /// instead (a sprite is a whole mark and has no point list); a <paramref name="tint"/> recolours
-        /// either form, which is how a silenced turret's last round goes grey. The one place every view that
-        /// draws an item on the map goes through, and it allocates nothing: the points and styles are the
-        /// icon set's, cached at initialisation.
+        /// either form. The one place every view that draws an item on the map goes through, and it allocates
+        /// nothing: the points and styles are the icon set's, cached at initialisation.
         /// </summary>
         protected void AppendIcon(ShapeIconSet icons, Shape shape, Vector2 centre, Color? tint)
         {
@@ -365,8 +375,33 @@ namespace Facet.Game
                 IReadOnlyList<Vector2> points = icons.Points(mineral, quadrant);
                 if (points == null) continue;
 
-                AppendPolygon(points, centre + style.Offset, tint ?? style.Fill, style.Outline,
-                    OutlineWidthFor(style));
+                AppendPolygonFill(points, centre + style.Offset, tint ?? style.Fill);
+            }
+
+            for (int quadrant = 0; quadrant < Shape.QuadrantCount; quadrant++)
+            {
+                Quad mineral = shape.At(quadrant);
+                if (mineral == Quad.Empty) continue;
+
+                VisualStyle style = icons.Style(mineral, quadrant);
+                if (style == null || style.Source == VisualSource.Sprite) continue;
+
+                IReadOnlyList<Vector2> points = icons.Points(mineral, quadrant);
+                if (points == null) continue;
+
+                // An outline is a screen constant, and a screen constant has a size in the figure's own
+                // terms that grows as the figure shrinks: at the far end of the zoom a disc is thirteen
+                // pixels across, and half of it was ring. Past this share of the figure's radius the cap
+                // wins, so what is drawn at the edge of the zoom is the shape rather than its outline.
+                float rim = Mathf.Min(OutlineWidthFor(style), icons.Radius * Colors.OutlineMaxRadiusFraction);
+
+                // The two edges a quadrant shares with its neighbours are the figure's seams, and each side
+                // draws half of one - which is what makes the cross in a disc a line rather than a band
+                // twice the rim's width. A flat side with a hole behind it is rim, not seam.
+                AppendQuadrantOutline(points, centre + style.Offset, style.Outline, rim,
+                    rim * Colors.SeamFraction,
+                    verticalSeam: shape.Has(Shape.AcrossVertical(quadrant)),
+                    horizontalSeam: shape.Has(Shape.AcrossHorizontal(quadrant)));
             }
         }
 

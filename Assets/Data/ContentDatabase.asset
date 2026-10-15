@@ -71,7 +71,7 @@ MonoBehaviour:
     Behavior: 8
     Cost: 15
     Name: Cutter
-    Description: "splits one shape in two \xB7 the cut runs across the facing: north/south cuts top/bottom"
+    Description: "splits one shape in two \xB7 two tiles wide: one piece runs straight on, the other leaves a lane over"
     Interval: 1.5
     Filter:
       Mode: 0
@@ -275,6 +275,32 @@ MonoBehaviour:
         SE: 0
         SW: 0
       Mineral: 0
+  - Id: sink
+    Build: 10
+    Tile: 17
+    Behavior: 11
+    Cost: 4
+    Name: Sink
+    Description: "eats anything delivered into it \xB7 nothing comes out"
+    Interval: 0
+    Filter:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+    MaxHp: 30
+    OverrideDiet: 1
+    Diet:
+      Mode: 1
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
   Turrets:
   - Id: turret
     Build: 9
@@ -296,7 +322,7 @@ MonoBehaviour:
   - Id: tank
     Kind: 1
     Name: Tank
-    Hp: 6
+    Hp: 10
     Speed: 1
     Damage: 10
     AttackInterval: 1.25

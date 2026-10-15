@@ -69,12 +69,13 @@ namespace Facet.Tests
         /// Two circle veins: one beside the Core for the economy line, one feeding the operator chain a
         /// player actually builds - drill &gt; cutter &gt; turret - whose gun sits four tiles off the lane,
         /// inside its 7-tile range and outside the 2.5 tiles a Runner notices a machine from. Two Runners a
-        /// wave, two waves a table, and a budget that pays for the opening: the whole opening costs 63
-        /// (14 for the economy line, 49 for the defence), so 80 leaves a little to spare.
+        /// wave, two waves a table, and a budget that pays for the opening: the whole opening costs 64
+        /// (14 for the economy line, 50 for the defence), so 80 leaves a little to spare.
         ///
-        /// The wave's demand is the <em>top</em> half-circle, which is the piece the cutter facing north
-        /// pushes out of its front outlet: a group's weakness is one exact item now, so the rig has to
-        /// name the item its own line produces or the gun would be firing resisted rounds all run.
+        /// The wave's demand is the <em>top</em> half-circle, which is the piece the rig's cutter sends out of
+        /// the lane tile's front, a lane over from the tile the belt fed: a group's weakness is one exact item
+        /// now, so the rig has to name the item its own line produces or the gun would be firing resisted
+        /// rounds all run.
         /// </summary>
         public static MapDefinition RigMap()
             => new MapDefinition("rig", 16, 22, 80,
@@ -108,22 +109,25 @@ namespace Facet.Tests
         }
 
         /// <summary>
-        /// The rig's defence: a drill on the second vein at (12,9) pushing west onto two belts into a
-        /// <b>cutter</b> at (9,9) facing north, whose top piece leaves north into a belt that feeds the
-        /// <b>turret</b> at (9,11) - four tiles from the lane's column - and whose bottom piece leaves south
-        /// onto a dead-ended belt, a visible queue rather than a lost half. <paramref name="trunk"/> is the
-        /// input run's first cell, where a jam goes in.
+        /// The rig's defence: a drill on the second vein at (12,9) pushing west onto one belt into the back of
+        /// a <b>cutter</b> at (10,9) that flows west, so the cut runs top from bottom and both pieces leave by
+        /// the front of their own tile. The displaced top piece turns up the map and then east into the
+        /// <b>turret</b> at (9,11) - four tiles from the lane's column - and the piece that keeps the lane
+        /// leaves onto a dead-ended belt, a visible queue rather than a lost half. <paramref name="trunk"/> is
+        /// the input run's first cell, where a jam goes in.
         /// </summary>
         public static void BuildRigDefence(SimWorld world, out Int2 trunk)
         {
             Place(world, BuildKind.Drill, new Int2(12, 9), Dir.West);
             Int2 runStart = new Int2(11, 9);
-            LayRun(world, runStart, Dir.West, 2);                 // (11,9) (10,9), into the cutter
+            LayRun(world, runStart, Dir.West, 1);                 // (11,9), into the cutter's back
             trunk = runStart;
 
-            Place(world, BuildKind.Cutter, new Int2(9, 9), Dir.North);
-            LayRun(world, new Int2(9, 10), Dir.North, 1);         // out of the cutter, up into the gun
-            LayRun(world, new Int2(9, 8), Dir.South, 1);          // and the bottom half's own dead end
+            Place(world, BuildKind.Cutter, new Int2(10, 9), Dir.West);
+            LayRun(world, new Int2(9, 10), Dir.West, 1);          // the top half out of the lane tile's front
+            LayRun(world, new Int2(8, 10), Dir.North, 1);         // one belt on, turning up the map
+            LayRun(world, new Int2(8, 11), Dir.East, 1);          // and into the gun
+            LayRun(world, new Int2(9, 9), Dir.West, 1);           // the bottom half's own dead end
             Place(world, BuildKind.Turret, new Int2(9, 11), Dir.West);
         }
 

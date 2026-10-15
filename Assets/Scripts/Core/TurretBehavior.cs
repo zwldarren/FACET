@@ -3,9 +3,16 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// The one gun, with a universal chamber. Every tick: a delivery is taken as the round it is (any
-    /// non-empty shape - the chamber has no diet), the barrel prefers the enemy that round actually hurts,
-    /// and if the machine is aimed, armed and off cooldown it eats the round and fires <em>it</em>.
+    /// The one gun, with a universal chamber. Every tick: a delivery is taken into the chamber as the round it
+    /// is (any non-empty shape - the chamber has no diet) <em>as soon as one is there</em>, whether or not there
+    /// is anything to shoot at; the barrel prefers the enemy that round actually hurts; and if the machine is
+    /// loaded, aimed and off cooldown it fires <em>it</em> and the chamber is empty again.
+    ///
+    /// <b>The chamber holds one round, and loading it is not conditional on a target.</b> A gun that only ate
+    /// when something was already in range could never be seen to load: its badge stayed empty, the line backed
+    /// up at the muzzle, and the player read their own working factory as a broken one. Loading is the belt's
+    /// business and firing is the target's, so the two are separate steps here - which is also what makes
+    /// "what is my line feeding the gun" a question the screen answers at any moment, loaded round or not.
     ///
     /// Nothing jams here under the shipped diet, because there is nothing a belt can deliver that the
     /// chamber refuses: the rework moved the punishment for the wrong shape from the belt to the damage
@@ -16,7 +23,8 @@ namespace Facet.Core
     /// counting a delivery it will never eat as its round.
     ///
     /// Fire rate is min(the gun's rate, what its lines deliver): damage is a throughput property of the
-    /// layout, and now a shape property of the round as well.
+    /// layout, and now a shape property of the round as well. A loaded chamber is what makes the first
+    /// shot of an engagement immediate rather than one belt-length late.
     /// </summary>
     internal sealed class TurretBehavior : IMachineBehavior
     {
@@ -28,43 +36,49 @@ namespace Facet.Core
 
             Vec2 centre = ctx.Grid.CellCenter(cell);
 
-            if (MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, in def))
+            if (MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, turret.Direction, in def))
             {
-                turret.Armed = false;
-                Aim(ref turret, in ctx, centre, spec.Range, Shape.None);
+                // A delivery the diet refuses blocks its segment. That says nothing about what is already in
+                // the chamber, so the gun keeps whatever it has loaded and stays aimed with it.
+                Armed(ref turret);
+                Aim(ref turret, in ctx, centre, spec.Range, turret.Carried);
                 return;
             }
 
-            bool armed = MachineDelivery.TryFindDietDelivery(ctx.Belts, cell, in def,
-                out Int2 delivery, out Shape round);
-            turret.Armed = armed;
-
-            // Armed: the aim prefers the enemy this round is worth full damage against. Unarmed: nothing in
-            // particular, so the barrel tracks the nearest enemy and the picture still reads as a gun.
-            Aim(ref turret, in ctx, centre, spec.Range, armed ? round : Shape.None);
-
-            if (!armed || !turret.HasTarget || turret.Cooldown > 0f) return;
-
-            // Aiming was a read of what is being delivered; firing still has to confirm the take. A
-            // jammed segment scans as a delivery but refuses to be emptied, and without this the gun
-            // would fire a round that never left the belt, once per cooldown, forever.
-            if (!ctx.Belts.TryTakeItem(delivery, out _))
+            // Load: only into an empty chamber, so a round already in hand is never overwritten - and not
+            // gated on a target, which is the whole point of a chamber.
+            if (turret.Carried.IsEmpty &&
+                MachineDelivery.TryFindDietDelivery(ctx.Belts, cell, turret.Direction, in def, out Int2 delivery, out _) &&
+                ctx.Belts.TryTakeItem(delivery, out Shape taken))
             {
-                turret.Armed = false;
-                return;
+                turret.Carried = taken;
             }
 
+            Armed(ref turret);
+
+            // The barrel aims with the round it is holding, so it points at the enemy that round is for.
+            Aim(ref turret, in ctx, centre, spec.Range, turret.Carried);
+
+            if (turret.Carried.IsEmpty || !turret.HasTarget || turret.Cooldown > 0f) return;
+
+            // Fire: the round leaves the chamber, so what the badge shows afterwards is the next one loaded.
+            // The shape is read out before it is cleared - it is what the shot in flight carries, and what the
+            // enemy it lands on is measured against.
+            Shape fired = turret.Carried;
+            turret.Carried = Shape.None;
             turret.Cooldown = spec.FireInterval;
+            Armed(ref turret);
 
-            // The chamber holds nothing between shots, so <see cref="MachineState.Carried"/> keeps the last
-            // round fired instead: it is what the badge draws and what the card reports, which is the only
-            // way the player can see which shape their line is actually feeding the gun.
-            turret.Carried = round;
             ctx.Telemetry.ShotsFired++;
             ctx.Projectiles.Spawn(centre + turret.Aim * 0.42f, turret.TargetId, turret.TargetPosition,
-                spec, round);
-            ctx.Events.ShotFired(cell, round, spec.Damage);
+                spec, fired);
+            ctx.Events.ShotFired(cell, fired, spec.Damage);
         }
+
+        /// <summary>"There is a round in the chamber" is not a state of its own - it <em>is</em> the chamber's
+        /// contents, read off it here so the flag the HUD warns on and the badge the view draws cannot disagree.
+        /// </summary>
+        private static void Armed(ref MachineState turret) => turret.Armed = !turret.Carried.IsEmpty;
 
         /// <summary>The enemy this turret's round is worth the most against - the nearest weak to it,
         /// or the nearest in range - with the barrel turned toward it. Chosen by the field, not by walking

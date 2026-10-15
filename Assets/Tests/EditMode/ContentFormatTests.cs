@@ -39,7 +39,11 @@ namespace Facet.Tests
             Assert.AreEqual("Wall", ((BuildKind)8).ToString());
             Assert.AreEqual("Turret", ((BuildKind)9).ToString());
 
-            Assert.AreEqual(10, Enum.GetValues(typeof(BuildKind)).Length,
+            // Appended past the ten the keyboard's digits reach, which is why the drain is the one kind whose
+            // key is a letter: the ordinal is the hotkey order, and there was no digit left to give it.
+            Assert.AreEqual("Sink", ((BuildKind)10).ToString());
+
+            Assert.AreEqual(11, Enum.GetValues(typeof(BuildKind)).Length,
                 "the count is pinned too - a name in the wrong slot is a fail, a name added anywhere " +
                 "is this fail plus the hotkey test");
         }
@@ -83,7 +87,10 @@ namespace Facet.Tests
             Assert.AreEqual("Cutter", ((TileKind)14).ToString());
             Assert.AreEqual("Rotator", ((TileKind)15).ToString());
             Assert.AreEqual("Stacker", ((TileKind)16).ToString());
-            Assert.AreEqual(12, Enum.GetValues(typeof(TileKind)).Length);
+
+            // And the drain, appended after them for the same reason.
+            Assert.AreEqual("Sink", ((TileKind)17).ToString());
+            Assert.AreEqual(13, Enum.GetValues(typeof(TileKind)).Length);
         }
 
         [Test]
@@ -107,8 +114,11 @@ namespace Facet.Tests
             Assert.AreEqual("Cutter", ((BehaviorKind)8).ToString());
             Assert.AreEqual("Rotator", ((BehaviorKind)9).ToString());
             Assert.AreEqual("Stacker", ((BehaviorKind)10).ToString());
-            Assert.AreEqual(9, Enum.GetValues(typeof(BehaviorKind)).Length,
-                "nine members over eleven slots: the member count is NOT the slot count");
+
+            // The drain, appended: the one behaviour with no outlet, so the one a port rule has to answer for.
+            Assert.AreEqual("Sink", ((BehaviorKind)11).ToString());
+            Assert.AreEqual(10, Enum.GetValues(typeof(BehaviorKind)).Length,
+                "ten members over twelve slots: the member count is NOT the slot count");
         }
 
         [Test]
@@ -230,9 +240,11 @@ namespace Facet.Tests
         [Test]
         public void Hotkeys_ReachEveryBuildKind()
         {
-            // The digit-to-kind mapping is positional (BuildInput.BuildKeys): an eleventh kind would have no
-            // key and bar tiles whose labels wrap onto a used digit, both silently. This is the fail-loud -
-            // extend BuildKeys and the labels before extending the table.
+            // The digit-to-kind mapping is positional (BuildInput.BuildKeys): a twelfth kind would have no key
+            // and bar tiles whose labels wrap onto a used digit, both silently. This is the fail-loud -
+            // extend BuildKeys and the labels before extending the table. The eleventh is the drain, and it
+            // took the one key past the digits rather than a second row of them, because a keyboard has
+            // exactly ten.
             BuildKind[] kinds = ContentDatabase.Default.BuildKinds;
             Assert.LessOrEqual(kinds.Length, BuildInput.HotkeyCount,
                 kinds.Length + " build kinds against " + BuildInput.HotkeyCount + " hotkeys");
@@ -240,9 +252,10 @@ namespace Facet.Tests
             Assert.AreEqual("1", BuildInput.HotkeyLabel(0));
             Assert.AreEqual("9", BuildInput.HotkeyLabel(8));
             Assert.AreEqual("0", BuildInput.HotkeyLabel(9), "the tenth kind is key 0");
-            Assert.AreEqual("1-9 and 0", BuildInput.KeyRangeText(),
-                "the shipped ten kinds are keys 1-9 and 0 - and the bar's hint says exactly that, in the " +
-                "characters a built player's HUD font actually carries");
+            Assert.AreEqual("X", BuildInput.HotkeyLabel(10), "and the eleventh is the letter X");
+            Assert.AreEqual("1-9, 0 and X", BuildInput.KeyRangeText(),
+                "the shipped eleven kinds are keys 1-9 and 0 plus X - and the bar's hint says exactly that, " +
+                "in the characters a built player's HUD font actually carries");
         }
 
         [Test]
@@ -340,14 +353,15 @@ namespace Facet.Tests
             Sim.Place(world, BuildKind.Drill, new Int2(2, 8), Dir.East);          // mining, clear of row 2
             Sim.LayRun(world, new Int2(3, 8), Dir.East, 1);
 
-            // The cutter's own rule, wired the way it has to be wired: a cutter facing east cuts left from
-            // right, so its two outlets are the east and west sides - which means its feeds can only come
-            // from the perpendicular axis. This is the one machine whose ports a player must think about.
+            // The cutter's own rule, wired the way it has to be wired: it stands on two tiles and each of them
+            // has one outlet, the side that tile faces - so a machine flowing east forks out of (5,2) and
+            // (5,1), and each of the two tiles is fed on its own back. This is the one machine whose ports a
+            // player has to think about twice.
             Sim.Place(world, BuildKind.Cutter, new Int2(4, 2), Dir.East);
-            Sim.LayRun(world, new Int2(5, 2), Dir.East, 1);                       // front outlet
-            Sim.LayRun(world, new Int2(3, 2), Dir.West, 1);                       // back outlet
-            Sim.LayRun(world, new Int2(4, 1), Dir.North, 1);                      // fed from the south
-            Sim.LayRun(world, new Int2(4, 3), Dir.South, 1);                      // and from the north
+            Sim.LayRun(world, new Int2(5, 2), Dir.East, 1);                // the blade tile's front
+            Sim.LayRun(world, new Int2(5, 1), Dir.East, 1);                // and the lane tile's
+            Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);                // fed from the west
+            Sim.LayRun(world, new Int2(4, 0), Dir.North, 1);               // into the lane tile from the south
 
             Sim.Place(world, BuildKind.Rotator, new Int2(8, 2), Dir.East);        // one outlet
             Sim.LayRun(world, new Int2(9, 2), Dir.East, 1);
@@ -355,8 +369,13 @@ namespace Facet.Tests
             Sim.Place(world, BuildKind.Pipe, new Int2(15, 2), Dir.East);          // carried badge
             Sim.Place(world, BuildKind.Splitter, new Int2(17, 2), Dir.East);      // hub badge
             Sim.Place(world, BuildKind.Sorter, new Int2(19, 2), Dir.East);        // filter badge
-            Sim.Place(world, BuildKind.Turret, new Int2(21, 2), Dir.East);        // last-round badge
+            Sim.Place(world, BuildKind.Turret, new Int2(21, 2), Dir.East);        // chamber badge
             Sim.Place(world, BuildKind.Wall, new Int2(23, 2), Dir.East);          // no badge at all
+
+            // The drain, fed from one side and eating from all four: it has a snapshot like every other
+            // machine and answers for its ports like every other machine, which is what this test is for.
+            Sim.LayRun(world, new Int2(6, 8), Dir.East, 1);
+            Sim.Place(world, BuildKind.Sink, new Int2(7, 8), Dir.East);
             Sim.Tick(world, 4);
 
             var seen = new HashSet<BuildKind>();
@@ -375,19 +394,24 @@ namespace Facet.Tests
                 Assert.IsTrue(seen.Contains(kind), kind + " placed, snapshotted, and passed every switch");
             }
 
-            // The port rule's own cases: a drill faces its output, a cutter's outlets are the two sides of
-            // its cut line, a wired hub counts, and a turret never pushes.
+            // The port rule's own cases: a drill faces its output, each of a cutter's two tiles is an outlet on
+            // the side it faces, a wired hub counts, and a turret never pushes.
             Assert.IsTrue(world.Machines.TryGetSnapshot(new Int2(2, 8), out MachineSnapshot drill));
             Assert.IsTrue(drill.OutMask.Has(Dir.East));
 
             Assert.IsTrue(world.Machines.TryGetSnapshot(new Int2(4, 2), out MachineSnapshot cutter));
-            Assert.IsTrue(cutter.OutMask.Has(Dir.East), "the cutter's front outlet is the side it faces");
-            Assert.IsTrue(cutter.OutMask.Has(Dir.West), "and the one opposite it is the other");
-            Assert.IsTrue(cutter.InMask.Has(Dir.North) && cutter.InMask.Has(Dir.South),
-                "while it is fed from the sides perpendicular to its cut line - the two are different axes");
+            Assert.IsTrue(cutter.OutMask.Has(Dir.East), "the cutter's outlet is the side both its tiles face");
+            Assert.IsFalse(cutter.OutMask.Has(Dir.West),
+                "while a side a belt points in on is a feed, not an exit");
+            Assert.IsTrue(cutter.InMask.Has(Dir.West) && cutter.InMask.Has(Dir.South),
+                "and both tiles are fed: the blade tile from the west, the lane tile from the south");
 
             Assert.IsTrue(world.Machines.TryGetSnapshot(new Int2(21, 2), out MachineSnapshot gun));
             Assert.IsTrue(gun.OutMask.IsEmpty, "and the turret never has one");
+
+            Assert.IsTrue(world.Machines.TryGetSnapshot(new Int2(7, 8), out MachineSnapshot sink));
+            Assert.IsTrue(sink.InMask.Has(Dir.West), "the sink is fed from the side a belt points in on");
+            Assert.IsTrue(sink.OutMask.IsEmpty);
         }
 
         [Test]
@@ -438,6 +462,17 @@ namespace Facet.Tests
             StringAssert.Contains(gun.ShotsPerSecond.ToString("0.##"),
                 MachineReading.Stats(content.Machine(BuildKind.Turret), content, world.Config),
                 "the line quotes the table, not a copy of it");
+
+            // The cutter's two lines, whole: what a player cannot see about it is that it is two tiles wide and
+            // that the second piece leaves a lane over, so the catalogue line says both, and the numbers line
+            // says how long a split takes and how many pieces a lane holds while its belt is blocked.
+            MachineDef cutterRow = content.Machine(BuildKind.Cutter);
+            Assert.AreEqual("splits one shape in two \u00b7 stands on two tiles: the piece on its left runs " +
+                "straight on and the piece on its right leaves a lane over",
+                MachineReading.Blurb(cutterRow, content));
+            Assert.AreEqual(cutterRow.Interval.ToString("0.##") +
+                " s per split \u00b7 both pieces leave at once \u00b7 holds 4 a lane",
+                MachineReading.Stats(cutterRow, content, world.Config));
 
             Assert.IsTrue(world.Machines.TryGetSnapshot(new Int2(2, 2), out MachineSnapshot drill));
             ReadingNote mining = MachineReading.LiveNote(world, new Int2(2, 2), drill);

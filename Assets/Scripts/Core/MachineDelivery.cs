@@ -36,21 +36,31 @@ namespace Facet.Core
         /// <summary>
         /// First cell in scan order delivering a ready item this machine eats, with what it is. The intake
         /// half of the diet rule.
+        ///
+        /// A machine that stands on two tiles is fed on both: the walk goes over the tiles
+        /// <see cref="MachineFootprint"/> names, in that order, and over each one's four sides in the fixed
+        /// scan order - so which of several ready items a machine takes is decided by the map and the
+        /// machine's own footprint, never by iteration order.
         /// </summary>
-        public static bool TryFindDietDelivery(BeltField belts, Int2 cell, in MachineDef def,
+        public static bool TryFindDietDelivery(BeltField belts, Int2 cell, Dir facing, in MachineDef def,
             out Int2 deliveryCell, out Shape shape)
         {
             deliveryCell = default;
             shape = Shape.None;
 
-            for (int i = 0; i < Ports.Length; i++)
+            for (int tile = 0; tile < MachineFootprint.Tiles(def.Behavior); tile++)
             {
-                if (!TryReadyAt(belts, cell, Ports[i], rejectJammed: false, out Int2 neighbour, out BeltState state)) continue;
-                if (!Eats(in def, state.Item)) continue;
+                if (!TryTile(def.Behavior, cell, facing, tile, out Int2 at)) continue;
 
-                deliveryCell = neighbour;
-                shape = state.Item;
-                return true;
+                for (int i = 0; i < Ports.Length; i++)
+                {
+                    if (!TryReadyAt(belts, at, Ports[i], rejectJammed: false, out Int2 neighbour, out BeltState state)) continue;
+                    if (!Eats(in def, state.Item)) continue;
+
+                    deliveryCell = neighbour;
+                    shape = state.Item;
+                    return true;
+                }
             }
 
             return false;
@@ -59,23 +69,43 @@ namespace Facet.Core
         /// <summary>
         /// And the jam half: the first cell delivering an item the machine does not eat. A delivery the
         /// machine refuses blocks the segment it landed on and stays blocked, which is what makes a
-        /// narrow diet a layout constraint rather than a silent loss.
+        /// narrow diet a layout constraint rather than a silent loss. Same walk as
+        /// <see cref="TryFindDietDelivery"/>.
         /// </summary>
-        public static bool TryFindWrongDelivery(BeltField belts, Int2 cell, in MachineDef def,
+        public static bool TryFindWrongDelivery(BeltField belts, Int2 cell, Dir facing, in MachineDef def,
             out Int2 deliveryCell)
         {
             deliveryCell = default;
 
-            for (int i = 0; i < Ports.Length; i++)
+            for (int tile = 0; tile < MachineFootprint.Tiles(def.Behavior); tile++)
             {
-                if (!TryReadyAt(belts, cell, Ports[i], rejectJammed: false, out Int2 neighbour, out BeltState state)) continue;
-                if (Eats(in def, state.Item)) continue;
+                if (!TryTile(def.Behavior, cell, facing, tile, out Int2 at)) continue;
 
-                deliveryCell = neighbour;
-                return true;
+                for (int i = 0; i < Ports.Length; i++)
+                {
+                    if (!TryReadyAt(belts, at, Ports[i], rejectJammed: false, out Int2 neighbour, out BeltState state)) continue;
+                    if (Eats(in def, state.Item)) continue;
+
+                    deliveryCell = neighbour;
+                    return true;
+                }
             }
 
             return false;
+        }
+
+        /// <summary>The tiles a machine stands on, by index, for the two walks above: index 0 is the tile
+        /// its state lives on, and 1 is the second of a two-tile machine - false when it has none, which is
+        /// every machine but the cutter.</summary>
+        private static bool TryTile(BehaviorKind behavior, Int2 cell, Dir facing, int index, out Int2 tile)
+        {
+            if (index == 0)
+            {
+                tile = cell;
+                return true;
+            }
+
+            return MachineFootprint.TrySecond(behavior, cell, facing, out tile);
         }
 
         /// <summary>
@@ -86,9 +116,9 @@ namespace Facet.Core
         /// when something was jammed - the turret is the one caller that acts on it, disarming instead of
         /// waiting out a delivery it will never eat.
         /// </summary>
-        public static bool TryJamWrongDelivery(BeltField belts, Int2 cell, in MachineDef def)
+        public static bool TryJamWrongDelivery(BeltField belts, Int2 cell, Dir facing, in MachineDef def)
         {
-            if (!TryFindWrongDelivery(belts, cell, in def, out Int2 wrong)) return false;
+            if (!TryFindWrongDelivery(belts, cell, facing, in def, out Int2 wrong)) return false;
 
             belts.TryJam(wrong);
             return true;
@@ -138,10 +168,10 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// Push one item out through exactly one named side. The cutter's rule: each piece of a cut has
-        /// its own outlet - the facing side and the one opposite it - so the machine does not choose an
-        /// outlet per item, the piece does. False when there is no belt pointing away there, or no room
-        /// on it; the caller keeps the piece buffered and tries again next tick.
+        /// Push one item out through exactly one named side. The cutter's rule: each piece of a cut leaves
+        /// by the front of its own tile - the one the belt fed, and the one a lane over - so the machine does
+        /// not choose an outlet per item, the piece does. False when there is no belt pointing away there, or
+        /// no room on it; the caller keeps the piece buffered and tries again next tick.
         /// </summary>
         public static bool TryPushOutSide(BeltField belts, Int2 cell, Dir side, Shape shape)
             => !shape.IsEmpty && IsOutput(belts, cell, side) && belts.TrySpawnItem(cell + side.Offset(), shape);
@@ -178,6 +208,30 @@ namespace Facet.Core
             return false;
         }
 
+        /// <summary>
+        /// Eat the first ready delivery off <paramref name="cell"/>'s belts, whatever state it is in: the
+        /// sink's intake, and the one intake that does not skip a jammed segment. A machine that
+        /// <em>carries</em> what it takes must leave a jammed item alone for the right-click that clears it
+        /// (<see cref="TryTakeInput"/>), but a machine that destroys what it takes is a way <em>out</em> of a
+        /// jam rather than a way around one - which is what makes a sink laid at the end of a stuck line
+        /// unstick it. The take clears the flag with the item; see <see cref="BeltField.TryTakeItem"/>.
+        /// </summary>
+        public static bool TryEat(BeltField belts, Int2 cell, in MachineDef def, out Shape shape)
+        {
+            shape = Shape.None;
+
+            for (int i = 0; i < Ports.Length; i++)
+            {
+                if (!TryReadyAt(belts, cell, Ports[i], rejectJammed: false, out Int2 neighbour, out BeltState state)) continue;
+                if (!Eats(in def, state.Item)) continue;
+
+                belts.TryTakeItem(neighbour, out shape);
+                return true;
+            }
+
+            return false;
+        }
+
         /// <summary>Is there a belt on the <paramref name="side"/> of <paramref name="cell"/>, pointing
         /// into it, with an item parked on its exit edge? <paramref name="rejectJammed"/> is the
         /// difference between the two ways this gets asked: a machine that consumes or fires the item
@@ -202,10 +256,15 @@ namespace Facet.Core
         /// fed on, which is what makes a stub pointing inward read as an input.
         ///
         /// <paramref name="outMask"/>: every side a belt points away on, when the machine's kind has an
-        /// output there. A drill's facing <em>is</em> its output (exactly one); a cutter's are the side it
-        /// faces and the one opposite it (the two pieces of its cut); a rotator's is the side it faces; a
-        /// stacker, splitter and sorter read their outlets off the belts around them (every side wired that
-        /// way); a pipe (lands two cells ahead) and a turret (never pushes) get none.
+        /// output there. A drill's facing <em>is</em> its output (exactly one); a cutter's is the side it
+        /// faces, on each of the two tiles it stands on (the two pieces of its cut leave by the front of
+        /// one tile each); a rotator's is the side it faces; a stacker, splitter and sorter read their
+        /// outlets off the belts around them (every side wired that way); a pipe (lands two cells ahead) and
+        /// a turret (never pushes) get none.
+        ///
+        /// This answers for <em>one tile</em>. A machine that stands on two has ports on both, so its
+        /// snapshot carries the union of the two (<see cref="MachineField.SnapshotOf"/>) while a view that
+        /// draws a stub per side asks <see cref="MachineField.PortMasksAt"/>.
         ///
         /// Which a machine is comes from its definition's <see cref="BehaviorKind"/>, so a new machine of
         /// an existing kind docks correctly without being added to a list here.
@@ -241,10 +300,10 @@ namespace Facet.Core
                 case BehaviorKind.Drill:
                 case BehaviorKind.Rotator: return facing == side;
 
-                // Both pieces leave at once, one per side of the cut: the facing side and the one
-                // opposite it. The other two sides are not this machine's outlets at all, so a belt
-                // laid there reads as an input (which is what it is).
-                case BehaviorKind.Cutter: return facing == side || facing.Opposite() == side;
+                // Both pieces leave at once, each out of the front of its own tile: the blade tile the belt
+                // fed, and - a lane over - the second tile. So on either tile it is the facing side that is
+                // an outlet; the rest are inputs. See MachineFootprint for why the cutter is two tiles.
+                case BehaviorKind.Cutter: return facing == side;
 
                 case BehaviorKind.Stacker:
                 case BehaviorKind.Splitter:
@@ -252,8 +311,10 @@ namespace Facet.Core
 
                 case BehaviorKind.None:
                 case BehaviorKind.Pipe:
-                // A pipe lands two cells ahead, never on an adjoining belt, and a turret only eats.
-                case BehaviorKind.Turret: return false;
+                // A pipe lands two cells ahead, never on an adjoining belt, and neither a turret nor a sink
+                // pushes anything out: a turret fires, and a sink has no product at all.
+                case BehaviorKind.Turret:
+                case BehaviorKind.Sink: return false;
 
                 default:
                     throw new ArgumentOutOfRangeException(nameof(behavior), behavior,

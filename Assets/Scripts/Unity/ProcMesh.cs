@@ -60,16 +60,20 @@ namespace Facet.Game
 
         /// <summary>Vertices of a half-disc, dome up: the arc from 0 to 180 degrees, closed by the diameter.
         /// Convex and wound counter-clockwise, so the polygon helpers take it unchanged. Nothing ships with it
-        /// any more - an item's semicircle is two circle quadrants - so it is the authored-override silhouette
-        /// for an author who wants a dome as one body; dome-up is fixed, so it reads the same wherever it is
-        /// used.</summary>
-        public static Vector2[] HalfDisc(int arcSegments, float radius)
+        /// as a body any more - an item's semicircle is two circle quadrants - so it is the authored-override
+        /// silhouette for an author who wants a dome as one body, and the figure a cutter's ghost previews at
+        /// one of its outlets.
+        ///
+        /// <paramref name="startAngleDeg"/> turns the dome: 0 is up, and the flat side is always the diameter
+        /// through the origin, perpendicular to it. That is what lets the same geometry be "the top half leaves
+        /// north" and "the right half leaves east" without a point list per side.</summary>
+        public static Vector2[] HalfDisc(int arcSegments, float radius, float startAngleDeg = 0f)
         {
             if (arcSegments < 2) arcSegments = 2;
             var pts = new Vector2[arcSegments + 1];
             for (int i = 0; i <= arcSegments; i++)
             {
-                float a = (180f * i / arcSegments) * Mathf.Deg2Rad;
+                float a = (startAngleDeg + 180f * i / arcSegments) * Mathf.Deg2Rad;
                 pts[i] = new Vector2(Mathf.Cos(a) * radius, Mathf.Sin(a) * radius);
             }
             return pts;
@@ -117,9 +121,31 @@ namespace Facet.Game
         /// <summary>Drop one polygon into shared vertex/colour/index buffers, optionally displaced by
         /// <paramref name="offset"/> - what lets a renderer pack every belt or item into a single mesh instead of one
         /// GameObject per object. The outline is one quad per edge rather than a scaled polygon, so its width stays
-        /// constant however many sides the shape has.</summary>
+        /// constant however many sides the shape has.
+        ///
+        /// Fill then outline, which is the right order for <em>one</em> polygon. Geometry assembled from several
+        /// polygons that share an edge - an item's four quadrants - must use the two halves separately instead: see
+        /// <see cref="AppendPolygonFill"/> for why.</summary>
         public static void AppendPolygon(List<Vector3> verts, List<Color> colors, List<int> tris,
             IReadOnlyList<Vector2> points, Vector2 offset, Color fill, Color outline, float outlineWidth)
+        {
+            AppendPolygonFill(verts, colors, tris, points, offset, fill);
+            AppendPolygonOutline(verts, colors, tris, points, offset, outline, outlineWidth);
+        }
+
+        /// <summary>
+        /// The fill half on its own: a triangle fan from the centroid (valid because polygons are convex).
+        ///
+        /// Separate from the outline because of what a <b>figure of several polygons</b> does on screen. Every
+        /// triangle lands in one mesh, so a later triangle paints over an earlier one - and an outline quad of one
+        /// quadrant lies in its neighbour's territory, because the outline grows outward. Drawing each quadrant
+        /// fill-then-outline therefore lets the <em>next</em> quadrant's fill erase the outline the previous one drew
+        /// on their shared axis, so a disc of four quarter discs came out with a seam cross that was neither
+        /// symmetrical nor centred on the item. All the fills first, then all the outlines
+        /// (<see cref="AppendQuadrantOutline"/>), which is also where the shared edge gets its own width.
+        /// </summary>
+        public static void AppendPolygonFill(List<Vector3> verts, List<Color> colors, List<int> tris,
+            IReadOnlyList<Vector2> points, Vector2 offset, Color fill)
         {
             int n = points.Count;
             if (n < 3) return;
@@ -128,7 +154,6 @@ namespace Facet.Game
             for (int i = 0; i < n; i++) centroid += points[i];
             centroid = centroid / n + offset;
 
-            // Fill: triangle fan from the centroid (valid because polygons are convex).
             for (int i = 0; i < n; i++)
             {
                 int i0 = verts.Count;
@@ -142,30 +167,83 @@ namespace Facet.Game
                 tris.Add(i0 + 1);
                 tris.Add(i0 + 2);
             }
+        }
 
-            if (outlineWidth > 0f && outline.a > 0f)
+        /// <summary>The outline half on its own: one quad per edge, grown outward, so its width is a constant
+        /// number of pixels however many sides the shape has. Appended after every fill of the figure it belongs
+        /// to - see <see cref="AppendPolygonFill"/>.</summary>
+        public static void AppendPolygonOutline(List<Vector3> verts, List<Color> colors, List<int> tris,
+            IReadOnlyList<Vector2> points, Vector2 offset, Color outline, float outlineWidth)
+            => AppendOutline(verts, colors, tris, points, offset, outline, outlineWidth, outlineWidth,
+                verticalSeam: false, horizontalSeam: false);
+
+        /// <summary>
+        /// The outline of one <em>quadrant</em> of a figure, with the width split between the figure's rim and
+        /// its seams.
+        ///
+        /// Two quadrants share every seam, and each outline grows outward into the neighbour across it, so a
+        /// seam both of them drew at the rim's width came out <b>twice</b> as heavy as the figure's own edge: the
+        /// cross through the middle of a disc was four pixels against the rim's two, and at the far end of the
+        /// zoom - where a disc is thirteen pixels across - that cross was most of the item. Each quadrant
+        /// drawing half of <paramref name="seamWidth"/> instead makes one line of the width asked for, and the
+        /// halves still meet on the axis, so the seam stays symmetric about it.
+        ///
+        /// An edge is a seam when the whole of it lies on one of the figure's own axes (x == 0 or y == 0 in
+        /// item-local space, where a quadrant polygon is placed) <em>and</em> the quadrant across that axis is
+        /// filled - which is what <paramref name="verticalSeam"/> and <paramref name="horizontalSeam"/> say. The
+        /// flat side of a half item is on an axis with a hole behind it, and that edge is the figure's rim like
+        /// any other.
+        /// </summary>
+        public static void AppendQuadrantOutline(List<Vector3> verts, List<Color> colors, List<int> tris,
+            IReadOnlyList<Vector2> points, Vector2 offset, Color outline, float rimWidth, float seamWidth,
+            bool verticalSeam, bool horizontalSeam)
+            => AppendOutline(verts, colors, tris, points, offset, outline, rimWidth, seamWidth,
+                verticalSeam, horizontalSeam);
+
+        /// <summary>How close to an axis a point has to be to count as lying on it. Quadrant polygons put their
+        /// radial edges exactly on x == 0 and y == 0; float noise from the arc's angles is far below this.</summary>
+        private const float SeamEpsilon = 1e-4f;
+
+        /// <summary>The one outline loop: one outward quad per edge, at the rim's width or the seam's.</summary>
+        private static void AppendOutline(List<Vector3> verts, List<Color> colors, List<int> tris,
+            IReadOnlyList<Vector2> points, Vector2 offset, Color outline, float rimWidth, float seamWidth,
+            bool verticalSeam, bool horizontalSeam)
+        {
+            int n = points.Count;
+            if (n < 3) return;
+            if (outline.a <= 0f) return;
+
+            // Half of the seam from this side: the neighbour across the axis draws the other half.
+            float halfSeam = seamWidth * 0.5f;
+
+            for (int i = 0; i < n; i++)
             {
-                for (int i = 0; i < n; i++)
-                {
-                    Vector2 a = points[i];
-                    Vector2 b = points[(i + 1) % n];
-                    Vector2 d = b - a;
-                    if (d.sqrMagnitude <= 1e-12f) continue;
-                    // Outward normal of a CCW polygon edge.
-                    var nrm = new Vector2(d.y, -d.x).normalized * outlineWidth;
+                Vector2 a = points[i];
+                Vector2 b = points[(i + 1) % n];
 
-                    int i0 = verts.Count;
-                    verts.Add(a + offset);
-                    verts.Add(b + offset);
-                    verts.Add(b + nrm + offset);
-                    verts.Add(a + nrm + offset);
-                    colors.Add(outline);
-                    colors.Add(outline);
-                    colors.Add(outline);
-                    colors.Add(outline);
-                    tris.Add(i0); tris.Add(i0 + 1); tris.Add(i0 + 2);
-                    tris.Add(i0); tris.Add(i0 + 2); tris.Add(i0 + 3);
-                }
+                float width = rimWidth;
+                if ((verticalSeam && Mathf.Abs(a.x) <= SeamEpsilon && Mathf.Abs(b.x) <= SeamEpsilon) ||
+                    (horizontalSeam && Mathf.Abs(a.y) <= SeamEpsilon && Mathf.Abs(b.y) <= SeamEpsilon))
+                    width = halfSeam;
+
+                if (width <= 0f) continue;
+
+                Vector2 d = b - a;
+                if (d.sqrMagnitude <= 1e-12f) continue;
+                // Outward normal of a CCW polygon edge.
+                var nrm = new Vector2(d.y, -d.x).normalized * width;
+
+                int i0 = verts.Count;
+                verts.Add(a + offset);
+                verts.Add(b + offset);
+                verts.Add(b + nrm + offset);
+                verts.Add(a + nrm + offset);
+                colors.Add(outline);
+                colors.Add(outline);
+                colors.Add(outline);
+                colors.Add(outline);
+                tris.Add(i0); tris.Add(i0 + 1); tris.Add(i0 + 2);
+                tris.Add(i0); tris.Add(i0 + 2); tris.Add(i0 + 3);
             }
         }
 

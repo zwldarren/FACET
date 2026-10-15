@@ -48,7 +48,7 @@ namespace Facet.Tests
             Assert.IsFalse(world.IsUnlocked(BuildKind.Stacker));
 
             var cell = new Int2(6, 6);
-            Assert.IsFalse(world.CanPlace(BuildKind.Rotator, cell), "the ghost reads the same rule");
+            Assert.IsFalse(world.CanPlace(BuildKind.Rotator, cell, Dir.East), "the ghost reads the same rule");
             Assert.IsFalse(world.TryPlace(BuildKind.Rotator, cell, Dir.East));
             Assert.IsFalse(world.Machines.Has(cell), "and nothing was built");
 

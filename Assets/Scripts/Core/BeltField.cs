@@ -24,6 +24,13 @@ namespace Facet.Core
         /// answer to "what did I feed that thing".</summary>
         public bool Jammed;
 
+        /// <summary>The item on this cell has reached the exit edge and the cell it points at will never
+        /// take it: bare ground, or off the map. Nothing is refusing it and nothing is wrong with it - the
+        /// line simply ends in the air, which is why the flag is not <see cref="Jammed"/> and why it is
+        /// <em>derived</em> rather than latched: laying one more belt, or a sink, is the fix, and the marker
+        /// has to go the tick it does.</summary>
+        public bool Blocked;
+
         public bool HasItem => !Item.IsEmpty;
     }
 
@@ -41,6 +48,9 @@ namespace Facet.Core
         public Int2 Cell;
         public Dir Direction;
         public bool Jammed;
+
+        /// <summary>Parked at the end of a line that goes nowhere - the bed's other warning colour.</summary>
+        public bool Blocked;
     }
 
     /// <summary>The belt layer: one <see cref="BeltState"/> per tile, indexed exactly like
@@ -89,6 +99,14 @@ namespace Facet.Core
         /// reads it every frame and the twist's whole failure mode is "how many segments are red".</summary>
         public int JamCount { get; private set; }
 
+        /// <summary>
+        /// How many cells are holding an item that has nowhere to go. Counted beside <see cref="JamCount"/>
+        /// and reported with it, because to a player the two are the same news - the line has stopped - and
+        /// this is the one the HUD could not see before: a line that ends in the air was silent, so the first
+        /// symptom of a lane nobody wants was a machine three tiles back that had quietly stopped.
+        /// </summary>
+        public int BlockedCount { get; private set; }
+
         public BeltField(TileGrid grid, TerrainField terrain, SimEventBuffer events)
         {
             _grid = grid ?? throw new ArgumentNullException(nameof(grid));
@@ -118,6 +136,9 @@ namespace Facet.Core
         public bool HasItemAt(Int2 cell) => Has(cell) && _state[_grid.Index(cell)].HasItem;
 
         public bool IsJammed(Int2 cell) => Has(cell) && _state[_grid.Index(cell)].Jammed;
+
+        /// <summary>Is the item on this cell parked at the end of a line that goes nowhere?</summary>
+        public bool IsBlocked(Int2 cell) => Has(cell) && _state[_grid.Index(cell)].Blocked;
 
         /// <summary>Lay a new belt. Fails out of bounds, on a tile that already holds something, on
         /// ground that takes no transport, or on an existing belt. Ground and ore both take one
@@ -152,6 +173,7 @@ namespace Facet.Core
 
             int i = _grid.Index(cell);
             if (_state[i].Jammed) JamCount--;
+            if (_state[i].Blocked) BlockedCount--;
             _state[i] = default;
             _terrain.Release(cell);
             Revision++;
@@ -195,18 +217,32 @@ namespace Facet.Core
 
         /// <summary>Take the item off a cell and keep the belt - how a turret eats and an operator takes
         /// its delivery: the machine consumes the delivery and the line carries on. The caller decides
-        /// whether the shape was right; this only moves it.</summary>
+        /// whether the shape was right; this only moves it.
+        ///
+        /// A jammed cell is eaten from like any other, and the jam goes with the item: a jam is "something
+        /// is stuck here and it will not move on its own", and a machine that destroys what it takes is
+        /// exactly the thing that moves it on. Left set, the flag would outlive the item and redden a cell
+        /// with nothing on it. A machine whose diet made the jam never reaches this - its own intake refuses
+        /// the shape - so the offending item still waits for the right-click that clears it.</summary>
         public bool TryTakeItem(Int2 cell, out Shape shape)
         {
             shape = Shape.None;
             if (!Has(cell)) return false;
 
             int i = _grid.Index(cell);
-            if (!_state[i].HasItem || _state[i].Jammed) return false;
+            if (!_state[i].HasItem) return false;
 
             shape = _state[i].Item;
             _state[i].Item = Shape.None;
             _state[i].Progress = 0f;
+
+            if (_state[i].Jammed)
+            {
+                _state[i].Jammed = false;
+                JamCount--;
+                _events.JamCleared(cell);
+            }
+
             return true;
         }
 
@@ -231,7 +267,38 @@ namespace Facet.Core
             SnapshotPreviousPositions();
             AdvanceProgress(dt, beltSpeed);
             ResolveHandoffs();
+            UpdateBlocked();
         }
+
+        /// <summary>
+        /// Re-decide, for every cell, whether the item on it has anywhere to go. Live rather than latched,
+        /// unlike a jam: a jam is a refusal and stays until the player clears it, while a dead end is
+        /// geometry - one more belt, or a sink, is the cure, and the marker has to go the tick it does.
+        ///
+        /// Only the head of a line shows. A cell pointing at a belt whose own item is stuck is a queue
+        /// rather than a dead end, and marking the whole queue would say "eleven problems" about one.
+        /// </summary>
+        private void UpdateBlocked()
+        {
+            for (int i = 0; i < _state.Length; i++)
+            {
+                BeltState s = _state[i];
+                bool blocked = s.HasItem && !s.Jammed && s.Progress >= 1f
+                    && !Takes(_grid.CellOf(i) + s.Direction.Offset());
+
+                if (blocked == s.Blocked) continue;
+
+                _state[i].Blocked = blocked;
+                if (blocked) BlockedCount++;
+                else BlockedCount--;
+                Revision++;
+            }
+        }
+
+        /// <summary>Will something take an item off this cell? A belt hands it on and a machine or the Core
+        /// eats it (<see cref="TileKindExtensions.Takes"/>); bare ground takes nothing, and neither does a
+        /// wall, however solid it is. This is the whole of "the line ends in the air".</summary>
+        private bool Takes(Int2 cell) => _grid.InBounds(cell) && _grid.Get(cell).Takes();
 
         /// <summary>Remember where every item is now, so the view can interpolate from here next frame.</summary>
         private void SnapshotPreviousPositions()
@@ -334,6 +401,7 @@ namespace Facet.Core
         {
             Array.Clear(_state, 0, _state.Length);
             JamCount = 0;
+            BlockedCount = 0;
             Revision++;
         }
 
@@ -351,6 +419,7 @@ namespace Facet.Core
                     Cell = cell,
                     Direction = _state[i].Direction,
                     Jammed = _state[i].Jammed,
+                    Blocked = _state[i].Blocked,
                 });
             }
         }
@@ -367,6 +436,22 @@ namespace Facet.Core
             for (int i = 0; i < _state.Length; i++)
             {
                 if (!_state[i].Jammed) continue;
+                into.Add(_grid.CellOf(i));
+            }
+        }
+
+        /// <summary>Every blocked cell, in the same stable order and for the same reason as
+        /// <see cref="GetJammed"/>: <see cref="BlockedCount"/> answers "how many", and the moment a line's
+        /// dead end is off the screen the player needs "which ones" - the marker on the radar is the only
+        /// thing that says where the missing belt goes.</summary>
+        public void GetBlocked(List<Int2> into)
+        {
+            into.Clear();
+            if (BlockedCount == 0) return;
+
+            for (int i = 0; i < _state.Length; i++)
+            {
+                if (!_state[i].Blocked) continue;
                 into.Add(_grid.CellOf(i));
             }
         }

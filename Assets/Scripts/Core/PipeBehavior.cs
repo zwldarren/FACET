@@ -13,7 +13,7 @@ namespace Facet.Core
         {
             MachineDef def = ctx.Content.Machine(pipe.Build);
 
-            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, in def);
+            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, pipe.Direction, in def);
 
             if (pipe.Carried.IsEmpty)
             {

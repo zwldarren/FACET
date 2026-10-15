@@ -15,9 +15,10 @@ namespace Facet.Core
         /// one down, so the question is only how fast the line behind the gun can feed it.</summary>
         Runner = 0,
 
-        /// <summary>Slow and heavy: the archetype a deep demand comes with. The same six health as a
-        /// Runner, but it walks at two-thirds the speed and hits the Core for ten - and it is worth
-        /// building the deeper round for, because a resisted shot barely marks it.</summary>
+        /// <summary>Slow and heavy: the archetype a deep demand comes with. Ten health to the Runner's
+        /// six - three matched shots where the Runner takes two - and it walks at two-thirds the speed
+        /// while hitting the Core for ten. It is worth building the deeper round for: a resisted shot
+        /// barely marks it.</summary>
         Tank = 1,
     }
 }

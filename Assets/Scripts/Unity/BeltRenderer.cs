@@ -49,7 +49,12 @@ namespace Facet.Game
             {
                 BeltSnapshot belt = _belts[i];
                 var centre = CellCentre(belt.Cell);
-                Color bed = belt.Jammed ? Colors.Jam : Colors.Belt;
+
+                // Three beds: a belt, one a machine refused something on, and one whose item has nowhere to
+                // go at all. The last two are different problems - clear the offending item, or finish the
+                // line - so they are different colours, and the short exit lane below says the second one in
+                // geometry as well.
+                Color bed = belt.Jammed ? Colors.Jam : belt.Blocked ? Colors.BeltBlocked : Colors.Belt;
 
                 // The hub every lane docks into; it is also the corner joint, so an L's two lanes meet under it and a
                 // turn never shows a seam.
@@ -61,7 +66,7 @@ namespace Facet.Game
                 // half-lane is the "this goes nowhere" readout.
                 Vec2 forward2 = belt.Direction.ToVec();
                 var forward = new Vector2(forward2.X, forward2.Y);
-                float exitLength = EatsFrom(belt.Cell + belt.Direction.Offset()) ? 0.5f : 0.32f;
+                float exitLength = TakesFrom(belt.Cell + belt.Direction.Offset()) ? 0.5f : 0.32f;
                 AppendLane(centre, centre + forward * exitLength, w, bed);
 
                 // A lane from every side something feeds in from: belts pointing at me, and machines whose facing pushes
@@ -79,11 +84,13 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>Would a belt on <paramref name="cell"/> deliver into this tile? Belts dock into each other
-        /// whatever way the neighbour faces (a head-to-head pair is a visible mistake, not a gap), and into anything
-        /// that eats: a machine or the Core. "Eats" is one rule in Core, so a new machine docks without this view
-        /// being told.</summary>
-        private bool EatsFrom(Int2 cell) => World.TileGrid.Get(cell).Eats();
+        /// <summary>Would an item on <paramref name="cell"/> be taken? Belts dock into each other whatever
+        /// way the neighbour faces (a head-to-head pair is a visible mistake, not a gap), and into anything
+        /// that takes: a machine with an intake or the Core. A wall is solid and takes nothing, which is why
+        /// this asks <see cref="TileKindExtensions.Takes"/> rather than <c>Eats</c> - the same rule the belt
+        /// layer's dead-end marker is derived from, so the short dangling lane and the amber bed say one
+        /// thing rather than two.</summary>
+        private bool TakesFrom(Int2 cell) => World.TileGrid.Get(cell).Takes();
 
         /// <summary>Does the neighbour on <paramref name="side"/> push items onto this belt?</summary>
         private bool DeliversInto(BeltSnapshot belt, Dir side)
@@ -93,10 +100,13 @@ namespace Facet.Game
             if (World.Belts.TryGet(neighbour, out BeltState other) && other.Direction == side.Opposite())
                 return true;
 
-            // A machine pushes onto me when the side facing me is one of its computed output ports - the same mask
-            // the simulation pushes through, not a second reading.
-            return World.Machines.TryGetSnapshot(neighbour, out MachineSnapshot machine)
-                && machine.OutMask.Has(side.Opposite());
+            // A machine pushes onto me when the side facing me is one of its output ports - the same mask the
+            // simulation pushes through, not a second reading. Asked of the tile this belt docks with rather
+            // than of the machine's snapshot: a cutter stands on two tiles and each of them has its own
+            // fronts, so the lane beside the blade docks with a port the blade tile's own mask knows nothing
+            // about.
+            World.Machines.PortMasksAt(neighbour, out _, out DirMask outMask);
+            return outMask.Has(side.Opposite());
         }
 
         private void AppendChevron(BeltSnapshot belt)

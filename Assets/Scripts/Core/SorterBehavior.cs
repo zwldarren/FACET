@@ -19,7 +19,7 @@ namespace Facet.Core
         {
             MachineDef def = ctx.Content.Machine(sorter.Build);
 
-            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, in def);
+            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, sorter.Direction, in def);
 
             // Push first, so a sorter that empties can take again in the same tick.
             if (!sorter.Carried.IsEmpty &&

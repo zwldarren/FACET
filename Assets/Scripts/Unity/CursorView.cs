@@ -5,7 +5,7 @@ namespace Facet.Game
 {
     /// <summary>The cursor. With a building selected it is the ghost that shows where the next placement
     /// would land, whether it would be allowed, and what it would be: the belt's chevron, a machine's body
-    /// and facing, a cutter's cut line across the cell, a turret's range ring. Green is buildable, amber
+    /// and facing, a cutter's two tiles and the blade between them, a turret's range ring. Green is buildable, amber
     /// means the stockpile cannot cover it, red
     /// means something is already there (or, for a drill, no shape patch under it) - feedback that makes
     /// dragging a run across an existing build predictable. With nothing selected there is no ghost, because
@@ -44,7 +44,7 @@ namespace Facet.Game
 
             bool visible = World.TileGrid.InBounds(cell);
             bool readable = visible && World.CanInspect(cell);
-            bool valid = kind.HasValue && visible && World.CanPlace(kind.Value, cell);
+            bool valid = kind.HasValue && visible && World.CanPlace(kind.Value, cell, direction);
             bool affordable = kind.HasValue && World.Economy.CanAfford(kind.Value);
 
             // What the inspected cell holds, so the marker and ring follow a building placed or removed under the
@@ -94,6 +94,7 @@ namespace Facet.Game
             Palette.CursorLook look = Colors.Cursor;
             var x = (float)_seenCell.X;
             var y = (float)_seenCell.Y;
+            var centre = new Vector2(x + 0.5f, y + 0.5f);
             Color edge;
             if (!_seenValid) edge = Colors.CursorBlocked;
             else if (_seenAffordable) edge = Colors.CursorOk;
@@ -116,35 +117,128 @@ namespace Facet.Game
             }
             else
             {
-                // A machine is one tile with a facing, so the ghost is its footprint plus the build arrow - except the
-                // machines with no facing, whose ports are read off surrounding belts, where an arrow would promise
-                // what Q/E cannot turn.
+                // A machine is a footprint with a facing, so the ghost is its body plus the build arrow -
+                // except the machines with no facing, whose ports are read off surrounding belts, where an
+                // arrow would promise what Q/E cannot turn.
                 Color body = edge;
                 body.a = look.BodyAlpha;
-                float bodyInset = look.BodyInset;
-                AppendQuad(
-                    new Vector2(x + bodyInset, y + bodyInset), new Vector2(x + 1f - bodyInset, y + bodyInset),
-                    new Vector2(x + 1f - bodyInset, y + 1f - bodyInset), new Vector2(x + bodyInset, y + 1f - bodyInset), body);
+
+                if (World.Content.Machine(kind).Behavior == BehaviorKind.Cutter)
+                {
+                    AppendCutterGhost(_seenCell, _seenDirection, edge, body, t);
+                    return;
+                }
+
+                if (World.Content.Machine(kind).Behavior == BehaviorKind.Sink)
+                {
+                    AppendSinkGhost(_seenCell, edge, body);
+                    return;
+                }
+
+                AppendBodyQuad(_seenCell, body, look.BodyInset);
 
                 if (HasFacing(kind))
                 {
-                    // The cutter's blade goes down first, under its own chevron: the cut line runs
-                    // across the cell perpendicular to the facing, so a ghost aiming north reads "top
-                    // and bottom pieces", not "a thing that points north". Without it the facing arrow
-                    // is the cut's only readout, and which two pieces a placement will yield is a guess.
-                    if (World.Content.Machine(kind).Behavior == BehaviorKind.Cutter)
-                    {
-                        (Vector2 cutFrom, Vector2 cutTo) = CutLineAcross(_seenCell, _seenDirection);
-                        AppendLane(cutFrom, cutTo, t * 0.5f, edge);
-                    }
-
-                    AppendChevron(new Vector2(x + 0.5f, y + 0.5f), _seenDirection,
+                    AppendChevron(centre, _seenDirection,
                         look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, edge);
                 }
             }
 
             if (World.Content.IsTurret(kind))
                 AppendRangeRing(Centre(_seenCell), kind, _seenValid ? Colors.RangeRing : Colors.CursorBlocked);
+        }
+
+        /// <summary>
+        /// The cutter's ghost: the two tiles it will stand on, the blade down the lane the belt runs in, and a
+        /// chevron in each lane saying which way the line runs.
+        ///
+        /// This is the whole explanation of a cutter, on the screen before the click rather than in the
+        /// manual. The body covers both tiles, so "this machine is two tiles wide across the belt" is
+        /// visible; the blade lies along the flow through the lane the belt runs in, so where the cut is made
+        /// is visible; and a chevron in each lane says both lanes leave that way. A player who reads it never
+        /// has to guess that the aim is theirs - which is exactly what a cutter that drew nothing but a knife
+        /// line across its cell left open, and how a fresh player concludes that a half can only be turned by
+        /// a rotator.
+        ///
+        /// Deliberately no pieces: a ghost that drew half circles would be drawing an item, and the machine
+        /// cuts whatever it is handed - a square, a mixed round, a quarter. What a lane is actually carrying
+        /// is on the placed machine's own badge, where it is a fact rather than a guess.
+        /// </summary>
+        private void AppendCutterGhost(Int2 cell, Dir facing, Color edge, Color body, float borderThickness)
+        {
+            Palette.CursorLook look = Colors.Cursor;
+
+            Dir lane = MachineFootprint.LaneOf(facing);         // the machine's right: where the second tile is
+            Int2 laneCell = cell + lane.Offset();
+
+            var flow = new Vector2(facing.ToVec().X, facing.ToVec().Y);
+            var middle = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
+            var laneMiddle = new Vector2(laneCell.X + 0.5f, laneCell.Y + 0.5f);
+
+            // The second tile: tinted like the first and carrying its own body, but deliberately without a
+            // border of its own - the border is the tile the click lands on, and two of them would read as
+            // two machines rather than as one.
+            Color tint = edge;
+            tint.a = look.FillAlpha;
+            AppendQuad(new Vector2(laneCell.X, laneCell.Y), new Vector2(laneCell.X + 1f, laneCell.Y),
+                new Vector2(laneCell.X + 1f, laneCell.Y + 1f), new Vector2(laneCell.X, laneCell.Y + 1f), tint);
+
+            AppendBodyQuad(cell, body, look.BodyInset);
+            AppendBodyQuad(laneCell, body, look.BodyInset);
+
+            // The blade: the item's own centre line along the flow, where the cut is made - through the middle
+            // of the lane the belt runs in, not between the machine's two tiles. The second tile is where the
+            // displaced half is dropped, one lane over.
+            AppendLane(middle - flow * 0.5f, middle + flow * 0.5f, borderThickness * 0.5f, edge);
+
+            // A chevron in each lane, at the front where the belt leaves: the same "this way" a belt wears, so
+            // the two lanes the machine forks into read as two belts rather than as one body with a mark.
+            var ahead = flow * look.ChevronOffset;
+            AppendChevron(middle + ahead, facing, look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, edge);
+            AppendChevron(laneMiddle + ahead, facing, look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, edge);
+        }
+
+        /// <summary>
+        /// The sink's ghost: a block with a pit at its centre and a chevron on each side pointing in.
+        ///
+        /// The machine has no facing, so Q/E turns nothing and an arrow would promise otherwise - what the
+        /// ghost has to say instead is the one thing its name cannot: everything goes in, from any side, and
+        /// nothing comes out. The four inward arrows say both halves of that before the click, and they are
+        /// the same marks the placed machine wears, so the ghost and the building it becomes agree.
+        /// </summary>
+        private void AppendSinkGhost(Int2 cell, Color edge, Color body)
+        {
+            Palette.CursorLook look = Colors.Cursor;
+            Palette.MachineLook machine = Colors.Machines;
+            var centre = Centre(cell);
+
+            AppendBodyQuad(cell, body, look.BodyInset);
+
+            // The pit, in the cursor's own colour: a hole is the whole readout, and it has to be as visible as
+            // the border around it at every zoom - which a fill alpha would not be.
+            float pit = machine.SinkHoleHalfSize;
+            AppendQuad(
+                new Vector2(centre.x - pit, centre.y - pit), new Vector2(centre.x + pit, centre.y - pit),
+                new Vector2(centre.x + pit, centre.y + pit), new Vector2(centre.x - pit, centre.y + pit), edge);
+
+            for (int i = 0; i < 4; i++)
+            {
+                Dir side = (Dir)i;
+                Vec2 away2 = side.ToVec();
+                var away = new Vector2(away2.X, away2.Y);
+                AppendChevron(centre + away * machine.ChevronOffset, side.Opposite(),
+                    machine.ChevronBack, machine.ChevronHalfWidth, machine.ChevronLength, edge);
+            }
+        }
+
+        /// <summary>An inset body quad on one tile of a machine's footprint.</summary>
+        private void AppendBodyQuad(Int2 cell, Color body, float inset)
+        {
+            float x = cell.X;
+            float y = cell.Y;
+            AppendQuad(
+                new Vector2(x + inset, y + inset), new Vector2(x + 1f - inset, y + inset),
+                new Vector2(x + 1f - inset, y + 1f - inset), new Vector2(x + inset, y + 1f - inset), body);
         }
 
         /// <summary>The read cursor - what a click with nothing selected would describe. Over something worth

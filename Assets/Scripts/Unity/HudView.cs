@@ -90,6 +90,14 @@ namespace Facet.Game
         private ControlsPanel _controls;
         private HelpPanel _help;
         private BarPanel _bar;
+
+        /// <summary>Have the tabs' words been measured yet? They are laid out again every frame until uGUI
+        /// has answered, which it does within the first frame or two.</summary>
+        private bool _tabsMeasured;
+
+        /// <summary>The selection the bar's open tab was last brought into line with, so a tab the player
+        /// opened by hand survives the frames that follow.</summary>
+        private BuildKind? _seenSelected;
         private InfoPanel _info;
         private StockpilePanel _stockpile;
         private ToastPanel _toast;
@@ -503,6 +511,12 @@ namespace Facet.Game
             HudUi.TopLeft(panel.WaveButton.Root, 14f * _scale, 183f * _scale, 250f * _scale, 26f * _scale);
             panel.WaveButton.Root.gameObject.SetActive(false);
 
+            // The run's seed, in the corner the button leaves beside it: on the title's line it pushed the
+            // wave number off the card, and it is not what anyone reads the card for.
+            panel.Seed = Label(root, "seed", 11f, FontStyle.Normal, TextAnchor.LowerRight);
+            HudUi.TopLeft(panel.Seed.Rect, 272f * _scale, 186f * _scale, rect.width - 286f * _scale,
+                20f * _scale);
+
             return panel;
         }
 
@@ -544,17 +558,22 @@ namespace Facet.Game
             HudBox stripe = HudUi.Box(root, "stripe", _palette.HudAccent);
             HudUi.TopLeft(stripe.Rect, 0f, 0f, 3f * _scale, rect.height);
 
-            HudText title = Label(root, "title", 15f, FontStyle.Bold, TextAnchor.UpperLeft);
-            HudUi.TopLeft(title.Rect, 14f * _scale, 10f * _scale, rect.width - 28f * _scale, 22f * _scale);
+            HudText title = Label(root, "title", 17f, FontStyle.Bold, TextAnchor.UpperLeft);
+            HudUi.TopLeft(title.Rect, 14f * _scale, 10f * _scale, rect.width - 28f * _scale, 24f * _scale);
             title.Set("HOW TO PLAY", _palette.HudAccent);
 
-            HudText body = Label(root, "body", 11f, FontStyle.Normal, TextAnchor.UpperLeft, wrap: true);
-            HudUi.TopLeft(body.Rect, 14f * _scale, 38f * _scale, rect.width - 28f * _scale, 110f * _scale);
+            // The card's one job is being read, and eleven design units was a size that had to be leaned
+            // into. The type is the size of the room this card is given (HudLayout.TutorialHeight), so the
+            // two numbers move together and the last line never runs off the bottom.
+            HudText body = Label(root, "body", 13f, FontStyle.Normal, TextAnchor.UpperLeft, wrap: true);
+            HudUi.TopLeft(body.Rect, 14f * _scale, 42f * _scale, rect.width - 28f * _scale, 158f * _scale);
             body.Set(
-                "1. Mine circle ore and carry it back to the Core using conveyor belts.\n" +
-                "2. Ore can only be spent after it reaches the Core.\n" +
-                "3. The cutter cuts across its facing: Q/E turns it - north/south cuts top/bottom halves.\n" +
-                "4. A jammed segment stops its line - right-click that segment to clear it.\n" +
+                "1. Mine circle ore and carry it back to the Core on belts.\n" +
+                "2. Ore is spendable once it reaches the Core.\n" +
+                "3. A cutter forks a belt: what comes in its back runs straight on out its front, and the\n" +
+                "   other half leaves a lane over. Q/E turns the whole fork, blade and all.\n" +
+                "4. A line that goes nowhere backs up and stops its machine: lay one more belt, or put a\n" +
+                "   Sink (X) on the end to eat what nothing wants. A jammed red segment takes a right-click.\n" +
                 "5. Feed a turret (0) the round the demand figure shows - anything else deals a quarter.",
                 _palette.HudText);
 
@@ -651,14 +670,13 @@ namespace Facet.Game
             HudBox stripe = HudUi.Box(root, "stripe", _palette.HudAccent);
             HudUi.TopLeft(stripe.Rect, 0f, 0f, rect.width, 3f * _scale);
 
-            HudText header = Label(root, "header", 11f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(header.Rect, 12f * _scale, 9f * _scale, rect.width - 24f * _scale, 15f * _scale);
-            header.Set("BUILD", _palette.HudAccent);
-
+            // The hint, right-aligned along the tab row. There is no "BUILD" label any more: the tabs are
+            // what the panel is called, and a word naming the panel beside seven words naming its contents
+            // is the one line the two-level bar does not need.
             HudText hint = Label(root, "hint", 11f, FontStyle.Normal, TextAnchor.UpperRight);
-            HudUi.TopLeft(hint.Rect, 12f * _scale, 9f * _scale, rect.width - 24f * _scale, 15f * _scale);
+            HudUi.TopLeft(hint.Rect, 12f * _scale, 8f * _scale, rect.width - 24f * _scale, 15f * _scale);
             hint.Set("click a tile or press " + BuildInput.KeyRangeText() +
-                "   ·   again to drop it   ·   drag to lay a run   ·   RMB deletes, or clears a jam   ·   Esc reads",
+                "   ·   again drops it   ·   drag lays a run",
                 _palette.HudText);
 
             BuildKind[] kinds = _world.Content.BuildKinds;
@@ -668,6 +686,10 @@ namespace Facet.Game
             float tileWidth = (rect.width - 2f * pad - (count - 1) * gap) / count;
             float tileHeight = rect.height - 39f * _scale;
             panel.TileWidth = tileWidth;
+            panel.TileHeight = tileHeight;
+            panel.Pad = pad;
+            panel.Gap = gap;
+            panel.TilesTop = 29f * _scale;
 
             for (int i = 0; i < count; i++)
             {
@@ -732,7 +754,40 @@ namespace Facet.Game
                 panel.Tiles.Add(tile);
             }
 
+            BuildRoleTabs(panel, root, kinds);
+
+            // The first tab is open before the first frame: a bar that opened empty would read as a bar with
+            // nothing in it, one frame before the player's first glance.
+            panel.OpenRole = panel.Tabs.Count > 0 ? panel.Tabs[0].Role : (MachineRole?)null;
+            LayoutBarTiles(panel);
+
             return panel;
+        }
+
+        /// <summary>
+        /// The bar's first level: one tab per role this run's table actually carries, in the order each
+        /// role's first building appears in it. A reading of the content rather than a second table to keep
+        /// in step with the first - a new building lands in its role's tab by saying what role it has, and a
+        /// narrower table simply has fewer tabs.
+        ///
+        /// Locked buildings stay inside their tab: the ladder is worth seeing, and the tile says LOCKED
+        /// itself, so a tab that vanished until map 3 would hide the campaign's whole progression.
+        /// </summary>
+        private void BuildRoleTabs(BarPanel panel, RectTransform root, BuildKind[] kinds)
+        {
+            for (int i = 0; i < kinds.Length; i++)
+            {
+                MachineRole role = MachineReading.Role(_world.Content.Machine(kinds[i]));
+                if (panel.HasTab(role)) continue;
+
+                var tab = new RoleTab { Role = role };
+                MachineRole captured = role;
+                tab.Button = HudUi.Button(root, "tab" + panel.Tabs.Count, 0f, 0f,
+                    MachineReading.RoleLabel(role), FontSize(11f), _palette.HudText,
+                    () => OpenRoleTab(captured));
+                DressRoleTab(tab);
+                panel.Tabs.Add(tab);
+            }
         }
 
         private InfoPanel BuildInfo()
@@ -1199,15 +1254,17 @@ namespace Facet.Game
             _world.Machines.CountTurrets(out int total, out int armed);
             bool starved = armed < total;
             int jams = _world.Belts.JamCount;
+            int blocked = _world.Belts.BlockedCount;
             bool hurting = _world.Core.HealthFraction <= 0.4f;
             ThreatRadar.Summary outOfView = ReadOutOfView();
             bool coreHit = ThreatRadar.CoreIsBeingHit(_world, _palette.Radar.DangerTicks);
 
             _status.Stripe.Set(
-                jams > 0 || starved || hurting || coreHit || outOfView.Urgent
+                jams > 0 || blocked > 0 || starved || hurting || coreHit || outOfView.Urgent
                     ? _palette.HudWarn : _palette.HudAccent);
 
             _status.Title.Set(TitleLine(), _palette.HudAccent);
+            _status.Seed.Set(SeedLine(), Blend(_palette.HudText, _palette.HudPanel, 0.45f));
 
             // The clock as a length above the clock as a number: the bar is what a player reads without
             // taking their eyes off the map, and the line underneath says what the wait is for.
@@ -1217,10 +1274,10 @@ namespace Facet.Game
             _status.News.Set(WaveNews(), _palette.HudText);
             UpdateComposition();
 
-            string production = ProductionLine(jams, starved, total);
+            string production = ProductionLine(jams, blocked, starved, total);
             bool productionNews = production != null;
             _status.Production.Show(productionNews);
-            if (productionNews) _status.Production.Set(production, ProductionColour(jams, starved));
+            if (productionNews) _status.Production.Set(production, ProductionColour(jams, blocked, starved));
 
             string threat = ThreatWarning(in outOfView);
             bool threatNews = threat != null;
@@ -1234,19 +1291,34 @@ namespace Facet.Game
                 _status.WaveButton.Label.Set(">  start wave " + _world.Waves.NextWave + " now");
         }
 
-        /// <summary>The production line, said only when something is wrong: a jam first - it stops the run,
-        /// not just one machine - then a gun that cannot shoot, then, once a wave is walking in, the absence
-        /// of anything to shoot it with. When the defence is fed and the belts are clear the line stays
-        /// silent: "all clear" printed every second is a line nobody reads. Null means no news, and the line
-        /// is hidden.</summary>
-        private string ProductionLine(int jams, bool starved, int total)
+        /// <summary>
+        /// The production line, said only when something is wrong: a segment that cannot pass its item on
+        /// first - it stops the run, not just one machine - then a gun that cannot shoot, then, once a wave
+        /// is walking in, the absence of anything to shoot it with. When the defence is fed and the belts
+        /// are clear the line stays silent: "all clear" printed every second is a line nobody reads. Null
+        /// means no news, and the line is hidden.
+        ///
+        /// Jammed and blocked are two words for one symptom, and both are counted here because they are the
+        /// two ways a line stops: a jam is an item a machine refused, a block is an item with nowhere to go
+        /// at all. The block is the one that used to be silent - a line ending in the air reddened nothing,
+        /// so a factory came to a standstill with nothing on the HUD to say why.
+        /// </summary>
+        private string ProductionLine(int jams, int blocked, bool starved, int total)
         {
+            if (jams > 0 && blocked > 0)
+                return jams + " jammed, " + blocked + " blocked   ·   right-click to clear";
+
             if (jams > 0)
                 return jams + " jammed segment" + (jams == 1 ? "" : "s") + "   ·   right-click one to clear it";
+
+            if (blocked > 0)
+                return blocked + " blocked - a line ends in the air   ·   right-click to clear";
+
             if (starved)
                 // The chamber is universal, so a starved gun is not missing the right shape - it is missing
-                // every shape. The words are MachineReading's live note, said here about the fleet.
-                return "a starved gun - nothing waiting on its lines   ·   its round goes grey";
+                // every shape. The words are MachineReading's live note, said here about the fleet: an empty
+                // chamber is a gun with nothing in hand, which is also why its badge is blank.
+                return "a starved gun - an empty chamber, nothing waiting on its lines";
 
             WaveDirector waves = _world.Waves;
             if (total == 0 && (waves.Phase == WavePhase.Running ||
@@ -1256,8 +1328,8 @@ namespace Facet.Game
             return null;
         }
 
-        private Color ProductionColour(int jams, bool starved)
-            => jams > 0 || starved ? _palette.HudWarn : _palette.HudText;
+        private Color ProductionColour(int jams, int blocked, bool starved)
+            => jams > 0 || blocked > 0 || starved ? _palette.HudWarn : _palette.HudText;
 
         /// <summary>What is out of view, said in the register the arrows cannot: how many, how far, and
         /// whether it is hitting anything. The arrows are drawn from the same <see cref="ThreatRadar.Summary"/>,
@@ -1558,8 +1630,10 @@ namespace Facet.Game
         }
 
         /// <summary>
-        /// The card's title: the run's identity - the map in the campaign, and the seed the wave generator
-        /// drew from, so a run is reproducible from the number on the screen - plus where the clock is.
+        /// The card's title: the run's identity - the map in the campaign and where the clock is. The seed
+        /// the wave generator drew from is the card's footer (<see cref="SeedLine"/>): it belongs with the
+        /// run, but it is twelve digits nobody reads twice, and on the title's line it pushed the wave the
+        /// player is actually waiting for off the end of the card.
         ///
         /// The total is <see cref="WaveDirector.TotalWaves"/>, and an endless run has none: it prints the
         /// wave number alone rather than "wave 7 of 0", and no line here ever claims a final wave, because
@@ -1576,7 +1650,7 @@ namespace Facet.Game
             // a run with no total to print is otherwise indistinguishable from a scripted one.
             string endless = _world.Waves.Endless ? "  ·  endless" : string.Empty;
 
-            string head = "FACET  ·  " + at + map + endless + "  ·  seed " + _world.Waves.Seed;
+            string head = "FACET  ·  " + at + map + endless;
 
             switch (_world.Status)
             {
@@ -1609,6 +1683,10 @@ namespace Facet.Game
         /// counts toward no final wave, so a total would be a number it cannot reach.</summary>
         private static string OfTotal(WaveDirector waves)
             => waves.TotalWaves > 0 ? " of " + waves.TotalWaves : string.Empty;
+
+        /// <summary>The card's footer: the seed a run is reproducible from, in the corner the start-wave
+        /// button leaves empty. Dim and out of the way - the one number on this card nobody plays against.</summary>
+        private string SeedLine() => "seed " + _world.Waves.Seed;
 
         /// <summary>What the wave clock is doing, in the sentence the bar above it is the length of.</summary>
         private string WaveNews()
@@ -1692,7 +1770,7 @@ namespace Facet.Game
             yield return BuildInput.KeyRangeText() + " or click builds";
             yield return "the same one again drops it";
             yield return "Q / E turn  ·  drag lays belts";
-            yield return "a cutter cuts across its facing";
+            yield return "a cutter forks a belt: Q/E turns it";
             yield return "RMB deletes, or clears a jam";
             yield return "Esc reads  ·  C goes to the Core";
             yield return "N the wave  ·  Space  ·  R restart";
@@ -1702,14 +1780,40 @@ namespace Facet.Game
 
         private void UpdateBuildBar()
         {
-            _hoveredTile = -1;
+            if (!_tabsMeasured) LayoutRoleTabs();
 
             BuildKind? selected = _world.SelectedKind;
+
+            // The hotkeys are global - a digit picks its building wherever it is filed - so a selection made
+            // from the keyboard opens whichever tab that building lives in, and the bar follows the keys
+            // rather than hiding what they just picked. Only a *change* of selection moves the bar: browsing
+            // to another tab while a belt is in hand must not be undone the next frame.
+            if (selected.HasValue && selected != _seenSelected)
+                OpenRoleTab(MachineReading.Role(_world.Content.Machine(selected.Value)));
+            _seenSelected = selected;
+
+            for (int i = 0; i < _bar.Tabs.Count; i++)
+            {
+                RoleTab tab = _bar.Tabs[i];
+                bool open = _bar.OpenRole.HasValue && _bar.OpenRole.Value == tab.Role;
+                bool hovered = tab.Button.Hovered;
+                if (tab.Open == open && tab.Hovered == hovered) continue;
+
+                tab.Open = open;
+                tab.Hovered = hovered;
+                DressRoleTab(tab);
+            }
+
+            _hoveredTile = -1;
 
             for (int i = 0; i < _bar.Tiles.Count; i++)
             {
                 BuildTile tile = _bar.Tiles[i];
-                bool hovered = tile.Button.Hovered;
+
+                // A closed tile's button is inactive, so the pointer cannot leave it: its hover flag is frozen
+                // at whatever it was when the tab closed. Asking the object rather than the flag is what keeps
+                // the info card from describing a building that is off the bar.
+                bool hovered = tile.Root.gameObject.activeSelf && tile.Button.Hovered;
                 if (hovered) _hoveredTile = i;
 
                 bool selectedTile = tile.Kind == selected;
@@ -1819,6 +1923,102 @@ namespace Facet.Game
             if (_world == null || !_world.IsUnlocked(kind)) return;
 
             _selectKind?.Invoke(kind);
+        }
+
+        // ------------------------------------------------------------------ the bar's two levels
+
+        /// <summary>Open a role's tab. Browsing is not selecting: the tab decides what the bar shows and
+        /// nothing else, so a player can look at what map 3 will hand them without dropping the belt in
+        /// hand - and the selection, when it changes, opens its own tab in
+        /// <see cref="UpdateBuildBar"/>.</summary>
+        private void OpenRoleTab(MachineRole role)
+        {
+            if (_bar.OpenRole.HasValue && _bar.OpenRole.Value == role) return;
+
+            _bar.OpenRole = role;
+            LayoutBarTiles(_bar);
+        }
+
+        /// <summary>
+        /// Show the open role's buildings and slide them up to the left edge, in the table's own order; the
+        /// rest go away. A hidden tile is not merely invisible - its button stops taking clicks and its
+        /// tooltip stops firing - which is what "the bar is showing this role" has to mean for the one panel
+        /// that answers the pointer.
+        ///
+        /// Tile sizes are set once, when the bar is built, from the whole table's count. A tile that grew and
+        /// shrank as the player browsed would move its own cost, name and afford line under the pointer that
+        /// was about to click it. The cost icon is placed from the tile's width and so survives a move.
+        /// </summary>
+        private void LayoutBarTiles(BarPanel panel)
+        {
+            float x = panel.Pad;
+
+            for (int i = 0; i < panel.Tiles.Count; i++)
+            {
+                BuildTile tile = panel.Tiles[i];
+                bool open = !panel.OpenRole.HasValue
+                    || MachineReading.Role(_world.Content.Machine(tile.Kind)) == panel.OpenRole.Value;
+
+                if (tile.Root.gameObject.activeSelf != open) tile.Root.gameObject.SetActive(open);
+                if (!open) continue;
+
+                HudUi.TopLeft(tile.Root, x, panel.TilesTop, panel.TileWidth, panel.TileHeight);
+                x += panel.TileWidth + panel.Gap;
+            }
+
+            // The pointer may well be standing on the tile that just left; a hover flag nobody can clear
+            // would keep the info card describing a building that is no longer on the bar.
+            _hoveredTile = -1;
+        }
+
+        /// <summary>
+        /// Lay the tabs out along the header row, each as wide as its own word plus padding. Measured rather
+        /// than guessed: the words are the roles' own labels, and a tab one character too narrow is a clipped
+        /// PROCESSING. uGUI measures text on its own schedule, so this runs again until every width has
+        /// arrived.
+        /// </summary>
+        private void LayoutRoleTabs()
+        {
+            float x = _bar.Pad;
+            float y = 5f * _scale;
+            float height = 22f * _scale;
+            bool measured = true;
+
+            for (int i = 0; i < _bar.Tabs.Count; i++)
+            {
+                RoleTab tab = _bar.Tabs[i];
+                float width = tab.Button.Label.PreferredWidth + 18f * _scale;
+                if (tab.Button.Label.PreferredWidth <= 0f) measured = false;
+
+                HudUi.TopLeft(tab.Button.Root, x, y, width, height);
+                x += width + _bar.Gap;
+            }
+
+            _tabsMeasured = measured;
+        }
+
+        /// <summary>
+        /// A tab's three states: the open one wears its role's colour, the one under the pointer lifts out of
+        /// the panel, and the rest sit flat and grey. The word on it is the role's own label - the same word
+        /// the tiles underneath print - so the bar's two levels are one taxonomy read twice, and a building
+        /// is filed where its own tile says it is.
+        /// </summary>
+        private void DressRoleTab(RoleTab tab)
+        {
+            Color category = CategoryColour(tab.Role);
+
+            tab.Button.Fill.Set(tab.Open
+                ? Blend(_palette.HudPanel, category, 0.22f)
+                : tab.Hovered
+                    ? Blend(_palette.HudPanel, _palette.HudText, 0.10f)
+                    : Blend(_palette.HudPanel, _palette.Outline, 0.30f));
+
+            tab.Button.Label.SetColour(tab.Open
+                ? _palette.HudText
+                : Blend(category, _palette.HudText, 0.4f));
+
+            tab.Button.Border.Set(tab.Open ? category : Blend(category, _palette.HudPanel, 0.55f),
+                tab.Open ? 2f * _scale : 1f * _scale);
         }
 
         /// <summary>The cost's shape, once the cost's own width is known: the picture just outside the
@@ -2789,6 +2989,9 @@ namespace Facet.Game
                 case MachineRole.Routing: return _palette.HudAccent;
                 case MachineRole.Transport: return _palette.MachineIdle;   // belts and pipes
                 case MachineRole.Wall: return _palette.MachineIdle;
+                // The drain wears the same quiet grey as the plumbing: it is a hole in the ground, not a
+                // machine with a state worth watching, and the one thing it must not look like is a warning.
+                case MachineRole.Waste: return _palette.MachineIdle;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(role), role,
                         "a new role needs a colour in the build bar");
@@ -2860,6 +3063,7 @@ namespace Facet.Game
             public HudText Production;
             public HudText Threat;
             public HudButton WaveButton;
+            public HudText Seed;
         }
 
         private sealed class ControlsPanel
@@ -2941,7 +3145,39 @@ namespace Facet.Game
         {
             public RectTransform Root;
             public readonly List<BuildTile> Tiles = new List<BuildTile>();
+
+            /// <summary>The bar's first level: one tab per role this table carries, in table order.</summary>
+            public readonly List<RoleTab> Tabs = new List<RoleTab>();
+
+            /// <summary>The role whose buildings the second level is showing, or null for "all of them" -
+            /// which only a table with no roles at all can be.</summary>
+            public MachineRole? OpenRole;
+
             public float TileWidth;
+            public float TileHeight;
+            public float Pad;
+            public float Gap;
+
+            /// <summary>Where the top of the tile row sits, under the tab row.</summary>
+            public float TilesTop;
+
+            public bool HasTab(MachineRole role)
+            {
+                for (int i = 0; i < Tabs.Count; i++)
+                    if (Tabs[i].Role == role) return true;
+
+                return false;
+            }
+        }
+
+        /// <summary>One tab: the role it opens, the button that opens it, and the two states its dressing
+        /// is written from - so a tab is only re-dressed when one of them changes.</summary>
+        private sealed class RoleTab
+        {
+            public MachineRole Role;
+            public HudButton Button;
+            public bool Open;
+            public bool Hovered;
         }
 
         private sealed class BuildTile

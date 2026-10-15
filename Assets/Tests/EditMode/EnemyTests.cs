@@ -102,7 +102,7 @@ namespace Facet.Tests
             SimWorld world = Sim.Rig();                            // a map with a door on it
             Int2 door = world.Map.SpawnPoints[0];
 
-            Assert.IsFalse(world.CanPlace(BuildKind.Wall, door), "the door stays open");
+            Assert.IsFalse(world.CanPlace(BuildKind.Wall, door, Dir.East), "the door stays open");
 
             // A click, not a direct TryPlace: the refusal is what the player is owed, and only the
             // gesture reports it (the click that built nothing has to say why).

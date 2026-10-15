@@ -14,14 +14,26 @@ namespace Facet.Core
         /// cell holds no machine.</summary>
         public TileKind Kind;
 
+        /// <summary>
+        /// Where this machine's state lives: the cell itself for a machine on one tile and for the
+        /// <em>primary</em> tile of a machine on two, and the primary's cell for the other tile of one.
+        ///
+        /// A cutter's two tiles both hold a state - both are solid ground, both can be read and either can be
+        /// taken away - but only the primary is in the tick's registry, so the machine is stepped once and
+        /// counted once. Every reader therefore resolves through this before touching anything else, and the
+        /// second tile's own copy is a marker that never goes stale because nothing reads past it.
+        /// </summary>
+        public Int2 Home;
+
         /// <summary>Which building this is. Turrets read their whole spec - rate, damage, range - back out
         /// of it, so one field covers the kind and its numbers.</summary>
         public BuildKind Build;
 
-        /// <summary>Drill: the cell it pushes onto. Cutter: the cut line, and which piece leaves by which
-        /// outlet. Rotator: the side it turns out of. Pipe: the direction it carries across. Splitter:
-        /// unused - its ports are read off the belts around it. Sorter: which side the filtered shape
-        /// leaves by. Turret: where its barrel rests when it has no target.</summary>
+        /// <summary>Drill: the cell it pushes onto. Cutter: the way the belt runs through it, which picks
+        /// the cut line and which of its two tiles each piece leaves by. Rotator: the side it turns out of.
+        /// Pipe: the direction it carries across. Splitter: unused - its ports are read off the belts around
+        /// it. Sorter: which side the filtered shape leaves by. Turret: where its barrel rests when it has no
+        /// target.</summary>
         public Dir Direction;
 
         /// <summary>Seconds until this machine may act again. Pipe: the remaining transit time of the
@@ -31,8 +43,9 @@ namespace Facet.Core
 
         /// <summary>What the machine is holding: a cutter's item being split, a rotator's item being
         /// turned, a stacker's first piece, a pipe's item in transit, a splitter's buffered item, a
-        /// turret's last round fired - a display value, held because the chamber keeps nothing between
-        /// shots and the badge and the card are how the player reads their line - or nothing.</summary>
+        /// turret's <em>chambered</em> round - the one round it is loaded with and will fire next, held from
+        /// the moment a belt delivered it until the shot leaves, so that the badge and the card can always
+        /// say what the line is feeding the gun - or nothing.</summary>
         public Shape Carried;
 
         /// <summary>Stacker: the second held piece, once the first is in <see cref="Carried"/>. The fuse
@@ -81,13 +94,19 @@ namespace Facet.Core
         /// <summary>Turret: an enemy is in range this tick.</summary>
         public bool HasTarget;
 
-        /// <summary>Turret: a round is waiting on one of its input belts, so it can fire the moment there
-        /// is something to shoot. False is the "starved" state the HUD warns about.</summary>
+        /// <summary>Turret: there is a round in the chamber, so it can fire the moment there is something to
+        /// shoot. Derived from <see cref="Carried"/> by the behaviour rather than tracked on its own - the flag
+        /// the HUD warns on and the badge on screen are one fact. False is the "starved" state.</summary>
         public bool Armed;
 
         /// <summary>Health enemies have left to chew through. Initialized on placement from the
         /// building's <see cref="MachineDef.MaxHp"/>; MaxHp 0 leaves this at 0 and is never targeted.</summary>
         public float Hp;
+
+        /// <summary>Sink: how many items it has destroyed since it was placed - the one number that says a
+        /// drain is doing its job, since a sink that works looks exactly like a sink that is fed nothing.
+        /// Nothing reads it back: the card prints it and a test may count it.</summary>
+        public int Swallowed;
     }
 
     /// <summary>One machine, flattened for the view layer.</summary>
@@ -134,9 +153,9 @@ namespace Facet.Core
         public float Work;
 
         /// <summary>Sides a belt feeds this machine from, and sides it pushes onto - the same sets the
-        /// tick acts on, computed once in Core by <see cref="MachineDelivery.PortMasks"/>. The view draws
-        /// its stubs and its neighbours' docking lanes from these instead of re-deriving the rule, so the
-        /// picture cannot drift from the simulation.</summary>
+        /// tick acts on, computed once in Core by <see cref="MachineDelivery.PortMasks"/> and gathered over
+        /// every tile the machine stands on. The view draws its stubs and its neighbours' docking lanes from
+        /// these instead of re-deriving the rule, so the picture cannot drift from the simulation.</summary>
         public DirMask InMask;
         public DirMask OutMask;
     }
@@ -194,15 +213,28 @@ namespace Facet.Core
 
         public bool Has(Int2 cell) => _grid.InBounds(cell) && _state[_grid.Index(cell)].Kind.IsMachine();
 
+        /// <summary>True for a machine, on either of its tiles, and the cell its state lives on. The one
+        /// place the two-tile resolution happens: every reader below goes through it, so a caller that was
+        /// handed the second tile of a cutter reads the cutter rather than a marker.</summary>
+        private bool TryHome(Int2 cell, out Int2 home)
+        {
+            home = cell;
+            if (!Has(cell)) return false;
+
+            Int2 stored = _state[_grid.Index(cell)].Home;
+            if (stored != cell && Has(stored)) home = stored;
+            return true;
+        }
+
         public bool TryGet(Int2 cell, out MachineState state)
         {
-            if (!Has(cell))
+            if (!TryHome(cell, out Int2 home))
             {
                 state = default;
                 return false;
             }
 
-            state = _state[_grid.Index(cell)];
+            state = _state[_grid.Index(home)];
             return true;
         }
 
@@ -220,16 +252,39 @@ namespace Facet.Core
         }
 
         /// <summary>Mutable ref for the machine behaviours, which update cooldowns, cargo and aim
-        /// in place.</summary>
-        public ref MachineState RefAt(Int2 cell) => ref _state[_grid.Index(cell)];
+        /// in place. Resolves a machine's second tile to the tile its state lives on, so a ref taken for
+        /// either tile of a cutter is the cutter.</summary>
+        public ref MachineState RefAt(Int2 cell)
+        {
+            int i = _grid.Index(cell);
+            if (_state[i].Kind.IsMachine())
+            {
+                Int2 stored = _state[i].Home;
+                if (stored != cell && Has(stored)) i = _grid.Index(stored);
+            }
+
+            return ref _state[i];
+        }
 
         /// <summary>May a machine of this kind stand here? A drill only on a vein and every other machine
         /// only on plain ground - a belt is occupied, so it comes out first, the whole cost of a belt
         /// crossing a vein - and no machine on a wave's doorway, the one place it would seal a wave in. A
         /// belt stays legal there because only something solid would plug a door. The ground half of the
         /// rule is <see cref="TerrainField.CanPlaceMachine"/>, which is also where rock, water and the void
-        /// refuse every machine at once.</summary>
-        public bool CanPlace(BuildKind build, Int2 cell)
+        /// refuse every machine at once.
+        ///
+        /// <paramref name="facing"/> is what a two-tile machine needs to answer: a cutter's second tile is
+        /// one lane over from the first, so turning the ghost is turning the footprint, and the answer is
+        /// only yes when both tiles are legal.</summary>
+        public bool CanPlace(BuildKind build, Int2 cell, Dir facing)
+        {
+            if (!CanPlaceOne(build, cell)) return false;
+
+            BehaviorKind behavior = _content.Machine(build).Behavior;
+            return !MachineFootprint.TrySecond(behavior, cell, facing, out Int2 second) || CanPlaceOne(build, second);
+        }
+
+        private bool CanPlaceOne(BuildKind build, Int2 cell)
         {
             if (!_grid.InBounds(cell)) return false;
 
@@ -243,7 +298,7 @@ namespace Facet.Core
 
         public bool TryPlace(Int2 cell, BuildKind build, Dir direction)
         {
-            if (!CanPlace(build, cell)) return false;
+            if (!CanPlace(build, cell, direction)) return false;
 
             MachineDef def = _content.Machine(build);
             int i = _grid.Index(cell);
@@ -254,6 +309,7 @@ namespace Facet.Core
                 Aim = direction.ToVec(),
                 Build = build,
                 Hp = def.MaxHp,
+                Home = cell,
 
                 // The row's filter is the machine's starting configuration, not its definition: the player
                 // may re-route a standing sorter without rebuilding it.
@@ -261,20 +317,55 @@ namespace Facet.Core
             };
             _grid.Set(cell, def.Tile);
             AddOccupied(i);
+
+            // The second tile of a two-tile machine: marked in the ground so nothing is built over it and so
+            // a walker treats it as solid, marked in the state so it reads as the machine, and deliberately
+            // kept out of the registry - the machine is stepped once, from the tile its state lives on.
+            if (MachineFootprint.TrySecond(def.Behavior, cell, direction, out Int2 second))
+            {
+                _state[_grid.Index(second)] = new MachineState
+                {
+                    Kind = def.Tile,
+                    Direction = direction,
+                    Aim = direction.ToVec(),
+                    Build = build,
+                    Hp = def.MaxHp,
+                    Home = cell,
+                };
+                _grid.Set(second, def.Tile);
+            }
+
             Revision++;
             return true;
         }
 
-        /// <summary>Remove a machine and put the tile back to its ground.</summary>
+        /// <summary>Remove a machine and put the tile back to its ground. Either of a two-tile machine's
+        /// tiles will do: the machine is one thing standing on two tiles, and taking one away takes it.</summary>
         public bool TryRemove(Int2 cell)
         {
-            if (!Has(cell)) return false;
+            if (!TryHome(cell, out Int2 home) || !Clear(home)) return false;
 
-            int i = _grid.Index(cell);
+            Revision++;
+            return true;
+        }
+
+        /// <summary>Empty the tiles a machine stands on, and the registry entry that steps it. The machine's
+        /// own tile first, so the registry, the ground and the state are consistent even if the second tile
+        /// has been scribbled over by something else.</summary>
+        private bool Clear(Int2 home)
+        {
+            int i = _grid.Index(home);
+            BehaviorKind behavior = _content.Machine(_state[i].Build).Behavior;
+            Dir facing = _state[i].Direction;
+
             _state[i] = default;
             RemoveOccupied(i);
-            _terrain.Release(cell);
-            Revision++;
+            _terrain.Release(home);
+
+            if (!MachineFootprint.TrySecond(behavior, home, facing, out Int2 second)) return true;
+
+            _state[_grid.Index(second)] = default;
+            _terrain.Release(second);
             return true;
         }
 
@@ -283,23 +374,23 @@ namespace Facet.Core
         /// <see cref="SimEventKind.BuildingDestroyed"/> - then removes the machine as <see cref="TryRemove"/>
         /// does (terrain restored, carried item lost) but with no refund. False when nothing attackable is
         /// there (no machine, or MaxHp 0 - indestructible, see <see cref="MachineDef.MaxHp"/>). Returns true
-        /// iff the building died.</summary>
+        /// iff the building died. Either tile of a two-tile machine will do, and the damage lands on the one
+        /// the machine keeps its health on, so a bite out of the lane and a bite out of the blade are bites
+        /// out of the same machine.</summary>
         public bool DamageAt(Int2 cell, float damage)
         {
-            if (!Has(cell)) return false;
+            if (!TryHome(cell, out Int2 home)) return false;
 
-            int i = _grid.Index(cell);
+            int i = _grid.Index(home);
             ref MachineState m = ref _state[i];
             if (_content.Machine(m.Build).MaxHp <= 0f) return false;
 
             m.Hp -= damage;
-            _events.BuildingDamaged(cell, m.Build, damage);
+            _events.BuildingDamaged(home, m.Build, damage);
             if (m.Hp > 0f) return false;
 
-            _events.BuildingDestroyed(cell, m.Build);
-            _state[i] = default;
-            RemoveOccupied(i);
-            _terrain.Release(cell);
+            _events.BuildingDestroyed(home, m.Build);
+            Clear(home);
             Revision++;
             return true;
         }
@@ -392,8 +483,20 @@ namespace Facet.Core
 
         private MachineSnapshot SnapshotOf(in MachineState m, Int2 cell)
         {
-            MachineDelivery.PortMasks(_belts, _content, cell, in m, out DirMask inMask, out DirMask outMask);
             MachineDef def = _content.Machine(m.Build);
+            MachineDelivery.PortMasks(_belts, _content, cell, in m, out DirMask inMask, out DirMask outMask);
+
+            // A machine that stands on two tiles has ports on both of them, and the snapshot is of the
+            // machine: the masks are the union of its tiles', so the info card reads a cutter's own outlets
+            // rather than the blade tile's half of them. The view that draws them per side asks
+            // <see cref="PortMasksAt"/> instead, which answers for one tile.
+            if (MachineFootprint.TrySecond(def.Behavior, cell, m.Direction, out Int2 second))
+            {
+                MachineDelivery.PortMasks(_belts, _content, second, in m, out DirMask inSecond,
+                    out DirMask outSecond);
+                inMask = inMask.With(inSecond);
+                outMask = outMask.With(outSecond);
+            }
 
             return new MachineSnapshot
             {
@@ -414,6 +517,24 @@ namespace Facet.Core
                 InMask = inMask,
                 OutMask = outMask,
             };
+        }
+
+        /// <summary>
+        /// The ports on the sides of <em>one tile</em> of the machine standing there, in and out. The
+        /// snapshot's masks are the machine's (see <see cref="SnapshotOf"/>); this is the one-tile answer,
+        /// for a reader that has to know which side of which tile a belt docks with - a belt drawing the
+        /// lane it feeds, or a two-tile body drawing a stub on each of its own fronts.
+        /// </summary>
+        public void PortMasksAt(Int2 cell, out DirMask inMask, out DirMask outMask)
+        {
+            if (!TryGet(cell, out MachineState m))
+            {
+                inMask = DirMask.None;
+                outMask = DirMask.None;
+                return;
+            }
+
+            MachineDelivery.PortMasks(_belts, _content, cell, in m, out inMask, out outMask);
         }
 
         /// <summary>Insert an occupied cell, keeping the list sorted. Occupancy is monotone per cell, so a

@@ -63,8 +63,8 @@ namespace Facet.Core
 
         // 13 was Assembler. Retired: combining is the stacker's job now.
 
-        /// <summary>Splits an item along the line its facing selects, one piece out each of two outlets.
-        /// The number is past every retired one, so nothing authored moved.</summary>
+        /// <summary>Splits an item along the line its facing selects, one piece out of the front of each of
+        /// the two tiles it stands on. The number is past every retired one, so nothing authored moved.</summary>
         Cutter = 14,
 
         /// <summary>Turns an item a quarter clockwise, out the side it faces.</summary>
@@ -72,6 +72,11 @@ namespace Facet.Core
 
         /// <summary>Unions two disjoint items into one, out through any wired outlet.</summary>
         Stacker = 16,
+
+        /// <summary>Eats anything delivered into it and destroys it: one tile, no outlet, and no state
+        /// that can hold, so a sink is never the reason a line stops. The number is past every retired one,
+        /// so nothing authored moved.</summary>
+        Sink = 17,
     }
 
     public static class TileKindExtensions
@@ -94,5 +99,19 @@ namespace Facet.Core
         /// - "the belt docked with something, rather than pointing at bare ground".
         /// </summary>
         public static bool Eats(this TileKind kind) => kind.IsBuilding();
+
+        /// <summary>
+        /// True for the tiles that will actually <em>take</em> an item off a belt pointing at them: a belt
+        /// hands it on, a machine with a behaviour eats it (every shipped machine's diet is "any shape"),
+        /// and the Core banks or destroys it.
+        ///
+        /// A wall is the one solid that takes nothing. It is a building, so a belt docks with it and
+        /// <see cref="Eats"/> says yes - which is the right answer to "did I hit something" and the wrong
+        /// answer to "is this item ever going anywhere", because a wall has no behaviour, no intake and an
+        /// empty diet. That difference is what the belt layer's dead-end marker and the belt view's short
+        /// dangling exit lane are drawn from; an item parked against a wall waits forever, and the player
+        /// has to be told so rather than left watching a line that looks docked.
+        /// </summary>
+        public static bool Takes(this TileKind kind) => kind.IsBuilding() && kind != TileKind.Wall;
     }
 }

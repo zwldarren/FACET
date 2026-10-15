@@ -56,7 +56,7 @@ namespace Facet.Tests
             Sim.Tick(fed, 30 * 5);
 
             Assert.AreEqual(0, fed.Belts.JamCount, "a circle is in the diet, so nothing jams");
-            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(fed, new Int2(5, 10)),
+            Assert.AreEqual(Sim.LeftHalfCircle, Sim.ShapeAt(fed, new Int2(5, 10)),
                 "and the machine did the work it was bought for");
         }
 
@@ -91,13 +91,13 @@ namespace Facet.Tests
             var input = new Int2(4, 9);
             Sim.LayRun(world, input, Dir.East, 1);
             Sim.Place(world, BuildKind.Cutter, new Int2(5, 9), Dir.North);
-            Sim.LayRun(world, new Int2(5, 10), Dir.North, 1);   // the top piece's outlet
+            Sim.LayRun(world, new Int2(5, 10), Dir.North, 1);   // the left piece's own front
 
             Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Square));
             Sim.Tick(world, 30 * 4);
 
-            Assert.AreEqual(Sim.TopHalfSquare, Sim.ShapeAt(world, new Int2(5, 10)),
-                "a square in, a half-square out - no recipe chose that, the cut line did");
+            Assert.AreEqual(Sim.LeftHalfSquare, Sim.ShapeAt(world, new Int2(5, 10)),
+                "a square in, a half-square out - no recipe chose that, the cut did");
             Assert.AreEqual(0, world.Belts.JamCount, "and nothing about it was a wrong-shape delivery");
         }
 

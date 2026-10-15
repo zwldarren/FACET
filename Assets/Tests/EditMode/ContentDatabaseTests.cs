@@ -210,7 +210,8 @@ namespace Facet.Tests
             Assert.AreEqual(2.5f, runner.DetectionRange, Sim.Tol, "and the range it charges from");
 
             EnemyDef tank = Content.Enemy(EnemyKind.Tank);
-            Assert.AreEqual(runner.Hp, tank.Hp, Sim.Tol, "the deep demand's archetype is the same health");
+            Assert.Greater(tank.Hp, runner.Hp, "the deep demand's archetype is the tankier one - three " +
+                "matched shots to the Runner's two, which is what its budget cost claims");
             Assert.Less(tank.Speed, runner.Speed, "but it walks slower");
             Assert.Greater(tank.Damage, runner.Damage, "and hits the Core harder");
             Assert.Greater(tank.DetectionRange, runner.DetectionRange,

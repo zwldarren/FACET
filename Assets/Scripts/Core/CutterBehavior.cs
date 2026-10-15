@@ -2,11 +2,17 @@ namespace Facet.Core
 {
     /// <summary>
     /// The first operator, and the one the campaign teaches first. It eats any shape, waits out its
-    /// interval (1.5 s), and emits <em>both</em> pieces of the cut at once: the piece on the side the
-    /// machine faces leaves by the facing outlet, the other by the outlet opposite it. Which line the cut
-    /// runs along is the facing's own business - north and south cut across, east and west cut down the
-    /// middle - so a 180-degree turn changes which outlet each piece uses and not which two pieces come
-    /// out, exactly as turning a knife half a turn does not change the cut.
+    /// interval (1.5 s), and emits <em>both</em> pieces of the cut at once - out of the front of the two
+    /// tiles it stands on (see <see cref="MachineFootprint"/>): the piece on the machine's left runs
+    /// straight on through the tile the belt fed, and the piece on its right leaves one lane over.
+    ///
+    /// <b>A fork, not a turn.</b> The belt feeds the cutter's back, a belt on each front carries a piece
+    /// away, and the two of them head off the way the line was already going. That is the whole reason the
+    /// cutter is two tiles wide: one tile of lane is what the displaced piece needs, and with it a player
+    /// can drop a cutter <em>into</em> a run instead of building a corner for it. The cut line runs along the
+    /// flow - north and south cut left from right, east and west cut top from bottom - so a quarter turn
+    /// changes which pieces come out as well as which way they leave. A half turn only swaps which lane is
+    /// which, exactly as turning a fork half a turn does not change the fork.
     ///
     /// The two pieces buffer separately (<see cref="MachineState.OutputCount"/> and
     /// <see cref="MachineState.OutputCount2"/>): routing one piece onward while the other queues for a
@@ -28,43 +34,43 @@ namespace Facet.Core
         {
             MachineDef def = ctx.Content.Machine(cutter.Build);
 
-            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, in def);
+            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, cutter.Direction, in def);
 
-            Dir front = cutter.Direction;
-            Dir back = front.Opposite();
+            Dir flow = cutter.Direction;
+            Int2 lane = cell + MachineFootprint.LaneOf(flow).Offset();
 
-            // Each piece leaves by its own outlet. One per tick is far above belt capacity, so the belts -
-            // not this line - set the output rate.
+            // Each piece leaves by its own lane, both out of the front. One per tick is far above belt
+            // capacity, so the belts - not this line - set the output rate.
             if (cutter.OutputCount > 0 &&
-                MachineDelivery.TryPushOutSide(ctx.Belts, cell, front, cutter.OutputShape))
+                MachineDelivery.TryPushOutSide(ctx.Belts, cell, flow, cutter.OutputShape))
                 cutter.OutputCount--;
 
             if (cutter.OutputCount2 > 0 &&
-                MachineDelivery.TryPushOutSide(ctx.Belts, cell, back, cutter.OutputShape2))
+                MachineDelivery.TryPushOutSide(ctx.Belts, lane, flow, cutter.OutputShape2))
                 cutter.OutputCount2--;
 
             if (!cutter.Carried.IsEmpty)
             {
                 // Mid-split. The pieces are recomputed from the held item, so the machine reads nothing
                 // back off the definition - a cutter cuts whatever it was handed.
-                (Shape frontPiece, Shape backPiece) = Pieces(cutter.Carried, front);
-                bool room = (frontPiece.IsEmpty || cutter.OutputCount < SlotBuffer)
-                            && (backPiece.IsEmpty || cutter.OutputCount2 < SlotBuffer);
+                (Shape straight, Shape displaced) = Pieces(cutter.Carried, flow);
+                bool room = (straight.IsEmpty || cutter.OutputCount < SlotBuffer)
+                            && (displaced.IsEmpty || cutter.OutputCount2 < SlotBuffer);
                 if (!room) return;   // both pieces leave at once, so the split waits for both slots
 
                 cutter.Cooldown -= ctx.Dt;
                 if (cutter.Cooldown > 0f) return;
 
                 cutter.Carried = Shape.None;
-                if (!frontPiece.IsEmpty)
+                if (!straight.IsEmpty)
                 {
-                    cutter.OutputShape = frontPiece;
+                    cutter.OutputShape = straight;
                     cutter.OutputCount++;
                 }
 
-                if (!backPiece.IsEmpty)
+                if (!displaced.IsEmpty)
                 {
-                    cutter.OutputShape2 = backPiece;
+                    cutter.OutputShape2 = displaced;
                     cutter.OutputCount2++;
                 }
 
@@ -75,12 +81,13 @@ namespace Facet.Core
             // queue. A slot counts pieces of one shape, so a piece that is not what the slot already
             // holds has to wait for it to drain - the queue is never rewritten to a different item,
             // because three halves the player built are three halves and not whatever was cut last. The
-            // wait is a stall, like the stacker's: the machine stops, visibly and safely.
+            // wait is a stall, like the stacker's: the machine stops, visibly and safely. Both of the
+            // machine's tiles are fed on: a belt laid into the back of either one delivers.
             if (cutter.OutputCount >= SlotBuffer || cutter.OutputCount2 >= SlotBuffer) return;
-            if (!MachineDelivery.TryFindDietDelivery(ctx.Belts, cell, in def,
+            if (!MachineDelivery.TryFindDietDelivery(ctx.Belts, cell, flow, in def,
                     out Int2 delivery, out Shape shape)) return;
 
-            (Shape arriving, Shape other) = Pieces(shape, front);
+            (Shape arriving, Shape other) = Pieces(shape, flow);
             if (!Fits(cutter.OutputCount, cutter.OutputShape, arriving)) return;
             if (!Fits(cutter.OutputCount2, cutter.OutputShape2, other)) return;
 
@@ -102,20 +109,22 @@ namespace Facet.Core
             => piece.IsEmpty || count <= 0 || held == piece;
 
         /// <summary>
-        /// The two pieces of cutting <paramref name="shape"/> with the machine facing
-        /// <paramref name="facing"/>, in outlet order: the facing side first. A horizontal cut (facing
-        /// north or south) yields the top and bottom pieces; a vertical one yields left and right. The
-        /// piece on the side the machine faces is the one that leaves by that side - so facing north
-        /// sends the top half out of the north, and facing south sends the bottom half out of the south.
+        /// The two pieces of cutting <paramref name="shape"/> with the machine flowing
+        /// <paramref name="facing"/>, in lane order: the one that keeps the tile the belt fed first, then
+        /// the one displaced a lane over.
+        ///
+        /// The cut runs <em>along</em> the flow, so the two pieces are the halves either side of it: flowing
+        /// north or south they are left and right, flowing east or west top and bottom. The piece on the
+        /// machine's left-hand side keeps its lane - the left of east is north, of north is west - and the
+        /// piece on its right is the one that leaves one lane over. <see cref="Shape.Cut"/> hands back the
+        /// top for a horizontal cut and the left for a vertical one, which is the first piece when the
+        /// machine flows north or east.
         /// </summary>
-        public static (Shape front, Shape back) Pieces(Shape shape, Dir facing)
+        public static (Shape straight, Shape displaced) Pieces(Shape shape, Dir facing)
         {
-            bool vertical = facing == Dir.East || facing == Dir.West;
+            bool vertical = facing == Dir.North || facing == Dir.South;
             (Shape a, Shape b) = Shape.Cut(shape, vertical);
-
-            // Cut's first piece is the top for a horizontal cut and the left for a vertical one, and the
-            // facing side is the top when facing north and the left when facing west.
-            bool facingHoldsA = facing == Dir.North || facing == Dir.West;
+            bool facingHoldsA = facing == Dir.North || facing == Dir.East;
             return facingHoldsA ? (a, b) : (b, a);
         }
     }

@@ -16,7 +16,7 @@ namespace Facet.Core
         {
             MachineDef def = ctx.Content.Machine(stacker.Build);
 
-            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, in def);
+            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, stacker.Direction, in def);
 
             // The finished union leaves the moment an outlet has room; one is held at a time, so a blocked
             // outlet means the machine stops taking pieces rather than piling them up invisibly.

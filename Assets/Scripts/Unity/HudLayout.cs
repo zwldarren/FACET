@@ -57,9 +57,10 @@ namespace Facet.Game
         /// <summary>The gap the info card floats above the bar with.</summary>
         public const float InfoGap = 8f;
 
-        /// <summary>Room for the tutorial's heading and its five lines - the cutter and turret lines are
-        /// the ones that can wrap on a narrow window, and the room is here so that wrap costs nothing.</summary>
-        public const float TutorialHeight = 168f;
+        /// <summary>Room for the tutorial's heading and its five lines, at a text size an eye can read
+        /// without leaning in: the cutter and turret lines are the ones that wrap on a narrow window, and
+        /// the room is here so that wrap costs nothing.</summary>
+        public const float TutorialHeight = 208f;
 
         /// <summary>The gap the tutorial sits below the status card with. Deliberately the same 8 the
         /// info card floats above the bar with: those two are the HUD's only cards that hang off another

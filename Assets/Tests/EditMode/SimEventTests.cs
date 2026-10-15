@@ -335,6 +335,34 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void ARefusedCutter_NamesTheLane_NotJustThePressCell()
+        {
+            // A machine on two tiles is refused for the tile that refused it, and the player is told about the
+            // cell they pressed on: "the lane this cutter needs is taken" is what that has to read as, because
+            // the belt in the way is not under the cursor. Aimed a quarter turn round, the same click builds.
+            SimWorld world = Sim.NewWorld(16, 10);
+            var press = new Int2(3, 6);
+            Sim.LayRun(world, press + MachineFootprint.LaneOf(Dir.East).Offset(), Dir.East, 1);
+
+            Click(world, press, BuildKind.Cutter);
+
+            Assert.IsFalse(world.Machines.Has(press), "nothing is built where the lane is a belt");
+            Assert.IsTrue(world.Events.TryLast(SimEventKind.PlacementRejected, out SimEvent onLane),
+                "and the click said why");
+            Assert.AreEqual(RejectionReason.Occupied, onLane.Reason, "the lane tile is taken");
+            Assert.AreEqual(press, onLane.Cell, "reported at the cell the player pressed on");
+
+            world.Tick(Gesture.Aim(press, BuildKind.Cutter));
+            world.Tick(Gesture.Aim(press + Dir.North.Offset(), BuildKind.Cutter));
+            world.Tick(Gesture.Release(press + Dir.North.Offset(), BuildKind.Cutter));
+
+            Assert.AreEqual(Dir.North, Sim.MachineAt(world, press).Direction,
+                "the same click aimed north puts the lane on bare ground");
+            Assert.IsTrue(world.Machines.Has(press + Dir.East.Offset()),
+                "so the machine stands on both of its tiles");
+        }
+
+        [Test]
         public void ADragThatRunsDry_StopsQuietly_BecauseTheRunShowsWhereItStopped()
         {
             // The boundary of the reporting above: the cells a belt *drag* sweeps are skipped like blocked

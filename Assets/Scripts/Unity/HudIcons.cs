@@ -76,6 +76,12 @@ namespace Facet.Game
         private readonly int[] _markLength = new int[Shape.QuadrantCount];
         private readonly Color32[] _markFill = new Color32[Shape.QuadrantCount];
         private readonly Color32[] _markLine = new Color32[Shape.QuadrantCount];
+
+        /// <summary>Per mark: does the quadrant across this one's vertical (or horizontal) axis carry a
+        /// mark too? Two filled quadrants share the edge between them, and a shared edge is a seam the two
+        /// of them draw half of each - the map's mesh rule, asked here of the same figure.</summary>
+        private readonly bool[] _markVerticalSeam = new bool[Shape.QuadrantCount];
+        private readonly bool[] _markHorizontalSeam = new bool[Shape.QuadrantCount];
         private int _markCount;
 
         public HudIcons(Palette palette)
@@ -203,6 +209,8 @@ namespace Facet.Game
                 _markLength[_markCount] = points.Count;
                 _markFill[_markCount] = sprite ? _palette.MineralColor(mineral) : style.Fill;
                 _markLine[_markCount] = sprite ? _palette.Outline : style.Outline;
+                _markVerticalSeam[_markCount] = shape.Has(Shape.AcrossVertical(quadrant));
+                _markHorizontalSeam[_markCount] = shape.Has(Shape.AcrossHorizontal(quadrant));
                 _markCount++;
             }
 
@@ -225,8 +233,15 @@ namespace Facet.Game
             var centre = new Vector2((minX + maxX) * 0.5f, (minY + maxY) * 0.5f);
 
             // The outline's width in the figure's own units: the rasteriser asks "is this pixel within this
-            // much of an edge", and the edges are measured in tiles, not in icon pixels.
-            float outline = (Size * OutlineFraction) / scale;
+            // much of an edge", and the edges are measured in tiles, not in icon pixels. It is capped at a
+            // share of the figure's own radius, exactly as the map's mesh caps it, so a mark drawn small
+            // here is a figure wearing an outline rather than an outline with a figure inside it.
+            float outline = Mathf.Min((Size * OutlineFraction) / scale,
+                SilhouetteRadius * _palette.OutlineMaxRadiusFraction);
+
+            // The seams - the lines between the quadrants - at their own, thinner width, half from each
+            // side. See NearEdge.
+            float seamOutline = outline * _palette.SeamFraction * 0.5f;
 
             for (int y = 0; y < Size; y++)
             {
@@ -235,7 +250,7 @@ namespace Facet.Game
                     var p = new Vector2((x + 0.5f - Size * 0.5f) / scale + centre.x,
                         (y + 0.5f - Size * 0.5f) / scale + centre.y);
 
-                    _pixels[y * Size + x] = Sample(p, outline);
+                    _pixels[y * Size + x] = Sample(p, outline, seamOutline);
                 }
             }
 
@@ -255,13 +270,13 @@ namespace Facet.Game
         /// <summary>What colour one pixel of the figure is: the mark it lands in, filled or outlined.
         /// Quadrant cells never overlap, so the first mark containing the point is the one it belongs to,
         /// and a point in none is the hole the shape does not occupy.</summary>
-        private Color32 Sample(Vector2 p, float outline)
+        private Color32 Sample(Vector2 p, float outline, float seamOutline)
         {
             for (int i = 0; i < _markCount; i++)
             {
                 if (!Inside(p, _markPoints[i], _markLength[i])) continue;
 
-                return DistanceToEdge(p, _markPoints[i], _markLength[i]) <= outline
+                return NearEdge(p, i, outline, seamOutline)
                     ? _markLine[i]
                     : _markFill[i];
             }
@@ -287,17 +302,33 @@ namespace Facet.Game
             return inside;
         }
 
-        private static float DistanceToEdge(Vector2 p, Vector2[] points, int count)
+        private bool NearEdge(Vector2 p, int mark, float outline, float seamOutline)
         {
-            float best = float.MaxValue;
+            Vector2[] points = _markPoints[mark];
+            int count = _markLength[mark];
+
             for (int i = 0, j = count - 1; i < count; j = i++)
             {
-                float d = DistanceToSegment(p, points[j], points[i]);
-                if (d < best) best = d;
+                Vector2 a = points[j], b = points[i];
+
+                // The same split the map's mesh makes (ProcMesh.AppendQuadrantOutline): an edge on one of
+                // the figure's own axes, with the quadrant across it filled, is a seam, and each side of a
+                // seam draws half of it. Here the outline is drawn inward instead of outward, so "half" is
+                // half the thickness, and the two sides still meet in the middle of the line.
+                float width = outline;
+                if ((_markVerticalSeam[mark] && Mathf.Abs(a.x) <= SeamEpsilon && Mathf.Abs(b.x) <= SeamEpsilon) ||
+                    (_markHorizontalSeam[mark] && Mathf.Abs(a.y) <= SeamEpsilon && Mathf.Abs(b.y) <= SeamEpsilon))
+                    width = seamOutline;
+
+                if (DistanceToSegment(p, a, b) <= width) return true;
             }
 
-            return best;
+            return false;
         }
+
+        /// <summary>How close to an axis a point has to be to count as lying on it - the map's own
+        /// tolerance for the same question, so a card's cross and a belt item's cross are one rule.</summary>
+        private const float SeamEpsilon = 1e-4f;
 
         private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
         {

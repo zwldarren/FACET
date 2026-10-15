@@ -15,29 +15,31 @@ namespace Facet.Game
     public sealed class BuildInput
     {
         /// <summary>The digits that select a building, in <see cref="BuildCatalog.All"/> order: key 0 is
-        /// the tenth kind. The loop stops at the table's length, so a shorter table's spare keys are inert;
-        /// an overflowing table would need a test to catch it - see
-        /// <see cref="ContentFormatTests.Hotkeys_ReachEveryBuildKind"/>.</summary>
+        /// the tenth kind, and X the eleventh - the drain is the one kind past the digits, because a
+        /// keyboard has exactly ten of them and the table outgrew them. The loop stops at the table's
+        /// length, so a shorter table's spare keys are inert; an overflowing table would need a test to
+        /// catch it - see <see cref="ContentFormatTests.Hotkeys_ReachEveryBuildKind"/>.</summary>
         private static readonly Key[] BuildKeys =
         {
             Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.Digit6,
-            Key.Digit7, Key.Digit8, Key.Digit9, Key.Digit0,
+            Key.Digit7, Key.Digit8, Key.Digit9, Key.Digit0, Key.X,
         };
 
         /// <summary>How many kinds the keyboard can reach, so the build bar's hints never go stale.</summary>
         public static int HotkeyCount => BuildKeys.Length;
 
-        /// <summary>The key label for a kind's index: digits 1..9, then 0 for the tenth.</summary>
-        public static string HotkeyLabel(int index) => ((index + 1) % 10).ToString();
+        /// <summary>The key label for a kind's index: digits 1..9, then 0 for the tenth, then X.</summary>
+        public static string HotkeyLabel(int index) => index <= 9 ? ((index + 1) % 10).ToString() : "X";
 
-        /// <summary>The hint text for the keys the table actually reaches: "1-9 and 0" for the shipped
-        /// ten. A hyphen, not an en dash: the built player's HUD font has no en dash.</summary>
+        /// <summary>The hint text for the keys the table actually reaches: "1-9 and 0" for a table of ten,
+        /// and the letter named for the eleven the shipped content has. A hyphen, not an en dash: the built
+        /// player's HUD font has no en dash.</summary>
         public static string KeyRangeText()
         {
             int count = System.Math.Min(BuildCatalog.Count, BuildKeys.Length);
             if (count <= 0) return "no keys";
             if (count < 10) return "1-" + count;
-            return "1-9 and 0";
+            return count < 11 ? "1-9 and 0" : "1-9, 0 and X";
         }
 
         private bool _pauseToggleRequested;

@@ -22,8 +22,10 @@ namespace Facet.Game
     /// operator (cutter, rotator, stacker) - the chambered body, a stub per wired port and the piece in the
     /// chamber as its badge; pipe - the tube across the jumped tile and the item riding it; splitter - the
     /// hub with a stub per live port read off the belts; sorter - a triangle whose apex points out the exit
-    /// side, with its badge at the centre; turret - the barrel and the last round, whose grey-out is
-    /// "silenced"; wall - a plain block whose damage tint is its state.
+    /// side, with its badge at the centre; turret - the barrel and the round in its chamber, so an empty
+    /// badge is the "starved" state; wall - a plain block whose damage tint is its state; sink - the same
+    /// block with a pit in it and a lane in from every side, which is the one building whose arrows all
+    /// point <em>in</em>.
     /// </summary>
     [DefaultExecutionOrder(105)]
     public sealed class MachineRenderer : MeshView
@@ -47,6 +49,10 @@ namespace Facet.Game
 
         /// <summary>The wall's inset block, cached like the other silhouettes.</summary>
         private Vector2[] _wallBody;
+
+        /// <summary>The sink's block and the pit in its middle, cached like the other silhouettes.</summary>
+        private Vector2[] _sinkBody;
+        private Vector2[] _sinkHole;
 
         private ShapeIconSet _carriedIcons;
         private ShapeIconSet _roundIcons;
@@ -110,6 +116,11 @@ namespace Facet.Game
             // The wall's block: a square inset from the cell edge, so neighbours still show the grid line.
             _wallBody = ProcMesh.RegularPolygon(4, (0.5f - look.WallInset) * 1.4143f, 45f);
 
+            // The sink: the same kind of block with a pit cut in it. Both are a square, because both are a
+            // building with no machinery on top - what tells them apart is the hole, not the outline.
+            _sinkBody = ProcMesh.RegularPolygon(4, (0.5f - look.SinkInset) * 1.4143f, 45f);
+            _sinkHole = ProcMesh.RegularPolygon(4, look.SinkHoleHalfSize * 1.4143f, 45f);
+
             // The badges follow the item overrides, so a re-skinned mineral reads the same everywhere.
             // (Decomposer* are the chamber's two radii; the field names keep their old spelling because
             // renaming a serialized field would silently drop its value out of Assets/Data/Palette.asset.)
@@ -134,13 +145,14 @@ namespace Facet.Game
                 switch (_machines[i].Behavior)
                 {
                     case BehaviorKind.Drill: AppendDrill(_machines[i]); break;
-                    case BehaviorKind.Cutter:
+                    case BehaviorKind.Cutter: AppendCutter(_machines[i], outlineWidth); break;
                     case BehaviorKind.Rotator:
                     case BehaviorKind.Stacker: AppendOperator(_machines[i], outlineWidth); break;
                     case BehaviorKind.Pipe: AppendPipe(_machines[i], outlineWidth); break;
                     case BehaviorKind.Splitter: AppendSplitter(_machines[i], outlineWidth); break;
                     case BehaviorKind.Sorter: AppendSorter(_machines[i], outlineWidth); break;
                     case BehaviorKind.Turret: AppendTurret(_machines[i], outlineWidth); break;
+                    case BehaviorKind.Sink: AppendSink(_machines[i], outlineWidth); break;
                     case BehaviorKind.None: AppendWall(_machines[i], outlineWidth); break;
                     default:
                         // An undrawn behaviour would be invisible on screen; say so instead. (MachineSystem's
@@ -190,16 +202,11 @@ namespace Facet.Game
         /// empty), plus a stub on every wired side; no facing chevron, since the outlets are read off the
         /// belts as the tick does.
         ///
-        /// The cutter is the one operator that draws its facing anyway, as the cut line across its cell:
-        /// the line is perpendicular to the stored direction and says which two pieces the machine is
-        /// making - the thing the outlets cannot say, and the whole difference between a line running
-        /// top halves and one running left halves. It sits over the body and under the badge, so the
-        /// chamber's piece still reads.
-        ///
-        /// All three operators share this path - cutter, rotator and stacker - because they are one
-        /// archetype: a machine with a chamber and the belts around it. The badge is the snapshot's, read by
-        /// <see cref="MachineField"/> through <see cref="MachineReading.Badge"/>, so a new operator needs no
-        /// line here.</summary>
+        /// The rotator and the stacker share this path because they are one archetype: a machine on one tile
+        /// with a chamber and the belts around it. The cutter is the third operator and does not - it stands
+        /// on two tiles and draws the fork, see <see cref="AppendCutter"/>. The badge is the snapshot's, read
+        /// by <see cref="MachineField"/> through <see cref="MachineReading.Badge"/>, so a new operator needs
+        /// no line here.</summary>
         private void AppendOperator(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);
@@ -219,13 +226,89 @@ namespace Facet.Game
                     OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
             }
 
-            if (machine.Behavior == BehaviorKind.Cutter)
+            AppendIcon(_carriedIcons, machine.Shape, centre, null);
+        }
+
+        /// <summary>
+        /// The cutter: the one machine drawn over two tiles, because the second tile is the whole point of it.
+        /// One body across the pair, the blade down the lane the belt feeds, a docking stub in each of the two
+        /// lanes it forks into, and each lane's pending piece worn as its own badge - so a cutter with a
+        /// blocked outlet shows <em>which</em> half is waiting where.
+        ///
+        /// The blade lies <em>along</em> the flow, in the lane the belt runs in, rather than across the cell: the
+        /// item is cut on its own centre line as it arrives, one half carries on down that lane and the other
+        /// leaves a lane over. That is why the second tile is there, and why the drawn knife sits in the lane
+        /// rather than between them.
+        /// </summary>
+        private void AppendCutter(in MachineSnapshot machine, float outlineWidth)
+        {
+            Palette.MachineLook look = Colors.Machines;
+            VisualStyle style = Over(machine.Build);
+
+            Dir flow = machine.Direction;
+            Dir lane = MachineFootprint.LaneOf(flow);
+            Int2 laneCell = machine.Cell + lane.Offset();
+
+            Vec2 flow2 = flow.ToVec();
+            var forward = new Vector2(flow2.X, flow2.Y);
+            var centre = CellCentre(machine.Cell);
+            var laneCentre = CellCentre(laneCell);
+            Color body = Damaged(FillOf(style, machine.Behavior), machine);
+
+            // Each tile's own ports: the snapshot's mask is the machine's, which is what the card wants, but a
+            // stub belongs on the tile whose side the belt docks with - and the two lanes are two tiles.
+            World.Machines.PortMasksAt(machine.Cell, out DirMask inHere, out DirMask outHere);
+            World.Machines.PortMasksAt(laneCell, out DirMask inThere, out DirMask outThere);
+            AppendPortStubs(inHere, outHere, centre, look.OperatorRadius * 0.8f);
+            AppendPortStubs(inThere, outThere, laneCentre, look.OperatorRadius * 0.8f);
+
+            if (IsSprite(style))
             {
-                (Vector2 cutFrom, Vector2 cutTo) = CutLineAcross(machine.Cell, machine.Direction);
-                AppendLane(cutFrom, cutTo, outlineWidth * 0.5f, Colors.Outline);
+                // An authored body replaces the machine's mark; where it stands is still the pair of tiles the
+                // blade and the badges are drawn against.
+                DrawSprite(style, centre, Damaged(Color.white, machine));
+            }
+            else
+            {
+                // An authored procedural body is one silhouette, so it stands on the tile the player placed and
+                // the second lane keeps its blade, stub and badge; the shipped look is the fork itself.
+                Vector2[] points = Overridden(style)
+                    ? BodyOf(style, _operatorBody)
+                    : CutterBodyFigure(flow, look.OperatorRadius);
+
+                AppendPolygon(points, centre, body, OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
             }
 
+            // The blade: the item's own centre line, along the flow, where the cut is made.
+            AppendLane(centre - forward * 0.5f, centre + forward * 0.5f, outlineWidth * 0.5f, Colors.Outline);
+
             AppendIcon(_carriedIcons, machine.Shape, centre, null);
+            AppendIcon(_carriedIcons, machine.Shape2, laneCentre, null);
+        }
+
+        /// <summary>
+        /// The cutter's body, in the tile's own frame with the machine's cell at the origin: one box spanning
+        /// the two tiles it stands on, as wide across the flow as every other operator's body and twice as long
+        /// along the lane, so the silhouette itself says "this machine is two tiles wide".
+        /// </summary>
+        public static Vector2[] CutterBodyFigure(Dir facing, float half)
+        {
+            Vec2 facing2 = facing.ToVec();
+            var forward = new Vector2(facing2.X, facing2.Y);
+
+            // The lane lies to the machine's right, which is the flow turned a quarter clockwise - the same
+            // handedness MachineFootprint states, read here in a right-handed frame so the winding stays CCW.
+            var right = new Vector2(-forward.y, forward.x);
+
+            Vector2 Corner(float along, float across) => forward * along + right * across;
+
+            return new[]
+            {
+                Corner(-half, -1f - half),
+                Corner(half, -1f - half),
+                Corner(half, half),
+                Corner(-half, half),
+            };
         }
 
         /// <summary>Two rails from this cell's entry edge across the jumped tile to the landing belt,
@@ -372,14 +455,19 @@ namespace Facet.Game
         /// same stub on every machine, and renaming a serialized field would silently drop the value
         /// out of Assets/Data/Palette.asset.</summary>
         private void AppendPortStubs(in MachineSnapshot machine, Vector2 centre, float innerRadius)
+            => AppendPortStubs(machine.InMask, machine.OutMask, centre, innerRadius);
+
+        /// <summary>The same stubs from one tile's masks, which is what a machine that stands on two tiles has
+        /// to ask for: each of its lanes draws its own ports.</summary>
+        private void AppendPortStubs(DirMask inMask, DirMask outMask, Vector2 centre, float innerRadius)
         {
             Palette.MachineLook look = Colors.Machines;
 
             for (int i = 0; i < Sides.Length; i++)
             {
                 Dir side = Sides[i];
-                bool inbound = machine.InMask.Has(side);
-                bool outbound = machine.OutMask.Has(side);
+                bool inbound = inMask.Has(side);
+                bool outbound = outMask.Has(side);
                 if (!inbound && !outbound) continue;
 
                 Vec2 side2 = side.ToVec();
@@ -403,9 +491,9 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>Octagon body, barrel along Aim, then the round it is holding. Draw order matters:
-        /// barrel after body, badge last so the armed/silenced colour is never covered - the badge's grey is
-        /// the "silenced" state, a turret with nothing waiting on its lines being a dead building.
+        /// <summary>Octagon body, barrel along Aim, then the round in its chamber. Draw order matters: barrel
+        /// after body, badge last so it is never covered - and the badge <em>is</em> the chamber, so a gun with
+        /// a round in hand shows the shape and a gun with nothing draws nothing at all.
         ///
         /// The one gun shares this path with any second one: the badge is the snapshot's, read by
         /// <see cref="MachineField"/> through <see cref="MachineReading.Badge"/>, because what the turret
@@ -428,10 +516,11 @@ namespace Facet.Game
 
             AppendBarrel(machine, centre, outlineWidth, body);
 
-            // A starved turret's badge is whatever it last fired, drawn grey rather than nothing: the
-            // chamber is universal, so "empty" and "silenced" are different news.
-            Color? roundTint = machine.Armed ? (Color?)null : Colors.MachineIdle;
-            AppendIcon(_roundIcons, machine.Shape, centre, roundTint);
+            // The chamber's round: what the line has loaded the gun with, drawn until the shot leaves. A gun
+            // with nothing loaded draws no badge at all, which is the same news as the HUD's "starved" line
+            // said in a picture - there is no last-round-to-grey-out any more, because a loaded chamber is
+            // what the badge now means.
+            AppendIcon(_roundIcons, machine.Shape, centre, null);
         }
 
         /// <summary>One quad from the body centre out along the aim, normalized by the tick; a zero Aim
@@ -486,8 +575,40 @@ namespace Facet.Game
                 OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
         }
 
-        private void AppendChevron(Int2 cell, Dir direction, Color color)
+        /// <summary>
+        /// The drain: an inset block with a pit in the middle and a lane in from every side. The lanes are
+        /// the hubs' own stub-and-chevron, wired on all four sides whether or not a belt is there - a sink
+        /// eats from every side at once and has no outlet, so a port that lit up per belt would say the
+        /// machine had a state it does not have. They are also what points the arrowheads inward, which is
+        /// the one thing the silhouette cannot say by itself.
+        ///
+        /// The pit is drawn dark rather than as a hole the ground shows through: at the far zoom a small
+        /// square of ground colour reads as a gap in the floor, while a black square reads as "nothing comes
+        /// out of here" at any size. Its pale lip is the same trick the outlines elsewhere play, and it is
+        /// what keeps the pit from merging into the block when both are small.
+        /// </summary>
+        private void AppendSink(in MachineSnapshot machine, float outlineWidth)
         {
+            var centre = CellCentre(machine.Cell);
+            VisualStyle style = Over(machine.Build);
+            Palette.MachineLook look = Colors.Machines;
+
+            if (IsSprite(style))
+            {
+                DrawSprite(style, centre, Damaged(Color.white, machine));
+            }
+            else
+            {
+                AppendPolygon(BodyOf(style, _sinkBody), centre,
+                    Damaged(FillOf(style, machine.Behavior), machine),
+                    OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
+            }
+
+            AppendPortStubs(DirMask.All, DirMask.None, centre, look.SinkHoleHalfSize);
+            AppendPolygon(_sinkHole, centre, Colors.Outline, Colors.Platform, outlineWidth * 0.5f);
+        }
+
+        private void AppendChevron(Int2 cell, Dir direction, Color color)        {
             Vec2 forward2 = direction.ToVec();
             var forward = new Vector2(forward2.X, forward2.Y);
             var centre = CellCentre(cell) + forward * Colors.Machines.ChevronOffset;

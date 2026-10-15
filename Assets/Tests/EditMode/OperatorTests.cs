@@ -6,9 +6,9 @@ namespace Facet.Tests
     /// <summary>
     /// The three operators, as machines rather than as algebra: the cutter that splits one item along a
     /// line, the rotator that turns one a quarter, and the stacker that unions two. Each of them is a rule
-    /// about <em>time</em> and about <em>outlets</em> on top of the algebra the algebra tests already pin,
-    /// and each of those halves is asserted here: how long a cycle takes, what a blocked outlet costs, and
-    /// what the machine does with an item it cannot use yet.
+    /// about <em>time</em> and about where an item leaves on top of the algebra the algebra tests already pin,
+    /// and each of those halves is asserted here: how long a cycle takes, what a blocked lane or outlet costs,
+    /// and what the machine does with an item it cannot use yet.
     ///
     /// The worlds are the 20x12 test map, clear of the Core's footprint (8,4)-(11,7) wherever a test cares
     /// about an item surviving to be read.
@@ -20,95 +20,95 @@ namespace Facet.Tests
         [Test]
         public void TheCutter_EmitsBothPiecesInTheSameTick()
         {
-            // The split is one decision, not two: the piece on the side the machine faces leaves by that
-            // outlet and the other by the outlet opposite it, and they go together. A machine that emitted
-            // one and waited a cycle for the other would halve a two-sided line for no reason the player
-            // could see.
-            SimWorld world = CutWorld(Dir.North, out Int2 front, out Int2 back);
+            // The split is one decision, not two: both pieces leave at once, each by the front of its own tile,
+            // so a two-lane line is never half-fed while the machine waits a cycle for the other piece. The
+            // piece that keeps the lane the belt fed goes by the blade tile's front and the piece displaced a
+            // lane over by the lane tile's.
+            SimWorld world = CutWorld(Dir.North, out Int2 input, out Int2 straight, out Int2 displaced);
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), Sim.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Circle));
 
             int landed = TickUntil(world, 30 * 5, () =>
-                !Sim.ShapeAt(world, front).IsEmpty || !Sim.ShapeAt(world, back).IsEmpty);
+                !Sim.ShapeAt(world, straight).IsEmpty || !Sim.ShapeAt(world, displaced).IsEmpty);
 
-            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(world, front), "the front outlet took the top half");
-            Assert.AreEqual(Sim.BottomHalfCircle, Sim.ShapeAt(world, back), "and the back outlet the bottom one");
+            Assert.AreEqual(Sim.LeftHalfCircle, Sim.ShapeAt(world, straight),
+                "the piece on the machine's left kept the lane the belt fed");
+            Assert.AreEqual(Sim.RightHalfCircle, Sim.ShapeAt(world, displaced),
+                "and the one on its right left a lane over, in the same cycle");
             Assert.Greater(landed, 0, "both pieces arrived on the same tick, " + landed + " ticks in");
         }
 
         [Test]
-        public void TheTwoFacingsOfOneCutLine_ProduceTheSamePairOnTheSameSides()
+        public void OppositeFlows_CutTheSameTwoPieces_AndSwapTheLanesTheyLeaveBy()
         {
-            // The cut line's own 180-degree symmetry, which is why the machine stores a facing rather than
-            // a line: turning a knife half a turn does not change the cut. What swaps is which piece the
-            // machine calls the *front* one - and therefore which of its two buffers the piece lands in -
-            // not which side of the item leaves by which belt.
-            SimWorld north = CutWorld(Dir.North, out Int2 northFront, out Int2 northBack);
-            SimWorld south = CutWorld(Dir.South, out Int2 southFront, out Int2 southBack);
+            // A half turn of the flow does not change the fork: flowing north and flowing south both cut left
+            // from right, so the same two pieces come out of the same item and they leave the way the line was
+            // already going. What the half turn swaps is which lane each piece owns, and therefore which of
+            // the machine's two slots it lands in: the left half keeps the lane flowing north, the right half
+            // keeps it flowing south.
+            SimWorld north = CutWorld(Dir.North, out Int2 northIn, out Int2 northStraight, out _);
+            SimWorld south = CutWorld(Dir.South, out Int2 southIn, out Int2 southStraight, out _);
 
-            Assert.IsTrue(north.Belts.TrySpawnItem(new Int2(3, 2), Sim.Circle));
-            Assert.IsTrue(south.Belts.TrySpawnItem(new Int2(3, 2), Sim.Circle));
-            TickUntil(north, 30 * 5, () => !Sim.ShapeAt(north, northFront).IsEmpty);
-            TickUntil(south, 30 * 5, () => !Sim.ShapeAt(south, southFront).IsEmpty);
+            Assert.IsTrue(north.Belts.TrySpawnItem(northIn, Sim.Circle));
+            Assert.IsTrue(south.Belts.TrySpawnItem(southIn, Sim.Circle));
+            TickUntil(north, 30 * 5, () => !Sim.ShapeAt(north, northStraight).IsEmpty);
+            TickUntil(south, 30 * 5, () => !Sim.ShapeAt(south, southStraight).IsEmpty);
 
-            Assert.AreEqual(new Int2(4, 3), northFront, "the test's premise: the two machines face opposite ways");
-            Assert.AreEqual(new Int2(4, 1), southFront);
+            Assert.AreNotEqual(northStraight, southStraight,
+                "the test's premise: the two machines face opposite ways, so their fronts are not the same cell");
 
-            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(north, new Int2(4, 3)),
-                "facing north, the top half leaves by the north belt");
-            Assert.AreEqual(Sim.BottomHalfCircle, Sim.ShapeAt(north, new Int2(4, 1)),
-                "and the bottom half by the south one");
-            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(south, new Int2(4, 3)),
-                "facing south, the same piece still leaves north");
-            Assert.AreEqual(Sim.BottomHalfCircle, Sim.ShapeAt(south, new Int2(4, 1)),
-                "and the same piece still leaves south - the cut did not change");
+            Assert.AreEqual(Sim.LeftHalfCircle, Sim.ShapeAt(north, northStraight),
+                "flowing north, the left half keeps the lane the belt fed");
+            Assert.AreEqual(Sim.RightHalfCircle, Sim.ShapeAt(south, southStraight),
+                "and flowing south the right half does - the same pair of pieces, the other lane each");
 
-            // What did change: the piece the facing side owns. That is the buffer assignment, and it is
-            // exactly what turns "which way is the cutter pointing" into a decision about outlets.
-            Assert.AreEqual(Sim.TopHalfCircle, Sim.MachineAt(north, new Int2(4, 2)).OutputShape,
-                "facing north, the front slot is the top piece's");
-            Assert.AreEqual(Sim.BottomHalfCircle, Sim.MachineAt(south, new Int2(4, 2)).OutputShape,
-                "facing south, the front slot is the bottom piece's");
+            // What the half turn moved: the piece the lane slot owns. That is the buffer assignment, and it is
+            // exactly what turns "which way is the cutter pointing" into a decision about lanes.
+            Assert.AreEqual(Sim.LeftHalfCircle, Sim.MachineAt(north, new Int2(4, 2)).OutputShape,
+                "flowing north, the lane slot is the left piece's");
+            Assert.AreEqual(Sim.RightHalfCircle, Sim.MachineAt(south, new Int2(4, 2)).OutputShape,
+                "flowing south, it is the right piece's");
         }
 
         [Test]
         public void CuttingAQuarter_EmitsTheQuarterAndNothing()
         {
             // "An item can be cut at most twice" is a corollary, not a rule: a quarter already lies on one
-            // side of every line that can cross it, so the other outlet gets nothing at all - not an empty
-            // item, not a stall, just one piece out of two outlets.
+            // side of every line that can cross it, so the machine's other lane gets nothing at all - not an
+            // empty item, not a stall, just one piece out of the two fronts.
             foreach (int q in new[] { Shape.NW, Shape.NE, Shape.SE, Shape.SW })
             {
-                SimWorld world = CutWorld(Dir.North, out Int2 front, out Int2 back);
+                SimWorld world = CutWorld(Dir.North, out Int2 input, out Int2 straight, out Int2 displaced);
                 Shape quarter = Shape.Quarter(q, Quad.Circle);
 
-                Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), quarter));
-                TickUntil(world, 30 * 5, () => !Sim.ShapeAt(world, front).IsEmpty || !Sim.ShapeAt(world, back).IsEmpty);
+                Assert.IsTrue(world.Belts.TrySpawnItem(input, quarter));
+                TickUntil(world, 30 * 5, () =>
+                    !Sim.ShapeAt(world, straight).IsEmpty || !Sim.ShapeAt(world, displaced).IsEmpty);
 
                 Assert.AreEqual(1, Sim.ItemCount(world),
                     "a " + Shape.CornerCode(q) + " quarter is one piece, wherever the line falls");
-                Assert.IsTrue(Sim.ShapeAt(world, front) == quarter || Sim.ShapeAt(world, back) == quarter,
+                Assert.IsTrue(Sim.ShapeAt(world, straight) == quarter || Sim.ShapeAt(world, displaced) == quarter,
                     "and the piece is the quarter itself");
 
                 MachineState cutter = Sim.MachineAt(world, new Int2(4, 2));
                 Assert.IsTrue((cutter.OutputShape == quarter) ^ (cutter.OutputShape2 == quarter),
                     "exactly one of the two slots ever held a piece, and it was the quarter");
                 Assert.IsTrue(cutter.OutputShape.IsEmpty || cutter.OutputShape2.IsEmpty,
-                    "and the slot the empty side owns is empty, not holding a hole");
+                    "and the slot the empty lane owns is empty, not holding a hole");
             }
         }
 
         [Test]
         public void ABlockedOutlet_BuffersItsOwnPiece_AndLeavesTheOtherSideRunning()
         {
-            // The second output slot's whole purpose, as a test: with nowhere to put one piece, the cutter
-            // keeps cutting *for the other side* until its own buffer for the stranded piece is full. The
-            // pieces are never lost, the two sides never interfere, and the machine's own ceiling is the
+            // The second output slot's whole purpose, as a test: with the lane tile's front left unwired, the
+            // cutter keeps cutting *for the other lane* until its own buffer for the stranded piece is full.
+            // The pieces are never lost, the two lanes never interfere, and the machine's own ceiling is the
             // only thing that eventually stops it - which is what a player sees as a queue.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);       // input
             Sim.Place(world, BuildKind.Cutter, new Int2(4, 2), Dir.North);
-            Sim.LayRun(world, new Int2(4, 3), Dir.North, 6);      // the front outlet, long enough to drain
+            Sim.LayRun(world, new Int2(4, 3), Dir.North, 6);      // the blade tile's front, long enough to drain
 
             for (int i = 0; i < 3; i++)
             {
@@ -119,12 +119,12 @@ namespace Facet.Tests
 
             Assert.AreEqual(0, world.Belts.JamCount, "a blocked outlet is backpressure, not a jam");
             Assert.AreEqual(3, Sim.MachineAt(world, new Int2(4, 2)).OutputCount2,
-                "all three bottom halves are buffered in their own slot, none thrown away");
+                "all three right halves are buffered in their own slot, none thrown away");
 
-            Sim.LayRun(world, new Int2(4, 1), Dir.South, 1);
-            TickUntil(world, 30 * 6, () => !Sim.ShapeAt(world, new Int2(4, 1)).IsEmpty);
+            Sim.LayRun(world, new Int2(5, 3), Dir.North, 1);
+            TickUntil(world, 30 * 6, () => !Sim.ShapeAt(world, new Int2(5, 3)).IsEmpty);
 
-            Assert.AreEqual(Sim.BottomHalfCircle, Sim.ShapeAt(world, new Int2(4, 1)),
+            Assert.AreEqual(Sim.RightHalfCircle, Sim.ShapeAt(world, new Int2(5, 3)),
                 "and the moment there is an outlet, the oldest piece leaves by it");
         }
 
@@ -132,14 +132,14 @@ namespace Facet.Tests
         public void ACutterAlreadyQueueingOneShape_WaitsRatherThanRewritingItsQueue()
         {
             // A slot counts pieces of *one* shape, because one count cannot describe a queue of two different
-            // items. So a cutter whose slot is filling with bottom half-circles and is then handed a square
+            // items. So a cutter whose lane slot is filling with right half-circles and is then handed a square
             // has to wait: writing the square's piece into that slot would rewrite what is already queued,
             // and three halves the player cut are three halves - not whatever was cut last. The wait is a
             // stall on the machine, which is visible and safe, and never a jam on the belt.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);       // input
             Sim.Place(world, BuildKind.Cutter, new Int2(4, 2), Dir.North);
-            Sim.LayRun(world, new Int2(4, 3), Dir.North, 6);      // the front outlet, long enough to drain
+            Sim.LayRun(world, new Int2(4, 3), Dir.North, 6);      // the blade tile's front, long enough to drain
 
             for (int i = 0; i < 3; i++)
             {
@@ -149,16 +149,16 @@ namespace Facet.Tests
             }
 
             Assert.AreEqual(3, Sim.MachineAt(world, new Int2(4, 2)).OutputCount2,
-                "the test's premise: three bottom half-circles are queued in the back slot");
-            Assert.AreEqual(Sim.BottomHalfCircle, Sim.MachineAt(world, new Int2(4, 2)).OutputShape2);
+                "the test's premise: three right half-circles are queued in the lane's slot");
+            Assert.AreEqual(Sim.RightHalfCircle, Sim.MachineAt(world, new Int2(4, 2)).OutputShape2);
 
-            // A square arrives, whose cut would put a bottom half-*square* in that very slot.
+            // A square arrives, whose cut would put a right half-*square* in that very slot.
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), Sim.Square));
             Sim.Tick(world, 30 * 8);
 
             MachineState after = Sim.MachineAt(world, new Int2(4, 2));
-            Assert.AreEqual(Sim.BottomHalfCircle, after.OutputShape2,
-                "the queued pieces are still bottom half-circles");
+            Assert.AreEqual(Sim.RightHalfCircle, after.OutputShape2,
+                "the queued pieces are still right half-circles");
             Assert.AreEqual(3, after.OutputCount2, "and there are still three of them");
             Assert.IsTrue(after.Carried.IsEmpty, "the square was not taken, so nothing is mid-split");
             Assert.AreEqual(Sim.Square, Sim.ShapeAt(world, new Int2(3, 2)),
@@ -167,14 +167,14 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void TheReading_CallsTheTwoOutletsTheSameWayTheTickDoes()
+        public void TheReading_CallsTheTwoLanesTheSameWayTheTickDoes()
         {
-            // `CutterBehavior.Pieces` is the one statement of which piece leaves by which side, and the
+            // `CutterBehavior.Pieces` is the one statement of which piece leaves by which lane, and the
             // info card is written through it - so the sentence a player reads mid-split and the belts the
             // pieces actually land on cannot disagree. (The behaviour is internal to Core, so the public
             // seam it is read through is the card; that is the seam a view uses too.)
-            SimWorld world = CutWorld(Dir.North, out Int2 front, out Int2 back);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), Sim.Circle));
+            SimWorld world = CutWorld(Dir.North, out Int2 input, out Int2 straight, out Int2 displaced);
+            Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Circle));
 
             // Mid-split: the intake happens on the thirtieth tick and the cut takes forty-five more.
             Sim.Tick(world, 40);
@@ -182,22 +182,24 @@ namespace Facet.Tests
             Assert.IsTrue(world.Machines.TryGetSnapshot(new Int2(4, 2), out MachineSnapshot snapshot));
             ReadingNote note = MachineReading.LiveNote(world, new Int2(4, 2), snapshot);
 
-            StringAssert.Contains(Sim.TopHalfCircle.Describe() + " leaves north", note.Text,
-                "the card promises the top half to the north outlet: " + note.Text);
-            StringAssert.Contains(Sim.BottomHalfCircle.Describe() + " leaves south", note.Text,
-                "and the bottom half to the south one: " + note.Text);
+            StringAssert.Contains(Sim.LeftHalfCircle.Describe() + " runs straight on", note.Text,
+                "the card promises the left half the lane the belt fed: " + note.Text);
+            StringAssert.Contains(Sim.RightHalfCircle.Describe() + " leaves a lane to the east", note.Text,
+                "and the right half a lane over: " + note.Text);
 
-            TickUntil(world, 30 * 5, () => !Sim.ShapeAt(world, front).IsEmpty);
+            TickUntil(world, 30 * 5, () => !Sim.ShapeAt(world, straight).IsEmpty);
 
-            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(world, front), "and the north outlet took it");
-            Assert.AreEqual(Sim.BottomHalfCircle, Sim.ShapeAt(world, back), "and the south outlet the other");
+            Assert.AreEqual(Sim.LeftHalfCircle, Sim.ShapeAt(world, straight), "and that lane took it");
+            Assert.AreEqual(Sim.RightHalfCircle, Sim.ShapeAt(world, displaced), "and the other lane the other");
         }
 
         [Test]
-        public void AHorizontalCut_IsSelectedByNorthOrSouth_AndAVerticalOneByEastOrWest()
+        public void AFlowOfNorthOrSouth_CutsLeftFromRight_AndAFlowOfEastOrWest_TopFromBottom()
         {
-            // Which line the facing selects, read off the machine's own card: the four facings are two
-            // lines, and a player who wants a left/right split must point the machine east or west.
+            // The cut runs along the flow, so the four facings are two cuts: a player who wants a left/right
+            // split runs the line north or south, and one who wants top from bottom runs it east or west. Read
+            // off the machine's own card, and off the ghost's one-line label - the same question asked before
+            // the machine exists, because that label is what the rotate buttons sit beside.
             SimWorld world = Sim.NewWorld(20, 12);
             MachineDef def = world.Content.Machine(BuildKind.Cutter);
 
@@ -209,34 +211,129 @@ namespace Facet.Tests
             foreach (Int2 cell in new[] { new Int2(4, 2), new Int2(8, 2) })
             {
                 Assert.IsTrue(world.Machines.TryGetSnapshot(cell, out MachineSnapshot northSouth));
-                StringAssert.Contains("cuts top from bottom", MachineReading.FacingNote(def, northSouth),
-                    cell + " selects the horizontal cut");
+                StringAssert.Contains("cutting left from right", MachineReading.FacingNote(def, northSouth),
+                    cell + " runs north or south, so the cut is left from right");
             }
 
             foreach (Int2 cell in new[] { new Int2(12, 2), new Int2(16, 2) })
             {
                 Assert.IsTrue(world.Machines.TryGetSnapshot(cell, out MachineSnapshot eastWest));
-                StringAssert.Contains("cuts left from right", MachineReading.FacingNote(def, eastWest),
-                    cell + " selects the vertical cut");
+                StringAssert.Contains("cutting top from bottom", MachineReading.FacingNote(def, eastWest),
+                    cell + " runs east or west, so the cut is top from bottom");
             }
+
+            Assert.AreEqual("cuts left from right", MachineReading.GhostFacingNote(def, Dir.North),
+                "and the ghost's label names the cut the click would make");
+            Assert.AreEqual("cuts top from bottom", MachineReading.GhostFacingNote(def, Dir.East));
+        }
+
+        [Test]
+        public void ACutter_IsFedFromTheBackOfEitherOfItsTiles()
+        {
+            // A machine on two tiles is fed on both: a belt delivering into the back of the lane tile cuts the
+            // item exactly as one delivering into the back of the blade tile does, and both pieces leave by
+            // the fronts. A cutter that could only be fed on the tile the player placed it on would be a wall
+            // in the middle of a run, which is the one thing a machine that sits *in* a line must not be.
+            SimWorld blade = FedCutter(new Int2(3, 2), out Int2 straight, out Int2 lane);
+            SimWorld laneFed = FedCutter(new Int2(3, 1), out Int2 laneStraight, out Int2 laneOut);
+
+            Assert.AreEqual(straight, laneStraight, "the test's premise: the same two fronts either way");
+            Assert.AreEqual(lane, laneOut);
+
+            Assert.IsTrue(blade.Belts.TrySpawnItem(new Int2(3, 2), Sim.Circle));
+            Assert.IsTrue(laneFed.Belts.TrySpawnItem(new Int2(3, 1), Sim.Circle));
+            TickUntil(blade, 30 * 6, () => !Sim.ShapeAt(blade, lane).IsEmpty);
+            TickUntil(laneFed, 30 * 6, () => !Sim.ShapeAt(laneFed, laneOut).IsEmpty);
+
+            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(laneFed, straight),
+                "the top half keeps the lane, whichever of the two tiles the belt fed");
+            Assert.AreEqual(Sim.BottomHalfCircle, Sim.ShapeAt(laneFed, laneOut),
+                "and the bottom half leaves the lane one over");
+            Assert.AreEqual(Sim.ShapeAt(blade, straight), Sim.ShapeAt(laneFed, straight),
+                "so the lane tile's own feed comes out as the blade tile's does");
+            Assert.AreEqual(Sim.ShapeAt(blade, lane), Sim.ShapeAt(laneFed, laneOut),
+                "and the other piece leaves a lane over either way");
+        }
+
+        [Test]
+        public void TheFourFacings_SendTheLeftPieceStraightOn_AndTheRightOneALaneOver()
+        {
+            // The mapping the whole machine is, over all four facings, written out as a table of cells: the flow
+            // decides which halves the cut makes - north and south cut left from right, east and west top from
+            // bottom - and the piece on the machine's left always keeps the tile the belt fed while the piece on
+            // its right leaves a lane over. Spelled with the cells, because "a lane over" is a cell on the map,
+            // and a table the test worked out from the same helper the machine uses would say nothing.
+            AssertCut(Dir.North, new Int2(4, 3), new Int2(5, 3), Sim.LeftHalfCircle, Sim.RightHalfCircle);
+            AssertCut(Dir.East, new Int2(5, 2), new Int2(5, 1), Sim.TopHalfCircle, Sim.BottomHalfCircle);
+            AssertCut(Dir.South, new Int2(4, 1), new Int2(3, 1), Sim.RightHalfCircle, Sim.LeftHalfCircle);
+            AssertCut(Dir.West, new Int2(3, 2), new Int2(3, 3), Sim.BottomHalfCircle, Sim.TopHalfCircle);
         }
 
         /// <summary>
-        /// A cutter at (4,2) facing <paramref name="facing"/>, fed from the west by one belt and wired on
-        /// both sides of its cut line with one dead-ended belt each. <paramref name="front"/> and
-        /// <paramref name="back"/> are the cells those two belts occupy, which is the side the machine
-        /// faces and the side opposite it - the same two cells whichever way it faces.
+        /// One circle through a cutter at (4,2) flowing <paramref name="facing"/>: the piece the machine keeps
+        /// in the lane the belt fed must land on <paramref name="straight"/> and the displaced piece on
+        /// <paramref name="displaced"/>, which are the two fronts the footprint puts a lane to the machine's
+        /// right of.
         /// </summary>
-        private static SimWorld CutWorld(Dir facing, out Int2 front, out Int2 back)
+        private static void AssertCut(Dir facing, Int2 straight, Int2 displaced,
+            Shape straightPiece, Shape displacedPiece)
+        {
+            SimWorld world = CutWorld(facing, out Int2 input, out Int2 straightOut, out Int2 laneOut);
+
+            Assert.AreEqual(straight, straightOut,
+                facing + " keeps the lane out of the front of the tile the belt fed");
+            Assert.AreEqual(displaced, laneOut,
+                facing + " drops the displaced piece out of the front of the lane tile");
+
+            Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Circle));
+            TickUntil(world, 30 * 6, () =>
+                !Sim.ShapeAt(world, straight).IsEmpty && !Sim.ShapeAt(world, displaced).IsEmpty);
+
+            Assert.AreEqual(straightPiece, Sim.ShapeAt(world, straight),
+                facing + " cuts " + straightPiece.Describe() +
+                ": the piece on the machine's left keeps the lane");
+            Assert.AreEqual(displacedPiece, Sim.ShapeAt(world, displaced),
+                facing + " sends " + displacedPiece.Describe() + " a lane over");
+        }
+
+        /// <summary>
+        /// A cutter at (4,2) flowing <paramref name="facing"/>, fed by one belt on the side opposite its lane
+        /// - the side of the machine that is left over once the lane and the front are accounted for - and
+        /// wired one dead-ended belt out of each of its two fronts. <paramref name="straight"/> and
+        /// <paramref name="displaced"/> are the cells those two belts occupy: the front of the tile the belt
+        /// fed and the front of the lane tile one over.
+        /// </summary>
+        private static SimWorld CutWorld(Dir facing, out Int2 input, out Int2 straight, out Int2 displaced)
         {
             SimWorld world = Sim.NewWorld(20, 12);
-            Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);
-            Sim.Place(world, BuildKind.Cutter, new Int2(4, 2), facing);
-            Sim.LayRun(world, new Int2(4, 3), Dir.North, 1);
-            Sim.LayRun(world, new Int2(4, 1), Dir.South, 1);
+            Dir lane = MachineFootprint.LaneOf(facing);
 
-            front = facing == Dir.South ? new Int2(4, 1) : new Int2(4, 3);
-            back = facing == Dir.South ? new Int2(4, 3) : new Int2(4, 1);
+            input = new Int2(4, 2) + lane.Opposite().Offset();
+            Sim.LayRun(world, input, lane, 1);                    // pointing at the machine
+            Sim.Place(world, BuildKind.Cutter, new Int2(4, 2), facing);
+
+            straight = new Int2(4, 2) + facing.Offset();
+            displaced = new Int2(4, 2) + lane.Offset() + facing.Offset();
+            Sim.LayRun(world, straight, facing, 1);
+            Sim.LayRun(world, displaced, facing, 1);
+            return world;
+        }
+
+        /// <summary>
+        /// A cutter at (4,2) flowing east, with one belt into <paramref name="input"/> from the west and one
+        /// dead-ended belt out of each of its two fronts. <paramref name="input"/> is the blade tile's back at
+        /// (3,2) or the lane tile's at (3,1), which are the two cells a line can arrive on.
+        /// </summary>
+        private static SimWorld FedCutter(Int2 input, out Int2 straight, out Int2 lane)
+        {
+            SimWorld world = Sim.NewWorld(20, 12);
+            Sim.LayRun(world, input, Dir.East, 1);
+            Sim.Place(world, BuildKind.Cutter, new Int2(4, 2), Dir.East);
+
+            straight = new Int2(5, 2);                            // the blade tile's front, east
+            lane = new Int2(5, 1);                                // and the lane tile's, one over
+            Sim.LayRun(world, straight, Dir.East, 1);
+            Sim.LayRun(world, lane, Dir.East, 1);
             return world;
         }
 

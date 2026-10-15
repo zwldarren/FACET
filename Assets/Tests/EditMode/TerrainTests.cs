@@ -129,19 +129,19 @@ namespace Facet.Tests
 
             foreach (Int2 cell in new[] { rock, water, hole })
             {
-                Assert.IsFalse(world.CanPlace(BuildKind.Turret, cell), "no machine on " + cell);
-                Assert.IsFalse(world.CanPlace(BuildKind.Wall, cell), "not even a wall on " + cell);
+                Assert.IsFalse(world.CanPlace(BuildKind.Turret, cell, Dir.East), "no machine on " + cell);
+                Assert.IsFalse(world.CanPlace(BuildKind.Wall, cell, Dir.East), "not even a wall on " + cell);
                 Assert.IsFalse(world.CanPlaceBelt(cell), "and no belt across " + cell);
             }
 
-            Assert.IsTrue(world.CanPlace(BuildKind.Turret, bare), "plain ground takes anything");
+            Assert.IsTrue(world.CanPlace(BuildKind.Turret, bare, Dir.East), "plain ground takes anything");
             Assert.IsTrue(world.CanPlaceBelt(bare), "including a belt");
 
             // Ore is the one ground with an exception, and it is the drill's alone.
             var ore = new Int2(4, 8);
             world.Terrain.SetOre(ore, Quad.Circle);
-            Assert.IsTrue(world.CanPlace(BuildKind.Drill, ore), "a vein takes the machine that mines it");
-            Assert.IsFalse(world.CanPlace(BuildKind.Turret, ore));
+            Assert.IsTrue(world.CanPlace(BuildKind.Drill, ore, Dir.East), "a vein takes the machine that mines it");
+            Assert.IsFalse(world.CanPlace(BuildKind.Turret, ore, Dir.East));
             Assert.IsTrue(world.CanPlaceBelt(ore), "and transport still crosses it");
         }
 

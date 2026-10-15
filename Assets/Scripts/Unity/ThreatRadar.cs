@@ -360,7 +360,9 @@ namespace Facet.Game
         /// state always draws the same arrows. Nothing is allocated: the markers go into a caller-owned
         /// array, and the lists are the ones the views already reuse.
         /// </summary>
-        /// <param name="jams">Jammed belt cells (<see cref="BeltField.GetJammed"/>), or empty.</param>
+        /// <param name="jams">Jammed and blocked belt cells (<see cref="BeltField.GetJammed"/> and
+        /// <see cref="BeltField.GetBlocked"/> together), or empty. Both are one subject because both are one
+        /// piece of news out of view: a line has stopped, on a tile the player has to go and look at.</param>
         /// <param name="core">The Core's centre, in world units.</param>
         /// <param name="into">Where the arrows go; at most <see cref="Array.Length"/> of them.</param>
         /// <param name="summary">What was found, including what no arrow had room for.</param>

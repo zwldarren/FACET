@@ -51,7 +51,7 @@ namespace Facet.Tests
             Assert.IsFalse(world.Belts.Has(new Int2(4, 1)), "so it was never laid");
 
             // The ghost reads both halves of the answer: legal ground, no money.
-            Assert.IsTrue(world.CanPlace(BuildKind.Belt, new Int2(4, 1)), "the cell itself is fine");
+            Assert.IsTrue(world.CanPlace(BuildKind.Belt, new Int2(4, 1), Dir.East), "the cell itself is fine");
             Assert.IsFalse(world.Economy.CanAfford(BuildKind.Belt), "the stockpile is not");
             Assert.IsFalse(world.Economy.CanAfford(BuildKind.Turret), "let alone a turret");
         }
@@ -192,10 +192,10 @@ namespace Facet.Tests
 
         /// <summary>
         /// The armed lane - the build that makes one drill pay for a gun and an income at once: a
-        /// splitter halves the stream, one branch banks at the Core, the other feeds a cutter whose halves
+        /// splitter halves the stream, one branch banks at the Core, the other feeds a cutter whose pieces
         /// are ammunition. While both branches drain, the bank's share is the splitter's half; and because
-        /// the ammo branch throttles itself (a one-outlet cutter can only hold so many of the piece it has
-        /// nowhere to put), the splitter ends up skipping it and the money branch carries everything - the
+        /// the ammo branch throttles itself (a cutter wired on one front only can hold so many of the piece it
+        /// has nowhere to put), the splitter ends up skipping it and the money branch carries everything - the
         /// two halves of "one drill, two destinations", read off the stockpile.
         /// </summary>
         [Test]
@@ -208,21 +208,22 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(19, 5), Dir.West, 8);                 // money branch, (19,5) .. (12,5)
             Sim.LayRun(world, new Int2(20, 6), Dir.North, 1);                // ammo branch north, into the cutter
             Sim.Place(world, BuildKind.Cutter, new Int2(20, 7), Dir.West);
-            Sim.LayRun(world, new Int2(19, 7), Dir.West, 8);                 // the left halves west, into the sink
+            Sim.LayRun(world, new Int2(19, 7), Dir.West, 8);                 // the bottom halves west, to the sink
 
-            // The ammo branch is throttled by its own second piece: the cutter facing west sends the left
-            // half down this line and has nowhere to put the right one, so once that slot holds
-            // CutterBehavior.SlotBuffer halves the machine stops cutting. The claim here is that the branch
-            // runs at all, so it is observed while it runs rather than at one arbitrary tick.
+            // The ammo branch is throttled by its own displaced piece: the cutter flowing west sends the bottom
+            // half down this line - its own front - and has nowhere to put the top one, which leaves a lane
+            // north, so once that slot holds CutterBehavior.SlotBuffer halves the machine stops cutting. The
+            // claim here is that the branch runs at all, so it is observed while it runs rather than at one
+            // arbitrary tick.
             bool ammoRan = false;
             for (int i = 0; i < 30 * (int)SimConfig.TickRate; i++)
             {
                 world.Tick(InputCommand.None);
-                ammoRan |= Sim.ShapeAt(world, new Int2(19, 7)) == Sim.LeftHalfCircle;
+                ammoRan |= Sim.ShapeAt(world, new Int2(19, 7)) == Sim.BottomHalfCircle;
             }
 
             Assert.IsTrue(ammoRan,
-                "the ammo branch runs: the cutter pushes the piece on the side it faces down the line");
+                "the ammo branch runs: the cutter pushes the piece on its own front down the line");
             Assert.AreEqual(0, world.Belts.JamCount, "and nothing about it is a wrong-shape delivery");
 
             // Half the drill, with the lane's own latency paid first: the first circle lands in the

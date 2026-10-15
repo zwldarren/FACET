@@ -66,6 +66,20 @@ namespace Facet.Core
         /// ask, so neither compares against <see cref="Quad.Empty"/> on its own.</summary>
         public bool Has(int quadrant) => At(quadrant) != Quad.Empty;
 
+        /// <summary>
+        /// The quadrant sharing this one's edge across the item's vertical axis - NW with NE, SE with SW. The
+        /// indices run clockwise from the top left, so that neighbour is one flip of the last bit away.
+        ///
+        /// Said here rather than in each drawing, because two views ask it (an item figure on the map and the
+        /// same figure rasterised for a card) and a seam drawn from both sides is one line only if both
+        /// sides agree about which quadrants share it.
+        /// </summary>
+        public static int AcrossVertical(int quadrant) => quadrant ^ 1;
+
+        /// <summary>The quadrant sharing this one's edge across the item's horizontal axis: NW with SW,
+        /// NE with SE. See <see cref="AcrossVertical"/>.</summary>
+        public static int AcrossHorizontal(int quadrant) => quadrant ^ 3;
+
         /// <summary>How many quadrants carry content: 0 for nothing, 4 for a full shape. The design's
         /// "depth" tiers are built on it (a quarter, a half, a three-quarter, a full).</summary>
         public int FilledCount

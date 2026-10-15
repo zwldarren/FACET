@@ -5,7 +5,7 @@ namespace Facet.Core
 {
     /// <summary>What a building is for, as the catalogue and the HUD both say it. The colour the HUD
     /// tints each role with is the view's own; this enum is the fact the tint hangs off.</summary>
-    public enum MachineRole { Transport, Wall, Mining, Processing, Routing, Defence }
+    public enum MachineRole { Transport, Wall, Mining, Processing, Routing, Defence, Waste }
 
     /// <summary>Whether a live note is just information, good news, or the player should look -
     /// <c>Warn</c> is the state a building is in that a fix at the cursor would change.</summary>
@@ -71,6 +71,8 @@ namespace Facet.Core
                 case BehaviorKind.Splitter:
                 case BehaviorKind.Sorter: return MachineRole.Routing;
                 case BehaviorKind.Pipe: return MachineRole.Transport;
+                // The drain: not routing, because it decides nothing - it is where a line's surplus ends.
+                case BehaviorKind.Sink: return MachineRole.Waste;
                 case BehaviorKind.None:
                     // A belt and a wall are both behaviour-less; the tile kind tells them apart.
                     return def.Tile == TileKind.Belt ? MachineRole.Transport : MachineRole.Wall;
@@ -90,6 +92,7 @@ namespace Facet.Core
                 case MachineRole.Processing: return "PROCESSING";
                 case MachineRole.Routing: return "ROUTING";
                 case MachineRole.Defence: return "DEFENCE";
+                case MachineRole.Waste: return "WASTE";
                 default:
                     throw new ArgumentOutOfRangeException(nameof(role), role,
                         "a new role needs the word the catalogue prints");
@@ -108,13 +111,11 @@ namespace Facet.Core
                            "does full damage, anything else " + ResistShare();
 
                 case BehaviorKind.Cutter:
-                    // "Across", not "along": the cut line runs perpendicular to the facing, and the
-                    // shipped wording once said "along the line it faces" - which reads as the cut
-                    // following the arrow, and taught exactly the wrong aim. The line names the case a
-                    // player needs and has not seen: the default east/west placement is the one they
-                    // already know.
-                    return "splits one shape in two · the cut runs across the facing: " +
-                           "north/south cuts top/bottom";
+                    // The line names the two things a player has to know and cannot see: it is two tiles
+                    // wide, and the second piece leaves a lane over rather than out of a side. The cut runs
+                    // along the belt rather than across it, which is why the knife can sit in a straight run.
+                    return "splits one shape in two · stands on two tiles: the piece on its left runs " +
+                           "straight on and the piece on its right leaves a lane over";
 
                 case BehaviorKind.Rotator:
                     return "turns a shape a quarter clockwise · the orientation fix";
@@ -128,6 +129,12 @@ namespace Facet.Core
                     // the row's filter here would put the definition's rule and the machine's rule on one
                     // card, disagreeing the moment the player re-routes it.
                     return def.Description;
+
+                case BehaviorKind.Sink:
+                    // The one card that has to teach a rule rather than describe a machine: a new player
+                    // meets a stalling cutter long before they think of throwing the surplus away.
+                    return "eats anything delivered into it and destroys it · where the half a fork makes " +
+                           "goes when nothing wants it";
 
                 case BehaviorKind.None:
                 case BehaviorKind.Drill:
@@ -154,7 +161,7 @@ namespace Facet.Core
 
                 case BehaviorKind.Cutter:
                     return def.Interval.ToString("0.##") + " s per split · both pieces leave at once · holds " +
-                           CutterBehavior.SlotBuffer + " a side";
+                           CutterBehavior.SlotBuffer + " a lane";
 
                 case BehaviorKind.Rotator:
                     return def.Interval.ToString("0.##") + " s per quarter turn";
@@ -181,6 +188,10 @@ namespace Facet.Core
 
                 case BehaviorKind.Splitter:
                     return "deals items round-robin · skips blocked outlets";
+
+                case BehaviorKind.Sink:
+                    return "1 × 1 tile · no outlet · never jams · eats "
+                        + config.BeltSpeed.ToString("0.##") + " shapes/s, one a segment";
 
                 case BehaviorKind.None:
                     return def.Tile == TileKind.Belt
@@ -218,7 +229,7 @@ namespace Facet.Core
                 {
                     Int2 onto = DrillLanding(cell, machine.Direction);
                     Quad mineral = world.Terrain.OreAt(cell);
-                    return world.TileGrid.Get(onto).Eats()
+                    return world.TileGrid.Get(onto).Takes()
                         ? new ReadingNote("mining " + Shape.MineralName(mineral) + " onto " + onto,
                             NoteSeverity.Neutral)
                         : new ReadingNote("nothing to push onto at " + onto + " - lay a belt facing it",
@@ -236,11 +247,11 @@ namespace Facet.Core
 
                     if (!state.Carried.IsEmpty)
                     {
-                        (Shape frontPiece, Shape backPiece) = CutterBehavior.Pieces(state.Carried, front);
+                        (Shape straight, Shape displaced) = CutterBehavior.Pieces(state.Carried, front);
                         return new ReadingNote("splitting " + state.Carried.Describe() + " · " +
-                            Percent(machine.Work) + "% through · " + frontPiece.Describe() + " leaves " +
-                            MachineReading.DirName(front) + ", " + backPiece.Describe() + " leaves " +
-                            MachineReading.DirName(front.Opposite()), NoteSeverity.Neutral);
+                            Percent(machine.Work) + "% through · " + straight.Describe() +
+                            " runs straight on, " + displaced.Describe() + " leaves a lane to the " +
+                            DirName(MachineFootprint.LaneOf(front)), NoteSeverity.Neutral);
                     }
 
                     if (state.OutputCount > 0 || state.OutputCount2 > 0)
@@ -311,20 +322,33 @@ namespace Facet.Core
 
                 case BehaviorKind.Turret:
                 {
+                    // Loading and aiming are separate now, so the card says both: what is in the chamber -
+                    // the shape the line is feeding the gun, which is the thing a player cannot otherwise see
+                    // - and whether there is anything to shoot. An empty chamber is the "starved" state, said
+                    // with the word the HUD's own diagnostic uses.
                     if (!machine.Armed)
-                        return new ReadingNote("starved - nothing waiting on its lines", NoteSeverity.Warn);
+                        return new ReadingNote("starved - an empty chamber, nothing waiting on its lines",
+                            NoteSeverity.Warn);
 
-                    string round = machine.Shape.IsEmpty
-                        ? string.Empty
-                        : " · last round " + machine.Shape.Describe();
-                    return new ReadingNote(
-                        (machine.HasTarget ? "armed · a target in range" : "armed · nothing in range") + round,
-                        NoteSeverity.Good);
+                    return new ReadingNote("loaded with " + machine.Shape.Describe() + " · " +
+                        (machine.HasTarget ? "a target in range" : "nothing in range"), NoteSeverity.Good);
                 }
 
                 case BehaviorKind.None:
                     // A wall or a belt under inspection: the description is the whole truth.
                     return new ReadingNote(def.Description, NoteSeverity.Neutral);
+
+                case BehaviorKind.Sink:
+                {
+                    // A working sink and an unfed one look identical on the map, so the card carries the one
+                    // number that tells them apart. Nothing is wrong in either state: a drain with nothing
+                    // to drain is not a fault, which is why this note never warns.
+                    world.Machines.TryGet(cell, out MachineState state);
+                    return state.Swallowed == 0
+                        ? new ReadingNote("empty - nothing is delivering", NoteSeverity.Neutral)
+                        : new ReadingNote("eaten " + state.Swallowed + " · nothing comes out",
+                            NoteSeverity.Neutral);
+                }
 
                 default:
                     throw new ArgumentOutOfRangeException(nameof(def), def.Behavior,
@@ -341,6 +365,8 @@ namespace Facet.Core
         {
             if (def.Behavior == BehaviorKind.None && def.Tile != TileKind.Belt)
                 return "no facing - a wall only stands in the way";
+            if (def.Behavior == BehaviorKind.Sink)
+                return "eats from every side - no outlet, and nothing to aim";
             if (!def.UsesFacing) return "ports read off the belts around it";
 
             switch (machine.Behavior)
@@ -350,8 +376,9 @@ namespace Facet.Core
                     return machine.Filter.Describe() + " leaves " + DirName(machine.Direction);
 
                 case BehaviorKind.Cutter:
-                    return CutNote(machine.Direction) +
-                           " - the front piece leaves " + DirName(machine.Direction);
+                    return "runs " + DirName(machine.Direction) + ", cutting " + CutNote(machine.Direction) +
+                           " - one piece on out the front, the other a lane to the " +
+                           DirName(MachineFootprint.LaneOf(machine.Direction));
 
                 case BehaviorKind.None:      // a belt: its facing is where it carries
                 case BehaviorKind.Drill:
@@ -378,20 +405,22 @@ namespace Facet.Core
         /// the room.</summary>
         public static string GhostFacingNote(in MachineDef def, Dir direction)
         {
-            if (def.Behavior == BehaviorKind.Cutter) return CutNote(direction);
+            if (def.Behavior == BehaviorKind.Cutter) return "cuts " + CutNote(direction);
+            if (def.Behavior == BehaviorKind.Sink) return "eats from every side";
             if (def.Behavior == BehaviorKind.None && def.Tile != TileKind.Belt)
                 return "a wall has no facing";
 
             return def.UsesFacing ? "facing " + DirName(direction) : "ports read off belts";
         }
 
-        /// <summary>The two cuts a cutter can be aimed at, said the one way both cards print it: which
-        /// pair of pieces the facing selects. The facing side takes the piece on that side - which piece
-        /// leaves where is the sentence <see cref="FacingNote"/> appends.</summary>
-        private static string CutNote(Dir direction)
-            => direction == Dir.East || direction == Dir.West
-                ? "cuts left from right"
-                : "cuts top from bottom";
+        /// <summary>The two cuts a cutter can be aimed at, said the one way both cards print it: the cut
+        /// runs <em>along</em> the way the machine faces, so a machine that runs north or south cuts left
+        /// from right and one that runs east or west cuts top from bottom. Which piece leaves where is the
+        /// second half of the sentence <see cref="FacingNote"/> adds.</summary>
+        private static string CutNote(Dir facing)
+            => facing == Dir.North || facing == Dir.South
+                ? "left from right"
+                : "top from bottom";
 
         /// <summary>The sides a machine's belts wire it to: a belt pointing in is an input and a belt
         /// pointing away is an output, both masks straight off <see cref="MachineSnapshot"/>.</summary>
@@ -405,7 +434,7 @@ namespace Facet.Core
         /// <summary>
         /// What the building draws on itself. Keyed on the machine's <em>behaviour</em>, not its tile
         /// kind: a cutter shows the piece it is holding, a stacker the union it just made, a sorter the
-        /// shape it routes, a turret the last round it fired.
+        /// shape it routes, a turret the round sitting in its chamber.
         ///
         /// Every behaviour that shows nothing says so by name; the fallback is a throw, because a new
         /// behaviour silently badge-less is the bug this file's design argues against.
@@ -430,8 +459,9 @@ namespace Facet.Core
                     return m.Carried;
 
                 case BehaviorKind.Turret:
-                    // The last round it fired: a universal chamber holds nothing, so the honest badge is
-                    // what the line most recently fed it.
+                    // The chambered round: what the line has loaded the gun with, drawn until the shot
+                    // leaves. Empty says "nothing loaded", the honest badge for a gun with no supply - the
+                    // state the card calls starved.
                     return m.Carried;
 
                 case BehaviorKind.Sorter:
@@ -450,6 +480,10 @@ namespace Facet.Core
 
                 case BehaviorKind.None:
                 case BehaviorKind.Drill:
+                // A drill draws nothing over its patch and a sink draws nothing at all: a sink holds
+                // nothing, so any badge on it would be a lie about a machine whose whole job is to have
+                // nothing left over.
+                case BehaviorKind.Sink:
                     return Shape.None;
 
                 default:
@@ -473,6 +507,7 @@ namespace Facet.Core
                 case BehaviorKind.Splitter:
                 case BehaviorKind.Sorter:
                 case BehaviorKind.Turret:
+                case BehaviorKind.Sink:
                     return Shape.None;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(def), def.Behavior,
@@ -504,6 +539,7 @@ namespace Facet.Core
                 case BehaviorKind.Splitter:
                 case BehaviorKind.Sorter:
                 case BehaviorKind.Turret:
+                case BehaviorKind.Sink:
                     return 0f;
 
                 default:

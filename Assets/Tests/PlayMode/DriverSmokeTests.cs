@@ -23,9 +23,9 @@ namespace Facet.PlayTests
     public class DriverSmokeTests
     {
         /// <summary>
-        /// The round the smoke rig's line runs: the top half-circle, which is what a north-facing cutter puts
-        /// out of its front outlet - and the demand its enemies carry, so a shot that lands is a matched one.
-        /// The rig spells it out rather than using the EditMode harness, which this assembly cannot see.
+        /// The round the smoke rig's line runs: the top half-circle, an item the cutter makes of a circle when
+        /// it flows east or west - and the demand its enemies carry, so a shot that lands is a matched one.
+        /// The rig spells the item out rather than using the EditMode harness, which this assembly cannot see.
         /// </summary>
         private static readonly Shape Ammo = Shape.Of(Quad.Circle, Quad.Circle, Quad.Empty, Quad.Empty);
 

@@ -30,6 +30,11 @@ namespace Facet.Game
         private readonly List<EnemySnapshot> _enemies = new List<EnemySnapshot>();
         private readonly List<Int2> _jams = new List<Int2>();
 
+        /// <summary>Segments whose item has nowhere to go - a dead end rather than a refusal. They mark the
+        /// same way a jam does, because to a player both are one piece of news ("something has stopped out
+        /// there, and it is on a tile you cannot see"); the card's line is where the two are told apart.</summary>
+        private readonly List<Int2> _blocked = new List<Int2>();
+
         /// <summary>Marker scratch, sized to the palette's cap: the arrows are folded into it and drawn
         /// straight out of it, so a wave off-screen costs no allocation per frame.</summary>
         private ThreatRadar.Marker[] _markers = new ThreatRadar.Marker[0];
@@ -93,6 +98,8 @@ namespace Facet.Game
 
             world.Enemies.GetEnemies(_enemies);
             world.Belts.GetJammed(_jams);
+            world.Belts.GetBlocked(_blocked);
+            _jams.AddRange(_blocked);
 
             int arrows = ThreatRadar.Collect(view, _enemies, _jams, ThreatRadar.CoreCentre(world),
                 look.MergePixels * pixel, _markers, out ThreatRadar.Summary summary);

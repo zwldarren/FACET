@@ -104,11 +104,14 @@ namespace Facet.Core
             HasBuilt = false;
         }
 
-        /// <summary>Would a placement of this kind be allowed here? Structural only - whether the stockpile
-        /// can cover it is <see cref="EconomyState.CanAfford"/>, and the cursor ghost reads both.</summary>
-        public bool CanPlace(BuildKind kind, Int2 cell)
+        /// <summary>Would a placement of this kind be allowed here, aimed this way? Structural only - whether
+        /// the stockpile can cover it is <see cref="EconomyState.CanAfford"/>, and the cursor ghost reads both.
+        /// The facing is part of the question rather than a detail of it, because a cutter's footprint is
+        /// turned by it: the machine stands on two tiles, so the tile the ghost is over is not always the only
+        /// one that has to be free.</summary>
+        public bool CanPlace(BuildKind kind, Int2 cell, Dir direction)
             => IsUnlocked(kind)
-               && (kind == BuildKind.Belt ? _terrain.CanLayBelt(cell) : _machines.CanPlace(kind, cell));
+               && (kind == BuildKind.Belt ? _terrain.CanLayBelt(cell) : _machines.CanPlace(kind, cell, direction));
 
         /// <summary>Has this map unlocked the operator this building needs? The campaign's progression is
         /// the operator set (<see cref="MapDefinition.Unlocked"/>), so map 1 refuses a rotator outright
@@ -127,7 +130,7 @@ namespace Facet.Core
         /// error.</summary>
         public bool TryPlace(BuildKind kind, Int2 cell, Dir direction)
         {
-            if (!CanPlace(kind, cell)) return false;
+            if (!CanPlace(kind, cell, direction)) return false;
             if (!_economy.TrySpend(kind)) return false;
 
             bool placed = kind == BuildKind.Belt
@@ -157,20 +160,32 @@ namespace Facet.Core
         {
             if (TryPlace(kind, cell, direction)) return;
 
-            _events.PlacementRejected(cell, kind, ReasonFor(kind, cell), _economy.CostOf(kind));
+            _events.PlacementRejected(cell, kind, ReasonFor(kind, cell, direction), _economy.CostOf(kind));
         }
 
         /// <summary>Why a placement was refused, read from the same rules that refused it and in the same
         /// order - <see cref="CanPlace"/> first, the stockpile second - so the toast names the rule that
         /// actually bit. The doorway is a machine's rule, so belts are exempt: a belt is walkable and may
-        /// cross a door, and a belt refused on one is refused for the tile it is on.</summary>
-        private RejectionReason ReasonFor(BuildKind kind, Int2 cell)
+        /// cross a door, and a belt refused on one is refused for the tile it is on.
+        ///
+        /// A machine that stands on two tiles is refused for the tile that refused it, which is the second
+        /// one whenever the ghost sits on a clear tile and the lane beside it does not - so "there is already
+        /// something in the lane this cutter would need" is what the player is told.</summary>
+        private RejectionReason ReasonFor(BuildKind kind, Int2 cell, Dir direction)
         {
-            if (CanPlace(kind, cell)) return RejectionReason.NoFunds;
+            if (CanPlace(kind, cell, direction)) return RejectionReason.NoFunds;
             if (!IsUnlocked(kind)) return RejectionReason.Locked;
             if (!_grid.InBounds(cell)) return RejectionReason.OffMap;
             if (kind != BuildKind.Belt && _map.SpawnIndexOf(cell) >= 0) return RejectionReason.Doorway;
             if (_grid.IsOccupied(cell)) return RejectionReason.Occupied;
+
+            if (kind != BuildKind.Belt && _content.TryMachine(kind, out MachineDef machine) &&
+                MachineFootprint.TrySecond(machine.Behavior, cell, direction, out Int2 second))
+            {
+                if (!_grid.InBounds(second)) return RejectionReason.OffMap;
+                if (_map.SpawnIndexOf(second) >= 0) return RejectionReason.Doorway;
+                if (_grid.IsOccupied(second)) return RejectionReason.Occupied;
+            }
 
             return RejectionReason.BadGround;
         }

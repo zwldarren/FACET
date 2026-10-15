@@ -10,6 +10,9 @@
 #   FACET.Editor - compiles against the real UnityEditor assemblies, because the
 #                 Editor tooling (the build tool, the asset creators, the map
 #                 painting window) is code too and a typo in it is a broken menu.
+#   the two test assemblies - FACET.Core.Tests and FACET.PlayTests, the same way:
+#                 a suite that does not compile is a suite that does not run, and
+#                 a test's use of an API a change just moved is a red test.
 #
 # It is a fast syntax + API-surface check, not a substitute for opening the Editor:
 # it cannot catch scene wiring, serialization or rendering mistakes.
@@ -72,6 +75,9 @@ build_rsp() {
         echo "-langversion:9.0"
         echo "-nologo"
         echo "-nostdlib+"
+        # Some assemblies only exist with a define set - the test assemblies carry
+        # UNITY_INCLUDE_TESTS on their asmdef, so their sources are behind it.
+        [ -z "$RSP_DEFINES" ] || echo "-define:$RSP_DEFINES"
         echo "-out:\"$(to_native "$OUT_DIR/$out")\""
         echo "-reference:\"$(to_native "$NETSTANDARD")\""
         local ref
@@ -112,6 +118,7 @@ run_csc() {
 }
 
 # ---------------------------------------------------------------- FACET.Core
+RSP_DEFINES=
 build_rsp core FACET.Core.dll "$PROJECT_ROOT/Assets/Scripts/Core" ""
 
 echo "== FACET.Core (netstandard2.1, no engine) =="
@@ -136,5 +143,51 @@ build_rsp editor FACET.Editor.dll "$PROJECT_ROOT/Assets/Scripts/Editor" "FACET.*
 echo "== FACET.Editor (UnityEngine + UnityEditor) =="
 run_csc editor FACET.Editor
 
+# ---------------------------------------------------------------- the test assemblies
+# The suite is code too, and a suite that does not compile is a suite that does not run: the two test
+# assemblies are compiled here for the same reason the game is. They reference the three above by
+# file, so a change that breaks a test's API use is caught in the same pass as the change itself.
+# Both carry UNITY_INCLUDE_TESTS on their asmdef, which is why their sources are behind it.
+#
+# NUnit is a precompiled reference rather than a package assembly, so it is not in ScriptAssemblies
+# at all: their asmdefs name it and Unity resolves it out of the package cache. NUnit's own build is a
+# .NET Framework one, so the netfx shims come along with it - the same reference set Unity's own
+# generated project file for this assembly carries.
+NUNIT="$(ls -d "$PROJECT_ROOT"/Library/PackageCache/com.unity.ext.nunit*/net40/unity-custom/nunit.framework.dll 2>/dev/null | head -n 1)"
+if [ -z "$NUNIT" ]; then
+    echo "error: no nunit.framework.dll under Library/PackageCache - open the project once, or run the suite in the Editor." >&2
+    exit 2
+fi
+
+NETFX_SHIMS="$UNITY_DATA/NetStandard/compat/2.1.0/shims/netfx"
+if [ ! -d "$NETFX_SHIMS" ]; then
+    echo "error: no .NET Framework shims at $NETFX_SHIMS, which NUnit needs to compile against." >&2
+    exit 2
+fi
+
+# The managed references these two need, with one omission: the monolithic UnityEditor.dll defines the
+# same types as UnityEditor.CoreModule.dll, and a compile that references both reports every one of
+# them as ambiguous. The Editor assembly above gets away with both because it touches none of them.
+MANAGED_REFS=()
+for d in "$UNITY_DATA/Managed/UnityEngine"/*.dll; do
+    [ "$(basename "$d")" = "UnityEditor.dll" ] || MANAGED_REFS+=("$d")
+done
+
+RSP_DEFINES="UNITY_INCLUDE_TESTS"
+build_rsp edittests FACET.Core.Tests.dll "$PROJECT_ROOT/Assets/Tests/EditMode" "FACET.*" \
+    "${MANAGED_REFS[@]}" "$NUNIT" "$NETFX_SHIMS"/*.dll \
+    "$OUT_DIR/FACET.Core.dll" "$OUT_DIR/FACET.Game.dll" "$OUT_DIR/FACET.Editor.dll"
+
+echo "== FACET.Core.Tests (EditMode) =="
+run_csc edittests FACET.Core.Tests
+
+build_rsp playtests FACET.PlayTests.dll "$PROJECT_ROOT/Assets/Tests/PlayMode" "FACET.*" \
+    "${MANAGED_REFS[@]}" "$NUNIT" "$NETFX_SHIMS"/*.dll \
+    "$OUT_DIR/FACET.Core.dll" "$OUT_DIR/FACET.Game.dll"
+
+echo "== FACET.PlayTests (PlayMode) =="
+run_csc playtests FACET.PlayTests
+RSP_DEFINES=
+
 echo
-echo "OK - FACET.Core, FACET.Game and FACET.Editor compiled clean."
+echo "OK - FACET.Core, FACET.Game, FACET.Editor and both test assemblies compiled clean."

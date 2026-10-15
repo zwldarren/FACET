@@ -80,10 +80,10 @@ namespace Facet.Tests
         [Test]
         public void TheGhost_TurnsWhilePaused_SoAStoppedPlayerCanStillAimTheCut()
         {
-            // Q/E is how a cutter's cut line is aimed, and re-aiming a line is what a paused player is
-            // doing - so the ghost's facing turns with the paused branch, exactly as the selection does.
-            // It rode the playing branch once, and a player who paused to plan faced a ghost no key
-            // could turn: level 1's top half-circle ask, met with a cut that would not aim.
+            // Q/E is how a cutter is aimed - the flow names the cut and the lane each piece leaves by - and
+            // re-aiming a line is what a paused player is doing, so the ghost's facing turns with the paused
+            // branch, exactly as the selection does. It rode the playing branch once, and a player who paused to
+            // plan faced a ghost no key could turn: the briefing's ask was there and the cut would not aim.
             SimWorld world = Sim.Rig();
 
             world.Paused = true;

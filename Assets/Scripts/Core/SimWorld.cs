@@ -230,7 +230,9 @@ namespace Facet.Core
         /// the R key still goes through <see cref="InputCommand.RestartPressed"/>.</summary>
         public void RequestRestart() => _restartRequested = true;
 
-        public bool CanPlace(BuildKind kind, Int2 cell) => _build.CanPlace(kind, cell);
+        /// <summary>Would a placement of this kind be allowed here, aimed this way? The facing is the
+        /// ghost's, because for a cutter it is what decides which tile the machine's second half needs.</summary>
+        public bool CanPlace(BuildKind kind, Int2 cell, Dir direction) => _build.CanPlace(kind, cell, direction);
 
         /// <summary>Has this run unlocked the operator that building needs? The build bar greys the rest
         /// out; the campaign's progression is this set and nothing else.</summary>
@@ -246,7 +248,7 @@ namespace Facet.Core
         /// player's verb. The no-refund low-level removal lives on <see cref="Belts"/>.</summary>
         public bool TryRemoveBuilding(Int2 cell) => _build.Remove(cell);
 
-        public bool CanPlaceBelt(Int2 cell) => _build.CanPlace(BuildKind.Belt, cell);
+        public bool CanPlaceBelt(Int2 cell) => _build.CanPlace(BuildKind.Belt, cell, Dir.East);
 
         public bool TryPlaceBelt(Int2 cell, Dir direction) => _build.TryPlace(BuildKind.Belt, cell, direction);
 

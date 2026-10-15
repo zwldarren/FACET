@@ -15,13 +15,24 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   carrier overrides the whole definition except its `Id`, its slot, and the additive `MaxHp` - and a
   `ShapeFilterField`/`ShapeField` is how the two shape-valued fields cross that boundary.
 - **Behaviour** (`BehaviorKind`) - what a machine *does*: drill, cutter, rotator, stacker, pipe, splitter,
-  sorter, turret, or none. The tick, the badge, the draw and the narration all dispatch on it - and every
-  dispatch that dispatches on it names every kind it has an answer for, and throws on the rest.
+  sorter, turret, sink, or none. The tick, the badge, the draw and the narration all dispatch on it - and
+  every dispatch that dispatches on it names every kind it has an answer for, and throws on the rest.
+- **Drain / sink** - the one machine that takes and destroys: one tile, no outlet, eats from any of its four
+  sides, and never the reason a line stops. It is what finishes a **fork** - see below - and it is the only
+  intake that will take a *jammed* segment, because a machine that destroys what it takes is a way out of a
+  jam rather than a way around one (a machine that *carries* must leave the item for the right-click).
 - **Operator** (`Operators`) - a machine that *transforms* an item rather than moving it: the cutter, the
   rotator and the stacker. The campaign's progression **is** this set (`MapDefinition.Unlocked`,
-  `MachineDef.Requires`), so a locked operator is a machine the map refuses to let the player build.
+  `MachineDef.Requires`), so a locked operator is a machine the map refuses to let the player build. The
+  drain transforms nothing and is gated by nothing.
 - **Belt, hub, run** - the transport vocabulary: a **belt** carries one item per cell, a **hub**
   (splitter/sorter) reads its outlets off the belts wired around it, a **run** is a laid line of belts.
+- **Blocked segment** - a belt cell whose item has reached its exit edge and whose front tile will never
+  take it: bare ground, the map's edge, or a **wall** (the one solid with no intake, however much a belt
+  docks with it). Reported with the **jam** count, marked in amber on the bed and on the locator.
+- **Jam** - a belt cell whose item a machine *refused*: the wrong shape for its **diet**. Latched, because a
+  refusal is a decision - the item waits for the right-click that clears it. A **blocked** segment is the
+  other way a line stops, and is *derived* rather than latched, because its cure is to finish the line.
 
 ## Shapes
 
@@ -38,14 +49,22 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   the algebra are one picture. It is what the belt items, the ore, the badges, the demand icons and the
   sorter's picker all draw.
 - **Cut / cut line** (`Shape.Cut`, `CutterBehavior.Pieces`) - splitting an item along one of its two axes,
-  keeping the quadrants on each side. The machine's *facing* selects the line (north/south cut across,
-  east/west cut down the middle - opposite facings are the same line) and each piece leaves by its own
-  side: the one it faces takes the piece on that side, the side opposite takes the other. Cutting a
-  quarter yields the quarter plus nothing, which is why "an item can be cut at most twice" is a corollary
-  rather than a rule.
+  keeping the quadrants on each side. The cut runs **along the cutter's flow**, so the machine's *facing*
+  selects the line: flowing north or south cuts left from right, flowing east or west cuts top from bottom
+  (opposite facings are the same line, with the two lanes swapped). Each piece leaves by the front of one of
+  the cutter's two tiles: the piece on the flow's left keeps the lane the belt fed, the piece on its right
+  leaves a lane over. Cutting a quarter yields the quarter plus nothing, which is why "an item can be cut at
+  most twice" is a corollary rather than a rule. Both lines are the cutter's to choose from the moment it is
+  unlocked, so the *axis* of a half is never what a rotator is for - which is the aim the placement ghost
+  draws: both tiles, the blade down the lane the belt feeds, and a chevron per lane. It draws no pieces,
+  because the machine cuts whatever it is handed - a preview of one item would be a lie about the rest.
+- **Fork** (`MachineFootprint`) - the cutter's shape: two tiles, one lane across its flow. The belt feeds the
+  back of the first, both pieces leave by the front (one per tile), and the second tile is the lane the
+  displaced piece is dropped into. Machines that stand on one tile answer one for `Tiles`.
 - **Rotation** (`Shape.RotatedCW`) - a quarter turn clockwise: NW to NE to SE to SW and back. Four turns
   are the identity and **two turns are not**: a half turn gives the complement piece on the same cut
-  line. The rotator's second job is orientation repair.
+  line. The rotator's work is orientation *repair* - a piece already on a belt keeps the orientation its cut
+  gave it, and a cut cannot turn one.
 - **Stack / disjoint union** (`Shape.Stacked`) - merging two items whose filled quadrants do not overlap;
   overlapping is illegal in the algebra and a *stall* at the machine, never a jam, because the item that
   cannot be merged is one the player spent a chain building.
@@ -150,12 +169,15 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   jumping exactly one). One statement each: the tick delivers through them and the card describes
   them, so the picture cannot drift from the simulation - the same deal the port masks make.
 - **Badge / work** (`Badge`, `Badge2`, `Work`) - what a building draws on itself (a cutter's pending
-  piece *and* the other one, a stacker's held piece, a sorter's filter, a turret's last round) and the
+  piece *and* the other one, a stacker's held piece, a sorter's filter, a turret's chambered round) and the
   0..1 fraction the view animates. Both dispatched on behaviour; both throw on one they have no answer for.
 - **Universal chamber** (`TurretBehavior`, `TurretDef`) - the one gun's rule: it eats any non-empty shape,
   one round per shot, and the *round* decides the damage - full against the enemy whose weakness it is, a
   quarter against anything else. There is no diet table and no splash, so what a shot is worth is a shape
-  property of the round and a layout property of the line that delivered it.
+  property of the round and a layout property of the line that delivered it. The chamber **holds one round
+  and loads it as soon as a belt delivers one**, with or without a target: loading is the line's half of the
+  gun and firing is the target's, so the badge always says what the line is feeding it, and an empty chamber
+  - not a full belt - is the "starved" state the HUD warns about.
 - **Diet** (`MachineDef.Diet`) - what a machine accepts, as a `ShapeFilter`. Every shipped machine eats any
   shape, so nothing in the shipped game jams; the rule stays because "what may this machine take" has to
   have one answer per machine, and a table may still declare a narrower one.

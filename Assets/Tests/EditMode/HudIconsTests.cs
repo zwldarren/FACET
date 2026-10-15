@@ -179,5 +179,52 @@ namespace Facet.Tests
                 Assert.IsTrue(single.Contains((Color32)palette.CircleMineral));
             });
         }
+
+        [Test]
+        public void TheCrossInACardFigure_IsThinnerThanTheRimThatFramesIt()
+        {
+            // The map's rule, rasterised: two quadrants share every seam and each side of one draws half of
+            // it, so the cross through a figure is one line thinner than the edge around it. A card's mark is
+            // the same figure as the item on the belt it describes, so a disc that reads as a disc there has
+            // to read as a disc here - and at a card's size a seam drawn from both sides at the outline's own
+            // width is most of the mark.
+            WithIcons((palette, icons) =>
+            {
+                // The unfitted canvas of a full item: the item's own square is the icon, so a row across it
+                // crosses the rim, the fill and the seam. A row off the middle, because the row through the
+                // middle is the horizontal seam itself - from end to end it is one line of outline.
+                Color32[] pixels = icons.Canvas(Shape.Full(Quad.Circle)).Texture.GetPixels32();
+                var outline = (Color32)palette.Outline;
+                int row = (IconSize / 2 + 6) * IconSize;
+
+                int rim = 0;
+                int seam = 0;
+                int run = 0;
+                int runStart = 0;
+                for (int x = 0; x <= IconSize; x++)
+                {
+                    if (x < IconSize && pixels[row + x].Equals(outline))
+                    {
+                        if (run == 0) runStart = x;
+                        run++;
+                        continue;
+                    }
+
+                    if (run > 0)
+                    {
+                        // The run at the figure's edge is the rim; the one at its middle is the seam.
+                        int middle = runStart + run / 2;
+                        if (middle < IconSize / 4) rim = run;
+                        else if (Mathf.Abs(middle - IconSize / 2) <= 1) seam = run;
+                    }
+
+                    run = 0;
+                }
+
+                Assert.Greater(rim, 0, "the figure's rim is drawn");
+                Assert.Greater(seam, 0, "and so is the vertical seam at its middle");
+                Assert.Less(seam, rim, "the seam is thinner than the rim, as it is on the map");
+            });
+        }
     }
 }

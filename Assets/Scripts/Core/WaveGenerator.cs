@@ -37,8 +37,11 @@ namespace Facet.Core
         /// <summary>What wave 1 may spend, in enemy-cost units.</summary>
         public const float BaseBudget = 4f;
 
-        /// <summary>How much the budget grows per wave: 1.25 is a quarter more pressure each time.</summary>
-        public const float Growth = 1.25f;
+        /// <summary>How much the budget grows per wave: 1.15 leans on the previous wave rather than
+        /// outrunning it, which is what keeps a bounded exam's last waves buildable - a map's economy
+        /// grows linearly in drilling and stacking throughput, and a curve that outran it would end the
+        /// run at a number no amount of building could answer.</summary>
+        public const float Growth = 1.15f;
 
         /// <summary>How far the budget may wander from its curve, as a share. 0.15 is the design's "±15%
         /// jitter": enough that two runs of one map do not play out identically, little enough that a
@@ -48,7 +51,8 @@ namespace Facet.Core
         /// <summary>What a Runner costs the budget.</summary>
         public const float RunnerCost = 1f;
 
-        /// <summary>What a Tank costs the budget: heavier in every sense, so one Tank is worth two and a
+        /// <summary>What a Tank costs the budget: heavier in every sense - three matched shots to the
+        /// Runner's two, eight damage a second where the Runner does six - so one Tank is worth two and a
         /// half Runners of pressure.</summary>
         public const float TankCost = 2.5f;
 

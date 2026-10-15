@@ -15,8 +15,9 @@ namespace Facet.Core
         Belt = 0,
         Drill = 1,
 
-        /// <summary>Splits one item along the line its facing selects. Two outlets - front and back -
-        /// and a buffer per outlet, so one blocked side never loses the other piece.</summary>
+        /// <summary>Splits one item along the line its facing selects, over the two tiles it stands on.
+        /// Both pieces leave by the front, one of them a lane over, and a buffer per lane means one blocked
+        /// lane never loses the other piece.</summary>
         Cutter = 2,
 
         /// <summary>Turns an item a quarter clockwise. The one machine that makes orientation fixable:
@@ -43,6 +44,13 @@ namespace Facet.Core
         /// non-empty shape, one round per shot, no diet table and no splash. What a shot is worth is the
         /// shape it was made of against the enemy it hits - see <see cref="TurretBehavior"/>.</summary>
         Turret = 9,
+
+        /// <summary>The drain: eats anything delivered into it and destroys it. It exists because a fork
+        /// makes two pieces and a layout often wants one - the surplus has to go <em>somewhere</em>, and
+        /// without a sink "route the unwanted half" has no ending, so its lane fills and the machine that
+        /// made it stalls. Appended past the ten the keyboard reaches, which is why it is the one kind with
+        /// a letter for a hotkey rather than a digit.</summary>
+        Sink = 10,
     }
 
     /// <summary>Convenience reads over the <b>shipped</b> content table, for code that does not care

@@ -12,7 +12,7 @@ namespace Facet.Core
         {
             MachineDef def = ctx.Content.Machine(splitter.Build);
 
-            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, in def);
+            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, splitter.Direction, in def);
 
             // Push first, so a hub that empties can take again in the same tick. Round-robin across the
             // outlets - the shared rule every ported machine uses.
