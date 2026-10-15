@@ -14,5 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: FACET.Game::Facet.Game.MapSet
   Maps:
   - {fileID: 11400000, guid: cdc4a00272f992248b121303bc333c42, type: 2}
-  - {fileID: 11400000, guid: 270a3b6e823ab6b4c81633f4dba54700, type: 2}
-  - {fileID: 11400000, guid: 931ae26737a2a454389062eab85eca93, type: 2}
+  - {fileID: 11400000, guid: 235de7ca6a8246aab7c38717d7031601, type: 2}

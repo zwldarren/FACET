@@ -295,7 +295,7 @@ namespace Facet.Tests
             // A map that scripts its opening hands the clock a generator that must pick up where the table
             // left off: the finale's budget is the generated curve's base, and the depth band never falls
             // below the deepest demand the table itself made. Without the handover the wave after the
-            // finale was a quarter of the exam the player had just fought - and the deep line they built
+            // finale was a fraction of the exam the player had just fought - and the deep line they built
             // for it sat idle through the first generated waves.
             ShapePool pool = FullPool();
             var generator = new WaveGenerator(11, pool, 1, authoredWaves: 3, authoredEndBudget: 47f,
@@ -530,7 +530,7 @@ namespace Facet.Tests
             for (int i = 0; i < authored; i++)
                 table[i] = new WaveDefinition(15f, new SpawnGroup(EnemyKind.Runner, 1, 0, 0f, 1f, Sim.Circle));
 
-            return new MapDefinition("generated", 32, 20, Sim.TestCircles,
+            return new MapDefinition("generated", 32, 20, Sim.TestShapes,
                 new[]
                 {
                     new ShapePatch(new Int2(2, 2), 1, 1, Quad.Circle),

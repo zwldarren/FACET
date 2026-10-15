@@ -3,10 +3,10 @@ using System.Collections.Generic;
 
 namespace Facet.Core
 {
-    /// <summary>The operator machines a map has unlocked, as a set. The campaign's progression <em>is</em>
-    /// this set (§7): map 1 teaches cutting and unlocks the cutter, map 2 the second mineral and the
-    /// rotator, map 3 the stacker. It is also the guardrail the wave generator draws its demand shapes
-    /// from, so a map can never brief a shape its own operators cannot build.</summary>
+    /// <summary>The operator machines a map has unlocked, as a set. A map's progression <em>is</em>
+    /// this set (§7): a map hands over exactly the operators it lists, so teaching cutting and handing
+    /// over the cutter are one statement rather than two. It is also the guardrail the wave generator
+    /// draws its demand shapes from, so a map can never brief a shape its own operators cannot build.</summary>
     [Flags]
     public enum Operators : byte
     {

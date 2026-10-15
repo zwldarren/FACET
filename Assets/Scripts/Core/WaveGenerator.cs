@@ -96,8 +96,8 @@ namespace Facet.Core
 
         /// <summary>The budget the authored table's last wave spent: where the generated stretch's curve
         /// hands over. Without it the wave after the table's finale is a <see cref="BudgetCurve"/> first
-        /// wave's worth - on the campaign's third map that was a quarter of the exam the player had just
-        /// fought, and the deep line they had just built sat idle for eight waves.</summary>
+        /// wave's worth - a fraction of the exam the player had just fought, and the deep line they had just
+        /// built sat idle for waves.</summary>
         private readonly float _authoredEndBudget;
 
         /// <summary>The deepest operator depth the authored table demanded: the floor of the generated

@@ -10,15 +10,15 @@ namespace Facet.Tests
     /// buy at all; and the same set is the guardrail the wave generator draws its demands from, so the
     /// ladder is also the promise that every wave is answerable.
     ///
-    /// The maps here are hand-built, one rung each, mirroring the campaign's three teaching maps without
-    /// reading them: Quarry hands over the cutter, Foundry adds the second mineral and the rotator, and
-    /// Canyon opens everything.
+    /// The maps here are hand-built, one rung each, rather than read from the campaign: both shipped maps hand
+    /// over the cutter and the rotator, and the rungs above them (a second mineral, the stacker) are exercised
+    /// here where a test can draw them in one line.
     /// </summary>
     public class UnlockTests
     {
         /// <summary>One vein of circles and a door: the smallest map that can still be briefed a wave.</summary>
         private static MapDefinition Map(Operators unlocked, Quad[] minerals = null, int seed = 11)
-            => new MapDefinition("ladder", 32, 20, Sim.TestCircles,
+            => new MapDefinition("ladder", 32, 20, Sim.TestShapes,
                 Patches(minerals ?? new[] { Quad.Circle }),
                 new[] { new Int2(16, 18) },
                 new WaveDefinition[0],

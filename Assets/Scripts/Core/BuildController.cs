@@ -113,10 +113,10 @@ namespace Facet.Core
             => IsUnlocked(kind)
                && (kind == BuildKind.Belt ? _terrain.CanLayBelt(cell) : _machines.CanPlace(kind, cell, direction));
 
-        /// <summary>Has this map unlocked the operator this building needs? The campaign's progression is
-        /// the operator set (<see cref="MapDefinition.Unlocked"/>), so map 1 refuses a rotator outright
-        /// rather than merely making it expensive - a locked machine is not a thing the player should be
-        /// able to buy and then find useless.
+        /// <summary>Has this map unlocked the operator this building needs? A map's progression is
+        /// the operator set (<see cref="MapDefinition.Unlocked"/>), so a map that has not handed the cutter
+        /// over refuses one outright rather than merely making it expensive - a locked machine is not a thing
+        /// the player should be able to buy and then find useless.
         ///
         /// A kind the run's own table does not define reads as locked, not as an error: the build bar offers
         /// the <em>shipped</em> kinds, a table may legitimately carry fewer rows than the enum has values,
