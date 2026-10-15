@@ -32,8 +32,9 @@ namespace Facet.Core
         public readonly SimConfig Config;
         public readonly EconomyState Economy;
 
-        /// <summary>The content this run reads: every cost, stat and recipe. Injected rather than read
-        /// from a static, so a test or a replay can run a different table and stay reproducible.</summary>
+        /// <summary>The content this run reads: every cost, machine stat, gun number and enemy profile.
+        /// Injected rather than read from a static, so a test or a replay can run a different table and
+        /// stay reproducible.</summary>
         public readonly ContentDatabase Content;
 
         /// <summary>
@@ -106,13 +107,13 @@ namespace Facet.Core
             _paths = new PathField(TileGrid, Terrain, Machines, Content);
             Enemies = new EnemyField(Content, Events, TileGrid, Terrain, Machines, _paths);
             Projectiles = new ProjectileField();
-            Waves = new WaveDirector(Enemies, map, Events);
+            Waves = new WaveDirector(Enemies, map, Events, Config.FreshSeed);
             Economy = new EconomyState(Content, map.StartCircles);
 
             _machineSystem = new MachineSystem(TileGrid, Terrain, Belts, Machines, Enemies, Projectiles,
                 Content, Events);
             _sink = new CoreSinkSystem(TileGrid, Belts, Economy, Events);
-            _build = new BuildController(TileGrid, Terrain, map, Belts, Machines, Economy, Events);
+            _build = new BuildController(TileGrid, Terrain, map, Belts, Machines, Economy, Content, Events);
 
             // The Core first, then the ground: a map's terrain may not bury the thing the player
             // defends, so the Core's tiles are already claimed by the time the ground is stamped.
@@ -229,6 +230,14 @@ namespace Facet.Core
         public void RequestRestart() => _restartRequested = true;
 
         public bool CanPlace(BuildKind kind, Int2 cell) => _build.CanPlace(kind, cell);
+
+        /// <summary>Has this run unlocked the operator that building needs? The build bar greys the rest
+        /// out; the campaign's progression is this set and nothing else.</summary>
+        public bool IsUnlocked(BuildKind kind) => _build.IsUnlocked(kind);
+
+        /// <summary>Re-route the sorter standing on a cell - the picker's verb. False when there is no
+        /// sorter there or the filter would route nothing.</summary>
+        public bool SetFilter(Int2 cell, ShapeFilter filter) => _build.SetFilter(cell, filter);
 
         public bool TryPlace(BuildKind kind, Int2 cell, Dir direction) => _build.TryPlace(kind, cell, direction);
 

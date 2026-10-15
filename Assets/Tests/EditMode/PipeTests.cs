@@ -26,7 +26,7 @@ namespace Facet.Tests
         {
             SimWorld world = PipeWorld();
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 3), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 3), Sim.Circle));
             Sim.Tick(world, 90);
 
             Assert.IsFalse(world.Belts.HasItemAt(new Int2(5, 4)), "the pipe swallows the delivery");
@@ -48,13 +48,13 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(5, 3), Dir.North, 2);    // (5,3) (5,4)
             Sim.LayRun(world, new Int2(3, 2), Dir.East, 5);     // (3,2) .. (7,2), through (5,2)
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 0), ShapeType.Circle));
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 0), Sim.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), Sim.TopHalfCircle));
             Sim.Tick(world, 150);
 
-            Assert.AreEqual(ShapeType.Circle, Sim.ShapeAt(world, new Int2(5, 4)),
+            Assert.AreEqual(Sim.Circle, Sim.ShapeAt(world, new Int2(5, 4)),
                 "the vertical item crossed over the horizontal belt");
-            Assert.AreEqual(ShapeType.HalfCircle, Sim.ShapeAt(world, new Int2(7, 2)),
+            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(world, new Int2(7, 2)),
                 "and the horizontal belt never noticed");
             Assert.AreEqual(2, Sim.ItemCount(world));
         }
@@ -68,23 +68,23 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(5, 6), Dir.North, 1);   // the landing, with nowhere beyond
 
             // Park a blocker on the landing cell, then feed the pipe.
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 6), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 6), Sim.TopHalfCircle));
             Sim.Tick(world, 60);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 3), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 3), Sim.Circle));
             Sim.Tick(world, 90);
 
             MachineState pipe = Sim.MachineAt(world, new Int2(5, 4));
-            Assert.AreEqual(ShapeType.Circle, pipe.Carried,
+            Assert.AreEqual(Sim.Circle, pipe.Carried,
                 "no room at the landing: the item waits inside the pipe instead of vanishing");
-            Assert.AreEqual(ShapeType.HalfCircle, Sim.ShapeAt(world, new Int2(5, 6)));
+            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(world, new Int2(5, 6)));
 
             // Make room and the pipe lets go.
             Assert.IsTrue(world.Belts.TryRemove(new Int2(5, 6)));
             Sim.LayRun(world, new Int2(5, 6), Dir.North, 2);
             Sim.Tick(world, 90);
 
-            Assert.AreEqual(ShapeType.None, Sim.MachineAt(world, new Int2(5, 4)).Carried);
-            Assert.AreEqual(ShapeType.Circle, Sim.ShapeAt(world, new Int2(5, 7)));
+            Assert.AreEqual(Shape.None, Sim.MachineAt(world, new Int2(5, 4)).Carried);
+            Assert.AreEqual(Sim.Circle, Sim.ShapeAt(world, new Int2(5, 7)));
             Assert.AreEqual(1, Sim.ItemCount(world), "the blocker was deleted with its belt; only the circle remains");
         }
 
@@ -98,13 +98,13 @@ namespace Facet.Tests
             Sim.Place(world, BuildKind.Pipe, new Int2(5, 4), Dir.North);
             Sim.LayRun(world, new Int2(5, 6), Dir.North, 2);
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 4), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 4), Sim.Circle));
             Sim.Tick(world, 120);
-            Assert.AreEqual(ShapeType.Circle, Sim.ShapeAt(world, new Int2(5, 7)), "the circle crossed");
+            Assert.AreEqual(Sim.Circle, Sim.ShapeAt(world, new Int2(5, 7)), "the circle crossed");
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 4), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 4), Sim.TopHalfCircle));
             Sim.Tick(world, 120);
-            Assert.AreEqual(ShapeType.HalfCircle, Sim.ShapeAt(world, new Int2(5, 6)),
+            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(world, new Int2(5, 6)),
                 "and so did the half - a pipe has no diet");
             Assert.AreEqual(2, Sim.ItemCount(world));
             Assert.AreEqual(0, world.Belts.JamCount);
@@ -114,7 +114,7 @@ namespace Facet.Tests
         public void Pipe_CannotSitOnAPatch_OrInsideTheCore()
         {
             SimWorld world = Sim.NewWorld(20, 12);
-            world.Terrain.SetOre(new Int2(2, 2), ShapeType.Circle);
+            world.Terrain.SetOre(new Int2(2, 2), Quad.Circle);
 
             Assert.IsFalse(world.TryPlace(BuildKind.Pipe, new Int2(2, 2), Dir.North), "patches are for drills");
             Assert.IsFalse(world.TryPlace(BuildKind.Pipe, world.Core.Cell, Dir.North));

@@ -93,7 +93,7 @@ namespace Facet.Tests
             SimWorld world = TerrainWorld(width, height, TerrainLayout.Rects(width, height,
                 new TerrainRect(new Int2(4, 2), 1, height - 2, TerrainKind.Rock)));
 
-            Assert.Greater(world.Enemies.Spawn(EnemyKind.Spike, new Vec2(0.5f, 5.5f)), 0);
+            Assert.Greater(world.Enemies.Spawn(EnemyKind.Runner, new Vec2(0.5f, 5.5f), Sim.Circle), 0);
 
             var enemies = new List<EnemySnapshot>();
             int ticks = (int)(90 * SimConfig.TickRate);
@@ -129,19 +129,19 @@ namespace Facet.Tests
 
             foreach (Int2 cell in new[] { rock, water, hole })
             {
-                Assert.IsFalse(world.CanPlace(BuildKind.Cannon, cell), "no machine on " + cell);
+                Assert.IsFalse(world.CanPlace(BuildKind.Turret, cell), "no machine on " + cell);
                 Assert.IsFalse(world.CanPlace(BuildKind.Wall, cell), "not even a wall on " + cell);
                 Assert.IsFalse(world.CanPlaceBelt(cell), "and no belt across " + cell);
             }
 
-            Assert.IsTrue(world.CanPlace(BuildKind.Cannon, bare), "plain ground takes anything");
+            Assert.IsTrue(world.CanPlace(BuildKind.Turret, bare), "plain ground takes anything");
             Assert.IsTrue(world.CanPlaceBelt(bare), "including a belt");
 
             // Ore is the one ground with an exception, and it is the drill's alone.
             var ore = new Int2(4, 8);
-            world.Terrain.SetOre(ore, ShapeType.Circle);
+            world.Terrain.SetOre(ore, Quad.Circle);
             Assert.IsTrue(world.CanPlace(BuildKind.Drill, ore), "a vein takes the machine that mines it");
-            Assert.IsFalse(world.CanPlace(BuildKind.Cannon, ore));
+            Assert.IsFalse(world.CanPlace(BuildKind.Turret, ore));
             Assert.IsTrue(world.CanPlaceBelt(ore), "and transport still crosses it");
         }
 
@@ -156,7 +156,7 @@ namespace Facet.Tests
 
             var belt = new Int2(5, 2);
             Assert.IsTrue(world.TryPlaceBelt(belt, Dir.East));
-            Assert.IsTrue(world.Belts.TrySpawnItem(belt, ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(belt, Sim.Circle));
 
             Sim.Tick(world, (int)(5 * SimConfig.TickRate));
 
@@ -173,7 +173,7 @@ namespace Facet.Tests
             // data to come back: this is re-stamping, not a leftover in a field.
             var ore = new Int2(10, 8);
             var map = new MapDefinition("terrain", 16, 12, Sim.TestCircles,
-                new[] { new ShapePatch(ore, 2, 1, ShapeType.Square) }, new Int2[0], new WaveDefinition[0],
+                new[] { new ShapePatch(ore, 2, 1, Quad.Square) }, new Int2[0], new WaveDefinition[0],
                 TerrainLayout.Rects(16, 12, new TerrainRect(new Int2(1, 1), 3, 3, TerrainKind.Water)));
 
             var world = new SimWorld(map, new SimConfig());
@@ -185,7 +185,7 @@ namespace Facet.Tests
 
             Assert.AreEqual(TerrainKind.Water, world.Terrain.KindAt(new Int2(2, 2)), "the pond is still there");
             Assert.IsTrue(world.Terrain.HasOre(ore), "and so is the vein");
-            Assert.AreEqual(ShapeType.Square, world.Terrain.OreAt(ore), "with its own mineral");
+            Assert.AreEqual(Quad.Square, world.Terrain.OreAt(ore), "with its own mineral");
             Assert.AreEqual(TileKind.Empty, world.TileGrid.Get(ore), "with nothing standing on it");
             Assert.IsTrue(world.TryPlace(BuildKind.Drill, ore, Dir.West), "so it can be drilled again");
         }

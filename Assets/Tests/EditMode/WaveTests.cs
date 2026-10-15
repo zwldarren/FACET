@@ -94,7 +94,7 @@ namespace Facet.Tests
                 new[]
                 {
                     new WaveDefinition(0f),
-                    new WaveDefinition(3f, new SpawnGroup(EnemyKind.Spike, 1, 0, 0f, 1f)),
+                    new WaveDefinition(3f, new SpawnGroup(EnemyKind.Runner, 1, 0, 0f, 1f, Sim.Circle)),
                 });
 
             var world = new SimWorld(map, new SimConfig());
@@ -231,11 +231,11 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void OneFedCannon_HoldsTheWave_AndAJamInItsLineDoesNot()
+        public void OneFedTurret_HoldsTheWave_AndAJamInItsLineDoesNot()
         {
-            // The wave, two ways: the same defence both times (a drill on the rig's second vein, a decomposer
-            // mid-line, and a cannon covering the lane into the Core's north face), differing only in one jammed
-            // segment. A fed cannon holds the wave and hands the clock to the intermission; a jammed line loses.
+            // The wave, two ways: the same defence both times (a drill on the rig's second vein, a cutter
+            // mid-line, and a turret covering the lane into the Core's north face), differing only in one jammed
+            // segment. A fed turret holds the wave and hands the clock to the intermission; a jammed line loses.
             SimWorld held = Sim.Rig();
             Sim.BuildRigDefence(held, out _);
             Prime(held);
@@ -244,7 +244,7 @@ namespace Facet.Tests
             RunWave(held);
 
             Assert.AreEqual(WavePhase.Intermission, held.Waves.Phase,
-                "a fed cannon clears the wave, and the clock waits on the next one");
+                "a fed turret clears the wave, and the clock waits on the next one");
             Assert.AreEqual(held.Config.CoreMaxHp, held.Core.Hp, Sim.Tol,
                 "without the Core being touched");
             Assert.Greater(held.ShotsFired, 0);
@@ -272,7 +272,7 @@ namespace Facet.Tests
 
         /// <summary>
         /// Let the line fill before calling the wave, as a player would with the opening countdown's time: the
-        /// drill &gt; decomposer &gt; gun route plus the decomposer's 1.5 s split takes a few seconds before the
+        /// drill &gt; cutter &gt; gun route plus the cutter's 1.5 s cut takes a few seconds before the
         /// first shot is possible, and the rig's opening allows sixty.
         /// </summary>
         private static void Prime(SimWorld world) => Sim.Tick(world, (int)(35 * SimConfig.TickRate));
@@ -314,6 +314,72 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void AConfiguredSeedSource_DrawsAFreshSeed_PerRun()
+        {
+            // §5: one seed per run, shown in the HUD. The map's authored seed is the default - it is what
+            // the engine-free tests and a demo that must replay exactly run on - but a host that injects
+            // a source gets a run whose seed is its own, and a restart is a new run: it draws again.
+            var map = new MapDefinition("seeded", 24, 16, Sim.TestCircles,
+                new[] { new ShapePatch(new Int2(2, 2), 1, 1, Quad.Circle) },
+                new[] { new Int2(12, 14) },
+                new WaveDefinition[0],
+                coreCell: new Int2(10, 6),
+                unlocked: Operators.All,
+                seed: 11,
+                generatedWaves: 3);
+
+            int draws = 0;
+            var world = new SimWorld(map, new SimConfig { CoreMaxHp = 1000000f, FreshSeed = () => ++draws * 101 });
+
+            Assert.AreEqual(101, world.Waves.Seed, "the source drew the run's seed, not the map's 11");
+
+            world.Tick(new InputCommand(restartPressed: true));
+
+            Assert.AreEqual(202, world.Waves.Seed, "a restarted run is a new run, on a newly drawn seed");
+        }
+
+        [Test]
+        public void AnEndlessMap_NeverFinishes_AndHasNoTotalToPrint()
+        {
+            // Endless mode is not a second mode: it is the generator with no bound (§5), so the clock's
+            // answer to "how many waves are there" is zero and the HUD prints the wave number alone. What
+            // must never happen is the run reporting itself finished - there is no last wave to clear.
+            var map = new MapDefinition("endless", 24, 16, Sim.TestCircles,
+                new[] { new ShapePatch(new Int2(2, 2), 1, 1, Quad.Circle) },
+                new[] { new Int2(12, 14) },
+                new WaveDefinition[0],
+                coreCell: new Int2(10, 6),
+                unlocked: Operators.All,
+                seed: 4242,
+                generatedWaves: -1);
+
+            var world = new SimWorld(map, new SimConfig { CoreMaxHp = 1000000f });
+
+            Assert.IsTrue(world.Waves.Endless);
+            Assert.AreEqual(0, world.Waves.TotalWaves, "an endless run has no total");
+            Assert.AreEqual(0, world.Waves.AuthoredCount, "and nothing scripted to play first");
+            Assert.AreEqual(4242, world.Waves.Seed, "the run's seed is the map's, for the HUD to print");
+            Assert.IsNotNull(world.Waves.Definition(1), "the generator answers from wave one");
+            Assert.IsNotNull(world.Waves.Definition(200), "and keeps answering: there is no last one");
+            Assert.IsNotNull(world.Waves.Definition(1), "and asking twice is the same answer");
+
+            world.Waves.StartNextWave();
+            Sim.Tick(world, (int)(60 * SimConfig.TickRate));
+
+            Assert.GreaterOrEqual(world.Waves.CurrentWave, 1, "a wave is on the clock");
+            Assert.IsFalse(world.Waves.Finished, "a minute in, an endless run has not run out of waves");
+            Assert.AreNotEqual(WavePhase.Over, world.Waves.Phase, "and the clock is not over");
+            Assert.AreEqual(GameStatus.Playing, world.Status, "with the run still to be won or lost");
+
+            // The control: the same questions asked of a bounded map, where the total is a number and the
+            // clock can reach the end of it. (That it *does* end is the win test's business, above.)
+            SimWorld bounded = Sim.OneWaveWorld();
+            Assert.IsFalse(bounded.Waves.Endless);
+            Assert.AreEqual(1, bounded.Waves.TotalWaves);
+            Assert.AreEqual(1, bounded.Waves.AuthoredCount);
+        }
+
+        [Test]
         public void FullRun_ReplaysIdentically_FromTheSameCommands()
         {
             // The point of an engine-free simulation: the same map and input produce the same run, so a bug is
@@ -325,7 +391,7 @@ namespace Facet.Tests
 
             for (int i = 0; i < 100 * SimConfig.TickRate; i++)
             {
-                // The wave starts once the ammo line has filled: a cannon still waiting for its first half-circle
+                // The wave starts once the line has filled: a turret still waiting for its first half-circle
                 // would watch the Core fall without firing, proving determinism about a run that never fought.
                 var cmd = new InputCommand(cursorCell: new Int2(10, 15), startWavePressed: i == 40 * SimConfig.TickRate);
                 a.Tick(cmd);

@@ -22,8 +22,9 @@ namespace Facet.Game
 
         /// <summary>The card after the quieting: the event feed and the always-on diagnostic sentences
         /// are gone - a line that only ever says "all clear" trains the player to stop reading it -
-        /// leaving a wave news line, the wave's bill of materials as chips, and the start-wave button.</summary>
-        public const float StatusHeight = 200f;
+        /// leaving a wave news line, two rows of the bill of materials (the wave coming and the one after
+        /// it: §5 previews both), the two diagnostic lines and the start-wave button.</summary>
+        public const float StatusHeight = 218f;
 
         /// <summary>The controls cluster collapsed: the pause and help buttons, a small cluster in the
         /// screen's top-right corner. The keyboard list lives behind the help button instead of costing
@@ -42,6 +43,15 @@ namespace Facet.Game
 
         public const float InfoWidth = 392f;
         public const float InfoHeight = 134f;
+
+        /// <summary>
+        /// How much taller the info card is while a sorter's filter picker is on it: the quadrant canvas,
+        /// the mode button beside it and the one line that says what the picker would route for. The card
+        /// is bottom-anchored, so it grows upward and the picker takes the band directly under the header -
+        /// the machine's setting is the first thing to read, before its ports and its health.
+        /// </summary>
+        public const float InfoPickHeight = 62f;
+
         public const float BarHeight = 126f;
 
         /// <summary>The gap the info card floats above the bar with.</summary>
@@ -122,9 +132,16 @@ namespace Facet.Game
             => new Rect(Margin * s, screenHeight - (Margin + BarHeight) * s,
                 screenWidth - 2f * Margin * s, BarHeight * s);
 
-        public static Rect Info(Rect bar, float s)
-            => new Rect(bar.xMax - InfoWidth * s, bar.y - (InfoGap + InfoHeight) * s,
-                InfoWidth * s, InfoHeight * s);
+        /// <summary>
+        /// The info card floating above the bar, bottom-anchored so a taller card grows upward.
+        /// <paramref name="pickerUp"/> is the sorter picker's band: the one thing on the card that a
+        /// reader of the panels cannot see from the card's place, which is why it is a parameter rather
+        /// than a number the reader guesses.
+        /// </summary>
+        public static Rect Info(Rect bar, float s, bool pickerUp = false)
+            => new Rect(bar.xMax - InfoWidth * s,
+                bar.y - (InfoGap + InfoHeight + (pickerUp ? InfoPickHeight : 0f)) * s,
+                InfoWidth * s, (InfoHeight + (pickerUp ? InfoPickHeight : 0f)) * s);
 
         /// <summary>A toast: centred just under the top cards, sized to its own text by the view. It
         /// overlays the map on purpose - news about a click arrives where the player who clicked is
@@ -146,9 +163,13 @@ namespace Facet.Game
         /// reader asking "is this tile under a panel?" needs the boxes the HUD draws. Written into
         /// <paramref name="into"/> (which holds <see cref="PanelCount"/> slots) rather than returned, so
         /// the per-frame readers ask it without allocating.
+        ///
+        /// <paramref name="pickerUp"/> is the sorter picker's band on the info card, which the locator has
+        /// to know about for the same reason it knows about the tutorial card: an arrow put under a panel
+        /// points at nothing the player can see.
         /// </summary>
         public static int Panels(float screenWidth, float screenHeight, float s, bool tutorialUp,
-            Rect[] into)
+            Rect[] into, bool pickerUp = false)
         {
             int n = 0;
             into[n++] = Status(s);
@@ -156,7 +177,7 @@ namespace Facet.Game
             into[n++] = Controls(screenWidth, s);
             Rect bar = Bar(screenWidth, screenHeight, s);
             into[n++] = bar;
-            into[n++] = Info(bar, s);
+            into[n++] = Info(bar, s, pickerUp);
             return n;
         }
 

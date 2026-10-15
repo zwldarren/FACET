@@ -46,6 +46,13 @@ namespace Facet.Game
         private bool _primaryReleased;
         private int _rotateSteps;
 
+        /// <summary>The sorter picker's one-shot, with the cell it is about: the cell travels in the
+        /// command's own <see cref="InputCommand.FilterCell"/>, which is the field
+        /// <see cref="BuildController.SetFilter"/> reads.</summary>
+        private bool _filterSet;
+        private Int2 _filterCell;
+        private ShapeFilter _setFilter;
+
         private bool _buildHeld;
         private bool _removeHeld;
         private bool _wasBuildHeld;
@@ -89,8 +96,12 @@ namespace Facet.Game
                         "cannot be selected from the keyboard. Add keys or trim the table.");
                 }
 
+                // A locked kind is not selectable at all - the world would refuse to place it
+                // (RejectionReason.Locked), so a ghost promising it would be a lie. The build bar's tiles
+                // ask the same question, so the digit key and the click agree.
                 for (int i = 0; i < BuildKeys.Length && i < BuildCatalog.Count; i++)
-                    if (keyboard[BuildKeys[i]].wasPressedThisFrame) ToggleSelect(BuildCatalog.All[i]);
+                    if (keyboard[BuildKeys[i]].wasPressedThisFrame && world.IsUnlocked(BuildCatalog.All[i]))
+                        ToggleSelect(BuildCatalog.All[i]);
 
                 // Q/E turn the ghost; rotation is latched, so two presses between ticks turn it twice.
                 if (keyboard.qKey.wasPressedThisFrame) _rotateSteps--;
@@ -131,13 +142,20 @@ namespace Facet.Game
         }
 
         /// <summary>The command the next tick should apply. Named fields, not positional: the latches below
-        /// are nine of them, and a silent swap of two same-typed arguments would mis-wire the whole game
-        /// (see <see cref="Gesture"/> for the single-gesture names the tests drive by).</summary>
+        /// are twelve of them, and a silent swap of two same-typed arguments would mis-wire the whole game
+        /// (see <see cref="Gesture"/> for the single-gesture names the tests drive by).
+        ///
+        /// A latched filter command carries the sorter's own cell in <see cref="InputCommand.FilterCell"/> -
+        /// its own field, not the cursor's. The picker is a click on a panel rather than on the map, so the
+        /// cell it is about has to travel with the command, while the cursor stays where the mouse really is:
+        /// everything else that reads it in the same tick (the tooltip, a keyboard inspect, the ghost) is
+        /// about the map. The latch lasts exactly one command - <see cref="ConsumeOneShots"/> drops it.</summary>
         public InputCommand Snapshot()
             => new InputCommand(buildHeld: _buildHeld, removeHeld: _removeHeld, cursorCell: _cursor,
                 primaryReleased: _primaryReleased, selected: _selected, rotateSteps: _rotateSteps,
                 startWavePressed: _startWaveRequested, restartPressed: _restartRequested,
-                inspectPressed: _inspectPressed);
+                inspectPressed: _inspectPressed, filterSet: _filterSet, setFilter: _setFilter,
+                filterCell: _filterCell);
 
         /// <summary>The HUD's build bar asking for a selection: the kind its tile names, or none at all
         /// (the inspect cursor). It writes the same field the number keys write, so the next
@@ -152,11 +170,26 @@ namespace Facet.Game
 
         /// <summary>Asking for the building already in hand drops it, which is how the player returns to
         /// the read cursor without a key of its own: the digit key and the bar's tile are two doors onto
-        /// this one rule.</summary>
+        /// this one rule. Both doors ask <see cref="SimWorld.IsUnlocked"/> first, so a kind this map has not
+        /// handed over is never selected at all.</summary>
         private void ToggleSelect(BuildKind kind) => _selected = _selected == kind ? null : kind;
 
         /// <summary>The HUD's rotate buttons, latched exactly like the Q/E keys.</summary>
         public void RequestRotate(int steps) => _rotateSteps += steps;
+
+        /// <summary>
+        /// The HUD's sorter picker asking for a new routing rule: the machine at
+        /// <paramref name="cell"/> routes for <paramref name="filter"/> from the next applied tick. Latched
+        /// rather than applied here for the same reason a placement is - a click happens between ticks, and
+        /// the simulation is the one place state changes. The picker never asks for
+        /// <see cref="ShapeFilter.None"/>, which the world refuses.
+        /// </summary>
+        public void RequestFilter(Int2 cell, ShapeFilter filter)
+        {
+            _filterSet = true;
+            _filterCell = cell;
+            _setFilter = filter;
+        }
 
         /// <summary>Drop the one-shots, once a tick has actually applied them.</summary>
         public void ConsumeOneShots()
@@ -166,6 +199,8 @@ namespace Facet.Game
             _rotateSteps = 0;
             _startWaveRequested = false;
             _restartRequested = false;
+            _filterSet = false;
+            _setFilter = ShapeFilter.None;
         }
 
         /// <summary>Tile under the mouse cursor, or (-1,-1) when there is no camera / no mouse.</summary>

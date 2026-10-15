@@ -3,58 +3,71 @@ using System.Collections.Generic;
 
 namespace Facet.Core
 {
-    /// <summary>State of one built machine. One struct covers drills, decomposers, pipes, splitters and
-    /// turrets because they share the two things that make the twist work: a facing (where a
-    /// drill/decomposer pushes, a pipe carries, a turret's barrel points) and being fed from the belt
-    /// cells that deliver into them. The unused fields per kind are deliberate: five parallel arrays would
-    /// cost more to read than this costs to store.</summary>
+    /// <summary>State of one built machine. One struct covers drills, cutters, rotators, stackers, pipes,
+    /// splitters, sorters and turrets because they share the two things that make the twist work: a facing
+    /// (where a drill pushes, a cutter's cut line, a rotator's outlet, a turret's barrel) and being fed
+    /// from the belt cells that deliver into them. The unused fields per kind are deliberate: eight parallel
+    /// arrays would cost more to read than this costs to store.</summary>
     public struct MachineState
     {
         /// <summary>One of the machine <see cref="TileKind"/>s. <see cref="TileKind.Empty"/> means the
         /// cell holds no machine.</summary>
         public TileKind Kind;
 
-        /// <summary>Which building this is. Turrets read their whole spec - diet, rate, damage, range -
-        /// back out of it, so one field covers the kind and its numbers.</summary>
+        /// <summary>Which building this is. Turrets read their whole spec - rate, damage, range - back out
+        /// of it, so one field covers the kind and its numbers.</summary>
         public BuildKind Build;
 
-        /// <summary>Drill and decomposer: the cell they push out to. Pipe: the direction it carries
-        /// across. Splitter: unused - its ports are read off the belts around it. Sorter: which side the
-        /// filtered shape leaves by. Turret: where its barrel rests when it has no target.</summary>
+        /// <summary>Drill: the cell it pushes onto. Cutter: the cut line, and which piece leaves by which
+        /// outlet. Rotator: the side it turns out of. Pipe: the direction it carries across. Splitter:
+        /// unused - its ports are read off the belts around it. Sorter: which side the filtered shape
+        /// leaves by. Turret: where its barrel rests when it has no target.</summary>
         public Dir Direction;
 
         /// <summary>Seconds until this machine may act again. Pipe: the remaining transit time of the
-        /// item inside. Decomposer: the remaining split time of the circle inside.</summary>
+        /// item inside. Cutter: the remaining split. Rotator: the remaining turn. Stacker: the remaining
+        /// fuse.</summary>
         public float Cooldown;
 
-        /// <summary>What the machine is holding: a converter's input being split, a pipe's item in
-        /// transit, a splitter's buffered item, or None.</summary>
-        public ShapeType Carried;
+        /// <summary>What the machine is holding: a cutter's item being split, a rotator's item being
+        /// turned, a stacker's first piece, a pipe's item in transit, a splitter's buffered item, a
+        /// turret's last round fired - a display value, held because the chamber keeps nothing between
+        /// shots and the badge and the card are how the player reads their line - or nothing.</summary>
+        public Shape Carried;
 
-        /// <summary>Converter: outputs made but not yet pushed onto the belt, 0..the running recipe's
-        /// buffer (4 for the shipped splits).</summary>
+        /// <summary>Stacker: the second held piece, once the first is in <see cref="Carried"/>. The fuse
+        /// runs while both are held, and both clear when the union lands in the output.</summary>
+        public Shape Carried2;
+
+        /// <summary>The machine's first output slot: outputs made but not yet pushed, 0 up to the
+        /// behaviour's buffer. A cutter fills it with the piece its facing side owns; a stacker, with the
+        /// union it just made.</summary>
         public int OutputCount;
 
-        /// <summary>Converter: what the buffered outputs are, remembered from the recipe that made them.
-        /// A converter that runs every recipe (the shipped decomposer) picks the recipe per input, so
-        /// the outputs cannot be read back off the definition once the input that made them is gone -
-        /// and a buffer holds one shape at a time: intake of a different recipe's input waits until the
-        /// buffer drains.</summary>
-        public ShapeType OutputShape;
+        /// <summary>What the first output slot holds, remembered from the cycle that made it: a cutter
+        /// picks a different piece per item, so the slot cannot be read back off the definition.</summary>
+        public Shape OutputShape;
 
-        /// <summary>Assembler: the second held input, once the first is in <see cref="Carried"/>. The
-        /// cycle runs while both are held, and both clear when the fused output lands in the buffer.</summary>
-        public ShapeType Carried2;
+        /// <summary>The second output slot, and the reason the state grew one in the rework: a cutter
+        /// emits <em>two</em> pieces at once, one per side of the cut, and they must buffer separately -
+        /// a single slot would lose one piece whenever the other side's belt was full, and "cut, then
+        /// route the two halves differently" is the whole puzzle.</summary>
+        public int OutputCount2;
 
-        /// <summary>Assembler: the recipe the first held input committed to - what
-        /// <see cref="Carried2"/> must complete, and what the running cycle reads its output and interval
-        /// from. Stored as an id rather than re-derived from the held pair, because several two-input
-        /// recipes may share an input; <see cref="ContentId.None"/> while nothing is held.</summary>
-        public ContentId CommittedRecipe;
+        /// <summary>What the second output slot holds.</summary>
+        public Shape OutputShape2;
 
         /// <summary>Splitter and sorter: the port the next item tries first, so a balanced hub rotates
         /// instead of always favouring the lowest-numbered output.</summary>
         public int Rotation;
+
+        /// <summary>
+        /// Sorter: what this machine routes for, seeded from its definition's row when it is placed and
+        /// editable afterwards - the picker beside the info card is the player's, and a routing decision made
+        /// without rebuilding the machine is what makes the sorter a tool rather than a purchase. Nothing for
+        /// every other behaviour.
+        /// </summary>
+        public ShapeFilter Filter;
 
         /// <summary>Turret: unit vector the barrel points at, updated every tick.</summary>
         public Vec2 Aim;
@@ -68,8 +81,8 @@ namespace Facet.Core
         /// <summary>Turret: an enemy is in range this tick.</summary>
         public bool HasTarget;
 
-        /// <summary>Turret: the right shape is waiting on one of its input belts, so it can fire the
-        /// moment there is something to shoot. False is the "silenced" state the twist is about.</summary>
+        /// <summary>Turret: a round is waiting on one of its input belts, so it can fire the moment there
+        /// is something to shoot. False is the "starved" state the HUD warns about.</summary>
         public bool Armed;
 
         /// <summary>Health enemies have left to chew through. Initialized on placement from the
@@ -84,7 +97,7 @@ namespace Facet.Core
         public TileKind Kind;
 
         /// <summary>Which building this is, and which behaviour drives it. Both are carried so the view
-        /// can dispatch on the behaviour ("draw a converter") while resolving the per-building look
+        /// can dispatch on the behaviour ("draw a cutter") while resolving the per-building look
         /// override, without looking either up per frame.</summary>
         public BuildKind Build;
         public BehaviorKind Behavior;
@@ -103,13 +116,21 @@ namespace Facet.Core
         /// never damaged - the view checks <see cref="MaxHp"/> before tinting, not this.</summary>
         public float HealthFraction => MaxHp <= 0f ? 0f : Hp / MaxHp;
 
-        /// <summary>What the building draws on itself: a turret's diet, a sorter's filter shape (the
-        /// badge that says which shape goes which way), a decomposer's pending halves (or the circle being
-        /// split), a pipe or splitter's buffered item, None when idle.</summary>
-        public ShapeType Shape;
+        /// <summary>What the building draws on itself: a turret's chambered round, a sorter's filter
+        /// shape (the badge that says which shape goes which way), a cutter's pending piece, a pipe or
+        /// splitter's buffered item, nothing when idle.</summary>
+        public Shape Shape;
 
-        /// <summary>Work-in-progress fraction for the view to animate: a decomposer's split, a pipe's
-        /// transit across its tile. 0 for machines with nothing in flight.</summary>
+        /// <summary>The second badge, where a machine has one: the cutter's other pending piece. Empty for
+        /// every other behaviour, and the view draws nothing extra for it.</summary>
+        public Shape Shape2;
+
+        /// <summary>What a sorter routes for, as it stands: the machine's own configuration rather than its
+        /// row's, so the info card and the picker describe the machine that is actually on the map.</summary>
+        public ShapeFilter Filter;
+
+        /// <summary>Work-in-progress fraction for the view to animate: a cutter's split, a rotator's turn,
+        /// a stacker's fuse, a pipe's transit. 0 for machines with nothing in flight.</summary>
         public float Work;
 
         /// <summary>Sides a belt feeds this machine from, and sides it pushes onto - the same sets the
@@ -198,7 +219,7 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>Mutable ref for the machine behaviours, which update cooldowns, aim and armed state
+        /// <summary>Mutable ref for the machine behaviours, which update cooldowns, cargo and aim
         /// in place.</summary>
         public ref MachineState RefAt(Int2 cell) => ref _state[_grid.Index(cell)];
 
@@ -233,6 +254,10 @@ namespace Facet.Core
                 Aim = direction.ToVec(),
                 Build = build,
                 Hp = def.MaxHp,
+
+                // The row's filter is the machine's starting configuration, not its definition: the player
+                // may re-route a standing sorter without rebuilding it.
+                Filter = def.Filter,
             };
             _grid.Set(cell, def.Tile);
             AddOccupied(i);
@@ -349,8 +374,8 @@ namespace Facet.Core
         }
 
         /// <summary>Turret count and how many are armed - the HUD's one diagnostic number. Asks the
-        /// content table whether a building is a turret rather than testing a tile kind, so the second gun
-        /// counts without this method knowing it exists.</summary>
+        /// content table whether a building is a turret rather than testing a tile kind, so a custom table
+        /// with a second gun counts without this method knowing it exists.</summary>
         public void CountTurrets(out int total, out int armed)
         {
             total = 0;
@@ -382,8 +407,10 @@ namespace Facet.Core
                 Armed = m.Armed,
                 Hp = m.Hp,
                 MaxHp = def.MaxHp,
-                Shape = MachineReading.Badge(m, def, _content),
-                Work = MachineReading.Work(m, def, _content),
+                Shape = MachineReading.Badge(m, def),
+                Shape2 = MachineReading.Badge2(m, def),
+                Filter = m.Filter,
+                Work = MachineReading.Work(m, def),
                 InMask = inMask,
                 OutMask = outMask,
             };

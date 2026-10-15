@@ -12,51 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 410face2b1160f448ba47ed71bc81142, type: 3}
   m_Name: ContentDatabase
   m_EditorClassIdentifier: FACET.Game::Facet.Game.ContentDatabaseAsset
-  Shapes:
-  - Shape: 0
-    Name: Nothing
-    Glyph: nothing
-  - Shape: 1
-    Name: Circle
-    Glyph: circle
-  - Shape: 2
-    Name: Half-circle
-    Glyph: half-circle
-  - Shape: 3
-    Name: Square
-    Glyph: square
-  - Shape: 4
-    Name: Half-square
-    Glyph: half-square
-  - Shape: 5
-    Name: Composite
-    Glyph: composite
-    MatchesAnyWeakness: 1
-  Recipes:
-  - Id: decompose
-    Input: 1
-    Input2: 0
-    Output: 2
-    InputCount: 1
-    OutputCount: 2
-    Interval: 1.5
-    Buffer: 4
-  - Id: bisect
-    Input: 3
-    Input2: 0
-    Output: 4
-    InputCount: 1
-    OutputCount: 2
-    Interval: 1.5
-    Buffer: 4
-  - Id: combine
-    Input: 2
-    Input2: 4
-    Output: 5
-    InputCount: 1
-    OutputCount: 1
-    Interval: 2
-    Buffer: 2
   Machines:
   - Id: belt
     Build: 0
@@ -65,120 +20,285 @@ MonoBehaviour:
     Cost: 1
     Name: Belt
     Description: "carries one shape per tile \xB7 drag to lay a run"
-    RecipeId: 
     Interval: 0
-    Filter: 0
+    Filter:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+    MaxHp: 0
+    OverrideDiet: 0
+    Diet:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
   - Id: drill
     Build: 1
     Tile: 4
     Behavior: 1
     Cost: 10
     Name: Drill
-    Description: "on a shape patch \xB7 mines the belt it faces"
-    RecipeId: 
+    Description: "on a shape patch \xB7 mines a full shape onto the belt it faces"
     Interval: 1
-    Filter: 0
-  - Id: decomposer
+    Filter:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+    MaxHp: 40
+    OverrideDiet: 1
+    Diet:
+      Mode: 1
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+  - Id: cutter
     Build: 2
-    Tile: 5
-    Behavior: 2
+    Tile: 14
+    Behavior: 8
     Cost: 15
-    Name: Decomposer
-    Description: splits one shape into its parts
-    RecipeId: 
-    Interval: 0
-    Filter: 0
-  - Id: pipe
+    Name: Cutter
+    Description: "splits one shape along the line it faces \xB7 a piece per outlet"
+    Interval: 1.5
+    Filter:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+    MaxHp: 60
+    OverrideDiet: 1
+    Diet:
+      Mode: 1
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+  - Id: rotator
     Build: 3
+    Tile: 15
+    Behavior: 9
+    Cost: 10
+    Name: Rotator
+    Description: "turns a shape a quarter clockwise \xB7 the orientation fix"
+    Interval: 0.75
+    Filter:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+    MaxHp: 45
+    OverrideDiet: 1
+    Diet:
+      Mode: 1
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+  - Id: stacker
+    Build: 4
+    Tile: 16
+    Behavior: 10
+    Cost: 25
+    Name: Stacker
+    Description: "unions two shapes that do not overlap \xB7 an overlapping pair
+      waits"
+    Interval: 2
+    Filter:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+    MaxHp: 60
+    OverrideDiet: 1
+    Diet:
+      Mode: 1
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+  - Id: pipe
+    Build: 5
     Tile: 6
     Behavior: 3
     Cost: 6
     Name: Pipe
     Description: "jumps one tile - the crossing piece \xB7 never jams"
-    RecipeId: 
     Interval: 0.25
-    Filter: 0
+    Filter:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+    MaxHp: 30
+    OverrideDiet: 1
+    Diet:
+      Mode: 1
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
   - Id: splitter
-    Build: 4
+    Build: 6
     Tile: 7
     Behavior: 4
     Cost: 10
     Name: Splitter
     Description: "ports read off the belts around it \xB7 in/out by their direction"
-    RecipeId: 
     Interval: 0
-    Filter: 0
-  - Id: cannon
-    Build: 5
-    Tile: 8
-    Behavior: 5
-    Cost: 20
-    Name: Cannon
-    Description: 
-    RecipeId: 
-    Interval: 0
-    Filter: 0
+    Filter:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+    MaxHp: 40
+    OverrideDiet: 1
+    Diet:
+      Mode: 1
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
   - Id: sorter
-    Build: 6
+    Build: 7
     Tile: 9
     Behavior: 6
     Cost: 12
     Name: Sorter
-    Description: "routes by shape \xB7 one shape leaves by the side it faces"
-    RecipeId: 
+    Description: "routes by shape \xB7 what its filter matches leaves by the side
+      it faces"
     Interval: 0
-    Filter: 1
-  - Id: mortar
-    Build: 7
-    Tile: 11
-    Behavior: 5
-    Cost: 30
-    Name: Mortar
-    Description: 
-    RecipeId: 
+    Filter:
+      Mode: 2
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 1
+    MaxHp: 45
+    OverrideDiet: 1
+    Diet:
+      Mode: 1
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+  - Id: wall
+    Build: 8
+    Tile: 12
+    Behavior: 0
+    Cost: 2
+    Name: Wall
+    Description: "blocks enemies \xB7 soaks their attacks"
     Interval: 0
-    Filter: 0
-  - Id: assembler
+    Filter:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+    MaxHp: 120
+    OverrideDiet: 0
+    Diet:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+  - Id: turret
     Build: 9
-    Tile: 13
-    Behavior: 7
-    Cost: 25
-    Name: Assembler
-    Description: fuses two different halves into one round
-    RecipeId: 
+    Tile: 8
+    Behavior: 5
+    Cost: 20
+    Name: Turret
+    Description: "eats any shape \xB7 what it fires is what the line delivered"
     Interval: 0
-    Filter: 0
+    Filter:
+      Mode: 0
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
+    MaxHp: 80
+    OverrideDiet: 1
+    Diet:
+      Mode: 1
+      Shape:
+        NW: 0
+        NE: 0
+        SE: 0
+        SW: 0
+      Mineral: 0
   Turrets:
-  - Id: cannon
-    Build: 5
-    Name: Cannon
-    AmmoTypes:
-    - Shape: 2
-      Damage: 3
-    - Shape: 5
-      Damage: 6
+  - Id: turret
+    Build: 9
+    Name: Turret
+    Damage: 4
     FireInterval: 1
     Range: 7
     ProjectileSpeed: 14
-    SplashRadius: 0
-  - Id: mortar
-    Build: 7
-    Name: Mortar
-    AmmoTypes:
-    - Shape: 4
-      Damage: 6
-    - Shape: 5
-      Damage: 10
-    FireInterval: 1.5
-    Range: 9
-    ProjectileSpeed: 12
-    SplashRadius: 1.25
   Enemies:
-  - Id: spike
+  - Id: runner
     Kind: 0
-    Name: Spike
+    Name: Runner
     Hp: 6
     Speed: 1.5
     Damage: 6
     AttackInterval: 1
-    Weakness: 2
+    AggroRange: 1.6
+    DetectionRange: 2.5
+  - Id: tank
+    Kind: 1
+    Name: Tank
+    Hp: 6
+    Speed: 1
+    Damage: 10
+    AttackInterval: 1.25
+    AggroRange: 1.6
+    DetectionRange: 3.2

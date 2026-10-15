@@ -24,7 +24,7 @@ namespace Facet.Tests
         private static readonly TerrainRect SouthSlab = new TerrainRect(new Int2(1, 0), 25, 6, TerrainKind.Rock);
         private static readonly TerrainRect NorthSlab = new TerrainRect(new Int2(1, 21), 25, 7, TerrainKind.Rock);
 
-        /// <summary>Two cannons covering the walked length of the south corridor (x=3..26 at y=7, gun cells
+        /// <summary>Two turrets covering the walked length of the south corridor (x=3..26 at y=7, gun cells
         /// walked around), so the straight route pays roughly a step of threat most of its way; the mouth cell
         /// stays outside range 7 and the 47-step climb route clears the 0.8x+2 budget by under two steps - the
         /// decision boundary the balance constants define, and the canary for moving them.</summary>
@@ -39,7 +39,7 @@ namespace Facet.Tests
 
         private static void PlaceGuns(SimWorld world)
         {
-            foreach (Int2 gun in Guns) Sim.Place(world, BuildKind.Cannon, gun, Dir.East);
+            foreach (Int2 gun in Guns) Sim.Place(world, BuildKind.Turret, gun, Dir.East);
         }
 
         /// <summary>Assert the machine on a cell has lost health, measured against its definition's max.</summary>
@@ -55,7 +55,7 @@ namespace Facet.Tests
             SimWorld world = EnduringWorld(Ridge, SouthSlab, NorthSlab);
 
             // Control first: with nothing standing in the corridor, the wave walks it east.
-            world.Enemies.Spawn(EnemyKind.Spike, Spawn);
+            world.Enemies.Spawn(EnemyKind.Runner, Spawn, Sim.Circle);
             Sim.Tick(world, 60);
 
             Assert.Greater(world.Enemies.EnemyAt(0).Position.X, 3.5f,
@@ -66,7 +66,7 @@ namespace Facet.Tests
             // corridor as the expensive one - twenty-odd steps of threat on the direct route, while the flank
             // (climb column plus north corridor) stays open. The wave turns around and takes it.
             PlaceGuns(world);
-            int flanker = world.Enemies.Spawn(EnemyKind.Spike, Spawn);
+            int flanker = world.Enemies.Spawn(EnemyKind.Runner, Spawn, Sim.Circle);
             Sim.Tick(world, 60);
 
             // By id, not by slot: a death anywhere reorders slots, and this assertion is about the flanking walker.
@@ -89,9 +89,9 @@ namespace Facet.Tests
             // PathDetourSlack allows - the marginal regime the two constants exist to tune. The gun is un-fed
             // (threat without shooting), and the overrun ends near x=5.5, far outside its 2.5-tile notice.
             SimWorld world = EnduringWorld(Ridge, SouthSlab, NorthSlab);
-            Sim.Place(world, BuildKind.Cannon, Guns[0], Dir.East);
+            Sim.Place(world, BuildKind.Turret, Guns[0], Dir.East);
 
-            world.Enemies.Spawn(EnemyKind.Spike, Spawn);
+            world.Enemies.Spawn(EnemyKind.Runner, Spawn, Sim.Circle);
             Sim.Tick(world, 60);
 
             Assert.Greater(world.Enemies.EnemyAt(0).Position.X, 3.5f,
@@ -111,18 +111,20 @@ namespace Facet.Tests
             PlaceGuns(world);
             Sim.LayRun(world, new Int2(9, 7), Dir.East, 1);
 
-            // A Bulwark, because the crossing must survive the fire it walks through: a Spike folds to two
-            // shots inside the first gun's disc. A Bulwark resists half-circles (a quarter damage a shot), so
-            // it walks the swept length, reaches the nearest gun, and chews it while it fires.
-            world.Enemies.Spawn(EnemyKind.Bulwark, Spawn);
+            // A Tank, because the crossing must survive the fire it walks through: six health against a
+            // quarter of the turret's four damage is six rounds, and a saturated belt fires one a second -
+            // which would fell it before it arrived. The supply here is one round every two seconds, so the
+            // walk is what is being measured and not the gun's rate: it walks the swept length, reaches the
+            // nearest gun, and chews it while it fires.
+            world.Enemies.Spawn(EnemyKind.Tank, Spawn, Sim.Circle);
 
-            float gunMaxHp = world.Content.Machine(BuildKind.Cannon).MaxHp;
+            float gunMaxHp = world.Content.Machine(BuildKind.Turret).MaxHp;
             bool fired = false;
             bool crossed = false;
             bool damaged = false;
             for (int i = 0; i < 30 * SimConfig.TickRate; i++)
             {
-                world.Belts.TrySpawnItem(new Int2(9, 7), ShapeType.HalfCircle);
+                if (i % 60 == 0) world.Belts.TrySpawnItem(new Int2(9, 7), Sim.TopHalfCircle);
                 world.Tick(InputCommand.None);
                 fired |= world.ShotsFired > 0;
                 crossed |= world.Enemies.AliveCount > 0 && world.Enemies.EnemyAt(0).Position.X > 8.0f;
@@ -140,7 +142,7 @@ namespace Facet.Tests
             SimWorld world = EnduringWorld(Ridge, SouthSlab, NorthSlab);
 
             PlaceGuns(world);
-            int committed = world.Enemies.Spawn(EnemyKind.Spike, Spawn);
+            int committed = world.Enemies.Spawn(EnemyKind.Runner, Spawn, Sim.Circle);
             Sim.Tick(world, 60);
             Assert.Less(world.Enemies.EnemyAt(0).Position.X, 2.0f, "the gauntlet is flanked while the guns stand");
 
@@ -150,7 +152,7 @@ namespace Facet.Tests
             foreach (Int2 gun in Guns)
                 Assert.IsTrue(world.TryRemoveBuilding(gun), "the guns are the player's to remove");
 
-            int reopened = world.Enemies.Spawn(EnemyKind.Spike, Spawn);
+            int reopened = world.Enemies.Spawn(EnemyKind.Runner, Spawn, Sim.Circle);
             Sim.Tick(world, 60);
 
             // By id, not by slot: the judgement that survives the rebuild is the walker's own. The old
@@ -171,18 +173,18 @@ namespace Facet.Tests
         [Test]
         public void AWave_ChargesTheTurret_BeforeTheMachineBesideIt()
         {
-            // A wall nearer than a cannon, both inside notice: the wave charges the cannon, because the gun
+            // A wall nearer than a turret, both inside notice: the wave charges the turret, because the gun
             // is what kills it. The wall is left standing - an obstruction is not worth a detour while a gun is in reach.
             SimWorld world = EnduringWorld();
 
             var wall = new Int2(11, 8);
             var gun = new Int2(13, 8);
             Sim.Place(world, BuildKind.Wall, wall, Dir.North);
-            Sim.Place(world, BuildKind.Cannon, gun, Dir.East);
+            Sim.Place(world, BuildKind.Turret, gun, Dir.East);
 
             // Spawn between them, a hair closer to the wall: 2.12 tiles to the wall's centre against 2.39
-            // to the cannon's, both inside the Spike's 2.5-tile notice and outside its 1.6-tile reach.
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(12.2f, 10.5f));
+            // to the gun's, both inside the Runner's 2.5-tile notice and outside its 1.6-tile reach.
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(12.2f, 10.5f), Sim.Circle);
             Sim.Tick(world, 90);
 
             AssertChewed(world, gun, "the gun is the machine the wave chews");
@@ -202,7 +204,7 @@ namespace Facet.Tests
 
             // The same standing spot as above, 2.12 tiles from the wall's centre: inside notice, outside
             // reach, so it charges and then hits.
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(12.2f, 10.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(12.2f, 10.5f), Sim.Circle);
             Sim.Tick(world, 90);
 
             AssertChewed(world, wall, "with no gun to hunt, the wall in notice is the one it chews");
@@ -220,18 +222,18 @@ namespace Facet.Tests
             var wall = new Int2(12, 7);
             var gun = new Int2(13, 7);
             Sim.Place(world, BuildKind.Wall, wall, Dir.North);
-            Sim.Place(world, BuildKind.Cannon, gun, Dir.East);
+            Sim.Place(world, BuildKind.Turret, gun, Dir.East);
 
-            // A Spike at (11.6, 7.5): 0.9 tiles from the wall's centre (inside its 1.6-tile reach) and 1.9
-            // from the cannon's (inside its 2.5-tile notice, beyond reach). Before the fallback the turret won
+            // A Runner at (11.6, 7.5): 0.9 tiles from the wall's centre (inside its 1.6-tile reach) and 1.9
+            // from the gun's (inside its 2.5-tile notice, beyond reach). Before the fallback the turret won
             // the scan and this walker pinned against the wall, hitting nothing; now the wall takes the bites.
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(11.6f, 7.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(11.6f, 7.5f), Sim.Circle);
             Sim.Tick(world, 120);
 
             AssertChewed(world, wall, "a wall inside reach outranks a gun beyond it");
 
             // The re-hunt half: the wall outlasts the window, so drop it by hand and watch the scan turn on
-            // the gun it was shielding - the walker stands about a tile from the cannon's centre, inside reach.
+            // the gun it was shielding - the walker stands about a tile from the turret's centre, inside reach.
             world.Machines.DamageAt(wall, world.Content.Machine(BuildKind.Wall).MaxHp);
             Sim.Tick(world, 90);
 

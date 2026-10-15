@@ -204,9 +204,12 @@ namespace Facet.Game
             private readonly Rect[] _world = new Rect[HudLayout.PanelCount];
 
             /// <summary>Measure the window <paramref name="camera"/> is showing, with the HUD's panels in it
-            /// and the arrows' margin off its edge. <paramref name="tutorialUp"/> is the one panel that is
-            /// not permanent, so it is the one the caller has to say.</summary>
-            public Viewport Measure(Camera camera, bool tutorialUp, float marginPixels)
+            /// and the arrows' margin off its edge. <paramref name="tutorialUp"/> and
+            /// <paramref name="infoGrown"/> are the two panels that are not always there - the tutorial card
+            /// and the sorter picker's band on the info card - so they are the two the caller has to say:
+            /// neither has a default, because a caller that forgot one would silently draw arrows under a
+            /// card that is on screen.</summary>
+            public Viewport Measure(Camera camera, bool tutorialUp, float marginPixels, bool infoGrown)
             {
                 if (camera == null) return default;
 
@@ -221,7 +224,7 @@ namespace Facet.Game
                 float pixel = 2f * halfHeight / pixels;
 
                 int count = HudLayout.Panels(Screen.width, Screen.height,
-                    HudLayout.Scale(Screen.height), tutorialUp, _pixels);
+                    HudLayout.Scale(Screen.height), tutorialUp, _pixels, infoGrown);
 
                 // Screen pixels grow down and world units up, so a panel's top edge in pixels is its bottom
                 // edge in the map - the same flip the cursor's arithmetic makes.

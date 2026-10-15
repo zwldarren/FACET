@@ -30,30 +30,52 @@ namespace Facet.Core
         /// building placed.</summary>
         Held = 2,
 
-        /// <summary>Every wave in the table has been fought. The run's own end is
+        /// <summary>Every wave this run has has been fought. The run's own end is
         /// <see cref="GameStatus"/>'s; this is the clock's answer, and the clock keeps no score.</summary>
         Over = 3,
     }
 
-    /// <summary>The wave clock: which wave is running, what is left of it, and how long the intermission
-    /// has to go. Every wave - the first included - starts itself when its intermission runs out, and
+    /// <summary>
+    /// The wave clock: which wave is running, what is left of it, and how long the intermission has to go.
+    /// Every wave - the first included - starts itself when its intermission runs out, and
     /// <see cref="StartNextWave"/> starts one early, so a player ready sooner can choose "now".
+    ///
+    /// <b>Where a wave comes from is the map's decision.</b> A map's authored table is played first, and
+    /// then the <see cref="WaveGenerator"/> takes over if the map asked for generated waves
+    /// (<see cref="MapDefinition.GeneratedWaves"/>): a scripted opening followed by a procedurally
+    /// generated run, or - a map that authors nothing - a generated run from wave 1. Endless mode is the
+    /// same mechanism with no bound, which is why it needed no separate mode.
+    ///
+    /// Lookups are by wave <em>number</em> and pure, so the briefing can show the wave after next without
+    /// disturbing the stream the running wave came from. The generator's answers are memoised, because a
+    /// HUD asks for the preview every frame.
     ///
     /// The opening is the one wait that does not begin with the run: it is held until the player's first
     /// building, so studying the map costs no time. Its countdown is the longest on the table, because the
-    /// whole opening is built under it - about 16 s for the bootstrap line to bank the defence's 66 circles
-    /// and 35 s for the ammo line to fill, measured from the first building - rounded up for a slower
-    /// player. It is a ceiling on the wait, not a floor: a player done early calls the wave with `N`.
+    /// whole opening is built under it. It is a ceiling on the wait, not a floor: a player done early calls
+    /// the wave with `N`.
     ///
     /// It owns spawning and the definition of "this wave is over"; whether that wins the run is the
-    /// world's business (<see cref="GameStatus"/>).</summary>
+    /// world's business (<see cref="GameStatus"/>).
+    /// </summary>
     public sealed class WaveDirector
     {
-        /// <summary>Room for every group of a wave. The table is fixed; this is only a bound.</summary>
-        private const int MaxGroups = 16;
+        /// <summary>Room for every group of a wave. The table is fixed; this is only a bound - and it is
+        /// public because the generator packs its tail into the groups it already has against this same
+        /// number, so a wave can never be built past what the timers below can hold.</summary>
+        public const int MaxGroups = 16;
 
         private readonly EnemyField _enemies;
         private readonly MapDefinition _map;
+
+        /// <summary>Where a new run's seed comes from - the host's injection of §5's "one seed per run".
+        /// Null plays the map's authored seed: the engine-free default, and what a map that pins its seed
+        /// for a reproducible demo asks for.</summary>
+        private readonly Func<int> _freshSeed;
+
+        /// <summary>The run's seed, drawn by <see cref="Reset"/>. The generator's only input, and what the
+        /// HUD shows so a run is reproducible from the number on the screen.</summary>
+        private int _seed;
 
         /// <summary>The stream waves are announced on, so a view can react to a wave starting or being
         /// cleared without polling the director's state for edges.</summary>
@@ -61,6 +83,18 @@ namespace Facet.Core
 
         private readonly float[] _groupTimer = new float[MaxGroups];
         private readonly int[] _groupSpawned = new int[MaxGroups];
+
+        /// <summary>The generator, built on first use: a map that plays only its authored table never pays
+        /// for the pool walk.</summary>
+        private WaveGenerator _generator;
+
+        /// <summary>Memo for <see cref="Definition"/>, two slots deep because the briefing asks for the
+        /// next wave and the one after it on every frame. Two is enough because of the invariant
+        /// <see cref="NextWave"/> states: while a wave runs, it still names that wave, so the clock bar's
+        /// lookup of the running wave collapses onto the same two numbers. Three live numbers at once would
+        /// make every lookup miss and rebuild the generator's answer several times a frame.</summary>
+        private readonly int[] _memoNumber = { 0, 0 };
+        private readonly WaveDefinition[] _memoWave = new WaveDefinition[2];
 
         private int _waveIndex = -1;     // 0-based index of the wave being fought, -1 during intermission
 
@@ -100,32 +134,53 @@ namespace Facet.Core
         /// the number; for *branching*, read <see cref="Phase"/>.</summary>
         public int CurrentWave { get; private set; }
 
-        /// <summary>1-based number of the wave the intermission is counting down to, 0 when none is left.</summary>
+        /// <summary>1-based number of the wave the intermission is counting down to, 0 when none is left.
+        /// <b>While a wave runs this still names that wave</b> - it is the number the clock is pointed at,
+        /// and a running wave is what it is pointed at - which is why the briefing's three per-frame
+        /// lookups (<see cref="Definition"/> of the running wave and of the two ahead) are only ever two
+        /// distinct numbers, and why <see cref="Definition"/>'s memo can be two slots deep.</summary>
         public int NextWave { get; private set; }
 
         /// <summary>Seconds until the next wave starts by itself: 0 while a wave runs, and 0 once the
-        /// table is exhausted. While the opening is <see cref="WavePhase.Held"/> this is the countdown that
-        /// will run once the first building arms it, not one already running - <see cref="Phase"/> says
+        /// run's waves are exhausted. While the opening is <see cref="WavePhase.Held"/> this is the countdown
+        /// that will run once the first building arms it, not one already running - <see cref="Phase"/> says
         /// which of the two it is.</summary>
         public float IntermissionRemaining { get; private set; }
 
         /// <summary>What that countdown starts at, so a HUD can draw it as a fraction. 0 when there is no
-        /// countdown at all: while a wave runs, or once the table is exhausted. Held for the first building,
-        /// it is the whole countdown waiting to be armed.</summary>
+        /// countdown at all: while a wave runs, or once the run is out of waves. Held for the first
+        /// building, it is the whole countdown waiting to be armed.</summary>
         public float IntermissionTotal { get; private set; }
 
-        /// <summary>True once every wave in the table has been fought and cleared.</summary>
+        /// <summary>True once every wave this run has has been fought and cleared.</summary>
         public bool Finished { get; private set; }
 
         /// <summary>The wave table this director runs: the map's own data, so a different map is a
         /// different campaign without a code change here.</summary>
         private WaveDefinition[] Table => _map.Waves;
 
-        public WaveDirector(EnemyField enemies, MapDefinition map, SimEventBuffer events)
+        /// <summary>How many authored waves the map has, before the generator takes over.</summary>
+        public int AuthoredCount => Table.Length;
+
+        /// <summary>Is this run endless - the generator past the last map with no bound (§5)? Then
+        /// <see cref="TotalWaves"/> is 0 and the HUD prints the wave number alone.</summary>
+        public bool Endless => _map.GeneratedWaves < 0;
+
+        /// <summary>How many waves the run has, or 0 for an endless one.</summary>
+        public int TotalWaves => Endless ? 0 : Table.Length + Math.Max(0, _map.GeneratedWaves);
+
+        /// <summary>The run's seed: the generator's only input, and what the HUD shows so a run is
+        /// reproducible from the number on the screen. Drawn once per run - construction and every
+        /// restart - from the source the host injected, or the map's authored seed when there is none.</summary>
+        public int Seed => _seed;
+
+        public WaveDirector(EnemyField enemies, MapDefinition map, SimEventBuffer events,
+            Func<int> freshSeed = null)
         {
             _enemies = enemies ?? throw new ArgumentNullException(nameof(enemies));
             _map = map ?? throw new ArgumentNullException(nameof(map));
             _events = events ?? throw new ArgumentNullException(nameof(events));
+            _freshSeed = freshSeed;
             Reset();
         }
 
@@ -136,32 +191,93 @@ namespace Facet.Core
             {
                 if (_waveIndex < 0) return 0;
 
-                WaveDefinition wave = Table[_waveIndex];
+                WaveDefinition wave = Definition(_waveIndex + 1);
+                if (wave == null) return 0;
+
                 int pending = 0;
-                for (int g = 0; g < wave.Groups.Length; g++)
+                for (int g = 0; g < wave.Groups.Length && g < MaxGroups; g++)
                     pending += Math.Max(0, wave.Groups[g].Count - _groupSpawned[g]);
 
                 return pending;
             }
         }
 
-        /// <summary>The definition of the wave the intermission is waiting on, or null while one runs.</summary>
-        public WaveDefinition NextWaveDefinition => NextWave > 0 ? Table[NextWave - 1] : null;
+        /// <summary>The definition of the wave the intermission is waiting on, or null while one runs or
+        /// once the run is out of waves.</summary>
+        public WaveDefinition NextWaveDefinition => NextWave > 0 ? Definition(NextWave) : null;
+
+        /// <summary>The wave after that one, so the briefing can show both (§5: preview the next wave and
+        /// the one after). Null when the run has only one wave left.</summary>
+        public WaveDefinition WaveAfterNextDefinition
+        {
+            get
+            {
+                if (NextWave <= 0) return null;
+                if (!Endless && NextWave + 1 > TotalWaves) return null;
+
+                return Definition(NextWave + 1);
+            }
+        }
+
+        /// <summary>
+        /// The wave numbered <paramref name="number"/> (1-based): the map's authored row, or - past the
+        /// table - the generator's. Pure and memoised, so the preview and the spawner cannot disagree and a
+        /// preview does not advance anything. Null for a number this run does not have.
+        /// </summary>
+        public WaveDefinition Definition(int number)
+        {
+            if (number < 1) return null;
+
+            if (number <= Table.Length) return Table[number - 1];
+            if (!_map.GeneratesWaves) return null;
+
+            int generated = number - Table.Length;
+            if (!Endless && generated > _map.GeneratedWaves) return null;
+
+            for (int i = 0; i < _memoNumber.Length; i++)
+                if (_memoNumber[i] == number && _memoWave[i] != null) return _memoWave[i];
+
+            // The generator is asked by the *run's* wave number, not by how many waves it has produced: a map
+            // that scripts its opening and hands over to the generator keeps climbing the budget curve and the
+            // depth bands from where its own table left off, instead of dropping back to a first wave's worth
+            // of pressure. For a map that authors nothing the two numbers are the same.
+            WaveDefinition wave = Generator().Wave(number);
+            _memoNumber[number % _memoNumber.Length] = number;
+            _memoWave[number % _memoNumber.Length] = wave;
+            return wave;
+        }
 
         public void Reset()
         {
+            // The seed is the run's, not the clock's: a restarted run is a new run, so a source draws
+            // again here, and a run without one plays the map's authored seed.
+            _seed = _freshSeed != null ? _freshSeed() : _map.Seed;
+
             _waveIndex = -1;
             CurrentWave = 0;
-            NextWave = Table.Length > 0 ? 1 : 0;
+            NextWave = HasWaves ? 1 : 0;
+
+            // A table with nothing to fight is NOT a finished run: `Finished` means "every wave this run has
+            // was fought and cleared", and it is set by clearing the last one. A map with no waves and no
+            // generator therefore never ends - which is what an unplayable map deserves (MapValidation names
+            // it `NoWaves`, and the Editor refuses to author it), and what the whole engine-free test rig
+            // leans on, since its maps carry no waves at all. Marking it finished here won the run on tick 1
+            // and froze the tick loop with it, so nothing advanced at all.
             Finished = false;
             BeginIntermission(NextWave);
             Array.Clear(_groupTimer, 0, _groupTimer.Length);
             Array.Clear(_groupSpawned, 0, _groupSpawned.Length);
+            Array.Clear(_memoNumber, 0, _memoNumber.Length);
+            Array.Clear(_memoWave, 0, _memoWave.Length);
 
             // A restart puts the opening back in the player's hands: the clock is armed by a building
             // again, so a restarted run is not already late before the first thing is laid.
             _openingWaiting = true;
         }
+
+        /// <summary>Is there a first wave at all? A map with no authored waves and no generator is a map
+        /// error the validator names; this is the clock's own answer to it.</summary>
+        private bool HasWaves => Table.Length > 0 || _map.GeneratesWaves;
 
         /// <summary>Arm the opening: the first wave's countdown starts now, because the player has begun
         /// to build. Called by the world on the tick a run's first building lands, and idempotent, so the
@@ -172,12 +288,13 @@ namespace Facet.Core
 
         /// <summary>Arm the wait before the wave numbered <paramref name="waveNumber"/> (0 when there is
         /// none): the countdown every wave runs, the first included, so "this wave is coming" is one rule
-        /// and its length is the table's number rather than a special case. The opening's wait begins
+        /// and its length is the wave's own number rather than a special case. The opening's wait begins
         /// ticking when the first building arms it (<see cref="ArmFirstWave"/>); every other one begins the
         /// moment it is armed here.</summary>
         private void BeginIntermission(int waveNumber)
         {
-            IntermissionTotal = waveNumber > 0 ? Table[waveNumber - 1].Intermission : 0f;
+            WaveDefinition wave = waveNumber > 0 ? Definition(waveNumber) : null;
+            IntermissionTotal = wave?.Intermission ?? 0f;
             _intermissionTicks = SecondsToTicks(IntermissionTotal);
             IntermissionRemaining = IntermissionTotal;
         }
@@ -191,7 +308,7 @@ namespace Facet.Core
                 if (NextWave == 0) return;
 
                 // The opening holds until the player builds something: no tick passes while it is Held,
-                // so the countdown the table declares is spent building, not reading.
+                // so the countdown the map declares is spent building, not reading.
                 if (_openingWaiting) return;
 
                 if (_intermissionTicks > 0) _intermissionTicks--;
@@ -221,6 +338,21 @@ namespace Facet.Core
 
         private void StartWave(int index)
         {
+            WaveDefinition wave = Definition(index + 1);
+            if (wave == null)
+            {
+                // No such wave: the run is over. Reachable only for a table this director was not told
+                // about, but ending the run is the honest answer rather than spawning nothing forever -
+                // and it leaves the clock in the same state the normal end does, so a reader that asks
+                // the countdown directly rather than through Phase sees a finished run, not a stale one.
+                Finished = true;
+                NextWave = 0;
+                _openingWaiting = false;
+                IntermissionRemaining = 0f;
+                IntermissionTotal = 0f;
+                return;
+            }
+
             // However the wait ended - a countdown running out, or the player calling it - the opening is
             // over, so the bit that held it is spent here rather than by the path that got here.
             _openingWaiting = false;
@@ -230,7 +362,6 @@ namespace Facet.Core
             IntermissionRemaining = 0f;
             IntermissionTotal = 0f;
 
-            WaveDefinition wave = Table[index];
             for (int g = 0; g < wave.Groups.Length && g < MaxGroups; g++)
             {
                 _groupTimer[g] = wave.Groups[g].FirstDelay;
@@ -242,7 +373,8 @@ namespace Facet.Core
 
         private void Spawn(float dt)
         {
-            WaveDefinition wave = Table[_waveIndex];
+            WaveDefinition wave = Definition(_waveIndex + 1);
+            if (wave == null) return;
 
             for (int g = 0; g < wave.Groups.Length && g < MaxGroups; g++)
             {
@@ -256,7 +388,7 @@ namespace Facet.Core
 
                 while (_groupTimer[g] <= 0f && _groupSpawned[g] < group.Count)
                 {
-                    _enemies.Spawn(group.Kind, _map.SpawnCenter(group.SpawnPoint));
+                    _enemies.Spawn(group.Kind, _map.SpawnCenter(group.SpawnPoint), group.Weakness);
                     _groupSpawned[g]++;
                     _groupTimer[g] += interval;
                 }
@@ -274,7 +406,8 @@ namespace Facet.Core
             CurrentWave = 0;
             _events.WaveCleared(cleared);
 
-            if (cleared >= Table.Length)
+            // A run with no bound - endless mode - never runs out: the generator simply keeps answering.
+            if (!Endless && cleared >= TotalWaves)
             {
                 Finished = true;
                 NextWave = 0;
@@ -284,5 +417,10 @@ namespace Facet.Core
             NextWave = cleared + 1;
             BeginIntermission(NextWave);
         }
+
+        /// <summary>The generator for this map, built once. The pool is the closure of the map's own
+        /// minerals under its own unlocked operators, so every demand it can draw is buildable here.</summary>
+        private WaveGenerator Generator()
+            => _generator ?? (_generator = new WaveGenerator(_seed, _map.Pool(), _map.SpawnPoints.Length));
     }
 }

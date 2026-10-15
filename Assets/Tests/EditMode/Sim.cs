@@ -5,7 +5,12 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>Shared scaffolding for the EditMode tests. Deliberately tiny - the simulation needs no
-    /// scene, Play mode or fixtures, so these are just conveniences.</summary>
+    /// scene, Play mode or fixtures, so these are just conveniences.
+    ///
+    /// The item model is the shape algebra now, so the old <c>ShapeType</c> names live here as the exact
+    /// items they always meant: a test reads "a half-circle" instead of spelling four quadrants, and a
+    /// test that means the <em>top</em> half says so. Every one of them is a plain <see cref="Shape"/>, so
+    /// nothing here is a second vocabulary - <see cref="Shape.Describe"/> remains the only prose.</summary>
     internal static class Sim
     {
         public const float Tol = 1e-4f;
@@ -16,6 +21,39 @@ namespace Facet.Tests
         /// <summary>The stockpile a unit-test world starts with: large enough that only economy tests
         /// ever have to think about the economy.</summary>
         public const int TestCircles = 100000;
+
+        // ---------------------------------------------------------------- the design's named items
+        //
+        // The five names the retired ShapeType had, spelled as the quadrants they always were. A half is
+        // an orientation now, not a value, so the top and bottom halves are two different items and the
+        // rotator's whole job is moving between them - which is exactly why these are spelled out rather
+        // than derived by a helper that could quietly change which way up it means.
+
+        public static readonly Shape Circle = Shape.Full(Quad.Circle);
+        public static readonly Shape Square = Shape.Full(Quad.Square);
+
+        /// <summary>The top half of a circle: the piece a horizontal cut of a full circle puts above the
+        /// line, and what a drill's circle becomes after one cut.</summary>
+        public static readonly Shape TopHalfCircle = Shape.Of(Quad.Circle, Quad.Circle, Quad.Empty, Quad.Empty);
+
+        public static readonly Shape BottomHalfCircle = Shape.Of(Quad.Empty, Quad.Empty, Quad.Circle, Quad.Circle);
+
+        public static readonly Shape LeftHalfCircle = Shape.Of(Quad.Circle, Quad.Empty, Quad.Empty, Quad.Circle);
+
+        public static readonly Shape RightHalfCircle = Shape.Of(Quad.Empty, Quad.Circle, Quad.Circle, Quad.Empty);
+
+        public static readonly Shape TopHalfSquare = Shape.Of(Quad.Square, Quad.Square, Quad.Empty, Quad.Empty);
+
+        public static readonly Shape BottomHalfSquare = Shape.Of(Quad.Empty, Quad.Empty, Quad.Square, Quad.Square);
+
+        public static readonly Shape LeftHalfSquare = Shape.Of(Quad.Square, Quad.Empty, Quad.Empty, Quad.Square);
+
+        public static readonly Shape RightHalfSquare = Shape.Of(Quad.Empty, Quad.Square, Quad.Square, Quad.Empty);
+
+        /// <summary>The old composite, as the quadrant content it was: a circle above the line and a
+        /// square below it. It is one of the eighty, not a wildcard - see
+        /// <see cref="Shape.Overlaps"/> for why "contains both minerals" stopped meaning "hits everything".</summary>
+        public static readonly Shape Composite = Shape.Of(Quad.Circle, Quad.Circle, Quad.Square, Quad.Square);
 
         /// <summary>A featureless map of the given size: no patches, spawn points or waves, and
         /// <paramref name="startCircles"/> banked. Unit tests draw their own terrain on it.</summary>
@@ -28,22 +66,28 @@ namespace Facet.Tests
         /// one: the game's maps are designer-repainted data, so asserting *their* ground, doors or waves would
         /// test today's map file rather than the simulation. A corridor down the north side (rock at (4,10)
         /// and (6,10), each eleven tiles tall) makes a wave walk a straight lane into the Core's north face.
-        /// Two veins: one beside the Core for the economy line, one feeding a drill &gt; decomposer &gt; cannon
-        /// line whose gun sits four tiles off the lane - inside its 7-tile range, outside the 2.5 tiles a Spike
-        /// notices a machine from. Two Spikes a wave, two waves a table, and a budget that pays for the opening.
+        /// Two circle veins: one beside the Core for the economy line, one feeding the operator chain a
+        /// player actually builds - drill &gt; cutter &gt; turret - whose gun sits four tiles off the lane,
+        /// inside its 7-tile range and outside the 2.5 tiles a Runner notices a machine from. Two Runners a
+        /// wave, two waves a table, and a budget that pays for the opening: the whole opening costs 63
+        /// (14 for the economy line, 49 for the defence), so 80 leaves a little to spare.
+        ///
+        /// The wave's demand is the <em>top</em> half-circle, which is the piece the cutter facing north
+        /// pushes out of its front outlet: a group's weakness is one exact item now, so the rig has to
+        /// name the item its own line produces or the gun would be firing resisted rounds all run.
         /// </summary>
         public static MapDefinition RigMap()
-            => new MapDefinition("rig", 16, 22, 62,
+            => new MapDefinition("rig", 16, 22, 80,
                 new[]
                 {
-                    new ShapePatch(new Int2(12, 6), 2, 1, ShapeType.Circle),
-                    new ShapePatch(new Int2(12, 9), 2, 1, ShapeType.Circle),
+                    new ShapePatch(new Int2(12, 6), 2, 1, Quad.Circle),
+                    new ShapePatch(new Int2(12, 9), 2, 1, Quad.Circle),
                 },
                 new[] { new Int2(5, 20) },
                 new[]
                 {
-                    new WaveDefinition(60f, new SpawnGroup(EnemyKind.Spike, 2, 0, 0f, 2f)),
-                    new WaveDefinition(30f, new SpawnGroup(EnemyKind.Spike, 2, 0, 0f, 2f)),
+                    new WaveDefinition(60f, new SpawnGroup(EnemyKind.Runner, 2, 0, 0f, 2f, TopHalfCircle)),
+                    new WaveDefinition(30f, new SpawnGroup(EnemyKind.Runner, 2, 0, 0f, 2f, TopHalfCircle)),
                 },
                 TerrainLayout.Rects(16, 22,
                     new TerrainRect(new Int2(4, 10), 1, 11, TerrainKind.Rock),
@@ -65,19 +109,22 @@ namespace Facet.Tests
 
         /// <summary>
         /// The rig's defence: a drill on the second vein at (12,9) pushing west onto two belts into a
-        /// decomposer at (9,9) whose outlet runs north into a cannon at (9,11) facing west, three tiles from
-        /// the lane's column. <paramref name="trunk"/> is the input run's first cell, where a jam goes in.
+        /// <b>cutter</b> at (9,9) facing north, whose top piece leaves north into a belt that feeds the
+        /// <b>turret</b> at (9,11) - four tiles from the lane's column - and whose bottom piece leaves south
+        /// onto a dead-ended belt, a visible queue rather than a lost half. <paramref name="trunk"/> is the
+        /// input run's first cell, where a jam goes in.
         /// </summary>
         public static void BuildRigDefence(SimWorld world, out Int2 trunk)
         {
             Place(world, BuildKind.Drill, new Int2(12, 9), Dir.West);
             Int2 runStart = new Int2(11, 9);
-            LayRun(world, runStart, Dir.West, 2);                 // (11,9) (10,9), into the decomposer
+            LayRun(world, runStart, Dir.West, 2);                 // (11,9) (10,9), into the cutter
             trunk = runStart;
 
-            Place(world, BuildKind.Decomposer, new Int2(9, 9), Dir.East);
-            LayRun(world, new Int2(9, 10), Dir.North, 1);         // out of the decomposer, up into the gun
-            Place(world, BuildKind.Cannon, new Int2(9, 11), Dir.West);
+            Place(world, BuildKind.Cutter, new Int2(9, 9), Dir.North);
+            LayRun(world, new Int2(9, 10), Dir.North, 1);         // out of the cutter, up into the gun
+            LayRun(world, new Int2(9, 8), Dir.South, 1);          // and the bottom half's own dead end
+            Place(world, BuildKind.Turret, new Int2(9, 11), Dir.West);
         }
 
         /// <summary>The whole opening, the way a player builds it: the economy first, then the defence.</summary>
@@ -99,31 +146,36 @@ namespace Facet.Tests
 
         /// <summary>
         /// The minimal rig that can actually end: a 20x12 map (Core at (8,4)-(11,7)) whose one wave sends a
-        /// single Spike in from (13,10), answered by a cannon at (10,10) fed by a belt at (9,10) that a test
-        /// stocks each tick. The spike dies, the wave clears, the table is exhausted, and the run ends - what
-        /// the win and the clock's-last-tick tests need without the campaign's longer maps. It has already
-        /// built by the time any tick runs (so the clock is armed) and its opening countdown is 0, so the wave
-        /// starts itself on the first tick; a press of N is harmless but redundant. A test of the Held-to-press
-        /// transition needs a rig that builds nothing at all.
+        /// single Runner in from (13,10), answered by the one universal turret at (10,10) fed by a belt at
+        /// (9,10) that a test stocks each tick. The Runner dies, the wave clears, the table is exhausted,
+        /// and the run ends - what the win and the clock's-last-tick tests need without the campaign's
+        /// longer maps. It has already built by the time any tick runs (so the clock is armed) and its
+        /// opening countdown is 0, so the wave starts itself on the first tick; a press of N is harmless
+        /// but redundant. A test of the Held-to-press transition needs a rig that builds nothing at all.
+        ///
+        /// The group's demand is a top half-circle, which is what <see cref="FeedOneWaveGun"/> loads: six
+        /// health against four matched damage is the two shots this rig has always taken, where a resisted
+        /// round would take eight.
         /// </summary>
         public static SimWorld OneWaveWorld()
         {
             var map = new MapDefinition("one wave", 20, 12, TestCircles,
                 new ShapePatch[0],
                 new[] { new Int2(13, 10) },
-                new[] { new WaveDefinition(0f, new SpawnGroup(EnemyKind.Spike, 1, 0, 1f, 1f)) });
+                new[] { new WaveDefinition(0f, new SpawnGroup(EnemyKind.Runner, 1, 0, 1f, 1f, TopHalfCircle)) });
             var world = new SimWorld(map, new SimConfig());
 
             LayRun(world, new Int2(9, 10), Dir.East, 1);
-            Place(world, BuildKind.Cannon, new Int2(10, 10), Dir.East);
+            Place(world, BuildKind.Turret, new Int2(10, 10), Dir.East);
             return world;
         }
 
-        /// <summary>Keep <see cref="OneWaveWorld"/>'s cannon fed: one half-circle on the belt's single cell
-        /// each tick. At <see cref="SimConfig.BeltSpeed"/> of 1 the cell delivers one per second - exactly
-        /// the gun's ceiling - though a shot still waits out the cell's first second of fill.</summary>
+        /// <summary>Keep <see cref="OneWaveWorld"/>'s turret fed: one top half-circle on the belt's single
+        /// cell each tick - the exact item the wave is weak to. At <see cref="SimConfig.BeltSpeed"/> of 1
+        /// the cell delivers one per second - exactly the gun's ceiling - though a shot still waits out the
+        /// cell's first second of fill.</summary>
         public static void FeedOneWaveGun(SimWorld world)
-            => world.Belts.TrySpawnItem(new Int2(9, 10), ShapeType.HalfCircle);
+            => world.Belts.TrySpawnItem(new Int2(9, 10), TopHalfCircle);
 
         public static void Tick(SimWorld world, InputCommand cmd, int count)
         {
@@ -178,20 +230,6 @@ namespace Facet.Tests
             }
         }
 
-        /// <summary>
-        /// Run the whole game, starting each wave the moment its wait begins so the test never sits through a
-        /// countdown (those have their own tests). The opening's wait counts too: it is Held for a first
-        /// building, and a press ends it just as a running countdown can be cut short.
-        /// </summary>
-        public static void RunToEnd(SimWorld world, int maxTicks = 60 * 30 * 12)
-        {
-            for (int i = 0; i < maxTicks && world.Status == GameStatus.Playing; i++)
-            {
-                if (world.Waves.HasWaveToStart) world.Waves.StartNextWave();
-                world.Tick(InputCommand.None);
-            }
-        }
-
         public static Dir DirAt(SimWorld world, Int2 cell)
         {
             Assert.IsTrue(world.Belts.TryGet(cell, out BeltState state), "expected a belt at " + cell);
@@ -221,8 +259,19 @@ namespace Facet.Tests
 
         public static int ItemCount(SimWorld world) => ItemsIn(world).Count;
 
-        /// <summary>The shape riding a cell, or None.</summary>
-        public static ShapeType ShapeAt(SimWorld world, Int2 cell)
-            => world.Belts.TryGet(cell, out BeltState state) ? state.Item : ShapeType.None;
+        /// <summary>The shape riding a cell, or nothing.</summary>
+        public static Shape ShapeAt(SimWorld world, Int2 cell)
+            => world.Belts.TryGet(cell, out BeltState state) ? state.Item : Shape.None;
+
+        /// <summary>How many items on the map are exactly this shape - the question a routing or cutting
+        /// test asks far more often than "what is on cell X".</summary>
+        public static int CountOf(SimWorld world, Shape shape)
+        {
+            int found = 0;
+            foreach (ItemSnapshot item in ItemsIn(world))
+                if (item.Shape == shape) found++;
+
+            return found;
+        }
     }
 }

@@ -4,376 +4,257 @@ using NUnit.Framework;
 namespace Facet.Tests
 {
     /// <summary>
-    /// EditMode tests for the second production chain: a square patch, the decomposer running the
-    /// second recipe, half-square ammunition and a mortar. Most pin that both chains obey the same
-    /// rules: the one splitter takes either mineral and jams on anything already split, each gun
-    /// refuses the other's ammunition, and the sorter separates the two minerals on one line.
+    /// EditMode tests for the second mineral's chain and for the rule that replaced the ammo table: a
+    /// round's <em>identity</em> against the group's demand. A square vein, the same cutter that splits a
+    /// circle, and the one universal turret - so what this file pins is that the operator set is
+    /// mineral-agnostic (one cutter, one sorter, any shape) and that damage is a quarter unless the round
+    /// <em>is</em> the item the wave asked for.
+    ///
+    /// The chain that used to run here ended in a mortar firing half-squares at a Bulwark that only a
+    /// half-circle could hurt; both guns and both weaknesses are gone, so those tests are rewritten around
+    /// the replacement rule rather than deleted: the same 6-hp archetype now costs two matched rounds and
+    /// six resisted ones.
+    ///
     /// Worlds use the 20x12 test map, unkillable so a Core breach cannot end a measurement mid-run.
     /// </summary>
     public class ChainTests
     {
-        private static readonly Int2 Converter = new Int2(7, 9);
-        private static readonly Int2 Mortar = new Int2(10, 9);
+        /// <summary>The cutter the second chain runs through, and the gun it feeds.</summary>
+        private static readonly Int2 Cutter = new Int2(7, 9);
+        private static readonly Int2 Turret = new Int2(7, 11);
+
+        /// <summary>The item this file's chain is asked for: the piece a north-facing cutter pushes out of
+        /// its front outlet, which is the only piece the turret is wired to receive.</summary>
+        private static readonly Shape Demand = Sim.TopHalfSquare;
 
         /// <summary>
-        /// Lays the second chain along the bottom of the test map: a drill on a square patch at (3,9)
-        /// mining east, four belt cells into the decomposer, then three more into the mortar (rest facing
-        /// west; its barrel points at the nearest enemy).
+        /// Lays the second chain up the middle of the test map: a drill on a square vein at (3,9) mining
+        /// east, three belt cells into a cutter at (7,9) facing north, one belt north out of it, and the
+        /// turret at (7,11) - so the chain's product is the top half-square and nothing else. (The bottom
+        /// half leaves by the cutter's other outlet, which this layout deliberately does not wire: half the
+        /// product is not the round the briefing asked for, which is the whole point of orientation.)
         /// </summary>
         private static SimWorld SecondChain()
         {
             SimWorld world = Sim.NewEnduringWorld(20, 12);
-            world.Terrain.SetOre(new Int2(3, 9), ShapeType.Square);
+            world.Terrain.SetOre(new Int2(3, 9), Quad.Square);
 
             Sim.Place(world, BuildKind.Drill, new Int2(3, 9), Dir.East);
-            Sim.LayRun(world, new Int2(4, 9), Dir.East, 3);       // (4,9) .. (6,9) into the decomposer
-            Sim.Place(world, BuildKind.Decomposer, Converter, Dir.East);
-            Sim.LayRun(world, new Int2(8, 9), Dir.East, 2);       // (8,9) (9,9) into the mortar
-            Sim.Place(world, BuildKind.Mortar, Mortar, Dir.West);
+            Sim.LayRun(world, new Int2(4, 9), Dir.East, 3);       // (4,9) .. (6,9) into the cutter
+            Sim.Place(world, BuildKind.Cutter, Cutter, Dir.North);
+            Sim.LayRun(world, new Int2(7, 10), Dir.North, 1);     // out of the cutter, up into the gun
+            Sim.Place(world, BuildKind.Turret, Turret, Dir.West);
             return world;
         }
 
         [Test]
         public void TheSecondChain_RunsFromAPatch_ToAKill()
         {
-            // Mine a square, split it, belt the halves, fire: the whole chain, headless. The mortar was
-            // once the cheap way to a Spike (one 6-damage shell against 6 HP); half-square ammo is now
-            // resisted by a quarter, so the same shell lands 1.5 and the kill costs four shells.
+            // Mine a square, cut it, belt the piece, fire: the whole chain, headless. Six health against
+            // four matched damage is two rounds - where the same round against an enemy demanding something
+            // else would be a quarter of that, and the belt's one-per-second ceiling is what makes the
+            // difference between holding a wave and watching the Core fall.
             SimWorld world = SecondChain();
-            Assert.Greater(world.Enemies.Spawn(EnemyKind.Spike, new Vec2(14.5f, 9.5f)), 0);
+            Assert.Greater(world.Enemies.Spawn(EnemyKind.Tank, new Vec2(13.5f, 10.5f), Demand), 0);
 
             for (int i = 0; i < 30 * 20 && world.Enemies.AliveCount > 0; i++) world.Tick(InputCommand.None);
 
-            Assert.AreEqual(0, world.Enemies.AliveCount, "the mortar brought the spike down");
+            Assert.AreEqual(0, world.Enemies.AliveCount, "the chain brought the enemy down");
             Assert.AreEqual(1, world.Events.CountOf(SimEventKind.EnemyKilled));
-            Assert.AreEqual(4, world.Events.CountOf(SimEventKind.ShotFired),
-                "with four resisted shells, not the one it used to take");
+            Assert.AreEqual(2, world.ShotsFired, "two matched rounds: 6 hp against 4 damage, rounded up");
         }
 
         [Test]
-        public void TheMortar_IsFedHalfSquares_NotCircles()
+        public void TheGun_HasNoAmmoTable_SoTheRoundIsWhateverTheLineDelivered()
         {
-            // The diet is the definition's: what arrives is the second recipe's output, not a circle
-            // that wandered down the wrong line.
+            // What a mortar's diet used to decide is the line's business now. The turret's row carries
+            // any-shape as its diet - the universal chamber - so the interesting claim is that the item on
+            // its input belt is the chain's own product, and that the chamber would take anything else too.
             SimWorld world = SecondChain();
 
+            MachineState chamber = default;
             for (int i = 0; i < 30 * 20; i++)
             {
                 world.Tick(InputCommand.None);
-                if (world.Machines.TryGet(Mortar, out MachineState mortar) && mortar.Armed) break;
+                chamber = Sim.MachineAt(world, Turret);
+                if (chamber.Armed) break;
             }
 
-            MachineState armed = Sim.MachineAt(world, Mortar);
-            Assert.AreEqual(ShapeType.HalfSquare, world.Content.Turret(BuildKind.Mortar).PrimaryAmmo);
-            Assert.IsTrue(armed.Armed, "the mortar is armed by its own chain");
+            Assert.IsTrue(chamber.Armed, "the gun is armed by its own chain");
+            Assert.AreEqual(Demand, Sim.ShapeAt(world, new Int2(7, 10)),
+                "and the round waiting for it is the piece the cutter's front outlet made");
+
+            Assert.AreEqual(FilterMode.Any, ContentDatabase.Default.Machine(BuildKind.Turret).Diet.Mode,
+                "the chamber's diet is 'anything a belt can carry' - there is no ammo row to satisfy");
+            Assert.IsTrue(ContentDatabase.Default.Machine(BuildKind.Turret).Diet.Matches(Sim.Circle),
+                "so a circle line would feed it too, and the round would simply be worth less");
         }
 
         [Test]
         public void OneSquare_BecomesTwoHalfSquares()
         {
-            // The recipe's shape, not the machine's: one square in, two half-squares out, as a circle
-            // becomes two half-circles. A single outlet caps the decomposer at the belt's rate, so the
-            // second half waits in the machine's buffer - the starvation that makes a second outlet
-            // worth wiring.
-            SimWorld world = SecondChain();
+            // The cut line's own shape, not a machine's: one square in, one top half out the north and one
+            // bottom half out the south, at the same moment. Neither outlet can carry two, so the pieces
+            // that cannot leave yet wait inside their own slot - which is what makes wiring both sides worth
+            // doing rather than a way to lose a piece.
+            SimWorld world = Sim.NewEnduringWorld(20, 12);
+            var input = new Int2(4, 9);
 
-            int halves = 0;
-            for (int i = 0; i < 30 * 10; i++)
-            {
-                world.Tick(InputCommand.None);
+            Sim.LayRun(world, input, Dir.East, 1);                  // into the cutter
+            Sim.Place(world, BuildKind.Cutter, new Int2(5, 9), Dir.North);
+            Sim.LayRun(world, new Int2(5, 10), Dir.North, 1);       // the front (top) outlet
+            Sim.LayRun(world, new Int2(5, 8), Dir.South, 1);        // the back (bottom) outlet
 
-                int made = Sim.MachineAt(world, Converter).OutputCount;
-                for (int cell = 4; cell < 10; cell++)
-                    if (Sim.ShapeAt(world, new Int2(cell, 9)) == ShapeType.HalfSquare) made++;
+            Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Square));
+            Sim.Tick(world, 30 * 6);
 
-                halves = System.Math.Max(halves, made);
-                if (halves >= 2) break;
-            }
+            Assert.AreEqual(Sim.TopHalfSquare, Sim.ShapeAt(world, new Int2(5, 10)), "the top half went north");
+            Assert.AreEqual(Sim.BottomHalfSquare, Sim.ShapeAt(world, new Int2(5, 8)),
+                "and the bottom half went south, in the same cycle");
+            Assert.AreEqual(2, Sim.ItemCount(world), "one square became exactly two halves, no more");
+            Assert.IsFalse(world.Belts.HasItemAt(input), "the input was eaten, not dropped");
 
-            Assert.GreaterOrEqual(halves, 2, "one square became two half-squares");
+            MachineState cutter = Sim.MachineAt(world, new Int2(5, 9));
+            Assert.AreEqual(0, cutter.OutputCount, "and neither slot is holding anything back");
+            Assert.AreEqual(0, cutter.OutputCount2);
         }
 
         [Test]
-        public void TheOneDecomposer_SplitsEitherMineral()
+        public void TheOneCutter_SplitsEitherMineral()
         {
-            // The merge: there is no cutter, because there needn't be - the delivered shape picks the
-            // recipe. Feed the one machine a circle, then a square, off the same belt.
+            // The merge: there is no per-input recipe any more, because processing is an operator. The same
+            // machine, fed off the same belt, cuts a circle and then a square - the delivered shape picks
+            // the piece, and neither is a wrong-shape delivery.
+            //
+            // Both outlets are wired, as they would be on a line: a slot counts pieces of one shape, so a
+            // cutter whose other side is queueing holds the next item on its belt rather than rewriting what
+            // is already queued behind it - which is a stall, and the layout is what avoids it.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             var input = new Int2(4, 9);
-            var output = new Int2(6, 9);
-
-            Sim.LayRun(world, input, Dir.East, 1);                       // into the decomposer
-            Sim.Place(world, BuildKind.Decomposer, new Int2(5, 9), Dir.East);
-            Sim.LayRun(world, output, Dir.East, 1);                      // and away again
-
-            Assert.IsTrue(world.Belts.TrySpawnItem(input, ShapeType.Circle));
-            Assert.AreEqual(ShapeType.HalfCircle, TickUntilOutput(world, output),
-                "a circle in, half-circles out");
-            world.Belts.TryTakeItem(output, out _);
-
-            // A split makes two: the second half waits in the buffer and must drain before the machine
-            // takes the other mineral - a buffer holds one shape at a time.
-            Assert.AreEqual(ShapeType.HalfCircle, TickUntilOutput(world, output), "its twin follows");
-            world.Belts.TryTakeItem(output, out _);
-
-            Assert.IsTrue(world.Belts.TrySpawnItem(input, ShapeType.Square));
-            Assert.AreEqual(ShapeType.HalfSquare, TickUntilOutput(world, output),
-                "the same machine takes the second mineral");
-
-            Assert.AreEqual(0, world.Belts.JamCount, "neither mineral is the wrong shape");
-        }
-
-        [Test]
-        public void TheOneDecomposer_StillJams_OnAnythingAlreadySplit()
-        {
-            // The wrong-shape rule outlives the cutter: halves are what the machine makes, not what it
-            // eats, so one fed back jams the belt that brought it, with the shape left on it.
-            SimWorld world = Sim.NewEnduringWorld(20, 12);
-            var input = new Int2(4, 9);
+            var output = new Int2(5, 10);
+            var other = new Int2(5, 8);
 
             Sim.LayRun(world, input, Dir.East, 1);
-            Sim.Place(world, BuildKind.Decomposer, new Int2(5, 9), Dir.East);
-            Sim.LayRun(world, new Int2(6, 9), Dir.East, 1);
+            Sim.Place(world, BuildKind.Cutter, new Int2(5, 9), Dir.North);
+            Sim.LayRun(world, output, Dir.North, 1);
+            Sim.LayRun(world, other, Dir.South, 1);   // the cut's other piece, out the opposite side
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(input, ShapeType.HalfSquare));
-            Sim.Tick(world, 30 * 4);
+            Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Circle));
+            Assert.AreEqual(Sim.TopHalfCircle, TickUntilOutput(world, output), "a circle in, a half-circle out");
+            Assert.AreEqual(Sim.BottomHalfCircle, Sim.ShapeAt(world, other),
+                "with the other piece out of the outlet opposite the one it faces");
+            world.Belts.TryTakeItem(output, out _);
 
-            Assert.IsTrue(world.Belts.IsJammed(input), "a half-square is no recipe's input");
-            Assert.AreEqual(ShapeType.HalfSquare, Sim.ShapeAt(world, input),
-                "with the offending shape left on the belt");
-            Assert.AreEqual(1, world.Events.CountOf(SimEventKind.Jammed));
-            Assert.IsTrue(world.Events.TryLast(SimEventKind.Jammed, out SimEvent jam));
-            Assert.AreEqual(ShapeType.HalfSquare, jam.Shape, "and the report names the shape");
-            Assert.AreEqual(input, jam.Cell);
-        }
+            Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Square));
+            Assert.AreEqual(Sim.TopHalfSquare, TickUntilOutput(world, output),
+                "the same machine takes the second mineral, with no table consulted");
 
-        /// <summary>Tick until an item reaches <paramref name="cell"/> (cap 10 s), returning its shape,
-        /// or None if nothing ever arrived.</summary>
-        private static ShapeType TickUntilOutput(SimWorld world, Int2 cell)
-        {
-            for (int i = 0; i < 30 * 10; i++)
-            {
-                world.Tick(InputCommand.None);
-                ShapeType shape = Sim.ShapeAt(world, cell);
-                if (shape != ShapeType.None) return shape;
-            }
-
-            return ShapeType.None;
-        }
-
-        [Test]
-        public void AMortarShell_BurstsOverTheWholePack()
-        {
-            // The mortar's difference that is not a stat: two Bulwarks shoulder to shoulder, one shell,
-            // two kills - the pack answer the cannon has no equivalent of.
-            SimWorld world = Sim.NewEnduringWorld(20, 12);
-
-            Sim.LayRun(world, new Int2(4, 9), Dir.East, 1);
-            Sim.Place(world, BuildKind.Mortar, new Int2(5, 9), Dir.East);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 9), ShapeType.HalfSquare));
-
-            // Side by side across the lane, so the walk keeps them shoulder to shoulder.
-            world.Enemies.Spawn(EnemyKind.Bulwark, new Vec2(10.5f, 9.2f));
-            world.Enemies.Spawn(EnemyKind.Bulwark, new Vec2(10.5f, 9.8f));
-
-            Sim.Tick(world, 30 * 5);
-
-            Assert.AreEqual(0, world.Enemies.AliveCount, "one bursting shell took the pair");
-            Assert.AreEqual(2, world.Events.CountOf(SimEventKind.EnemyKilled));
-            Assert.AreEqual(1, world.Events.CountOf(SimEventKind.ShotFired), "one shell, not two");
-        }
-
-        [Test]
-        public void EachGun_RefusesTheOtherChainsAmmunition()
-        {
-            // A mortar fed half-circles jams its feed belt, and a cannon fed half-squares does the same -
-            // why two turrets with two diets are a routing problem.
-            SimWorld world = Sim.NewEnduringWorld(20, 12);
-
-            Sim.LayRun(world, new Int2(4, 9), Dir.East, 1);
-            Sim.Place(world, BuildKind.Mortar, new Int2(5, 9), Dir.West);
-
-            Sim.LayRun(world, new Int2(4, 3), Dir.East, 1);
-            Sim.Place(world, BuildKind.Cannon, new Int2(5, 3), Dir.West);
-
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 9), ShapeType.HalfCircle));
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 3), ShapeType.HalfSquare));
-            Sim.Tick(world, 30 * 4);
-
-            Assert.IsTrue(world.Belts.IsJammed(new Int2(4, 9)), "the mortar refused a half-circle");
-            Assert.IsTrue(world.Belts.IsJammed(new Int2(4, 3)), "and the cannon refused a half-square");
-            Assert.AreEqual(2, world.Belts.JamCount);
+            Assert.AreEqual(0, world.Belts.JamCount, "neither mineral is the wrong shape for a cutter");
         }
 
         [Test]
         public void ASorter_SeparatesTheTwoMinerals_OnOneLine()
         {
-            // The chain and the router together: one input line carrying both minerals, the squares
-            // leaving by the side the sorter faces, the circles carrying on down the line.
+            // The chain and the router together: one input line carrying both minerals, the items matching
+            // the filter leaving by the side the sorter faces, the rest carrying on down the line. The
+            // shipped filter is "anything with a circle in it", which is the money rule - a square-bearing
+            // item is not money, so it takes the other outlet.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             var hub = new Int2(4, 5);
 
             Sim.LayRun(world, new Int2(4, 4), Dir.North, 1);        // into the hub from the south
-            Sim.Place(world, BuildKind.Sorter, hub, Dir.East);      // squares leave east
-            Sim.LayRun(world, new Int2(5, 5), Dir.East, 2);         // (5,5) (6,5): squares this way
+            Sim.Place(world, BuildKind.Sorter, hub, Dir.East);      // circles leave east
+            Sim.LayRun(world, new Int2(5, 5), Dir.East, 2);         // (5,5) (6,5): the filtered way
             Sim.LayRun(world, new Int2(4, 6), Dir.North, 2);        // (4,6) (4,7): everything else
 
-            // The shipped filter is a circle; this is a sorter retuned as a player would, swapping the
-            // shapes' names and the routing with them.
-            Assert.AreEqual(ShapeType.Circle, world.Content.Machine(BuildKind.Sorter).Filter);
+            Assert.AreEqual(ShapeFilter.Has(Quad.Circle), world.Content.Machine(BuildKind.Sorter).Filter,
+                "the shipped sorter routes for the money shape");
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), ShapeType.Square));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), Sim.Square));
             Sim.Tick(world, 120);
-            Assert.AreEqual(ShapeType.Square, Sim.ShapeAt(world, new Int2(4, 7)),
-                "a square is not the filter, so it took the other outlet");
+            Assert.AreEqual(Sim.Square, Sim.ShapeAt(world, new Int2(4, 7)),
+                "a square carries no circle, so it took the other outlet");
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), Sim.Circle));
             Sim.Tick(world, 120);
-            Assert.AreEqual(ShapeType.Circle, Sim.ShapeAt(world, new Int2(6, 5)),
-                "and the circle - the filter - left by the side it faces");
+            Assert.AreEqual(Sim.Circle, Sim.ShapeAt(world, new Int2(6, 5)),
+                "and the circle - which the filter matches - left by the side it faces");
 
             Assert.AreEqual(2, Sim.ItemCount(world), "two in, two out, none eaten");
         }
 
         [Test]
-        public void AnAssembler_FusesTwoHalves_IntoAComposite()
+        public void AMixedRound_IsOneItem_NotAWildcard()
         {
-            // The ladder's deep rung: one half-circle and one half-square in, one composite out -
-            // the two chains meeting at one machine.
+            // The rule the old composite broke. A shape's structure "containing both minerals" used to make
+            // it match every weakness, which made one deep round the answer to the whole roster. Weakness is
+            // exact identity now: the composite is worth full damage against an enemy that demands the
+            // composite and a quarter against anything else, however much of both minerals it carries.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
-            var machine = new Int2(5, 9);
-            var output = new Int2(6, 9);
+            int asksForIt = world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 8.5f), Sim.Composite);
+            int asksForOther = world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 9.5f), Sim.TopHalfCircle);
 
-            Sim.LayRun(world, new Int2(4, 9), Dir.East, 1);        // half-circles in from the west
-            Sim.Place(world, BuildKind.Assembler, machine, Dir.East);
-            Sim.LayRun(world, new Int2(5, 10), Dir.South, 1);      // half-squares in from the north
-            Sim.LayRun(world, output, Dir.East, 1);
+            Assert.IsTrue(Sim.Composite.Contains(Quad.Circle) && Sim.Composite.Contains(Quad.Square),
+                "the test's premise: the round is made of both minerals");
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 9), ShapeType.HalfCircle));
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 10), ShapeType.HalfSquare));
+            // Neither shot kills, so slots do not reorder and each enemy can be read where it was spawned.
+            world.Enemies.ApplyDamage(asksForIt, 3f, Sim.Composite);
+            world.Enemies.ApplyDamage(asksForOther, 3f, Sim.Composite);
 
-            Assert.AreEqual(ShapeType.Composite, TickUntilOutput(world, output),
-                "the two halves fused into a composite");
-            Assert.AreEqual(0, world.Belts.JamCount);
+            float hp = world.Content.Enemy(EnemyKind.Runner).Hp;
+            Assert.AreEqual(hp - 3f, world.Enemies.EnemyAt(0).Hp, Sim.Tol,
+                "the enemy that demanded the composite takes the full 3");
+            Assert.AreEqual(hp - 0.75f, world.Enemies.EnemyAt(1).Hp, Sim.Tol,
+                "and the one that demanded a half-circle takes a quarter, both minerals or not");
         }
 
         [Test]
-        public void AnAssembler_HoldsOneHalf_UntilItsPairArrives()
+        public void TheSameSixHealth_CostsTwoMatchedRounds_OrSixResistedOnes()
         {
-            // One input alone is not a jam and not a cycle: the machine holds it and waits.
-            SimWorld world = Sim.NewEnduringWorld(20, 12);
-            var machine = new Int2(5, 9);
-
-            Sim.LayRun(world, new Int2(4, 9), Dir.East, 1);
-            Sim.Place(world, BuildKind.Assembler, machine, Dir.East);
-            Sim.LayRun(world, new Int2(6, 9), Dir.East, 1);
-
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 9), ShapeType.HalfCircle));
-            Sim.Tick(world, 30 * 4);
-
-            MachineState state = Sim.MachineAt(world, machine);
-            Assert.AreEqual(ShapeType.HalfCircle, state.Carried, "the half-circle is held");
-            Assert.AreEqual(0, state.OutputCount, "and nothing is made of it alone");
-            Assert.AreEqual(0, world.Belts.JamCount, "a held half is a stall, not a jam");
+            // The price rule at one gun, as the number a player feels: 6 hp against the shipped 4 damage is
+            // two rounds when the round is what the group asked for, and six when it is not - six seconds of
+            // one belt's supply against two, at a fire rate the belt already caps.
+            Assert.AreEqual(2, RoundsToKill(Sim.TopHalfCircle, Sim.TopHalfCircle), "a matched round");
+            Assert.AreEqual(6, RoundsToKill(Sim.Square, Sim.TopHalfCircle),
+                "a resisted round lands a quarter of 4, so the same enemy takes six of them");
         }
 
-        [Test]
-        public void AnAssembler_CompletesTheRecipeItsFirstHalfCommittedTo()
+        /// <summary>
+        /// One turret at (5,9), a belt into it kept stocked with <paramref name="round"/> every tick, and
+        /// one 6-hp Runner that demands <paramref name="demand"/>. Returns the shots it took to bring the
+        /// enemy down - the gun's real cost of a mismatch, measured rather than asserted from constants.
+        /// </summary>
+        private static int RoundsToKill(Shape round, Shape demand)
         {
-            // Two fuses may share an input, and then only the row the first half committed to can finish
-            // the cycle: a delivery that would complete the *other* row waits on its belt instead of
-            // silently steering the machine onto a different recipe - and a different output - mid-cycle.
-            var alloy = new RecipeDef(new ContentId("alloy"), ShapeType.HalfCircle, ShapeType.Circle,
-                inputCount: 1, outputCount: 2, interval: 1.5f, buffer: 4, input2: ShapeType.Square);
+            SimWorld world = Sim.NewEnduringWorld(20, 12);
+            var belt = new Int2(4, 9);
 
-            SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig { CoreMaxHp = 1000000f },
-                CustomContentTests.Rewrite(extraRecipe: alloy));
+            Sim.LayRun(world, belt, Dir.East, 1);
+            Sim.Place(world, BuildKind.Turret, new Int2(5, 9), Dir.East);
+            Assert.Greater(world.Enemies.Spawn(EnemyKind.Runner, new Vec2(9.5f, 9.5f), demand), 0);
 
-            var machine = new Int2(5, 9);
-            var west = new Int2(4, 9);          // half-circles: first in, so they commit the row
-            var north = new Int2(5, 10);        // squares: the *other* row's second half
-            var south = new Int2(5, 8);         // half-squares: the committed row's second half
-            var output = new Int2(6, 9);
+            for (int i = 0; i < 30 * 60 && world.Enemies.AliveCount > 0; i++)
+            {
+                world.Belts.TrySpawnItem(belt, round);
+                world.Tick(InputCommand.None);
+            }
 
-            Sim.LayRun(world, west, Dir.East, 1);
-            Sim.Place(world, BuildKind.Assembler, machine, Dir.East);
-            Sim.LayRun(world, north, Dir.South, 1);
-            Sim.LayRun(world, south, Dir.North, 1);
-            Sim.LayRun(world, output, Dir.East, 1);
-
-            Assert.IsTrue(world.Belts.TrySpawnItem(west, ShapeType.HalfCircle));
-            Sim.Tick(world, 45);
-            Assert.AreEqual(ShapeType.HalfCircle, Sim.MachineAt(world, machine).Carried,
-                "the half-circle is held, in the row the table reaches first");
-
-            Assert.IsTrue(world.Belts.TrySpawnItem(north, ShapeType.Square));
-            Sim.Tick(world, 30 * 4);
-
-            Assert.AreEqual(ShapeType.None, Sim.MachineAt(world, machine).Carried2,
-                "the square completes the other row, so it is not this cycle's partner");
-            Assert.AreEqual(ShapeType.Square, Sim.ShapeAt(world, north), "it waits on its own belt");
-            Assert.AreEqual(0, world.Belts.JamCount, "and waiting is not jamming - the row does eat squares");
-            Assert.AreEqual(ShapeType.None, Sim.ShapeAt(world, output), "nothing has been fused");
-
-            Assert.IsTrue(world.Belts.TrySpawnItem(south, ShapeType.HalfSquare));
-            Assert.AreEqual(ShapeType.Composite, TickUntilOutput(world, output),
-                "the committed pair is what completes the cycle");
+            Assert.AreEqual(0, world.Enemies.AliveCount, "the gun never brought the enemy down");
+            return world.ShotsFired;
         }
 
-        [Test]
-        public void AnAssembler_Jams_OnAnythingThatIsNotAHalf()
+        /// <summary>Tick until an item reaches <paramref name="cell"/> (cap 10 s), returning its shape,
+        /// or nothing if it never arrived.</summary>
+        private static Shape TickUntilOutput(SimWorld world, Int2 cell)
         {
-            // Raw minerals are the decomposer's food, not the assembler's: the wrong-shape rule holds.
-            SimWorld world = Sim.NewEnduringWorld(20, 12);
-            var input = new Int2(4, 9);
+            for (int i = 0; i < 30 * 10; i++)
+            {
+                world.Tick(InputCommand.None);
+                Shape shape = Sim.ShapeAt(world, cell);
+                if (!shape.IsEmpty) return shape;
+            }
 
-            Sim.LayRun(world, input, Dir.East, 1);
-            Sim.Place(world, BuildKind.Assembler, new Int2(5, 9), Dir.East);
-            Sim.LayRun(world, new Int2(6, 9), Dir.East, 1);
-
-            Assert.IsTrue(world.Belts.TrySpawnItem(input, ShapeType.Circle));
-            Sim.Tick(world, 30 * 4);
-
-            Assert.IsTrue(world.Belts.IsJammed(input), "a whole circle is no fuse's input");
-            Assert.AreEqual(ShapeType.Circle, Sim.ShapeAt(world, input));
-        }
-
-        [Test]
-        public void AComposite_MatchesEveryWeakness()
-        {
-            // The deep chain's payoff: the composite's structure contains both minerals, so no enemy
-            // resists it - full damage to the Spike's half-circle weakness and the Bulwark's half-square one.
-            SimWorld world = Sim.NewEnduringWorld(20, 12);
-            int spike = world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 8.5f));
-            int bulwark = world.Enemies.Spawn(EnemyKind.Bulwark, new Vec2(10.5f, 9.5f));
-
-            world.Enemies.ApplyDamage(spike, 3f, ShapeType.Composite);
-            world.Enemies.ApplyDamage(bulwark, 3f, ShapeType.Composite);
-
-            Assert.AreEqual(3f, world.Content.Enemy(EnemyKind.Spike).Hp - world.Enemies.EnemyAt(0).Hp, Sim.Tol,
-                "full damage against the Spike");
-            Assert.AreEqual(3f, world.Content.Enemy(EnemyKind.Bulwark).Hp -
-                world.Enemies.EnemyAt(world.Enemies.AliveCount - 1).Hp, Sim.Tol,
-                "and against the Bulwark - a plain half would have landed a quarter of it");
-        }
-
-        [Test]
-        public void ACannon_FedComposite_OneShotsABulwark()
-        {
-            // The whole ladder end to end at a gun: a cannon eating composite rounds answers the enemy
-            // its half-circles barely mark - one shell, where eight resisted shots were needed.
-            SimWorld world = Sim.NewEnduringWorld(20, 12);
-
-            Sim.LayRun(world, new Int2(4, 9), Dir.East, 1);
-            Sim.Place(world, BuildKind.Cannon, new Int2(5, 9), Dir.East);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 9), ShapeType.Composite));
-            world.Enemies.Spawn(EnemyKind.Bulwark, new Vec2(11.5f, 9.5f));
-
-            Sim.Tick(world, 30 * 5);
-
-            Assert.AreEqual(0, world.Enemies.AliveCount, "the Bulwark is down");
-            Assert.AreEqual(1, world.Events.CountOf(SimEventKind.ShotFired), "one composite shell did it");
-            Assert.AreEqual(0, world.Belts.JamCount, "and composite is in the cannon's diet, so no jam");
+            return Shape.None;
         }
     }
 }

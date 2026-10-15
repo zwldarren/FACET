@@ -14,13 +14,15 @@ namespace Facet.Tests
     {
         /// <summary>
         /// A door in the middle of the north edge of a featureless map, with a Core that outlasts the
-        /// test: what is measured is where the walkers stand, not who wins.
+        /// test: what is measured is where the walkers stand, not who wins. The group's demand is a full
+        /// circle - this file is about bodies and doorways, so any exact item will do, and naming one keeps
+        /// the wave legal.
         /// </summary>
         private static SimWorld DoorWorld(int enemies, float interval)
             => new SimWorld(
                 new MapDefinition("door", 20, 12, Sim.TestCircles, new ShapePatch[0],
                     new[] { new Int2(10, 1) },
-                    new[] { new WaveDefinition(0f, new SpawnGroup(EnemyKind.Spike, enemies, 0, 0f, interval)) }),
+                    new[] { new WaveDefinition(0f, new SpawnGroup(EnemyKind.Runner, enemies, 0, 0f, interval, Sim.Circle)) }),
                 new SimConfig { CoreMaxHp = 1000000f });
 
         /// <summary>The closest two walkers stand, over every pair in the field.</summary>
@@ -60,7 +62,7 @@ namespace Facet.Tests
             // door lands them when it enters faster than the lane drains. The separation pass moves a body
             // no faster than the walker moves itself, so this is a shade under a second of pulling apart.
             SimWorld world = Sim.NewEnduringWorld();
-            for (int i = 0; i < 3; i++) world.Enemies.Spawn(EnemyKind.Spike, new Vec2(5.5f, 3.5f));
+            for (int i = 0; i < 3; i++) world.Enemies.Spawn(EnemyKind.Runner, new Vec2(5.5f, 3.5f), Sim.Circle);
 
             Assert.AreEqual(0f, ClosestPair(world), "the test's premise: three walkers on one spot");
 

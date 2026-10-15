@@ -18,7 +18,7 @@ namespace Facet.Tests
         private static SimWorld WorldWithADrill()
         {
             SimWorld world = Sim.NewWorld(16, 10);
-            world.Terrain.SetOre(Ore, ShapeType.Circle);
+            world.Terrain.SetOre(Ore, Quad.Circle);
             Sim.Place(world, BuildKind.Drill, Ore, Dir.East);
             return world;
         }
@@ -34,7 +34,7 @@ namespace Facet.Tests
             // selected it must do neither: no drill on the patch under the cursor, no run behind it, no
             // circles spent.
             SimWorld world = Sim.NewWorld(16, 10);
-            world.Terrain.SetOre(Ore, ShapeType.Circle);
+            world.Terrain.SetOre(Ore, Quad.Circle);
             int circles = world.Economy.Circles;
 
             world.Tick(Click(Ore));
@@ -83,7 +83,7 @@ namespace Facet.Tests
             // Ore is not a building and has no state, but it is what a chain gets built around - so it
             // is something to read, not bare ground to unpin on.
             SimWorld world = Sim.NewWorld(16, 10);
-            world.Terrain.SetOre(Ore, ShapeType.Circle);
+            world.Terrain.SetOre(Ore, Quad.Circle);
 
             world.Tick(Click(Ore));
 
@@ -116,13 +116,40 @@ namespace Facet.Tests
             input.RequestSelect(BuildKind.Drill);
             Assert.IsNull(input.Snapshot().Selected, "and asking again drops it");
 
-            input.RequestSelect(BuildKind.Mortar);
-            input.RequestSelect(BuildKind.Mortar);
+            input.RequestSelect(BuildKind.Turret);
+            input.RequestSelect(BuildKind.Turret);
             Assert.IsNull(input.Snapshot().Selected, "for any building, not just the first");
 
-            input.RequestSelect(BuildKind.Mortar);
+            input.RequestSelect(BuildKind.Turret);
             input.RequestSelect(null);
             Assert.IsNull(input.Snapshot().Selected, "and the card's button clears rather than toggles");
+        }
+
+        [Test]
+        public void TheSortersFilter_IsLatchedAsAOneShotWithItsOwnCell()
+        {
+            // The picker is a click on a panel rather than on the map, so the cell it is about travels with
+            // the command - and it travels in a field of its own, because everything else that reads the
+            // cursor in the same tick (the tooltip, a keyboard inspect, the ghost) is about where the mouse
+            // really is. A one-shot like the other latches: applied once, then dropped.
+            var input = new BuildInput();
+            var hub = new Int2(6, 4);
+            ShapeFilter rule = ShapeFilter.Is(Sim.Square);
+
+            input.RequestFilter(hub, rule);
+            InputCommand command = input.Snapshot();
+
+            Assert.IsTrue(command.FilterSet, "the ask is latched");
+            Assert.AreEqual(rule, command.SetFilter);
+            Assert.AreEqual(hub, command.FilterCell, "with the machine it is about");
+            Assert.AreNotEqual(hub, command.CursorCell,
+                "and not in the cursor's field, which the rest of the tick reads as the map");
+
+            input.ConsumeOneShots();
+            InputCommand again = input.Snapshot();
+
+            Assert.IsFalse(again.FilterSet, "a consumed one-shot is not sent twice");
+            Assert.IsTrue(again.SetFilter.IsNone);
         }
 
         [Test]

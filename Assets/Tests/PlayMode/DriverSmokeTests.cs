@@ -22,6 +22,13 @@ namespace Facet.PlayTests
     /// </summary>
     public class DriverSmokeTests
     {
+        /// <summary>
+        /// The round the smoke rig's line runs: the top half-circle, which is what a north-facing cutter puts
+        /// out of its front outlet - and the demand its enemies carry, so a shot that lands is a matched one.
+        /// The rig spells it out rather than using the EditMode harness, which this assembly cannot see.
+        /// </summary>
+        private static readonly Shape Ammo = Shape.Of(Quad.Circle, Quad.Circle, Quad.Empty, Quad.Empty);
+
         private GameObject _cameraObject;
         private GameObject _driverObject;
         private MapSet _campaign;
@@ -96,7 +103,7 @@ namespace Facet.PlayTests
                 new TerrainRect(new Int2(2, 2), 6, 4, TerrainKind.Rock),
                 new TerrainRect(new Int2(20, 12), 4, 4, TerrainKind.Water),
                 new TerrainRect(new Int2(30, 18), 2, 2, TerrainKind.Void));
-            map.Ore = new[] { new MapAsset.OreCell { Cell = new Vector2Int(6, 12), Shape = ShapeType.Circle } };
+            map.Ore = new[] { new MapAsset.OreCell { Cell = new Vector2Int(6, 12), Mineral = Quad.Circle } };
             map.SpawnPoints = new[] { new Vector2Int(2, 18) };
             map.Waves = new[] { OneWave() };
             return map;
@@ -124,7 +131,8 @@ namespace Facet.PlayTests
                 {
                     new MapAsset.SpawnGroupRow
                     {
-                        Kind = EnemyKind.Spike, Count = 2, SpawnPoint = 0, FirstDelay = 0f, Interval = 2f,
+                        Kind = EnemyKind.Runner, Count = 2, SpawnPoint = 0, FirstDelay = 0f, Interval = 2f,
+                        Weakness = ShapeField.FromCore(Ammo),
                     },
                 },
             };
@@ -181,11 +189,10 @@ namespace Facet.PlayTests
                     "the committed content asset disagrees with the shipped behaviour for " + kind);
             }
 
-            Assert.AreEqual(ContentDatabase.Default.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle).Damage,
-                driver.Content.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle).Damage, 1e-4f,
-                "shipped cannon damage");
-            Assert.AreEqual(ContentDatabase.Default.Enemy(EnemyKind.Spike).Hp,
-                driver.Content.Enemy(EnemyKind.Spike).Hp, 1e-4f, "shipped spike hp");
+            Assert.AreEqual(ContentDatabase.Default.Turret(BuildKind.Turret).Damage,
+                driver.Content.Turret(BuildKind.Turret).Damage, 1e-4f, "the shipped gun's damage");
+            Assert.AreEqual(ContentDatabase.Default.Enemy(EnemyKind.Runner).Hp,
+                driver.Content.Enemy(EnemyKind.Runner).Hp, 1e-4f, "the shipped runner's hp");
 
             int ticks = driver.World.TickCount;
             yield return new WaitForSeconds(0.3f);
@@ -219,9 +226,9 @@ namespace Facet.PlayTests
             var turret = new Int2(21, 10);
 
             Assert.IsTrue(world.TryPlaceBelt(belt, Dir.East));
-            Assert.IsTrue(world.TryPlace(BuildKind.Cannon, turret, Dir.East));
-            Assert.IsTrue(world.Belts.TrySpawnItem(belt, ShapeType.HalfCircle));
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(24f, 10.5f));
+            Assert.IsTrue(world.TryPlace(BuildKind.Turret, turret, Dir.East));
+            Assert.IsTrue(world.Belts.TrySpawnItem(belt, Ammo));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(24f, 10.5f), Ammo);
 
             // One frame for the views to notice the revision bump, one for the new enemy to be drawn.
             yield return null;
@@ -270,20 +277,20 @@ namespace Facet.PlayTests
             var belt = new Int2(20, 10);
             var turret = new Int2(21, 10);
             Assert.IsTrue(world.TryPlaceBelt(belt, Dir.East));
-            Assert.IsTrue(world.TryPlace(BuildKind.Cannon, turret, Dir.East));
-            Assert.IsTrue(world.Belts.TrySpawnItem(belt, ShapeType.HalfCircle));
-            Assert.Greater(world.Enemies.Spawn(EnemyKind.Spike, new Vec2(24f, 10.5f)), 0);
+            Assert.IsTrue(world.TryPlace(BuildKind.Turret, turret, Dir.East));
+            Assert.IsTrue(world.Belts.TrySpawnItem(belt, Ammo));
+            Assert.Greater(world.Enemies.Spawn(EnemyKind.Runner, new Vec2(24f, 10.5f), Ammo), 0);
 
-            // Ammo arrives, the shots land, the spike dies (6 hp against 3 damage: two shots). Damage and
+            // Ammo arrives, the shots land, the runner dies (6 hp against 4 matched damage: two shots). Damage and
             // the kill both go on the stream. The belt holds one item at a time, so the feed keeps refilling
             // it while the turret works.
             for (int i = 0; i < 30 * 6 && world.Enemies.AliveCount > 0; i++)
             {
-                if (!world.Belts.HasItemAt(belt)) world.Belts.TrySpawnItem(belt, ShapeType.HalfCircle);
+                if (!world.Belts.HasItemAt(belt)) world.Belts.TrySpawnItem(belt, Ammo);
                 world.Tick(InputCommand.None);
             }
 
-            Assert.AreEqual(0, world.Enemies.AliveCount, "the cannon killed the spike");
+            Assert.AreEqual(0, world.Enemies.AliveCount, "the gun killed the runner");
             Assert.Greater(world.Events.CountOf(SimEventKind.EnemyKilled), 0, "and the stream says so");
 
             yield return null;
@@ -393,8 +400,8 @@ namespace Facet.PlayTests
             SimWorld world = driver.World;
             int before = Vertices("ThreatRadar");
 
-            world.Enemies.Spawn(EnemyKind.Spike,
-                new Vec2(world.TileGrid.Width - 1.5f, world.TileGrid.Height - 1.5f));
+            world.Enemies.Spawn(EnemyKind.Runner,
+                new Vec2(world.TileGrid.Width - 1.5f, world.TileGrid.Height - 1.5f), Ammo);
 
             yield return null;
             yield return null;

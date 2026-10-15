@@ -28,11 +28,11 @@ MonoBehaviour:
   TurretBody: {r: 0.239, g: 0.278, b: 0.345, a: 1}
   MachineIdle: {r: 0.749, g: 0.776, b: 0.816, a: 1}
   RangeRing: {r: 0.243, g: 0.353, b: 0.549, a: 0.5}
-  SpikeBody: {r: 0.867, g: 0.286, b: 0.247, a: 1}
+  RunnerBody: {r: 0.867, g: 0.286, b: 0.247, a: 1}
+  TankBody: {r: 0.545, g: 0.173, b: 0.192, a: 1}
   SpawnMarker: {r: 0.851, g: 0.29, b: 0.259, a: 1}
-  CircleShape: {r: 1, g: 0.78, b: 0.28, a: 1}
-  HalfCircleShape: {r: 0.361, g: 0.757, b: 1, a: 1}
-  CompositeShape: {r: 0.78, g: 0.541, b: 0.949, a: 1}
+  CircleMineral: {r: 1, g: 0.78, b: 0.28, a: 1}
+  SquareMineral: {r: 0.941, g: 0.376, b: 0.678, a: 1}
   Core: {r: 0.976, g: 0.98, b: 0.988, a: 1}
   CoreDamage: {r: 0.878, g: 0.263, b: 0.263, a: 1}
   CursorOk: {r: 0.192, g: 0.706, b: 0.376, a: 1}

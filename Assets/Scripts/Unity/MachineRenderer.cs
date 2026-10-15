@@ -5,24 +5,25 @@ using UnityEngine;
 namespace Facet.Game
 {
     /// <summary>
-    /// Draws every machine as one mesh. A turret's Aim and Armed state, a converter's split, a pipe's
+    /// Draws every machine as one mesh. A turret's Aim and Armed state, an operator's held piece, a pipe's
     /// item in transit and a splitter's ports all change while the player watches, so this view rebuilds
     /// every frame; outline widths therefore stay a true 2 px at any zoom.
     ///
     /// A building's <em>body</em> may be overridden from the Palette's <see cref="Palette.Visuals"/> - a
     /// Sprite replacing the flat body, or a procedural override picking a different silhouette/colour.
-    /// Functional overlays are never overridden (a turret keeps its barrel and ammo icon, a converter and
-    /// splitter their port stubs and held-item icon), so a re-skinned building still reads its state.
+    /// Functional overlays are never overridden (a turret keeps its barrel and round, an operator and a
+    /// splitter their port stubs and chamber badge), so a re-skinned building still reads its state.
     ///
     /// Drawing dispatches on the machine's <see cref="BehaviorKind"/>, not its tile kind, and asks for the
-    /// override of the <em>build kind</em> it was handed - which is what lets a second gun and a second
-    /// converter exist without a line here.
+    /// override of the <em>build kind</em> it was handed - which is what lets a second gun or a second
+    /// operator exist without a line here.
     ///
-    /// Each behaviour's readout: drill - a hollow frame so the patch icon underneath is the identity;
-    /// converter - the held shape plus a stub per fed/drained side; pipe - the tube across the jumped tile
-    /// and the item riding it; splitter - the hub with a stub per live port read off the belts; sorter - a
-    /// triangle whose apex points out the exit side, with that shape as a badge; turret - the barrel and
-    /// the ammo icon whose grey-out is "silenced"; wall - a plain block whose damage tint is its state.
+    /// Each behaviour's readout: drill - a hollow frame so the patch mark underneath is the identity;
+    /// operator (cutter, rotator, stacker) - the chambered body, a stub per wired port and the piece in the
+    /// chamber as its badge; pipe - the tube across the jumped tile and the item riding it; splitter - the
+    /// hub with a stub per live port read off the belts; sorter - a triangle whose apex points out the exit
+    /// side, with its badge at the centre; turret - the barrel and the last round, whose grey-out is
+    /// "silenced"; wall - a plain block whose damage tint is its state.
     /// </summary>
     [DefaultExecutionOrder(105)]
     public sealed class MachineRenderer : MeshView
@@ -35,7 +36,7 @@ namespace Facet.Game
         private readonly Vector2[] _barrel = new Vector2[4];
 
         /// <summary>The shipped silhouettes, cached; a procedural override supplies its own points.</summary>
-        private Vector2[] _converterBody;
+        private Vector2[] _operatorBody;
         private Vector2[] _turretBody;
         private Vector2[] _splitterHub;
 
@@ -48,7 +49,7 @@ namespace Facet.Game
         private Vector2[] _wallBody;
 
         private ShapeIconSet _carriedIcons;
-        private ShapeIconSet _ammoIcons;
+        private ShapeIconSet _roundIcons;
         private ShapeIconSet _pipeIcons;
         private ShapeIconSet _sorterIcons;
 
@@ -95,9 +96,11 @@ namespace Facet.Game
         {
             Palette.MachineLook look = Colors.Machines;
 
-            // First vertex at 30 degrees puts a flat edge up, matching the ground shape patches; a
-            // procedural override supplies its own.
-            _converterBody = ProcMesh.RegularPolygon(6, look.DecomposerRadius, 30f);
+            // First vertex at 30 degrees puts a flat edge up, matching the ground ore marks; a
+            // procedural override supplies its own. The three operators share this chambered body - what
+            // tells a cutter from a rotator on screen is its badge and its role colour, exactly as a
+            // second gun is the first one's octagon in a darker body colour.
+            _operatorBody = ProcMesh.RegularPolygon(6, look.OperatorRadius, 30f);
             _turretBody = ProcMesh.RegularPolygon(8, look.TurretRadius);
             _splitterHub = ProcMesh.RegularPolygon(4, look.SplitterHubHalfSize * 1.4143f, 45f);
 
@@ -107,9 +110,11 @@ namespace Facet.Game
             // The wall's block: a square inset from the cell edge, so neighbours still show the grid line.
             _wallBody = ProcMesh.RegularPolygon(4, (0.5f - look.WallInset) * 1.4143f, 45f);
 
-            // The icons follow the item-shape overrides, so a re-skinned shape reads the same everywhere.
-            _carriedIcons = Colors.ShapeIcons(look.DecomposerIconRadius, Colors.OutlinePixels);
-            _ammoIcons = Colors.ShapeIcons(look.AmmoIconRadius, Colors.OutlinePixels);
+            // The badges follow the item overrides, so a re-skinned mineral reads the same everywhere.
+            // (Decomposer* are the chamber's two radii; the field names keep their old spelling because
+            // renaming a serialized field would silently drop its value out of Assets/Data/Palette.asset.)
+            _carriedIcons = Colors.ShapeIcons(look.OperatorIconRadius, Colors.OutlinePixels);
+            _roundIcons = Colors.ShapeIcons(look.AmmoIconRadius, Colors.OutlinePixels);
             _pipeIcons = Colors.ShapeIcons(look.PipeItemRadius, Colors.OutlinePixels);
             _sorterIcons = Colors.ShapeIcons(look.SorterIconRadius, Colors.OutlinePixels);
         }
@@ -129,8 +134,9 @@ namespace Facet.Game
                 switch (_machines[i].Behavior)
                 {
                     case BehaviorKind.Drill: AppendDrill(_machines[i]); break;
-                    case BehaviorKind.Converter: AppendConverter(_machines[i], outlineWidth); break;
-                    case BehaviorKind.Assembler: AppendConverter(_machines[i], outlineWidth); break;
+                    case BehaviorKind.Cutter:
+                    case BehaviorKind.Rotator:
+                    case BehaviorKind.Stacker: AppendOperator(_machines[i], outlineWidth); break;
                     case BehaviorKind.Pipe: AppendPipe(_machines[i], outlineWidth); break;
                     case BehaviorKind.Splitter: AppendSplitter(_machines[i], outlineWidth); break;
                     case BehaviorKind.Sorter: AppendSorter(_machines[i], outlineWidth); break;
@@ -148,7 +154,7 @@ namespace Facet.Game
             EndSprites();
         }
 
-        /// <summary>A hollow frame plus an outlet chevron. No outline: the patch icon underneath IS the
+        /// <summary>A hollow frame plus an outlet chevron. No outline: the ore mark underneath IS the
         /// drill's identity, so the frame only frames it.</summary>
         private void AppendDrill(in MachineSnapshot machine)
         {
@@ -180,18 +186,21 @@ namespace Facet.Game
             AppendChevron(machine.Cell, machine.Direction, body);
         }
 
-        /// <summary>Hexagon body with the held shape as its icon (nothing when empty), plus a stub on
-        /// every wired side; no facing chevron, since the outlets are read off the belts as the tick does.
+        /// <summary>Hexagon body with the piece in the chamber as its badge (nothing when the chamber is
+        /// empty), plus a stub on every wired side; no facing chevron, since the outlets are read off the
+        /// belts as the tick does.
         ///
-        /// Both converters share this path: the icon is the snapshot's shape, read by
-        /// <see cref="MachineField"/>, so converters need no line here.</summary>
-        private void AppendConverter(in MachineSnapshot machine, float outlineWidth)
+        /// All three operators share this path - cutter, rotator and stacker - because they are one
+        /// archetype: a machine with a chamber and the belts around it. The badge is the snapshot's, read by
+        /// <see cref="MachineField"/> through <see cref="MachineReading.Badge"/>, so a new operator needs no
+        /// line here.</summary>
+        private void AppendOperator(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);
             VisualStyle style = Over(machine.Build);
 
             // 0.8 r is inside the hexagon's flat edge (apothem 0.866 r), so the body covers each stub's inner end.
-            AppendPortStubs(machine, centre, Colors.Machines.DecomposerRadius * 0.8f);
+            AppendPortStubs(machine, centre, Colors.Machines.OperatorRadius * 0.8f);
 
             if (IsSprite(style))
             {
@@ -199,7 +208,7 @@ namespace Facet.Game
             }
             else
             {
-                AppendPolygon(BodyOf(style, _converterBody), centre,
+                AppendPolygon(BodyOf(style, _operatorBody), centre,
                     Damaged(FillOf(style, machine.Behavior), machine),
                     OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
             }
@@ -268,12 +277,17 @@ namespace Facet.Game
             AppendIcon(_carriedIcons, machine.Shape, centre, null);
         }
 
-        /// <summary>The router: a triangle whose apex points out the side the filtered shape leaves by,
-        /// with that shape as a centre badge and a stub per live port - both things a sorter can be wrong
-        /// about (side and shape) on screen at once.
+        /// <summary>The router: a triangle whose apex points out the side the filtered item leaves by,
+        /// with that routing badge at the centre and a stub per live port - both things a sorter can be
+        /// wrong about (side and filter) on screen at once.
+        ///
+        /// Core's badge names the exact item a sorter routes for; a <em>contains a mineral</em> rule has no
+        /// single item to name, so the badge is that mineral's whole figure - the same swatch the HUD's
+        /// picker paints, so the machine on the map and the card beside it say the same thing rather than one
+        /// of them saying nothing.
         ///
         /// The apex is the direction readout, so a sorter needs no chevron. Stubs are drawn first and the
-        /// body covers their inner ends, as with the converters and splitter.</summary>
+        /// body covers their inner ends, as with the operators and the splitter.</summary>
         private void AppendSorter(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);
@@ -294,6 +308,8 @@ namespace Facet.Game
                     OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
             }
 
+            // The badge is Core's own reading of the machine's filter - a mineral rule drawn as the full
+            // mineral it asks for - so the view draws what it is handed and resolves nothing itself.
             AppendIcon(_sorterIcons, machine.Shape, centre, null);
         }
 
@@ -335,7 +351,7 @@ namespace Facet.Game
         /// <summary>One stub per live port on a cell, drawn straight from the machine's computed
         /// <see cref="MachineSnapshot.InMask"/> / <see cref="MachineSnapshot.OutMask"/>: an input side
         /// gets a stub with an inward chevron, an output side one with an outward chevron, a side with
-        /// no belt (or a belt running past) gets nothing. Shared by the splitter, the converters and
+        /// no belt (or a belt running past) gets nothing. Shared by the splitter, the operators and
         /// the sorter - the machines whose ports *are* the belts around them - and read from the same
         /// mask the tick pushes through, so the picture cannot drift from the rule. All of them draw
         /// their body after this, which is what hides each stub's inner end.
@@ -375,12 +391,13 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>Octagon body, barrel along Aim, then the ammo icon. Draw order matters: barrel after
-        /// body, icon last so the armed/silenced colour is never covered - the icon's grey is the
-        /// "silenced" state, a turret with no ammo being a dead building.
+        /// <summary>Octagon body, barrel along Aim, then the round it is holding. Draw order matters:
+        /// barrel after body, badge last so the armed/silenced colour is never covered - the badge's grey is
+        /// the "silenced" state, a turret with nothing waiting on its lines being a dead building.
         ///
-        /// Both guns share this path: the icon is the snapshot's shape, read by
-        /// <see cref="MachineField"/> out of that gun's <see cref="TurretDef"/>.</summary>
+        /// The one gun shares this path with any second one: the badge is the snapshot's, read by
+        /// <see cref="MachineField"/> through <see cref="MachineReading.Badge"/>, because what the turret
+        /// fires is whatever the factory fed it rather than a property of the gun.</summary>
         private void AppendTurret(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);
@@ -399,10 +416,10 @@ namespace Facet.Game
 
             AppendBarrel(machine, centre, outlineWidth, body);
 
-            // A turret's diet is always a real shape (ContentDatabase.Turret), so the null branch is
-            // written out rather than assumed away.
-            Color? ammoTint = machine.Armed ? (Color?)null : Colors.MachineIdle;
-            AppendIcon(_ammoIcons, machine.Shape, centre, ammoTint);
+            // A starved turret's badge is whatever it last fired, drawn grey rather than nothing: the
+            // chamber is universal, so "empty" and "silenced" are different news.
+            Color? roundTint = machine.Armed ? (Color?)null : Colors.MachineIdle;
+            AppendIcon(_roundIcons, machine.Shape, centre, roundTint);
         }
 
         /// <summary>One quad from the body centre out along the aim, normalized by the tick; a zero Aim

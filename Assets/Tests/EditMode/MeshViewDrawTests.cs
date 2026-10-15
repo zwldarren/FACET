@@ -82,6 +82,49 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void Draw_OfTheItemView_DrawsTheFilledQuadrantsAsOneFigure()
+        {
+            // An item is drawn as its quadrants, so the mesh grows with them: nothing for a hole, one mark
+            // for a quarter, two for a half and four for a full circle. That is what "a full circle reads as
+            // a disc and a top half-circle as half a disc" means once the geometry is counted.
+            int quarter = ItemVertices(Shape.Quarter(Shape.NW, Quad.Circle));
+            int half = ItemVertices(Sim.TopHalfCircle);
+            int full = ItemVertices(Sim.Circle);
+
+            Assert.Greater(quarter, 0, "a filled quadrant is geometry - the empty ones are not");
+            Assert.Greater(half, quarter, "two quadrants are more than one");
+            Assert.Greater(full, half, "and a full circle is four of them");
+        }
+
+        /// <summary>The item view's mesh size for a world whose one belt cell carries the given item, drawn
+        /// by hand the way the preview draws it. The cell is clear of the Core, which an 8x4 test map puts
+        /// down its middle.</summary>
+        private int ItemVertices(Shape item)
+        {
+            SimWorld world = Sim.NewWorld(8, 4);
+            var cell = new Int2(0, 1);
+            Assert.IsTrue(world.TryPlaceBelt(cell, Dir.East), "the item's cell is free");
+            Assert.IsTrue(world.Belts.TrySpawnItem(cell, item), "the belt takes the item");
+
+            var go = new GameObject("Items");
+            try
+            {
+                ItemRenderer view = go.AddComponent<ItemRenderer>();
+                view.Initialize(world, _clock, _palette);
+                view.Draw(_clock.Frame);
+
+                MeshFilter filter = go.GetComponent<MeshFilter>();
+                Assert.IsNotNull(filter, "the view draws through a mesh filter");
+                Assert.IsNotNull(filter.sharedMesh, "and built its mesh without a frame arriving");
+                return filter.sharedMesh.vertexCount;
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
         public void Draw_AfterItsMeshWasDestroyed_MakesAnotherOne()
         {
             // What a Play-mode transition does to a preview that outlives it: the mesh goes, the view stays.

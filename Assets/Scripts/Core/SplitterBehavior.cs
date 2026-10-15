@@ -10,16 +10,20 @@ namespace Facet.Core
     {
         public void Step(ref MachineState splitter, Int2 cell, in MachineTickContext ctx)
         {
+            MachineDef def = ctx.Content.Machine(splitter.Build);
+
+            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, in def);
+
             // Push first, so a hub that empties can take again in the same tick. Round-robin across the
             // outlets - the shared rule every ported machine uses.
-            if (splitter.Carried != ShapeType.None &&
+            if (!splitter.Carried.IsEmpty &&
                 MachineDelivery.TryPushOut(ctx.Belts, ref splitter, cell, splitter.Carried))
-                splitter.Carried = ShapeType.None;
+                splitter.Carried = Shape.None;
 
-            if (splitter.Carried != ShapeType.None) return;
+            if (!splitter.Carried.IsEmpty) return;
 
             // Take from any side that delivers, in the same fixed order every ported machine uses.
-            if (MachineDelivery.TryTakeInput(ctx.Belts, cell, out ShapeType shape))
+            if (MachineDelivery.TryTakeInput(ctx.Belts, cell, in def, out Shape shape))
                 splitter.Carried = shape;
         }
     }

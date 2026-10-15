@@ -39,12 +39,16 @@ namespace Facet.Tests
         [Test]
         public void AWrongShapeDelivery_ReportsTheJam_AndTheShapeThatCausedIt()
         {
-            // The shipped cannon eats half-circles, so a circle arriving at it is the jam the whole twist is
-            // about - and the event must name the shape, or a log line cannot say what went wrong.
-            SimWorld world = Sim.NewWorld(20, 12);
+            // The shipped table jams nothing - a machine's diet is content, and every shipped eating machine
+            // eats anything - so the jam rule is proved on a table that narrows one, which is the case it
+            // still exists for. Either way the event must name the shape that arrived wrong, or a log line
+            // cannot say what went wrong.
+            SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig(),
+                CustomContentTests.Rewrite(machine: CustomContentTests.CutterOnADiet(ShapeFilter.Is(Sim.Circle))));
+
             Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);
-            Sim.Place(world, BuildKind.Cannon, new Int2(4, 2), Dir.East);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), ShapeType.Circle));
+            Sim.Place(world, BuildKind.Cutter, new Int2(4, 2), Dir.East);
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), Sim.Square));
 
             world.Events.Clear();
             Sim.Tick(world, 60);
@@ -52,12 +56,25 @@ namespace Facet.Tests
             Assert.AreEqual(1, world.Events.CountOf(SimEventKind.Jammed));
             Assert.IsTrue(world.Events.TryLast(SimEventKind.Jammed, out SimEvent jammed));
             Assert.AreEqual(new Int2(3, 2), jammed.Cell);
-            Assert.AreEqual(ShapeType.Circle, jammed.Shape, "the shape that arrived wrong");
+            Assert.AreEqual(Sim.Square, jammed.Shape, "the shape that arrived wrong");
 
             world.Events.Clear();
             Assert.IsTrue(world.Belts.TryClearJam(new Int2(3, 2)));
             Assert.AreEqual(1, world.Events.CountOf(SimEventKind.JamCleared));
             Assert.AreEqual(new Int2(3, 2), world.Events[0].Cell);
+
+            // The control, on the shipped table: the same delivery to the same machine is not a jam at all,
+            // because the chamber and the cutter both eat anything. The rule did not change - the data did.
+            SimWorld shipped = Sim.NewWorld(20, 12);
+            Sim.LayRun(shipped, new Int2(3, 2), Dir.East, 1);
+            Sim.Place(shipped, BuildKind.Cutter, new Int2(4, 2), Dir.East);
+            Assert.IsTrue(shipped.Belts.TrySpawnItem(new Int2(3, 2), Sim.Square));
+
+            shipped.Events.Clear();
+            Sim.Tick(shipped, 60);
+
+            Assert.AreEqual(0, shipped.Events.CountOf(SimEventKind.Jammed),
+                "nothing in the shipped game is a wrong-shape delivery any more");
         }
 
         [Test]
@@ -67,7 +84,7 @@ namespace Facet.Tests
             // the tick banks it and the stream says so the same tick.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(7, 4), Dir.East, 1);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 4), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 4), Sim.Circle));
             int before = world.Economy.Circles;   // read after the belt was paid for
 
             world.Events.Clear();
@@ -76,42 +93,44 @@ namespace Facet.Tests
             Assert.AreEqual(1, world.Events.CountOf(SimEventKind.Banked));
             Assert.IsTrue(world.Events.TryLast(SimEventKind.Banked, out SimEvent banked));
             Assert.AreEqual(new Int2(7, 4), banked.Cell);
-            Assert.AreEqual(ShapeType.Circle, banked.Shape);
+            Assert.AreEqual(Sim.Circle, banked.Shape);
             Assert.AreEqual(before + 1, world.Economy.Circles, "and the stockpile moved by one");
         }
 
         [Test]
         public void AFiredShot_ReportsItsAmmo_AndItsHit_ReportsTheEnemy()
         {
-            // One cannon, two half-circles, one 6-HP spike: the first shot damages, the second kills - so the
-            // stream has to carry a fired shot, a damage and a kill, in that order.
+            // One turret, two top half-circles, one 6-HP Runner demanding exactly that item: the first
+            // matched shot damages, the second kills - so the stream has to carry a fired shot, a damage and
+            // a kill, in that order.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);
-            Sim.Place(world, BuildKind.Cannon, new Int2(4, 2), Dir.East);
+            Sim.Place(world, BuildKind.Turret, new Int2(4, 2), Dir.East);
 
-            int id = world.Enemies.Spawn(EnemyKind.Spike, new Vec2(6.5f, 2.5f));
+            int id = world.Enemies.Spawn(EnemyKind.Runner, new Vec2(6.5f, 2.5f), Sim.TopHalfCircle);
             Assert.Greater(id, 0);
 
             world.Events.Clear();
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), Sim.TopHalfCircle));
             Sim.Tick(world, 60);
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), Sim.TopHalfCircle));
             Sim.Tick(world, 60);
 
             Assert.AreEqual(2, world.Events.CountOf(SimEventKind.ShotFired), "two shots, two reports");
             Assert.IsTrue(world.Events.TryLast(SimEventKind.ShotFired, out SimEvent shot));
             Assert.AreEqual(new Int2(4, 2), shot.Cell, "reported at the turret that fired");
-            Assert.AreEqual(ShapeType.HalfCircle, shot.Shape, "and with the ammunition it spent");
-            Assert.AreEqual(3f, shot.Amount, Sim.Tol);
+            Assert.AreEqual(Sim.TopHalfCircle, shot.Shape, "and with the ammunition it spent");
+            Assert.AreEqual(world.Content.Turret(BuildKind.Turret).Damage, shot.Amount, Sim.Tol,
+                "the report carries the damage the round is worth, read off the table");
 
             Assert.AreEqual(1, world.Events.CountOf(SimEventKind.EnemyDamaged), "the first shot hurt it");
             Assert.AreEqual(1, world.Events.CountOf(SimEventKind.EnemyKilled), "the second killed it");
 
             Assert.IsTrue(world.Events.TryLast(SimEventKind.EnemyKilled, out SimEvent killed));
             Assert.AreEqual(id, killed.EnemyId, "named by id, so a view can flash that one enemy");
-            Assert.AreEqual(EnemyKind.Spike, killed.Enemy);
+            Assert.AreEqual(EnemyKind.Runner, killed.Enemy);
             Assert.AreEqual(0, world.Enemies.AliveCount);
         }
 
@@ -121,14 +140,14 @@ namespace Facet.Tests
             // The Core's attack ring is two tiles from its centre, so an enemy dropped half a tile outside it
             // arrives and hits within a few ticks.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10f, 8.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10f, 8.5f), Sim.Circle);
 
             world.Events.Clear();
             Sim.Tick(world, 120);
 
             Assert.Greater(world.Events.CountOf(SimEventKind.CoreDamaged), 0, "it hit the Core");
             Assert.IsTrue(world.Events.TryLast(SimEventKind.CoreDamaged, out SimEvent hit));
-            Assert.AreEqual(6f, hit.Amount, Sim.Tol, "the spike's damage");
+            Assert.AreEqual(6f, hit.Amount, Sim.Tol, "the Runner's damage");
         }
 
         [Test]
@@ -200,7 +219,7 @@ namespace Facet.Tests
             events.Banked(new Int2(0, 0));
             events.Tick = 10;
             events.Banked(new Int2(10, 0));
-            events.Jammed(new Int2(11, 0), ShapeType.Square);
+            events.Jammed(new Int2(11, 0), Sim.Square);
             events.Tick = 20;
             events.Banked(new Int2(20, 0));
 
@@ -296,13 +315,13 @@ namespace Facet.Tests
             // "wrong ground" are different problems with different fixes.
             SimWorld world = Sim.NewWorld(16, 10);
             var ore = new Int2(4, 4);
-            world.Terrain.SetOre(ore, ShapeType.Circle);
+            world.Terrain.SetOre(ore, Quad.Circle);
 
-            Click(world, ore, BuildKind.Cannon);                       // a machine on a vein
+            Click(world, ore, BuildKind.Turret);                       // a machine on a vein
             Assert.IsTrue(world.Events.TryLast(SimEventKind.PlacementRejected, out SimEvent onOre));
             Assert.AreEqual(RejectionReason.BadGround, onOre.Reason);
             Assert.AreEqual(ore, onOre.Cell);
-            Assert.AreEqual(BuildKind.Cannon, onOre.Building);
+            Assert.AreEqual(BuildKind.Turret, onOre.Building);
 
             Click(world, world.Core.Cell, BuildKind.Belt);             // the Core is occupied ground
             Assert.IsTrue(world.Events.TryLast(SimEventKind.PlacementRejected, out SimEvent onCore));
@@ -372,8 +391,8 @@ namespace Facet.Tests
 
                 if (i % 30 == 0)
                 {
-                    a.Belts.TrySpawnItem(new Int2(2, 2), ShapeType.Circle);
-                    b.Belts.TrySpawnItem(new Int2(2, 2), ShapeType.Circle);
+                    a.Belts.TrySpawnItem(new Int2(2, 2), Sim.Circle);
+                    b.Belts.TrySpawnItem(new Int2(2, 2), Sim.Circle);
                 }
 
                 var cmd = Gesture.Aim(new Int2(2 + (i % 9), 1 + (i % 5)), BuildKind.Belt);

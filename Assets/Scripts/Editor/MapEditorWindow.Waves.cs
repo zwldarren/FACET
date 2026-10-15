@@ -84,6 +84,18 @@ namespace Facet.EditorTools
                         group.SpawnPoint = IntField(asset, "Entry point", group.SpawnPoint, "Edit wave");
                         group.FirstDelay = FloatField(asset, "First delay", group.FirstDelay, "Edit wave");
                         group.Interval = Mathf.Max(0.01f, FloatField(asset, "Interval", group.Interval, "Edit wave"));
+
+                        // The demand, and the reason the group exists at all: what this block of enemies is
+                        // weak to, orientation included. Both ways a demand can be unanswerable are reported
+                        // by the validation panel rather than leaving the map quietly unwinnable: a group
+                        // authored without one at all, and one naming an item this map's minerals and
+                        // unlocked operators cannot build. The picker offers all eighty either way, because
+                        // which of them a map can make is a property of the map, not of the field.
+                        EditorGUILayout.LabelField("Weakness - the exact item that kills this group",
+                            EditorStyles.miniLabel);
+                        EditorGUI.indentLevel++;
+                        group.Weakness = ShapeFieldField(asset, group.Weakness, "Edit wave");
+                        EditorGUI.indentLevel--;
                     }
 
                     if (GUILayout.Button("Remove group", EditorStyles.miniButton))

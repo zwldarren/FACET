@@ -24,9 +24,9 @@ namespace Facet.Game
         /// <summary>The ground of every cell, row-major (y * Width + x).</summary>
         public readonly TerrainKind[] Ground;
 
-        /// <summary>The mineral of every cell, row-major, <see cref="ShapeType.None"/> where nothing is painted: the
-        /// first ore entry for a cell counts, exactly as it counts in the conversion.</summary>
-        public readonly ShapeType[] Mineral;
+        /// <summary>The mineral of every cell, row-major, <see cref="Quad.Empty"/> where nothing is painted:
+        /// the first ore entry for a cell counts, exactly as it counts in the conversion.</summary>
+        public readonly Quad[] Mineral;
 
         /// <summary>The entry points inside the map, in table order.</summary>
         public readonly Vector2Int[] DoorCells;
@@ -38,7 +38,7 @@ namespace Facet.Game
         /// <summary>Lower-left tile of the Core's footprint, the centred tile where the map names none.</summary>
         public readonly Vector2Int Core;
 
-        internal DrawnMap(int width, int height, TerrainKind[] ground, ShapeType[] mineral,
+        internal DrawnMap(int width, int height, TerrainKind[] ground, Quad[] mineral,
             Vector2Int[] doorCells, int[] doorPositions, Vector2Int core)
         {
             Width = width;
@@ -57,9 +57,9 @@ namespace Facet.Game
         /// <summary>The ground at a cell the walk already covered.</summary>
         public TerrainKind GroundAt(int x, int y) => Ground[y * Width + x];
 
-        /// <summary>The mineral at a cell, or <see cref="ShapeType.None"/> - the cell-indexed answer the fills draw,
+        /// <summary>The mineral at a cell, or <see cref="Quad.Empty"/> - the cell-indexed answer the fills draw,
         /// already first-wins and clipped to the map.</summary>
-        public ShapeType MineralAt(int x, int y) => Mineral[y * Width + x];
+        public Quad MineralAt(int x, int y) => Mineral[y * Width + x];
 
         /// <summary>The row-major index of a cell - the arithmetic every walk of this map needs, said once here instead
         /// of re-multiplied per surface.</summary>

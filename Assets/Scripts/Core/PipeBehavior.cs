@@ -11,15 +11,21 @@ namespace Facet.Core
     {
         public void Step(ref MachineState pipe, Int2 cell, in MachineTickContext ctx)
         {
-            if (pipe.Carried == ShapeType.None)
+            MachineDef def = ctx.Content.Machine(pipe.Build);
+
+            MachineDelivery.TryJamWrongDelivery(ctx.Belts, cell, in def);
+
+            if (pipe.Carried.IsEmpty)
             {
-                // Empty pipe: swallow whatever is being delivered, from any side.
-                if (MachineDelivery.TryFindDelivery(ctx.Belts, cell, ShapeType.None, requireShape: false,
-                        out Int2 feed, out ShapeType shape))
+                // Empty pipe: swallow whatever is being delivered, from any side - but never a jammed
+                // item, because this machine carries what it takes to another side, and carrying it would
+                // move it past the segment the player is meant to clear. TryTakeInput asks the diet, the
+                // jam flag and the take as one question, so a refusal commits nothing: scanning and then
+                // taking separately is how an item ends up on the belt *and* inside the pipe at once.
+                if (MachineDelivery.TryTakeInput(ctx.Belts, cell, in def, out Shape shape))
                 {
-                    ctx.Belts.TryTakeItem(feed, out _);
                     pipe.Carried = shape;
-                    pipe.Cooldown = ctx.Content.Machine(pipe.Build).Interval;
+                    pipe.Cooldown = def.Interval;
                 }
                 return;
             }
@@ -29,7 +35,7 @@ namespace Facet.Core
 
             // Land on the belt two cells ahead. No belt or no room: the item waits at the far end.
             if (ctx.Belts.TrySpawnItem(MachineReading.PipeLanding(cell, pipe.Direction), pipe.Carried))
-                pipe.Carried = ShapeType.None;
+                pipe.Carried = Shape.None;
         }
     }
 }

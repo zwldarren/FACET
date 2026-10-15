@@ -1,3 +1,5 @@
+using System;
+
 namespace Facet.Core
 {
     /// <summary>Tunables for the simulation. Mutating these mid-run is allowed and instant.</summary>
@@ -14,5 +16,12 @@ namespace Facet.Core
 
         /// <summary>HP of the defended object. Reaching 0 loses the run.</summary>
         public float CoreMaxHp = 100f;
+
+        /// <summary>Where a new run's seed comes from (§5: one seed per run, shown in the HUD), drawn
+        /// once per run - at construction and again on every restart, because a restarted run is a new
+        /// run. Null - the default - plays the map's authored seed, which is what the engine-free tests
+        /// and a demo map that must replay exactly want. Core stays engine-free by never drawing the
+        /// number itself: entropy is the host's to inject.</summary>
+        public Func<int> FreshSeed;
     }
 }

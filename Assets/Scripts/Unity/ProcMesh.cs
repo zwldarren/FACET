@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Facet.Core;
 using UnityEngine;
 
 namespace Facet.Game
@@ -57,9 +58,11 @@ namespace Facet.Game
             return pts;
         }
 
-        /// <summary>Vertices of a half-disc, dome up: the arc from 0 to 180 degrees, closed by the diameter. Convex
-        /// and wound counter-clockwise, so the polygon helpers take it unchanged. Dome-up is fixed so an ammo icon
-        /// and the enemy weak to it read as one shape.</summary>
+        /// <summary>Vertices of a half-disc, dome up: the arc from 0 to 180 degrees, closed by the diameter.
+        /// Convex and wound counter-clockwise, so the polygon helpers take it unchanged. Nothing ships with it
+        /// any more - an item's semicircle is two circle quadrants - so it is the authored-override silhouette
+        /// for an author who wants a dome as one body; dome-up is fixed, so it reads the same wherever it is
+        /// used.</summary>
         public static Vector2[] HalfDisc(int arcSegments, float radius)
         {
             if (arcSegments < 2) arcSegments = 2;
@@ -69,6 +72,45 @@ namespace Facet.Game
                 float a = (180f * i / arcSegments) * Mathf.Deg2Rad;
                 pts[i] = new Vector2(Mathf.Cos(a) * radius, Mathf.Sin(a) * radius);
             }
+            return pts;
+        }
+
+        /// <summary>
+        /// Vertices of a quarter disc filling one quadrant of an item, with the item's centre as the
+        /// origin: the arc runs across that quadrant's 90 degrees and the two radii close it back through
+        /// the centre. Convex and counter-clockwise in every quadrant, so the polygon helpers take it
+        /// unchanged - and the two straight radii are what draw the item's own quarter seams, which is the
+        /// readout the cutter's cut line is chosen against.
+        ///
+        /// <paramref name="quadrant"/> is a <see cref="Shape"/> quadrant index; the arc's angles follow the
+        /// compass, so NW spans 90..180 degrees and so on clockwise.
+        /// </summary>
+        public static Vector2[] QuarterDisc(int arcSegments, float radius, int quadrant)
+        {
+            if (arcSegments < 2) arcSegments = 2;
+
+            float start;
+            switch (quadrant)
+            {
+                case Shape.NW: start = 90f; break;
+                case Shape.NE: start = 0f; break;
+                case Shape.SE: start = 270f; break;
+                case Shape.SW: start = 180f; break;
+                default:
+                    throw new System.ArgumentOutOfRangeException(nameof(quadrant), quadrant,
+                        "an item has exactly four quadrants");
+            }
+
+            // The centre first, then the arc: going anticlockwise from the item's centre out along one
+            // radius, round the rim and back down the other keeps the winding positive.
+            var pts = new Vector2[arcSegments + 2];
+            pts[0] = Vector2.zero;
+            for (int i = 0; i <= arcSegments; i++)
+            {
+                float a = (start + 90f * i / arcSegments) * Mathf.Deg2Rad;
+                pts[i + 1] = new Vector2(Mathf.Cos(a) * radius, Mathf.Sin(a) * radius);
+            }
+
             return pts;
         }
 

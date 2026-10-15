@@ -45,12 +45,12 @@ namespace Facet.EditorTools
 
             /// <summary>One cell of the active brush - or, with <paramref name="erase"/> set, "nothing here".
             /// Inside a stroke session, so a whole drag is still one undo entry.</summary>
-            public void Paint(int x, int y, MapBrush brush, ShapeType ore, bool erase)
+            public void Paint(int x, int y, MapBrush brush, Quad ore, bool erase)
                 => MapPainting.Stroke(Asset, brush, ore, x, y, erase);
 
             /// <summary>Fill the whole map with the active ground brush: the strokes of one sweep, recorded as the
             /// one edit it is.</summary>
-            public void Fill(MapBrush brush, ShapeType ore) => MapPainting.Fill(Asset, brush, ore);
+            public void Fill(MapBrush brush, Quad ore) => MapPainting.Fill(Asset, brush, ore);
 
             // ------------------------------------------------------- the structural edits
             // Each wraps the asset's own operation and hands back its "changed" answer.

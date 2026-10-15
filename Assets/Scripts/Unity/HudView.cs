@@ -6,6 +6,11 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
+// Core's shape-filter mode collides with UnityEngine.FilterMode (the texture filter), and this file means
+// the routing rule, so the alias is made once here rather than qualified at every case of the picker's
+// switches.
+using FilterMode = Facet.Core.FilterMode;
+
 namespace Facet.Game
 {
     /// <summary>
@@ -63,6 +68,14 @@ namespace Facet.Game
         /// still draws.</summary>
         private Action<BuildKind?> _selectKind;
         private Action<int> _rotate;
+
+        /// <summary>
+        /// The sorter picker's way back into the input latch: re-route the sorter at this cell. It is a
+        /// third door onto the same latch the keyboard and the bar use, so the simulation stays the one
+        /// place a routing change is applied. Null for a HUD the driver did not wire - the picker then draws
+        /// the machine's filter and sends nothing, which is the honest read-only card.
+        /// </summary>
+        private Action<Int2, ShapeFilter> _setFilter;
 
         /// <summary>The shapes as pictures, built once from the same Palette the map draws with: the
         /// stockpile and build tiles are marks, not sentences, and a mark drawn as a character disappears in
@@ -142,6 +155,28 @@ namespace Facet.Game
         private int _inspectTick = -1;
         private int _rowCount;
 
+        /// <summary>Is the info card wearing its taller sorter-picker band this frame? Read by the locator
+        /// through <see cref="InfoGrown"/>, because a panel the arrows do not know about is a place an arrow
+        /// is drawn under.</summary>
+        private bool _pickerUp;
+
+        /// <summary>
+        /// The picker's working state, seeded from the machine's own filter (never the definition row's -
+        /// the machine is what routes, and the player may have re-routed it). Two fields rather than one,
+        /// because the two modes answer different questions: <see cref="_filterShape"/> is the exact item
+        /// being painted, <see cref="_filterMineral"/> says the rule is about the item's mineral.
+        /// </summary>
+        private Shape _filterShape;
+        private bool _filterMineral;
+        private Quad _filterMineralPicked;
+
+        /// <summary>The filter the working state was seeded from, so a filter the machine changed under the
+        /// picker (a second click, or a load) re-seeds it instead of being overwritten by stale paint.
+        /// Compared field by field: <see cref="ShapeFilter"/> is a plain struct with no equality of its
+        /// own.</summary>
+        private ShapeFilter _filterSeen;
+        private Int2 _filterCell = new Int2(-1, -1);
+
         private bool _tutorialUp;
 
         /// <summary>The tile under the pointer, pushed by the driver each frame: the cursor tooltip's
@@ -170,7 +205,7 @@ namespace Facet.Game
             if (_radarMarkers.Length != look.MaxMarkers)
                 _radarMarkers = new ThreatRadar.Marker[Mathf.Max(1, look.MaxMarkers)];
 
-            var view = _screen.Measure(_camera, ShowTutorial, look.EdgeInsetPixels);
+            var view = _screen.Measure(_camera, ShowTutorial, look.EdgeInsetPixels, _pickerUp);
 
             _world.Enemies.GetEnemies(_radarEnemies);
             _world.Belts.GetJammed(_radarJams);
@@ -193,6 +228,11 @@ namespace Facet.Game
         private bool CanStartWaveNow =>
             _world.Status == GameStatus.Playing && !_world.Paused && _world.Waves.HasWaveToStart;
 
+        /// <summary>Is the info card taller than its base height right now, because a sorter's filter picker
+        /// is on it? The driver relays this to the locator, whose panel boxes are the same boxes the HUD
+        /// draws - see <see cref="ThreatRadarView.SetInfoGrown"/>.</summary>
+        public bool InfoGrown => _pickerUp;
+
         /// <summary>Is the "how to play" card up? The one predicate the card's claim on the pointer, the
         /// toast's clearance and the driver's camera rig all read, so no two pieces of the frame can disagree
         /// about whether the card is there.</summary>
@@ -204,10 +244,11 @@ namespace Facet.Game
         /// the build bar's tiles.
         ///
         /// <paramref name="campaign"/> is optional so a scene (or a test) with one map gets exactly the
-        /// single-map HUD; the selection and rotation callbacks are optional so the bar draws without them,
-        /// it just cannot be clicked.</summary>
+        /// single-map HUD; the selection, rotation and filter callbacks are optional so the bar and the
+        /// sorter's picker draw without them, they just cannot be clicked.</summary>
         public void Initialize(SimWorld world, Palette palette, CampaignState campaign = null,
-            Action<BuildKind?> selectKind = null, Action<int> rotate = null, MapCatalog catalog = null)
+            Action<BuildKind?> selectKind = null, Action<int> rotate = null, MapCatalog catalog = null,
+            Action<Int2, ShapeFilter> setFilter = null)
         {
             _world = world;
             _palette = palette;
@@ -215,6 +256,7 @@ namespace Facet.Game
             _catalog = catalog;
             if (selectKind != null) _selectKind = selectKind;
             if (rotate != null) _rotate = rotate;
+            if (setFilter != null) _setFilter = setFilter;
 
             if (_icons == null) _icons = new HudIcons(palette);
 
@@ -335,6 +377,11 @@ namespace Facet.Game
             _inspectCell = new Int2(-1, -1);
             _inspectTick = -1;
             _hoveredTile = -1;
+
+            // The picker's paint belongs to the machine it was seeded from, and a new world has none: the
+            // next card seeds itself from whatever sorter is inspected there.
+            _filterSeen = ShapeFilter.None;
+            _filterCell = new Int2(-1, -1);
             _helpOpen = false;
             _compKey = null;
             _tooltipCell = new Int2(-2, -2);
@@ -342,6 +389,10 @@ namespace Facet.Game
             _tooltipTick = -1;
             _tooltipRows = 0;
             _tutorialUp = !ShowTutorial;   // forces the tutorial's own update to decide again
+
+            // The card is built at its base height, and a picker left standing on the old hierarchy would
+            // be a band nobody re-placed: the next card that describes a sorter raises it again.
+            SetPickerUp(false);
         }
 
         // ------------------------------------------------------------------ the panels' geometry
@@ -373,6 +424,20 @@ namespace Facet.Game
             TextAnchor anchor, bool wrap = false)
             => HudUi.Text(parent, name, FontSize(design), style, anchor, wrap);
 
+        /// <summary>A card's accent stripe: full height whatever the card's own is, because the info card can
+        /// grow while a sorter's picker is on it and a stripe built at the base height would stop short of the
+        /// card it is drawn on. Placed by its own insets rather than through the corner helpers, which set
+        /// coincident anchors: this one stretches down the card's height, and an inset is the one way to say
+        /// "the card's full height, whatever that turns out to be" without also having to reason about where
+        /// the pivot sits on a stretched axis.</summary>
+        private void Stripe(HudBox stripe, float width)
+        {
+            stripe.Rect.anchorMin = Vector2.zero;
+            stripe.Rect.anchorMax = Vector2.up;
+            stripe.Rect.offsetMin = Vector2.zero;
+            stripe.Rect.offsetMax = new Vector2(width, 0f);
+        }
+
         private StatusPanel BuildStatus()
         {
             Rect rect = HudLayout.Status(_scale);
@@ -380,7 +445,7 @@ namespace Facet.Game
             RectTransform root = panel.Root;
 
             panel.Stripe = HudUi.Box(root, "stripe", _palette.HudAccent);
-            HudUi.Stretch(panel.Stripe.Rect, 0f, 0f, rect.width - 3f * _scale, rect.height);
+            Stripe(panel.Stripe, 3f * _scale);
 
             panel.Title = Label(root, "title", 15f, FontStyle.Bold, TextAnchor.UpperLeft);
             HudUi.TopLeft(panel.Title.Rect, 14f * _scale, 10f * _scale, rect.width - 28f * _scale, 22f * _scale);
@@ -405,18 +470,57 @@ namespace Facet.Game
             panel.News = Label(root, "news", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
             HudUi.TopLeft(panel.News.Rect, 14f * _scale, 72f * _scale, rect.width - 28f * _scale, 19f * _scale);
 
-            // The bill of materials as chips: count, enemy, and the shape it is weak to drawn as a picture -
-            // the character the content table spells a weakness with is not in every font a player has.
-            panel.Chips = new Chip[ChipCapacity];
+            // The bill of materials as chips, in two rows: the wave the clock is counting to and the one
+            // after it, because "what do I need" is asked about both while there is still time to build for
+            // the second. Each chip is the count, the archetype and the round its group demands, drawn as a
+            // quadrant figure - the character the old content table spelled a weakness with is not in every
+            // font a player has.
+            // Derived from the two rows' own constants rather than repeating their numbers, so moving a row
+            // moves its label with it - the placement below and LayoutChips read the same two values.
+            panel.NextLabel = Label(root, "waveNext", 11f, FontStyle.Bold, TextAnchor.UpperLeft);
+            HudUi.TopLeft(panel.NextLabel.Rect, 14f * _scale, (ChipsTop + 4f) * _scale, 80f * _scale,
+                15f * _scale);
+            panel.AfterLabel = Label(root, "waveAfter", 11f, FontStyle.Bold, TextAnchor.UpperLeft);
+            HudUi.TopLeft(panel.AfterLabel.Rect, 14f * _scale, (ChipsAfterTop + 4f) * _scale, 80f * _scale,
+                15f * _scale);
+
+            panel.Chips = BuildChips(root, "chip");
+            panel.ChipsAfter = BuildChips(root, "after");
+
+            // Two lines that only speak when something needs them: a jam or a starved gun, and what is out
+            // of view. Quiet is the default and silence is the good news - a line that only says "all clear"
+            // trains the player to stop reading.
+            panel.Production = Label(root, "production", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
+            HudUi.TopLeft(panel.Production.Rect, 14f * _scale, 145f * _scale, rect.width - 28f * _scale, 19f * _scale);
+            panel.Production.Show(false);
+
+            panel.Threat = Label(root, "threat", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
+            HudUi.TopLeft(panel.Threat.Rect, 14f * _scale, 164f * _scale, rect.width - 28f * _scale, 19f * _scale);
+            panel.Threat.Show(false);
+
+            panel.WaveButton = HudUi.Button(root, "wave", 250f * _scale, 26f * _scale, string.Empty,
+                FontSize(13f), _palette.HudPanel, PressWave);
+            HudUi.TopLeft(panel.WaveButton.Root, 14f * _scale, 183f * _scale, 250f * _scale, 26f * _scale);
+            panel.WaveButton.Root.gameObject.SetActive(false);
+
+            return panel;
+        }
+
+        /// <summary>One row of chips: the count, the archetype's name and the demanded round's figure, all
+        /// hidden until a wave is briefed into them.</summary>
+        private Chip[] BuildChips(RectTransform root, string prefix)
+        {
+            var chips = new Chip[ChipCapacity];
+
             for (int i = 0; i < ChipCapacity; i++)
             {
                 var chip = new Chip
                 {
-                    Back = HudUi.Box(root, "chip" + i + ".back", Blend(_palette.HudPanel, _palette.HudText, 0.07f)),
-                    Count = Label(root, "chip" + i + ".count", 12f, FontStyle.Bold, TextAnchor.UpperLeft),
-                    Name = Label(root, "chip" + i + ".name", 11f, FontStyle.Normal, TextAnchor.UpperLeft),
+                    Back = HudUi.Box(root, prefix + i + ".back", Blend(_palette.HudPanel, _palette.HudText, 0.07f)),
+                    Count = Label(root, prefix + i + ".count", 12f, FontStyle.Bold, TextAnchor.UpperLeft),
+                    Name = Label(root, prefix + i + ".name", 11f, FontStyle.Normal, TextAnchor.UpperLeft),
                 };
-                RectTransform iconRect = HudUi.Node(root, "chip" + i + ".icon");
+                RectTransform iconRect = HudUi.Node(root, prefix + i + ".icon");
                 var icon = iconRect.gameObject.AddComponent<RawImage>();
                 icon.raycastTarget = false;
                 chip.Icon = icon;
@@ -425,26 +529,10 @@ namespace Facet.Game
                 chip.Count.Show(false);
                 chip.Name.Show(false);
                 icon.gameObject.SetActive(false);
-                panel.Chips[i] = chip;
+                chips[i] = chip;
             }
 
-            // Two lines that only speak when something needs them: a jam or a starved gun, and what is out
-            // of view. Quiet is the default and silence is the good news - a line that only says "all clear"
-            // trains the player to stop reading.
-            panel.Production = Label(root, "production", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.Production.Rect, 14f * _scale, 125f * _scale, rect.width - 28f * _scale, 19f * _scale);
-            panel.Production.Show(false);
-
-            panel.Threat = Label(root, "threat", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.Threat.Rect, 14f * _scale, 144f * _scale, rect.width - 28f * _scale, 19f * _scale);
-            panel.Threat.Show(false);
-
-            panel.WaveButton = HudUi.Button(root, "wave", 250f * _scale, 26f * _scale, string.Empty,
-                FontSize(13f), _palette.HudPanel, PressWave);
-            HudUi.TopLeft(panel.WaveButton.Root, 14f * _scale, 163f * _scale, 250f * _scale, 26f * _scale);
-            panel.WaveButton.Root.gameObject.SetActive(false);
-
-            return panel;
+            return chips;
         }
 
         private TutorialPanel BuildTutorial()
@@ -465,8 +553,8 @@ namespace Facet.Game
             body.Set(
                 "1. Mine circle ore and carry it back to the Core using conveyor belts.\n" +
                 "2. Ore can only be spent after it reaches the Core.\n" +
-                "3. The wrong shape will jam a line. Right-click the jammed segment to clear it.\n" +
-                "4. Match ammo to the enemy's weakness icon - anything else deals a quarter.",
+                "3. A jammed segment stops its line - right-click that segment to clear it.\n" +
+                "4. Match the round to the wave's demand figure - anything else deals a quarter.",
                 _palette.HudText);
 
             panel.Root.gameObject.SetActive(ShowTutorial);
@@ -541,7 +629,7 @@ namespace Facet.Game
             panel.Number = Label(panel.Root, "number", 26f, FontStyle.Bold, TextAnchor.MiddleLeft);
             HudUi.TopLeft(panel.Number.Rect, 0f, 0f, rect.width, rect.height);
 
-            HudIcons.Icon icon = _icons.Shape(ShapeType.Circle);
+            HudIcons.Icon icon = _icons.Mark(Shape.Full(Quad.Circle));
             if (icon.Valid)
             {
                 panel.Icon = HudUi.Icon(panel.Root, "icon", icon);
@@ -590,7 +678,10 @@ namespace Facet.Game
 
                 tile.Button = tile.Root.gameObject.AddComponent<HudButton>();
                 BuildKind captured = kind;
-                tile.Button.Pressed = () => _selectKind?.Invoke(captured);
+                // A locked tile is refused here rather than by the simulation's rejection toast: the map
+                // has not handed that operator over (§7), so a ghost promising it would be a lie and a
+                // click that produced "NOT ON THIS MAP" would be a worse answer than no selection at all.
+                tile.Button.Pressed = () => SelectKind(captured);
 
                 tile.Button.Fill = HudUi.Box(tile.Root, "back", _palette.HudPanel);
                 HudUi.StretchFull(tile.Button.Fill.Rect);
@@ -607,7 +698,7 @@ namespace Facet.Game
                 HudUi.TopLeft(tile.Cost.Rect, 0f, 9f * _scale, tileWidth - 8f * _scale, 15f * _scale);
                 tile.Cost.Set(_world.Content.Machine(kind).Cost.ToString(), _palette.MachineIdle);
 
-                HudIcons.Icon icon = _icons.Shape(ShapeType.Circle);
+                HudIcons.Icon icon = _icons.Mark(Shape.Full(Quad.Circle));
                 if (icon.Valid)
                 {
                     tile.CostIcon = HudUi.Icon(tile.Root, "costIcon", icon);
@@ -620,10 +711,13 @@ namespace Facet.Game
                 HudUi.TopLeft(tile.Name.Rect, 4f * _scale, 27f * _scale, tileWidth - 8f * _scale, 20f * _scale);
                 tile.Name.Set(_world.Content.Machine(kind).Name, _palette.HudText);
 
+                tile.Locked = !_world.IsUnlocked(kind);
+
                 tile.Role = Label(tile.Root, "role", 10f, FontStyle.Bold, TextAnchor.MiddleCenter);
                 HudUi.TopLeft(tile.Role.Rect, 4f * _scale, tileHeight - 20f * _scale,
                     tileWidth - 8f * _scale, 14f * _scale);
-                tile.Role.Set(RoleOf(kind), Blend(CategoryColor(kind), _palette.HudText, 0.15f));
+                tile.Role.Set(tile.Locked ? "LOCKED" : RoleOf(kind),
+                    Blend(CategoryColor(kind), _palette.HudText, 0.15f));
 
                 tile.Afford = HudUi.BarFill(tile.Root, "afford", 1f * _scale, 1f * _scale,
                     tileWidth - 2f * _scale, 2f * _scale);
@@ -652,7 +746,7 @@ namespace Facet.Game
             HudUi.StretchFull(panel.BuildRoot);
 
             panel.BuildStripe = HudUi.Box(panel.BuildRoot, "stripe", _palette.HudAccent);
-            HudUi.TopLeft(panel.BuildStripe.Rect, 0f, 0f, 3f * _scale, rect.height);
+            Stripe(panel.BuildStripe, 3f * _scale);
 
             panel.BuildTitle = Label(panel.BuildRoot, "title", 15f, FontStyle.Bold, TextAnchor.UpperLeft);
             HudUi.TopLeft(panel.BuildTitle.Rect, 14f * _scale, 9f * _scale, rect.width - 28f * _scale, 18f * _scale);
@@ -681,7 +775,7 @@ namespace Facet.Game
             HudUi.StretchFull(panel.InspectRoot);
 
             panel.InspectStripe = HudUi.Box(panel.InspectRoot, "stripe", _palette.HudAccent);
-            HudUi.TopLeft(panel.InspectStripe.Rect, 0f, 0f, 3f * _scale, rect.height);
+            Stripe(panel.InspectStripe, 3f * _scale);
 
             panel.InspectTitle = Label(panel.InspectRoot, "title", 15f, FontStyle.Bold, TextAnchor.UpperLeft);
             HudUi.TopLeft(panel.InspectTitle.Rect, 14f * _scale, 9f * _scale, rect.width - 28f * _scale, 18f * _scale);
@@ -698,9 +792,94 @@ namespace Facet.Game
                 panel.Rows[i].Show(false);
             }
 
+            // ----- the sorter's filter picker, the one band of the card that is not always there
+            //
+            // The canvas is the item's own square, quartered - the same figure the machine's badge and the
+            // belt items wear - and each quarter is a button. What the buttons paint is a routing rule, so
+            // the band carries the mode and the rule in words under it: a player choosing what a machine
+            // eats should not have to infer it from a picture.
+            panel.Picker = BuildFilterPicker(panel.InspectRoot, rect);
+
             panel.BuildRoot.gameObject.SetActive(false);
             panel.InspectRoot.gameObject.SetActive(false);
             return panel;
+        }
+
+        /// <summary>
+        /// The sorter picker as widgets: a quartered canvas of ghost cells and one figure, a mode toggle and
+        /// the sentence saying what the picker would route for.
+        ///
+        /// The ghosts are the empty quadrants and nothing else is: an empty quadrant is drawn as nothing on
+        /// the map, and only here - where the player is choosing quadrants - is it a faint cell to click.
+        /// The figure itself is a rasterised picture (the HUD has no meshes), so the quadrants' colours come
+        /// from the same per-mineral override the map draws with.
+        /// </summary>
+        private FilterPicker BuildFilterPicker(RectTransform root, Rect card)
+        {
+            var picker = new FilterPicker();
+
+            picker.Root = HudUi.Node(root, "picker");
+            HudUi.TopLeft(picker.Root, 0f, PickerTop * _scale, card.width, HudLayout.InfoPickHeight * _scale);
+
+            picker.Title = Label(picker.Root, "title", 11f, FontStyle.Bold, TextAnchor.UpperLeft);
+            HudUi.TopLeft(picker.Title.Rect, 14f * _scale, 0f, 120f * _scale, 14f * _scale);
+            picker.Title.Set("ROUTES", _palette.HudAccent);
+
+            RectTransform canvas = HudUi.Node(picker.Root, "canvas");
+            HudUi.TopLeft(canvas, 14f * _scale, 15f * _scale, CanvasSize * _scale, CanvasSize * _scale);
+
+            // Draw order inside the canvas is the read order: the ghost cells, then the figure over them,
+            // then the buttons that claim the clicks.
+            for (int quadrant = 0; quadrant < Shape.QuadrantCount; quadrant++)
+            {
+                Vector2 at = CellOffset(quadrant);
+
+                HudBox ghost = HudUi.Box(canvas, "ghost" + quadrant, GhostCell);
+                HudUi.TopLeft(ghost.Rect, at.x * _scale, at.y * _scale, CellSize * _scale, CellSize * _scale);
+                picker.Ghosts[quadrant] = ghost;
+            }
+
+            var figure = HudUi.Node(canvas, "figure");
+            HudUi.StretchFull(figure);
+            picker.Figure = figure.gameObject.AddComponent<RawImage>();
+            picker.Figure.raycastTarget = false;
+
+            for (int quadrant = 0; quadrant < Shape.QuadrantCount; quadrant++)
+            {
+                Vector2 at = CellOffset(quadrant);
+
+                // One button per quadrant, its own label hidden: the picture underneath is the content, and
+                // a click on a quarter is a click on that quadrant of the item.
+                int captured = quadrant;
+                HudButton button = HudUi.Button(canvas, "pick" + quadrant, CellSize * _scale, CellSize * _scale,
+                    string.Empty, FontSize(11f), _palette.HudText, () => PressFilterQuadrant(captured));
+                button.Label.Show(false);
+                HudUi.TopLeft(button.Root, at.x * _scale, at.y * _scale, CellSize * _scale, CellSize * _scale);
+                picker.Quadrants[quadrant] = button;
+            }
+
+            HudUi.Frame(canvas, "frame", PanelBorder(), 1f * _scale);
+
+            picker.Mode = HudUi.Button(picker.Root, "mode", ModeWidth * _scale, 20f * _scale, string.Empty,
+                FontSize(12f), _palette.HudText, PressFilterMode);
+            HudUi.TopLeft(picker.Mode.Root, ModeLeft * _scale, 15f * _scale, ModeWidth * _scale, 20f * _scale);
+
+            picker.Caption = Label(picker.Root, "caption", 11f, FontStyle.Normal, TextAnchor.UpperLeft);
+            HudUi.TopLeft(picker.Caption.Rect, ModeLeft * _scale, 38f * _scale,
+                card.width - (ModeLeft + 14f) * _scale, 14f * _scale);
+
+            picker.Root.gameObject.SetActive(false);
+            return picker;
+        }
+
+        /// <summary>Where one quadrant's cell sits inside the canvas, in design units: north is up, so a
+        /// quadrant's own compass corner is its corner of the square.</summary>
+        private static Vector2 CellOffset(int quadrant)
+        {
+            float x = quadrant == Shape.NW || quadrant == Shape.SW ? 0f : CellSize;
+            float y = quadrant == Shape.NW || quadrant == Shape.NE ? 0f : CellSize;
+
+            return new Vector2(x, y);
         }
 
         private BannerPanel BuildBanner()
@@ -925,8 +1104,8 @@ namespace Facet.Game
             switch (refusal.Reason)
             {
                 case RejectionReason.NoFunds:
-                    return "NOT ENOUGH " + Plural(ShapeType.Circle, 2).ToUpperInvariant() + " - " +
-                           def.Name + " costs " + Mathf.RoundToInt(refusal.Amount) + ", you have " +
+                    return "NOT ENOUGH " + Plural(Shape.MineralName(Quad.Circle), 2).ToUpperInvariant() +
+                           " - " + def.Name + " costs " + Mathf.RoundToInt(refusal.Amount) + ", you have " +
                            _world.Economy.Circles;
                 case RejectionReason.Occupied:
                     return "BLOCKED - something already stands on " + refusal.Cell;
@@ -937,6 +1116,10 @@ namespace Facet.Game
                 case RejectionReason.Doorway:
                     return "A DOORWAY - waves walk in at " + refusal.Cell +
                            ", and nothing solid may stand there";
+                case RejectionReason.Locked:
+                    // The map has not handed this operator over yet (§7's unlock ladder). The build bar
+                    // greys the tile out, so this is the keyboard's version of the same answer.
+                    return "NOT ON THIS MAP - " + def.Name + " is an operator this map has not unlocked";
                 default:
                     return "OFF THE MAP - nothing can be built on " + refusal.Cell;
             }
@@ -1060,7 +1243,9 @@ namespace Facet.Game
             if (jams > 0)
                 return jams + " jammed segment" + (jams == 1 ? "" : "s") + "   ·   right-click one to clear it";
             if (starved)
-                return "a starved gun's ammo icon is grey   ·   its line is not feeding it";
+                // The chamber is universal, so a starved gun is not missing the right shape - it is missing
+                // every shape. The words are MachineReading's live note, said here about the fleet.
+                return "a starved gun - nothing waiting on its lines   ·   its round goes grey";
 
             WaveDirector waves = _world.Waves;
             if (total == 0 && (waves.Phase == WavePhase.Running ||
@@ -1119,62 +1304,105 @@ namespace Facet.Game
         private Color ThreatColour(in ThreatRadar.Summary outOfView)
             => outOfView.Urgent ? _palette.HudWarn : _palette.HudText;
 
-        /// <summary>The bill of materials as chips: which enemies the wave being built for is made of, and -
-        /// drawn, not typed - the shape each is weak to. The next wave while one is waited on, the one being
-        /// fought while a wave runs; "what do I need" is the same question, only the answer differs.
+        /// <summary>
+        /// The bill of materials as chips, in two rows: the wave the clock is counting to - the one being
+        /// fought while a wave runs - and the wave after it, because "what do I need" is asked about both
+        /// while there is still time to build a line for the second.
         ///
-        /// The row is laid out by measurement, once per change, at whatever widths the words ask for. A wave
-        /// too varied to fit drops the names and keeps the numbers and marks - the count and shape are the
-        /// decision, the name the courtesy.</summary>
+        /// Per <em>group</em>, because a group is what a wave is made of: the count, the archetype and the
+        /// round that group demands. The demand is the group's own (<see cref="SpawnGroup.Weakness"/>), not
+        /// the archetype's, which is what makes the same enemy a different puzzle each wave.
+        ///
+        /// The rows are laid out by measurement, once per change, at whatever widths the words ask for. A
+        /// wave too varied to fit drops the names and keeps the numbers and figures - the count and the round
+        /// are the decision, the name the courtesy - and both rows drop them together so the pair stays a
+        /// pair.
+        /// </summary>
         private void UpdateComposition()
         {
             WaveDirector waves = _world.Waves;
-            WaveDefinition wave = waves.Phase == WavePhase.Running
-                ? _world.Map.Waves[waves.CurrentWave - 1]
-                : waves.Phase == WavePhase.Held || waves.Phase == WavePhase.Intermission
-                    ? waves.NextWaveDefinition
-                    : null;
 
-            var key = new StringBuilder().Append((int)waves.Phase).Append(':').Append(waves.NextWave);
-            if (wave != null)
-                for (int i = 0; i < _world.Content.EnemyKinds.Length; i++)
-                    key.Append(':').Append(wave.CountOf(_world.Content.EnemyKinds[i]));
+            // NextWave is the number a reader prints, in every phase: while a wave runs it is that wave's
+            // number, and between waves the number counting down. Both definitions are null once the run is
+            // out of waves, which is the whole of "there is nothing left to brief".
+            WaveDefinition next = waves.NextWaveDefinition;
+            WaveDefinition after = waves.WaveAfterNextDefinition;
+
+            var key = new StringBuilder().Append(waves.NextWave).Append('/').Append((int)waves.Phase);
+            AppendWaveKey(key, next);
+            key.Append('|');
+            AppendWaveKey(key, after);
 
             string signature = key.ToString();
             if (signature == _compKey) return;
             _compKey = signature;
 
-            if (wave == null)
+            if (next == null)
             {
                 HideChips();
                 return;
             }
 
-            var entries = new List<ChipEntry>();
-            ContentDatabase content = _world.Content;
-            for (int i = 0; i < content.EnemyKinds.Length; i++)
-            {
-                EnemyKind kind = content.EnemyKinds[i];
-                int count = wave.CountOf(kind);
-                if (count == 0) continue;
-                entries.Add(new ChipEntry(count, content.Enemy(kind).Name, content.Enemy(kind).Weakness));
-            }
+            ChipEntries(next, _nextEntries);
+            ChipEntries(after, _afterEntries);
 
-            if (entries.Count == 0 || !LayoutChips(entries, withNames: true))
-                LayoutChips(entries, withNames: false);
+            string nextLabel = "WAVE " + waves.NextWave;
+            string afterLabel = "THEN " + (waves.NextWave + 1);
+
+            if (!LayoutChips(_status.Chips, _status.NextLabel, nextLabel, _nextEntries, ChipsTop, withNames: true) ||
+                !LayoutChips(_status.ChipsAfter, _status.AfterLabel, afterLabel, _afterEntries, ChipsAfterTop, withNames: true))
+            {
+                if (!LayoutChips(_status.Chips, _status.NextLabel, nextLabel, _nextEntries, ChipsTop, withNames: false) ||
+                    !LayoutChips(_status.ChipsAfter, _status.AfterLabel, afterLabel, _afterEntries, ChipsAfterTop, withNames: false))
+                    HideChips();
+            }
         }
 
-        /// <summary>Lay the chips left to right across the card's row. False when they do not fit -
-        /// the caller tries again without the names.</summary>
-        private bool LayoutChips(List<ChipEntry> entries, bool withNames)
+        /// <summary>One wave's groups as chip entries, reused per frame so a briefing change allocates
+        /// nothing. A group past the row's capacity is dropped: more kinds than chips in one wave is a
+        /// content-table question, not a layout one.</summary>
+        private void ChipEntries(WaveDefinition wave, List<ChipEntry> into)
         {
-            if (entries.Count > ChipCapacity) entries = entries.GetRange(0, ChipCapacity);
+            into.Clear();
+            if (wave == null) return;
+
+            ContentDatabase content = _world.Content;
+            for (int g = 0; g < wave.Groups.Length && into.Count < ChipCapacity; g++)
+            {
+                SpawnGroup group = wave.Groups[g];
+                into.Add(new ChipEntry(group.Count, content.Enemy(group.Kind).Name, group.Weakness));
+            }
+        }
+
+        /// <summary>What makes one briefing different from another, so the rows are laid out when the demand
+        /// changes rather than every frame: the enemies, their counts and their demanded rounds.</summary>
+        private static void AppendWaveKey(StringBuilder key, WaveDefinition wave)
+        {
+            if (wave == null) return;
+
+            for (int g = 0; g < wave.Groups.Length; g++)
+            {
+                SpawnGroup group = wave.Groups[g];
+                key.Append(':').Append((int)group.Kind).Append('x').Append(group.Count)
+                    .Append('@').Append(group.Weakness.Code);
+            }
+        }
+
+        /// <summary>Lay one briefing row left to right, after its own label. False when the row does not fit
+        /// - the caller tries the pair again without the names, because a name dropped is a courtesy lost
+        /// while a chip clipped is a count the player cannot read.</summary>
+        private bool LayoutChips(Chip[] row, HudText label, string labelText, List<ChipEntry> entries,
+            float top, bool withNames)
+        {
+            label.Set(labelText, _palette.HudAccent);
+            label.Show(entries.Count > 0);
 
             float x = 14f * _scale;
+            if (entries.Count > 0) x += label.PreferredWidth + 6f * _scale;
 
             for (int i = 0; i < ChipCapacity; i++)
             {
-                Chip chip = _status.Chips[i];
+                Chip chip = row[i];
                 if (i >= entries.Count)
                 {
                     HideChip(chip);
@@ -1191,38 +1419,30 @@ namespace Facet.Game
                 float nameWidth = withNames ? chip.Name.PreferredWidth : 0f;
                 float chipWidth = countWidth + (withNames ? 3f * _scale + nameWidth + 5f * _scale : 0f) + 13f * _scale;
 
-                if (x + chipWidth > _status.Root.rect.width - 14f * _scale)
-                {
-                    if (!withNames)
-                    {
-                        HideChips();
-                        return false;   // even the numbers do not fit: the row stays empty rather than clipped
-                    }
-                    return false;       // too wide with names - the caller lays the compact row
-                }
+                if (x + chipWidth > _status.Root.rect.width - 14f * _scale) return false;
 
                 chip.Back.Show(true);
                 chip.Count.Show(true);
-                HudUi.TopLeft(chip.Back.Rect, x - 5f * _scale, 92f * _scale, chipWidth + 10f * _scale, 24f * _scale);
-                HudUi.TopLeft(chip.Count.Rect, x, 96f * _scale, countWidth + 2f * _scale, 18f * _scale);
+                HudUi.TopLeft(chip.Back.Rect, x - 5f * _scale, top * _scale, chipWidth + 10f * _scale, 24f * _scale);
+                HudUi.TopLeft(chip.Count.Rect, x, (top + 4f) * _scale, countWidth + 2f * _scale, 18f * _scale);
                 chip.Count.SetColour(_palette.HudText);
 
                 if (withNames)
                 {
-                    HudUi.TopLeft(chip.Name.Rect, x + countWidth + 3f * _scale, 96f * _scale,
+                    HudUi.TopLeft(chip.Name.Rect, x + countWidth + 3f * _scale, (top + 4f) * _scale,
                         nameWidth + 2f * _scale, 18f * _scale);
                     chip.Name.SetColour(_palette.MachineIdle);
                 }
 
                 if (chip.Icon != null)
                 {
-                    HudIcons.Icon icon = _icons.Shape(entry.Weakness);
+                    HudIcons.Icon icon = _icons.Mark(entry.Round);
                     if (icon.Valid)
                     {
                         chip.Icon.texture = icon.Texture;
                         chip.Icon.uvRect = icon.Uv;
                         HudUi.TopLeft(chip.Icon.rectTransform, x + chipWidth - 13f * _scale,
-                            97f * _scale, 13f * _scale, 13f * _scale);
+                            (top + 5f) * _scale, 13f * _scale, 13f * _scale);
                         chip.Icon.gameObject.SetActive(true);
                     }
                     else chip.Icon.gameObject.SetActive(false);
@@ -1236,7 +1456,14 @@ namespace Facet.Game
 
         private void HideChips()
         {
-            for (int i = 0; i < ChipCapacity; i++) HideChip(_status.Chips[i]);
+            for (int i = 0; i < ChipCapacity; i++)
+            {
+                HideChip(_status.Chips[i]);
+                HideChip(_status.ChipsAfter[i]);
+            }
+
+            _status.NextLabel.Show(false);
+            _status.AfterLabel.Show(false);
         }
 
         private static void HideChip(Chip chip)
@@ -1316,8 +1543,10 @@ namespace Facet.Game
                     return Mathf.Clamp01(1f - waves.IntermissionRemaining / waves.IntermissionTotal);
 
                 case WavePhase.Running:
-                    WaveDefinition current = _world.Map.Waves[waves.CurrentWave - 1];
-                    if (current.Total <= 0) return 1f;
+                    // Definition, not the map's authored table: past the table the director generates, and
+                    // indexing the array with a generated wave's number is how this used to throw.
+                    WaveDefinition current = waves.Definition(waves.CurrentWave);
+                    if (current == null || current.Total <= 0) return 1f;
                     int left = _world.Enemies.AliveCount + waves.PendingInWave;
                     return Mathf.Clamp01(1f - left / (float)current.Total);
 
@@ -1327,15 +1556,26 @@ namespace Facet.Game
             }
         }
 
+        /// <summary>
+        /// The card's title: the run's identity - the map in the campaign, and the seed the wave generator
+        /// drew from, so a run is reproducible from the number on the screen - plus where the clock is.
+        ///
+        /// The total is <see cref="WaveDirector.TotalWaves"/>, and an endless run has none: it prints the
+        /// wave number alone rather than "wave 7 of 0", and no line here ever claims a final wave, because
+        /// an endless run does not have one.
+        /// </summary>
         private string TitleLine()
         {
-            int waveCount = _world.Map.Waves.Length;
             string map = _world.Map.Name;
             string at = _campaign != null && _campaign.MapCount > 1
                 ? "map " + (_campaign.MapIndex + 1) + "/" + _campaign.MapCount + "  ·  "
                 : string.Empty;
 
-            string head = "FACET  ·  " + at + map;
+            // The endless re-entry of the last map is the same map on the card, so the card says so -
+            // a run with no total to print is otherwise indistinguishable from a scripted one.
+            string endless = _world.Waves.Endless ? "  ·  endless" : string.Empty;
+
+            string head = "FACET  ·  " + at + map + endless + "  ·  seed " + _world.Waves.Seed;
 
             switch (_world.Status)
             {
@@ -1351,9 +1591,9 @@ namespace Facet.Game
             {
                 case WavePhase.Held:
                 case WavePhase.Intermission:
-                    return head + "  ·  wave " + waves.NextWave + " of " + waveCount + " next";
+                    return head + "  ·  wave " + waves.NextWave + OfTotal(waves) + " next";
                 case WavePhase.Running:
-                    return head + "  ·  wave " + waves.CurrentWave + " of " + waveCount;
+                    return head + "  ·  wave " + waves.CurrentWave + OfTotal(waves);
                 case WavePhase.Over:
                     // The tick that finishes the table also ends the run, so a playing map never shows
                     // this; the clock still owes the title an answer rather than a default.
@@ -1364,10 +1604,22 @@ namespace Facet.Game
             }
         }
 
+        /// <summary>" of 6" while the run has a bound, and nothing at all when it does not: an endless run
+        /// counts toward no final wave, so a total would be a number it cannot reach.</summary>
+        private static string OfTotal(WaveDirector waves)
+            => waves.TotalWaves > 0 ? " of " + waves.TotalWaves : string.Empty;
+
         /// <summary>What the wave clock is doing, in the sentence the bar above it is the length of.</summary>
         private string WaveNews()
         {
-            if (_world.Status != GameStatus.Playing) return "press R to restart";
+            if (_world.Status != GameStatus.Playing)
+            {
+                // Won with no map after this one, the next press of N is the endless entry; a loss, or a
+                // win with a map still ahead, has no N to offer - the banner above already says which.
+                return _world.Status == GameStatus.Won && _campaign != null && !_campaign.HasNext
+                    ? "press N to keep going, endless  ·  R to restart"
+                    : "press R to restart";
+            }
 
             WaveDirector waves = _world.Waves;
             switch (waves.Phase)
@@ -1387,9 +1639,11 @@ namespace Facet.Game
 
                 case WavePhase.Running:
                 {
-                    WaveDefinition current = _world.Map.Waves[waves.CurrentWave - 1];
+                    // Definition, not the authored table: an endless or generated run has waves the table
+                    // never held, and the count still has to be right.
+                    WaveDefinition current = waves.Definition(waves.CurrentWave);
                     int left = _world.Enemies.AliveCount + waves.PendingInWave;
-                    return left + " of " + current.Total + " enemies left in this wave"
+                    return left + " of " + (current != null ? current.Total : left) + " enemies left in this wave"
                         + (_world.Paused ? "   ·   paused" : string.Empty);
                 }
 
@@ -1458,19 +1712,33 @@ namespace Facet.Game
 
                 bool selectedTile = tile.Kind == selected;
                 bool affordable = _world.Economy.CanAfford(tile.Kind);
+                bool locked = !_world.IsUnlocked(tile.Kind);
 
                 if (tile.Selected != selectedTile || tile.Hovered != hovered ||
-                    tile.Affordable != affordable)
+                    tile.Affordable != affordable || tile.Locked != locked)
                 {
+                    bool wasLocked = tile.Locked;
                     tile.Selected = selectedTile;
                     tile.Hovered = hovered;
                     tile.Affordable = affordable;
+                    tile.Locked = locked;
+
+                    // The two labels the lock owns: put the role back the moment the map hands the operator
+                    // over, which is what a campaign's map change does. The cost mark is placed from the
+                    // cost's measured width, so a lock change makes it place itself again.
+                    if (wasLocked != locked)
+                    {
+                        tile.Role.Set(locked ? "LOCKED" : RoleOf(tile.Kind));
+                        tile.CostPlaced = false;
+                    }
+
                     DressBuildTile(tile);
                 }
 
                 // The line along the tile's bottom says how far from affordable the bank is: nine tenths of
-                // the way is a belt to lay now, a tenth of the way is a plan for later.
-                if (!tile.Affordable && _world.Content.Machine(tile.Kind).Cost > 0)
+                // the way is a belt to lay now, a tenth of the way is a plan for later. A locked tile has no
+                // cost to save toward, so its line stays empty.
+                if (!tile.Locked && !tile.Affordable && _world.Content.Machine(tile.Kind).Cost > 0)
                     tile.Afford.Set(Mathf.Clamp01(_world.Economy.Circles / (float)_world.Content.Machine(tile.Kind).Cost),
                         _palette.CursorNoFunds);
                 else tile.Afford.Set(0f, Color.clear);
@@ -1481,13 +1749,33 @@ namespace Facet.Game
             for (int i = 0; i < _bar.Tiles.Count; i++) PlaceCostIcon(_bar.Tiles[i]);
         }
 
-        /// <summary>One building as a button: hotkey, cost, name and role over a stripe tinted by that role.
+        /// <summary>
+        /// One building as a button: hotkey, cost, name and role over a stripe tinted by that role.
         /// Selected is an accent outline and tinted fill, unaffordable greys the name and turns the cost
         /// amber, and the pointer lightens the tile. A click selects the kind through the input latch - it
-        /// never places anything, so a stray click can only change what is selected.</summary>
+        /// never places anything, so a stray click can only change what is selected.
+        ///
+        /// A kind this map has not unlocked is drawn as a locked tile: grey, its role replaced by LOCKED,
+        /// and no cost. It stays on the bar rather than disappearing because the ladder is worth seeing -
+        /// "the rotator exists and map 2 hands it over" is the campaign's whole progression - but it cannot
+        /// be selected, and <see cref="SelectKind"/> is where that is enforced for the click as well as the
+        /// key.
+        /// </summary>
         private void DressBuildTile(BuildTile tile)
         {
             Color category = CategoryColor(tile.Kind);
+
+            if (tile.Locked)
+            {
+                tile.Button.Fill.Set(Blend(_palette.HudPanel, _palette.Outline, 0.25f));
+                tile.Stripe.Set(Blend(category, _palette.HudPanel, 0.8f));
+                tile.Border.Show(false);
+                tile.Hotkey.SetColour(Blend(_palette.MachineIdle, _palette.HudPanel, 0.5f));
+                tile.Cost.SetColour(Blend(_palette.MachineIdle, _palette.HudPanel, 0.5f));
+                tile.Name.SetColour(Blend(_palette.HudText, _palette.HudPanel, 0.55f));
+                tile.Role.SetColour(Blend(_palette.MachineIdle, _palette.HudPanel, 0.6f));
+                return;
+            }
 
             Color fill = _palette.HudPanel;
             if (tile.Selected) fill = Blend(_palette.HudPanel, category, 0.18f);
@@ -1521,11 +1809,30 @@ namespace Facet.Game
             tile.Name.SetColour(tile.Affordable ? _palette.HudText : _palette.MachineIdle);
         }
 
+        /// <summary>The bar's one way to change what is selected, and the one place a locked kind is
+        /// refused: the tile's click and the digit key are the same door, so the rule has one statement.
+        /// Asking for the kind already in hand drops it, which is the read cursor.</summary>
+        private void SelectKind(BuildKind kind)
+        {
+            if (_world == null || !_world.IsUnlocked(kind)) return;
+
+            _selectKind?.Invoke(kind);
+        }
+
         /// <summary>The cost's shape, once the cost's own width is known: the picture just outside the
-        /// number's left edge, where a cost is a mark rather than a sentence.</summary>
+        /// number's left edge, where a cost is a mark rather than a sentence. A locked tile has no price to
+        /// pay yet, so it draws no cost mark.</summary>
         private void PlaceCostIcon(BuildTile tile)
         {
-            if (tile.CostIcon == null || tile.CostPlaced) return;
+            if (tile.CostIcon == null) return;
+
+            if (tile.Locked)
+            {
+                tile.CostIcon.gameObject.SetActive(false);
+                return;
+            }
+
+            if (tile.CostPlaced) return;
             float textWidth = tile.Cost.PreferredWidth;
             if (textWidth <= 0f) return;
 
@@ -1559,6 +1866,10 @@ namespace Facet.Game
                     _infoBuildShown = true;
                     _infoKind = kind;
                     _infoDirty = false;
+
+                    // The build card has no picker: a sorter left inspected behind it would otherwise leave
+                    // the card wearing its taller band with nothing drawn in it.
+                    SetPickerUp(false);
                     RefreshBuildInfo(kind);
                 }
 
@@ -1593,14 +1904,20 @@ namespace Facet.Game
 
             MachineDef def = _world.Content.Machine(kind);
             Color category = CategoryColor(kind);
+            bool locked = !_world.IsUnlocked(kind);
 
             _info.BuildStripe.Set(category);
             _info.BuildTitle.Set(def.Name, _palette.HudText);
             _info.BuildRight.Set(
-                def.Cost + " " + Plural(Glyph(ShapeType.Circle), def.Cost) + "   " + RoleOf(kind),
+                def.Cost + " " + Plural(Shape.MineralName(Quad.Circle), def.Cost) + "   " +
+                (locked ? "LOCKED" : RoleOf(kind)),
                 _palette.MachineIdle);
 
-            _info.Blurb.Set(Blurb(kind), _palette.HudText);
+            // A locked kind is described on the card like any other - the catalogue's words are not a
+            // secret - with the one thing the player needs to know about it said first.
+            _info.Blurb.Set(locked
+                ? "not unlocked on this map · " + Blurb(kind)
+                : Blurb(kind), _palette.HudText);
 
             string stats = Stats(kind);
             bool hasStats = !string.IsNullOrEmpty(stats);
@@ -1643,8 +1960,16 @@ namespace Facet.Game
             _rowCount = 0;
 
             Int2 cell = _world.InspectedCell;
+            bool machineHere = _world.Machines.TryGetSnapshot(cell, out MachineSnapshot machine);
 
-            if (_world.Machines.TryGetSnapshot(cell, out MachineSnapshot machine))
+            // The one machine whose card grows: a sorter's filter is a setting the player owns, and the
+            // picker is where it is set. It is read from the machine's snapshot - not the definition row -
+            // because a sorter that has been re-routed is the machine that is routing.
+            bool picker = machineHere && machine.Behavior == BehaviorKind.Sorter;
+            SetPickerUp(picker);
+            if (picker) RefreshFilterPicker(cell, machine);
+
+            if (machineHere)
             {
                 MachineDef def = _world.Content.Machine(machine.Build);
                 Color category = CategoryColor(machine.Build);
@@ -1666,7 +1991,7 @@ namespace Facet.Game
                         hurting ? _palette.HudWarn : _palette.HudGood);
                 }
 
-                InspectLine(MachineReading.FacingNote(def, machine, _world.Content), _palette.MachineIdle);
+                InspectLine(MachineReading.FacingNote(def, machine), _palette.MachineIdle);
                 FinishInspect();
                 return;
             }
@@ -1680,15 +2005,16 @@ namespace Facet.Game
 
                 if (belt.Jammed)
                 {
-                    // A jam arrives with the shape that caused it on the belt; name that shape when it is
-                    // there rather than asking the content table about "nothing", which has no glyph.
-                    string culprit = belt.Item == ShapeType.None ? string.Empty : " by " + Glyph(belt.Item);
-                    InspectLine("JAMMED" + culprit + " - the wrong shape for whatever this segment feeds",
+                    // A jam arrives with the item that caused it on the belt; name that item when it is
+                    // there, because a jam is always "this machine refuses this round" and the round is the
+                    // half of it the player can act on.
+                    string culprit = belt.Item.IsEmpty ? string.Empty : " by " + belt.Item.Describe();
+                    InspectLine("JAMMED" + culprit + " - the machine this segment feeds will not take it",
                         _palette.HudWarn);
                 }
                 else if (belt.HasItem)
-                    InspectLine("carrying " + Glyph(belt.Item) + " · " + Mathf.RoundToInt(belt.Progress * 100f) +
-                        "% across", _palette.HudText);
+                    InspectLine("carrying " + belt.Item.Describe() + " · " +
+                        Mathf.RoundToInt(belt.Progress * 100f) + "% across", _palette.HudText);
                 else
                     InspectLine("empty - nothing riding it right now", _palette.HudText);
 
@@ -1707,16 +2033,17 @@ namespace Facet.Game
                 InspectLine("holding " + Mathf.CeilToInt(_world.Core.Hp) + " / " +
                     Mathf.CeilToInt(_world.Core.MaxHp) + " health",
                     hurting ? _palette.HudWarn : _palette.HudGood);
-                InspectLine("circles belted into it become spendable", _palette.MachineIdle);
+                InspectLine("full circles belted into it become spendable - anything else is destroyed",
+                    _palette.MachineIdle);
                 InspectLine("losing it loses the run", _palette.MachineIdle);
                 FinishInspect();
                 return;
             }
 
-            // The ground is read off the terrain layer rather than the tile kind, so an ore card has a shape
-            // and a rock card its kind. Whether the cell is worth reading at all is the simulation's one answer
-            // (<see cref="SimWorld.CanInspect"/> - the same rule the click and the cursor's marker read), not
-            // a copy restated here.
+            // The ground is read off the terrain layer rather than the tile kind, so an ore card has a
+            // mineral and a rock card its kind. Whether the cell is worth reading at all is the simulation's
+            // one answer (<see cref="SimWorld.CanInspect"/> - the same rule the click and the cursor's marker
+            // read), not a copy restated here.
             if (_world.CanInspect(cell))
             {
                 DrawGroundCard(cell, _world.Map.SpawnIndexOf(cell));
@@ -1731,6 +2058,253 @@ namespace Facet.Game
                 _palette.MachineIdle);
             FinishInspect();
         }
+
+        /// <summary>
+        /// Grow or shrink the info card's picker band, and put the pieces that depend on it back where the
+        /// grown card wants them. The card is bottom-anchored, so growing means the header stays at the top
+        /// of a taller card and the rows move down by the band's height.
+        /// </summary>
+        private void SetPickerUp(bool up)
+        {
+            if (_pickerUp == up) return;
+
+            _pickerUp = up;
+            _info.Picker.Root.gameObject.SetActive(up);
+            Place(_info.Root, HudLayout.Info(HudLayout.Bar(Screen.width, Screen.height, _scale), _scale, up),
+                PlaceCorner.BottomRight);
+
+            for (int i = 0; i < _info.Rows.Length; i++)
+                HudUi.TopLeft(_info.Rows[i].Rect, 14f * _scale,
+                    (31f + (up ? HudLayout.InfoPickHeight : 0f) + 17f * i) * _scale,
+                    (HudLayout.InfoWidth - 28f) * _scale, 15f * _scale);
+        }
+
+        /// <summary>
+        /// Paint the picker from the machine's own filter: the item's figure on the canvas, a ghost cell
+        /// where a quadrant is empty, and the sentence the mode button and the caption carry.
+        ///
+        /// The working state is re-seeded whenever the machine's filter is not the one it was seeded from,
+        /// so a filter changed by an earlier click (or by a different machine being inspected) is read back
+        /// rather than painted over - the card always shows what routes.
+        /// </summary>
+        private void RefreshFilterPicker(Int2 cell, in MachineSnapshot machine)
+        {
+            if (cell != _filterCell || !SameFilter(machine.Filter, _filterSeen))
+            {
+                _filterCell = cell;
+                _filterSeen = machine.Filter;
+                SeedFilter(machine.Filter);
+            }
+
+            Shape painted = PaintedFilter();
+            HudIcons.Icon icon = _icons.Canvas(painted);
+            if (icon.Valid)
+            {
+                _info.Picker.Figure.texture = icon.Texture;
+                _info.Picker.Figure.uvRect = icon.Uv;
+            }
+            _info.Picker.Figure.gameObject.SetActive(icon.Valid);
+
+            for (int quadrant = 0; quadrant < Shape.QuadrantCount; quadrant++)
+                _info.Picker.Ghosts[quadrant].Show(!painted.Has(quadrant));
+
+            _info.Picker.Mode.Label.Set(_filterMineral ? "mode: contains a mineral" : "mode: exactly this item",
+                _palette.HudText);
+
+            // The caption is what a click would send. While the canvas is still empty it says what the
+            // machine routes <em>now</em> instead, so the card never leaves the player guessing: a sorter
+            // whose row shipped "any shape" has a rule worth reading even though it has no quadrants to paint.
+            // A card built without a way to send a rule - the honest read-only one - says what the machine
+            // routes without inviting a click that could never take effect.
+            string caption = PickerCaption();
+            Color captionColour = _palette.MachineIdle;
+            if (!TryPendingFilter(out _))
+            {
+                if (_setFilter == null)
+                {
+                    caption = "routing " + machine.Filter.Describe() + " now   ·   read-only";
+                    captionColour = _palette.MachineIdle;
+                }
+                else
+                {
+                    caption = machine.Filter.IsNone
+                        ? caption
+                        : "routing " + machine.Filter.Describe() + " now   ·   click a quadrant to change it";
+                    captionColour = machine.Filter.IsNone ? _palette.HudWarn : _palette.MachineIdle;
+                }
+            }
+
+            _info.Picker.Caption.Set(caption, captionColour);
+        }
+
+        /// <summary>What the machine's filter says the picker should start painting.</summary>
+        private void SeedFilter(in ShapeFilter filter)
+        {
+            switch (filter.Mode)
+            {
+                case FilterMode.Mineral:
+                    _filterMineral = true;
+                    _filterMineralPicked = filter.Mineral != Quad.Empty ? filter.Mineral : Quad.Circle;
+                    _filterShape = Shape.Full(_filterMineralPicked);
+                    return;
+
+                case FilterMode.Exact:
+                    _filterMineral = false;
+                    _filterShape = filter.Exact;
+                    return;
+
+                case FilterMode.Any:
+                case FilterMode.None:
+                    // "Routes everything" and "routes nothing" have no quadrants to paint: the canvas starts
+                    // empty and the first click on a quarter is what gives it a rule. The mineral is seeded
+                    // anyway, so the mode toggle has somewhere to go from an empty canvas.
+                    _filterMineral = false;
+                    _filterShape = Shape.None;
+                    _filterMineralPicked = Quad.Circle;
+                    return;
+
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(filter), filter.Mode,
+                        "a new filter mode must say how the picker paints it");
+            }
+        }
+
+        /// <summary>The item the canvas is showing: the painted shape in exact mode, and the whole of the
+        /// mineral in mineral mode - the rule is about the mineral, so the swatch that stands for it is all
+        /// four quadrants of it.</summary>
+        private Shape PaintedFilter() => _filterMineral ? Shape.Full(_filterMineralPicked) : _filterShape;
+
+        /// <summary>
+        /// What a click would send, or false when it would send nothing. A rule that routes nothing is
+        /// never sent: <see cref="ShapeFilter.None"/> is refused by the world, and an exact match on an
+        /// empty item would be a filter that admits nothing at all.
+        /// </summary>
+        private bool TryPendingFilter(out ShapeFilter filter)
+        {
+            if (_filterMineral)
+            {
+                filter = _filterMineralPicked == Quad.Empty
+                    ? ShapeFilter.None
+                    : ShapeFilter.Has(_filterMineralPicked);
+                return !filter.IsNone;
+            }
+
+            filter = _filterShape.IsEmpty ? ShapeFilter.None : ShapeFilter.Is(_filterShape);
+            return !filter.IsNone;
+        }
+
+        /// <summary>The rule a click would send, in words - or the instruction, while the canvas is still
+        /// empty and a click is what gives it a rule.</summary>
+        private string PickerCaption()
+            => TryPendingFilter(out ShapeFilter filter) ? filter.Describe() : "click a quadrant to route on";
+
+        /// <summary>
+        /// One quadrant clicked. In exact mode it cycles that quadrant's own content - empty, circle,
+        /// square, empty - because which way up an item is matters and a top half-circle is not a bottom
+        /// one, so the canvas is a real item rather than a bag of minerals. In mineral mode it cycles the
+        /// mineral, which is the only thing that rule is about.
+        /// </summary>
+        private void PressFilterQuadrant(int quadrant)
+        {
+            if (!_pickerUp) return;
+
+            if (_filterMineral)
+            {
+                // In mineral mode a click chooses the mineral itself, so the cycle has two stops: a mineral
+                // is never nothing, and a canvas that could go blank would be a rule the player cannot send.
+                _filterMineralPicked = _filterMineralPicked == Quad.Circle ? Quad.Square : Quad.Circle;
+            }
+            else
+            {
+                _filterShape = WithQuadrant(_filterShape, quadrant, NextMineral(_filterShape.At(quadrant)));
+            }
+
+            SendFilter();
+        }
+
+        /// <summary>Switch between the two rules the picker states: anything containing a mineral, and one
+        /// exact item. Neither switch is ever a dead end - each keeps a mineral or an item to route on - so
+        /// the toggle always sends a rule the world accepts. Guarded like the quadrant press beside it: both
+        /// are the picker's own buttons, and one handler defending against a state the other ignores would
+        /// read as deliberate.</summary>
+        private void PressFilterMode()
+        {
+            if (!_pickerUp) return;
+
+            if (_filterMineral)
+            {
+                _filterMineral = false;
+                _filterShape = Shape.Full(_filterMineralPicked);
+            }
+            else
+            {
+                Quad mineral = FirstMineral(_filterShape);
+                _filterMineral = true;
+                _filterMineralPicked = mineral != Quad.Empty ? mineral : _filterMineralPicked;
+            }
+
+            SendFilter();
+        }
+
+        /// <summary>Hand the picker's rule to the input latch, which carries it to the next tick. Nothing is
+        /// sent while the canvas is empty (see <see cref="TryPendingFilter"/>).</summary>
+        private void SendFilter()
+        {
+            if (_setFilter == null) return;
+            if (!TryPendingFilter(out ShapeFilter filter)) return;
+
+            _setFilter(_filterCell, filter);
+        }
+
+        /// <summary>The next mineral the picker's cycle shows.</summary>
+        private static Quad NextMineral(Quad mineral)
+        {
+            switch (mineral)
+            {
+                case Quad.Empty: return Quad.Circle;
+                case Quad.Circle: return Quad.Square;
+                case Quad.Square: return Quad.Empty;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(mineral), mineral,
+                        "a new mineral needs a place in the picker's cycle");
+            }
+        }
+
+        /// <summary>One quadrant of a painted item replaced, the other three kept: the canvas is an item, so
+        /// painting a quadrant must not disturb its neighbours.</summary>
+        private static Shape WithQuadrant(Shape shape, int quadrant, Quad mineral)
+        {
+            Quad nw = shape.At(Shape.NW), ne = shape.At(Shape.NE);
+            Quad se = shape.At(Shape.SE), sw = shape.At(Shape.SW);
+
+            switch (quadrant)
+            {
+                case Shape.NW: nw = mineral; break;
+                case Shape.NE: ne = mineral; break;
+                case Shape.SE: se = mineral; break;
+                case Shape.SW: sw = mineral; break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(quadrant), quadrant,
+                        "an item has exactly four quadrants");
+            }
+
+            return Shape.Of(nw, ne, se, sw);
+        }
+
+        /// <summary>The mineral a painted item is made of: its first filled quadrant's. Empty for a canvas
+        /// with nothing on it.</summary>
+        private static Quad FirstMineral(Shape shape)
+        {
+            for (int quadrant = 0; quadrant < Shape.QuadrantCount; quadrant++)
+                if (shape.Has(quadrant)) return shape.At(quadrant);
+
+            return Quad.Empty;
+        }
+
+        /// <summary>Is this the same routing rule? <see cref="ShapeFilter"/> is a plain struct with no
+        /// equality of its own, and the two unused halves are not part of its identity.</summary>
+        private static bool SameFilter(in ShapeFilter left, in ShapeFilter right)
+            => left.Mode == right.Mode && left.Exact == right.Exact && left.Mineral == right.Mineral;
 
         /// <summary>The card's title row and the accent stripe: every card opens the same way, with the
         /// building's own category colour.</summary>
@@ -1787,8 +2361,8 @@ namespace Facet.Game
             }
 
             bool ore = _world.Terrain.HasOre(cell);
-            ShapeType shape = ore ? _world.Terrain.OreAt(cell) : ShapeType.None;
-            Color oreColour = _palette.ShapeColor(shape);
+            Quad mineral = ore ? _world.Terrain.OreAt(cell) : Quad.Empty;
+            Color oreColour = mineral == Quad.Empty ? _palette.Outline : _palette.MineralColor(mineral);
 
             string title = doorway < 0 ? "Ore patch" : ore ? "Entry point · ore" : "Entry point";
             InspectHeader(title, doorway < 0 ? oreColour : _palette.SpawnMarker, cell.ToString());
@@ -1801,7 +2375,8 @@ namespace Facet.Game
 
             if (!ore) return;
 
-            InspectLine("yields " + Glyph(shape) + " - only a drill may be built on it", oreColour);
+            InspectLine("mines as " + Shape.Full(mineral).Describe() +
+                " - only a drill may be built on it", oreColour);
 
             if (TryVeinAt(cell, out ShapePatch vein))
                 InspectLine(vein.Width + " × " + vein.Height + " vein in the ground", _palette.MachineIdle);
@@ -1931,10 +2506,11 @@ namespace Facet.Game
                 TooltipHeader(_world.Content.Machine(BuildKind.Belt).Name, CategoryColor(BuildKind.Belt));
 
                 string state = belt.Jammed
-                    ? "JAMMED" + (belt.Item == ShapeType.None ? "" : " by " + Glyph(belt.Item)) +
+                    ? "JAMMED" + (belt.Item.IsEmpty ? "" : " by " + belt.Item.Describe()) +
                       " - right-click clears it"
                     : belt.HasItem
-                        ? "carrying " + Glyph(belt.Item) + " · " + Mathf.RoundToInt(belt.Progress * 100f) + "% across"
+                        ? "carrying " + belt.Item.Describe() + " · " +
+                          Mathf.RoundToInt(belt.Progress * 100f) + "% across"
                         : "empty";
                 TooltipLine(state + " · to the " + MachineReading.DirName(belt.Direction),
                     belt.Jammed ? _palette.HudWarn : _palette.HudText);
@@ -1975,9 +2551,10 @@ namespace Facet.Game
             }
             else
             {
-                ShapeType shape = _world.Terrain.OreAt(cell);
-                TooltipHeader("Ore patch", _palette.ShapeColor(shape));
-                TooltipLine("yields " + Glyph(shape) + " - a drill mines it", _palette.ShapeColor(shape));
+                Quad mineral = _world.Terrain.OreAt(cell);
+                TooltipHeader("Ore patch", _palette.MineralColor(mineral));
+                TooltipLine("mines as " + Shape.Full(mineral).Describe() + " - a drill mines it",
+                    _palette.MineralColor(mineral));
             }
 
             if (ore && TryVeinAt(cell, out ShapePatch vein))
@@ -2074,8 +2651,13 @@ namespace Facet.Game
                     }
                     else
                     {
+                        // The campaign has no map after this one, and pressing N is the "go on" verb in
+                        // every state there is: here it is the endless entry (§7), the same map with the
+                        // generator unbounded. The banner invites it; without a campaign there is only R.
                         text = _world.Map.Name.ToUpperInvariant() + " CLEARED\n" + StatsLine() +
-                               (_campaign != null && _campaign.MapCount > 1 ? "\ncampaign complete · R to play it again" : "\nR to restart");
+                               (_campaign != null
+                                    ? "\ncampaign complete · press N to keep going, endless"
+                                    : "\nR to restart");
                     }
 
                     colour = _palette.HudGood;
@@ -2101,7 +2683,7 @@ namespace Facet.Game
         private string StatsLine()
         {
             return _world.ShotsFired + " shots fired · " + _world.Economy.TotalBanked + " " +
-                Plural(ShapeType.Circle, _world.Economy.TotalBanked) + " banked";
+                Plural(Shape.MineralName(Quad.Circle), _world.Economy.TotalBanked) + " banked";
         }
 
         // ------------------------------------------------------------------ the buttons' dressing
@@ -2119,6 +2701,16 @@ namespace Facet.Game
             Dress(_info.TurnLeft, ButtonFill);
             Dress(_info.TurnRight, ButtonFill);
             if (_info.Inspect.Root.gameObject.activeSelf) Dress(_info.Inspect, ButtonFill);
+
+            // The picker's quarters are cells of the figure, not buttons with a colour of their own: their
+            // fill stays clear so the item underneath is the content, and their border is what says the cell
+            // is clickable - which is also why every quadrant wears one, empty or not.
+            if (_info.Picker.Root.gameObject.activeSelf)
+            {
+                Dress(_info.Picker.Mode, ButtonFill);
+                for (int i = 0; i < _info.Picker.Quadrants.Length; i++)
+                    Dress(_info.Picker.Quadrants[i], Color.clear);
+            }
 
             // The start-wave button breathes while it waits: the one motion the HUD spends on itself, on the
             // one action a player can take early and might not notice. A paused world holds its breath.
@@ -2169,18 +2761,21 @@ namespace Facet.Game
         private Color CategoryColor(BuildKind kind) =>
             CategoryColour(MachineReading.Role(_world.Content.Machine(kind)));
 
-        /// <summary>Which colour files which role under. A role nobody has coloured is an error, not
-        /// a quiet slide into "transport" - the discipline the badge and draw dispatches keep.</summary>
+        /// <summary>Which colour files which role under. The two mineral colours are the palette's warm
+        /// pair, and the roles take them the way the chains do: the mining and processing machines wear the
+        /// circle's gold, the routing piece the HUD's own accent, and transport and walls the quiet machine
+        /// grey. A role nobody has coloured is an error, not a quiet slide into "transport" - the discipline
+        /// the badge and draw dispatches keep.</summary>
         private Color CategoryColour(MachineRole role)
         {
             switch (role)
             {
                 case MachineRole.Defence: return _palette.HudWarn;
                 case MachineRole.Mining:
-                case MachineRole.Processing: return _palette.CircleShape;
+                case MachineRole.Processing: return _palette.CircleMineral;
                 case MachineRole.Routing: return _palette.HudAccent;
-                case MachineRole.Transport: return _palette.HalfCircleShape;   // belts and pipes
-                case MachineRole.Wall: return _palette.HalfCircleShape;
+                case MachineRole.Transport: return _palette.MachineIdle;   // belts and pipes
+                case MachineRole.Wall: return _palette.MachineIdle;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(role), role,
                         "a new role needs a colour in the build bar");
@@ -2196,12 +2791,8 @@ namespace Facet.Game
         private string Stats(BuildKind kind) =>
             MachineReading.Stats(_world.Content.Machine(kind), _world.Content, _world.Config);
 
-        private string Glyph(ShapeType shape) => _world.Content.Shape(shape).Glyph;
-
-        /// <summary>The shape's word, pluralised the way the sentence reading it needs: "3 circle banked" is
-        /// the HUD's mistake to avoid, not the table's.</summary>
-        private string Plural(ShapeType shape, int count) => Plural(Glyph(shape), count);
-
+        /// <summary>The item's own words, pluralised the way the sentence reading it needs: "3 circle
+        /// banked" is the HUD's mistake to avoid, not the algebra's.</summary>
         private static string Plural(string word, int count)
             => count == 1 ? word : word + "s";
 
@@ -2249,7 +2840,10 @@ namespace Facet.Game
             public HudText HealthDamage;
             public HudBar Clock;
             public HudText News;
+            public HudText NextLabel;
+            public HudText AfterLabel;
             public Chip[] Chips;
+            public Chip[] ChipsAfter;
             public HudText Production;
             public HudText Threat;
             public HudButton WaveButton;
@@ -2278,18 +2872,19 @@ namespace Facet.Game
             public HudText[] Rows;
         }
 
-        /// <summary>One entry of the wave's bill of materials: how many, of what, weak to what.</summary>
+        /// <summary>One entry of the wave's bill of materials: how many, of what, and the round that group
+        /// demands.</summary>
         private readonly struct ChipEntry
         {
             public readonly int Count;
             public readonly string Name;
-            public readonly ShapeType Weakness;
+            public readonly Shape Round;
 
-            public ChipEntry(int count, string name, ShapeType weakness)
+            public ChipEntry(int count, string name, Shape round)
             {
                 Count = count;
                 Name = name;
-                Weakness = weakness;
+                Round = round;
             }
         }
 
@@ -2352,6 +2947,7 @@ namespace Facet.Game
             public bool Selected;
             public bool Hovered;
             public bool Affordable;
+            public bool Locked;
             public bool CostPlaced;
         }
 
@@ -2375,6 +2971,23 @@ namespace Facet.Game
             public HudText InspectTitle;
             public HudText InspectRight;
             public HudText[] Rows;
+            public FilterPicker Picker;
+        }
+
+        /// <summary>The sorter's filter picker: the item's own square as four clickable quadrants, the mode
+        /// toggle beside them and the sentence saying what a click would route for.</summary>
+        private sealed class FilterPicker
+        {
+            public RectTransform Root;
+            public HudText Title;
+
+            /// <summary>The faint cells empty quadrants wear here, and only here.</summary>
+            public readonly HudBox[] Ghosts = new HudBox[Shape.QuadrantCount];
+
+            public RawImage Figure;
+            public readonly HudButton[] Quadrants = new HudButton[Shape.QuadrantCount];
+            public HudButton Mode;
+            public HudText Caption;
         }
 
         /// <summary>The most lines any inspect card asks of the pool: a machine's ports, live note,
@@ -2388,5 +3001,41 @@ namespace Facet.Game
         /// <summary>The most lines the cursor tooltip asks of its pool: what it is, its ports, its
         /// live note - the glance, not the card.</summary>
         private const int TooltipRowCapacity = 3;
+
+        /// <summary>The chip row's own copy of the briefings, reused every pass: a wave change is rare, but a
+        /// wave change that allocated two lists per row would be a garbage-collector spike exactly when the
+        /// player is reading the card.</summary>
+        private readonly List<ChipEntry> _nextEntries = new List<ChipEntry>();
+        private readonly List<ChipEntry> _afterEntries = new List<ChipEntry>();
+
+        /// <summary>Where the two briefing rows' chip backs sit, in design units from the card's top: the
+        /// wave being counted to, then the one after it. The labels above each row are placed with them, in
+        /// <see cref="BuildStatus"/>.</summary>
+        private const float ChipsTop = 90f;
+        private const float ChipsAfterTop = 114f;
+
+        /// <summary>
+        /// The sorter picker's geometry, in design units: a quartered canvas of four cells and the mode
+        /// toggle beside it. Big enough that four quadrants read apart at the smallest scale, and small
+        /// enough that the band it costs the info card is one line of the layout
+        /// (<see cref="HudLayout.InfoPickHeight"/>).
+        /// </summary>
+        private const float CellSize = 22f;
+        private const float CanvasSize = CellSize * 2f;
+
+        /// <summary>Where the picker's band starts inside the card, under the header: the header runs
+        /// 9..27, and the band's own widgets hang from here. The card's rows move down by
+        /// <see cref="HudLayout.InfoPickHeight"/> while it is up, so this is the whole of the overlap
+        /// rule.</summary>
+        private const float PickerTop = 30f;
+
+        /// <summary>The mode toggle's column, clear of the canvas.</summary>
+        private const float ModeLeft = 14f + CanvasSize + 6f;
+        private const float ModeWidth = 250f;
+
+        /// <summary>The faint cell an empty quadrant wears in the picker, and nowhere else: on the map an
+        /// empty quadrant is nothing, and a ghost there would draw an item the simulation does not have.
+        /// Faint enough to be a target rather than content.</summary>
+        private Color GhostCell => WithAlpha(_palette.HudText, 0.09f);
     }
 }

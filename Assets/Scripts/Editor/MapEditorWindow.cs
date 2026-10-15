@@ -51,7 +51,7 @@ namespace Facet.EditorTools
         [SerializeField] private bool _preview;
 
         private MapBrush _brush = MapBrush.Ground;
-        private ShapeType _oreShape = ShapeType.Circle;
+        private Quad _ore = Quad.Circle;
 
         /// <summary>The zoom the toolbar's slider holds. Named by the fit arithmetic, not a pixel size:
         /// <see cref="GridFrame.Layout"/> multiplies the view's own fit by this.</summary>
@@ -160,8 +160,8 @@ namespace Facet.EditorTools
 
             // The mineral only means something while the ore brush is in hand, so it appears with it.
             if (_brush == MapBrush.Ore)
-                _oreShape = (ShapeType)EditorGUILayout.EnumPopup(MapPainting.MineralLabel, _oreShape,
-                    MapPainting.ShapeChoices, false,
+                _ore = (Quad)EditorGUILayout.EnumPopup(MapPainting.MineralLabel, _ore,
+                    MapPainting.MineralChoices, false,
                     GUILayout.Width(180f));
 
             _zoom = EditorGUILayout.Slider("Zoom", _zoom, MinZoom, MaxZoom, GUILayout.Width(240f));
@@ -198,7 +198,7 @@ namespace Facet.EditorTools
             // The strokes of one sweep are one edit: the session holds the single undo entry, and
             // MapPainting.Fill holds the single batch of writes underneath it.
             using (var edit = new MapEdit.Session(asset, "Fill map"))
-                edit.Fill(_brush, _oreShape);
+                edit.Fill(_brush, _ore);
         }
     }
 }

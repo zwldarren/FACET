@@ -40,10 +40,28 @@ namespace Facet.Core
 
         public readonly bool RestartPressed;
 
+        /// <summary>
+        /// The player set a sorter's filter, from the picker beside the info card: the sorter at
+        /// <see cref="FilterCell"/> routes for <see cref="SetFilter"/> from now on. A filter is a
+        /// configuration rather than a placement, so it travels as its own command - there is no gesture in
+        /// progress and no cost to charge.
+        /// </summary>
+        public readonly bool FilterSet;
+
+        public readonly ShapeFilter SetFilter;
+
+        /// <summary>Which sorter the filter is for. Its own field rather than a reuse of
+        /// <see cref="CursorCell"/>: the picker is a click on a panel, and for the tick the command is latched
+        /// the pointer is over the card rather than the map - so everything else that reads the cursor (the
+        /// tooltip, the tile an <see cref="InspectPressed"/> reads, the ghost) must keep seeing the map,
+        /// while <see cref="SetFilter"/> needs the machine.</summary>
+        public readonly Int2 FilterCell;
+
         public InputCommand(bool buildHeld = false, bool removeHeld = false, Int2 cursorCell = default,
             bool primaryReleased = false, BuildKind? selected = null,
             int rotateSteps = 0, bool startWavePressed = false, bool restartPressed = false,
-            bool inspectPressed = false)
+            bool inspectPressed = false, bool filterSet = false, ShapeFilter setFilter = default,
+            Int2 filterCell = default)
         {
             BuildHeld = buildHeld;
             RemoveHeld = removeHeld;
@@ -54,6 +72,9 @@ namespace Facet.Core
             RotateSteps = rotateSteps;
             StartWavePressed = startWavePressed;
             RestartPressed = restartPressed;
+            FilterSet = filterSet;
+            SetFilter = setFilter;
+            FilterCell = filterCell;
         }
 
         /// <summary>No cursor, nothing held, nothing selected, nothing requested.</summary>

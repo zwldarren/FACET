@@ -21,7 +21,7 @@ namespace Facet.Tests
             SimWorld world = Sim.NewWorld(16, 10);
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 5);
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), Sim.Circle));
 
             Sim.Tick(world, 29);
             Assert.IsTrue(world.Belts.HasItemAt(new Int2(1, 1)), "still on its first cell after 29 ticks");
@@ -41,7 +41,7 @@ namespace Facet.Tests
 
             // Pack cells 1..7 and leave the head cell empty, so the train has somewhere to go.
             for (int x = 1; x <= 7; x++)
-                Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(x, 1), ShapeType.HalfCircle));
+                Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(x, 1), Sim.TopHalfCircle));
 
             Sim.Tick(world, 30);
 
@@ -93,7 +93,7 @@ namespace Facet.Tests
                 Int2 cell = head;
                 for (int i = 0; i < 5; i++)
                 {
-                    Assert.IsTrue(world.Belts.TrySpawnItem(cell, ShapeType.Circle));
+                    Assert.IsTrue(world.Belts.TrySpawnItem(cell, Sim.Circle));
                     cell = cell + dir.Offset();
                 }
 
@@ -113,7 +113,7 @@ namespace Facet.Tests
             // hand-off must cost exactly one ordinary tick of travel - not half a tile.
             SimWorld world = Sim.NewWorld(16, 10);
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 3);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), Sim.Circle));
 
             Sim.Tick(world, 29);
             Sim.Tick(world, 1);
@@ -133,17 +133,17 @@ namespace Facet.Tests
             SimWorld world = Sim.NewWorld(16, 10);
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 4);   // (1,1) .. (4,1)
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 1), ShapeType.Circle));  // head, nowhere to go
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 1), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 1), Sim.Circle));  // head, nowhere to go
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 1), Sim.TopHalfCircle));
 
             Sim.Tick(world, 120);
 
             Assert.IsTrue(world.Belts.TryGet(new Int2(4, 1), out BeltState head));
-            Assert.AreEqual(ShapeType.Circle, head.Item, "the two items must not swap");
+            Assert.AreEqual(Sim.Circle, head.Item, "the two items must not swap");
             Assert.AreEqual(1f, head.Progress, Sim.ProgressTol);
 
             Assert.IsTrue(world.Belts.TryGet(new Int2(3, 1), out BeltState queued));
-            Assert.AreEqual(ShapeType.HalfCircle, queued.Item);
+            Assert.AreEqual(Sim.TopHalfCircle, queued.Item);
             Assert.AreEqual(1f, queued.Progress, Sim.ProgressTol, "queued on the boundary behind it");
 
             Assert.AreEqual(2, Sim.ItemCount(world));
@@ -159,7 +159,7 @@ namespace Facet.Tests
             Assert.IsTrue(world.TryPlaceBelt(new Int2(3, 2), Dir.North));
             Assert.IsTrue(world.TryPlaceBelt(new Int2(3, 3), Dir.North));
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), Sim.Circle));
 
             Sim.Tick(world, 60);
             Assert.IsTrue(world.Belts.HasItemAt(new Int2(3, 1)), "three cells in: the corner");
@@ -173,7 +173,7 @@ namespace Facet.Tests
         {
             SimWorld world = Sim.NewWorld(16, 10);
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 5);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), Sim.Circle));
             Assert.IsTrue(world.Belts.TryJam(new Int2(3, 1)));
 
             Sim.Tick(world, 90);
@@ -194,7 +194,7 @@ namespace Facet.Tests
         {
             SimWorld world = Sim.NewWorld(16, 10);
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 3);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(2, 1), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(2, 1), Sim.Circle));
             Assert.IsTrue(world.Belts.TryJam(new Int2(2, 1)));
 
             Sim.Tick(world, 10);
@@ -214,7 +214,7 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 2);
             Assert.IsTrue(world.Belts.TryJam(new Int2(2, 1)));
 
-            Assert.IsFalse(world.Belts.TrySpawnItem(new Int2(2, 1), ShapeType.Circle));
+            Assert.IsFalse(world.Belts.TrySpawnItem(new Int2(2, 1), Sim.Circle));
         }
 
         [Test]
@@ -278,7 +278,7 @@ namespace Facet.Tests
             const int Dragged = 4;                          // cells the run leaves the drill for
             var drill = new Int2(4, 2);
             var map = new MapDefinition("drill run", 16, 12, Sim.TestCircles,
-                new[] { new ShapePatch(drill, 1, 1, ShapeType.Circle) }, new Int2[0], new WaveDefinition[0]);
+                new[] { new ShapePatch(drill, 1, 1, Quad.Circle) }, new Int2[0], new WaveDefinition[0]);
             var world = new SimWorld(map, new SimConfig());
 
             for (int i = 0; i < Dragged; i++)
@@ -305,22 +305,23 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void DragOutOfADecomposer_LeavesItsFacingAlone()
+        public void DragOutOfAStacker_LeavesItsFacingAlone()
         {
-            // A decomposer has no facing to point: its inlet is the belt pointing into it and its outlets are
-            // the belts pointing away, read fresh each tick. So a run dragged out of one wires itself up - the
-            // belt leaving southwards is an outlet the moment it exists - and the machine keeps its placed
-            // facing. (The drill is the other case: its facing *is* its output, so a run leaving it turns it.)
+            // A stacker has no facing to point: its outlets are every belt pointing away from it, read fresh
+            // each tick, so a run dragged out of one wires itself up - the belt leaving southwards is an
+            // outlet the moment it exists - and the machine keeps the facing it was placed with. (The drill
+            // is the other case, above: its facing *is* its output, so a run leaving it turns it. A cutter is
+            // a third: its facing selects the cut line, not a piece's exit, so a drag leaves it alone too.)
             SimWorld world = Sim.NewWorld(16, 12);
-            var decomposer = new Int2(2, 8);
+            var stacker = new Int2(2, 8);
 
-            world.Tick(Gesture.Aim(decomposer, BuildKind.Decomposer));
-            world.Tick(Gesture.Release(decomposer, BuildKind.Decomposer));
-            Assert.AreEqual(Dir.East, Sim.MachineAt(world, decomposer).Direction);
+            world.Tick(Gesture.Aim(stacker, BuildKind.Stacker));
+            world.Tick(Gesture.Release(stacker, BuildKind.Stacker));
+            Assert.AreEqual(Dir.East, Sim.MachineAt(world, stacker).Direction);
 
-            Sim.Drag(world, decomposer, new Int2(2, 4));
+            Sim.Drag(world, stacker, new Int2(2, 4));
 
-            Assert.AreEqual(Dir.East, Sim.MachineAt(world, decomposer).Direction,
+            Assert.AreEqual(Dir.East, Sim.MachineAt(world, stacker).Direction,
                 "a machine whose ports are read off the belts is not turned by a run");
             Assert.AreEqual(Dir.South, Sim.DirAt(world, new Int2(2, 7)),
                 "the run itself still leaves southwards, which is what makes that side an outlet");
@@ -432,7 +433,7 @@ namespace Facet.Tests
         {
             SimWorld world = Sim.NewWorld(16, 10);
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 2);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), Sim.TopHalfCircle));
 
             Assert.IsTrue(world.Belts.TryRemove(new Int2(1, 1)));
 
@@ -447,9 +448,9 @@ namespace Facet.Tests
             SimWorld world = Sim.NewWorld(16, 10);
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 2);
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), ShapeType.HalfCircle));
-            Assert.IsFalse(world.Belts.TrySpawnItem(new Int2(1, 1), ShapeType.Circle), "one item per cell");
-            Assert.IsFalse(world.Belts.TrySpawnItem(new Int2(9, 9), ShapeType.Circle), "not onto bare ground");
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), Sim.TopHalfCircle));
+            Assert.IsFalse(world.Belts.TrySpawnItem(new Int2(1, 1), Sim.Circle), "one item per cell");
+            Assert.IsFalse(world.Belts.TrySpawnItem(new Int2(9, 9), Sim.Circle), "not onto bare ground");
         }
 
         [Test]
@@ -486,7 +487,7 @@ namespace Facet.Tests
             SimWorld world = Sim.NewWorld(16, 10);
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 2);
             Assert.IsTrue(world.Belts.TryJam(new Int2(1, 1)));
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(2, 1), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(2, 1), Sim.Circle));
 
             Assert.IsTrue(world.Belts.TryRemove(new Int2(1, 1)));
             Assert.IsTrue(world.Belts.TryRemove(new Int2(2, 1)));
@@ -506,7 +507,7 @@ namespace Facet.Tests
             // the player was trying to thread. Ore is ground a belt can be laid on, so the run is unbroken.
             SimWorld world = Sim.NewWorld(20, 12);
             for (int x = 0; x < 3; x++)
-                world.Terrain.SetOre(new Int2(6 + x, 8), ShapeType.Circle);
+                world.Terrain.SetOre(new Int2(6 + x, 8), Quad.Circle);
 
             Sim.Route(world, new Int2(3, 8), new Int2(12, 8));
 
@@ -525,7 +526,7 @@ namespace Facet.Tests
             // Removing the belt is a right-click that refunds, so the only thing it may change is the belt.
             SimWorld world = Sim.NewWorld(20, 12);
             var ore = new Int2(7, 7);
-            world.Terrain.SetOre(ore, ShapeType.Square);
+            world.Terrain.SetOre(ore, Quad.Square);
 
             Assert.IsTrue(world.TryPlaceBelt(ore, Dir.East));
             Assert.IsTrue(world.Terrain.HasOre(ore), "the ore is under the belt, not gone");
@@ -534,7 +535,7 @@ namespace Facet.Tests
 
             Assert.IsFalse(world.TileGrid.Get(ore).IsBuilding(), "and nothing is left standing on the vein");
             Assert.IsTrue(world.Terrain.HasOre(ore), "the vein is back");
-            Assert.AreEqual(ShapeType.Square, world.Terrain.OreAt(ore), "with its own shape");
+            Assert.AreEqual(Quad.Square, world.Terrain.OreAt(ore), "with its own shape");
             Assert.IsTrue(world.CanPlaceBelt(ore), "and it can be built over again");
         }
         [Test]
@@ -545,7 +546,7 @@ namespace Facet.Tests
             // the press cell" - which would pave the very cell the drill was aimed at. Ghost and outcome agree.
             SimWorld world = Sim.NewWorld(20, 12);
             var ore = new Int2(3, 9);
-            world.Terrain.SetOre(ore, ShapeType.Circle);
+            world.Terrain.SetOre(ore, Quad.Circle);
 
             world.Tick(Gesture.Aim(ore, BuildKind.Drill));
             Assert.AreEqual(BuildKind.Drill, world.SelectedKind, "the press takes the selection");
@@ -559,7 +560,7 @@ namespace Facet.Tests
 
             Assert.IsTrue(world.Machines.Has(ore), "the drill landed where the press was");
             Assert.AreEqual(Dir.East, Sim.MachineAt(world, ore).Direction, "aimed by the drag");
-            Assert.AreEqual(ShapeType.Circle, world.Terrain.OreAt(ore), "on the ore, which is untouched");
+            Assert.AreEqual(Quad.Circle, world.Terrain.OreAt(ore), "on the ore, which is untouched");
 
             world.Tick(new InputCommand(cursorCell: new Int2(8, 9), selected: BuildKind.Belt));
             Assert.AreEqual(BuildKind.Belt, world.SelectedKind, "and the next gesture gets the new selection");

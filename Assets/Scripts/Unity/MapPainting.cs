@@ -69,11 +69,11 @@ namespace Facet.Game
         /// the filtering popup takes one, and a field so a repaint does not allocate it every pass.</summary>
         public static readonly GUIContent MineralLabel = new GUIContent("Mineral");
 
-        /// <summary>The shapes an ore brush may be offered, as the popup filter both surfaces hand in. A data
-        /// rule, not styling: <see cref="MapAsset.PaintOre"/> writes nothing but a shape, so an enabled None
-        /// would be a button for an empty stroke. Both surfaces read it here, so a new shape appears exactly
-        /// once.</summary>
-        public static readonly Func<Enum, bool> ShapeChoices = shape => ((ShapeType)shape).IsShape();
+        /// <summary>The minerals an ore brush may be offered, as the popup filter both surfaces hand in. A
+        /// data rule, not styling: <see cref="MapAsset.PaintOre"/> writes nothing but a mineral, so an
+        /// enabled Empty would be a button for an empty stroke. Both surfaces read it here, so a new
+        /// mineral appears exactly once.</summary>
+        public static readonly Func<Enum, bool> MineralChoices = mineral => (Quad)mineral != Quad.Empty;
 
         /// <summary>The ground a ground brush paints. Ore is not here: a vein is painted by its mineral's
         /// name through <see cref="MapAsset.PaintOre"/>, leaving the ground plain. A non-ground brush
@@ -94,7 +94,7 @@ namespace Facet.Game
         /// ground, no mineral and no door. Erasing is a modifier because that is what the middle of a map
         /// means and because it is one answer for every brush in hand. The undo entry is the caller's,
         /// recorded once per stroke: a record per cell would make Ctrl+Z step back a tile at a time.</summary>
-        public static void Stroke(MapAsset asset, MapBrush brush, ShapeType ore, int x, int y, bool erase)
+        public static void Stroke(MapAsset asset, MapBrush brush, Quad ore, int x, int y, bool erase)
         {
             if (asset == null || !asset.InBounds(x, y)) return;
 
@@ -134,7 +134,7 @@ namespace Facet.Game
         /// forgets. The writes are <see cref="Stroke"/>, cell by cell, inside one asset batch, so a fill and
         /// a stroke cannot produce different data; the ore list the cells churn is written back once at the
         /// sweep's end rather than once per cell.</summary>
-        public static void Fill(MapAsset asset, MapBrush brush, ShapeType ore)
+        public static void Fill(MapAsset asset, MapBrush brush, Quad ore)
         {
             if (asset == null || !IsGround(brush)) return;
 

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Text;
 
 namespace Facet.Core
@@ -37,6 +36,10 @@ namespace Facet.Core
     /// be given a role, a line and a badge by name, never silently inherit one. The tests are the same
     /// seam: what the HUD would print is asserted through this interface, not a MonoBehaviour.
     ///
+    /// Shapes are spelled with <see cref="Shape.Describe"/> now that the per-shape word table is gone: a
+    /// shape's identity is its quadrants, so the words come from the quadrants rather than from a row that
+    /// could disagree with them.
+    ///
     /// Strings and severity only - no colours, no fonts, no layout. The view formats and tints.
     /// </summary>
     public static class MachineReading
@@ -62,8 +65,9 @@ namespace Facet.Core
             {
                 case BehaviorKind.Turret: return MachineRole.Defence;
                 case BehaviorKind.Drill: return MachineRole.Mining;
-                case BehaviorKind.Converter:
-                case BehaviorKind.Assembler: return MachineRole.Processing;
+                case BehaviorKind.Cutter:
+                case BehaviorKind.Rotator:
+                case BehaviorKind.Stacker: return MachineRole.Processing;
                 case BehaviorKind.Splitter:
                 case BehaviorKind.Sorter: return MachineRole.Routing;
                 case BehaviorKind.Pipe: return MachineRole.Transport;
@@ -93,57 +97,31 @@ namespace Facet.Core
         }
 
         /// <summary>The building in one sentence: the definition's own description where it has one,
-        /// and a behaviour-shaped sentence where it does not - so a new turret or converter gets a
-        /// sensible line without any view being edited.</summary>
+        /// and a behaviour-shaped sentence where it does not - so a new gun or operator gets a sensible
+        /// line without any view being edited.</summary>
         public static string Blurb(in MachineDef def, ContentDatabase content)
         {
             switch (def.Behavior)
             {
                 case BehaviorKind.Turret:
-                {
-                    TurretDef spec = content.Turret(def.Build);
-                    string eats = "eats " + AmmoDiet(content, spec) + " from any side";
-                    return spec.SplashRadius > 0f
-                        ? eats + " · shells burst over an area"
-                        : eats + " · fires at whatever is in range";
-                }
+                    return "eats any shape from any side · a round matching the target's weakness " +
+                           "does full damage, anything else " + ResistShare();
 
-                case BehaviorKind.Assembler:
-                {
-                    // "fuses half-circle + half-square into composite", per two-input recipe it runs.
-                    var text = new StringBuilder("fuses ");
-                    bool first = true;
-                    foreach (RecipeDef recipe in RecipesFor(content, def))
-                    {
-                        if (!first) text.Append(", ");
-                        first = false;
-                        text.Append(Glyph(content, recipe.Input)).Append(" + ")
-                            .Append(Glyph(content, recipe.Input2)).Append(" into ")
-                            .Append(Glyph(content, recipe.Output));
-                    }
+                case BehaviorKind.Cutter:
+                    return "splits one shape along the line it faces · each piece leaves by its own side";
 
-                    return text + " · outlets read off the belts pointing away";
-                }
+                case BehaviorKind.Rotator:
+                    return "turns a shape a quarter clockwise · the orientation fix";
 
-                case BehaviorKind.Converter:
-                {
-                    // "splits circle into 2 x half-circle", or every recipe the table holds for a
-                    // machine that names none: "splits circle into 2 x half-circle, square into ...".
-                    var text = new StringBuilder("splits ");
-                    bool first = true;
-                    foreach (RecipeDef recipe in RecipesFor(content, def))
-                    {
-                        if (!first) text.Append(", ");
-                        first = false;
-                        text.Append(Glyph(content, recipe.Input)).Append(" into ")
-                            .Append(Repeat(Glyph(content, recipe.Output), recipe.OutputCount));
-                    }
-
-                    return text + " · outlets read off the belts pointing away";
-                }
+                case BehaviorKind.Stacker:
+                    return "unions two shapes that do not overlap · an overlapping pair waits on its belt";
 
                 case BehaviorKind.Sorter:
-                    return def.Description + " (" + Glyph(content, def.Filter) + ")";
+                    // The row's words alone: what this sorter actually routes for is the machine's own
+                    // filter, which can be re-set from the card, and the live note below says it. Quoting
+                    // the row's filter here would put the definition's rule and the machine's rule on one
+                    // card, disagreeing the moment the player re-routes it.
+                    return def.Description;
 
                 case BehaviorKind.None:
                 case BehaviorKind.Drill:
@@ -165,24 +143,18 @@ namespace Facet.Core
             {
                 case BehaviorKind.Drill:
                     return def.Interval > 0f
-                        ? (1f / def.Interval).ToString("0.##") + " " + Glyph(content, ShapeType.Circle) + "/s mined"
+                        ? (1f / def.Interval).ToString("0.##") + " shapes/s mined"
                         : string.Empty;
 
-                case BehaviorKind.Converter:
-                {
-                    // The numbers the recipes share, said once; a recipe retuned away from the others
-                    // surfaces as both values, slash-joined, rather than passing as uniform.
-                    string intervals = Distinct(content, in def, r => r.Interval.ToString("0.##"));
-                    string buffers = Distinct(content, in def, r => r.Buffer.ToString());
-                    return intervals + " s per split · holds " + buffers + " when blocked";
-                }
+                case BehaviorKind.Cutter:
+                    return def.Interval.ToString("0.##") + " s per split · holds " +
+                           CutterBehavior.SlotBuffer + " a side";
 
-                case BehaviorKind.Assembler:
-                {
-                    string fuseIntervals = Distinct(content, in def, r => r.Interval.ToString("0.##"));
-                    string fuseBuffers = Distinct(content, in def, r => r.Buffer.ToString());
-                    return fuseIntervals + " s per fuse · holds " + fuseBuffers + " when blocked";
-                }
+                case BehaviorKind.Rotator:
+                    return def.Interval.ToString("0.##") + " s per quarter turn";
+
+                case BehaviorKind.Stacker:
+                    return def.Interval.ToString("0.##") + " s per union · one union at a time";
 
                 case BehaviorKind.Pipe:
                     return def.Interval > 0f
@@ -192,15 +164,10 @@ namespace Facet.Core
                 case BehaviorKind.Turret:
                 {
                     TurretDef spec = content.Turret(def.Build);
-                    DamageRange(spec, out float min, out float max);
-                    string damage = min >= max
-                        ? min.ToString("0.##") + " dmg"
-                        : min.ToString("0.##") + "-" + max.ToString("0.##") + " dmg";
-                    string line = spec.ShotsPerSecond.ToString("0.##") + " shots/s · " + damage +
-                           " · range " + spec.Range.ToString("0.##") + " tiles";
-                    return spec.SplashRadius > 0f
-                        ? line + " · bursts over " + spec.SplashRadius.ToString("0.##") + " tiles"
-                        : line;
+                    float resisted = spec.Damage * Balance.ResistantDamageMultiplier;
+                    return spec.ShotsPerSecond.ToString("0.##") + " shots/s · " +
+                           spec.Damage.ToString("0.##") + " dmg matched, " + resisted.ToString("0.##") +
+                           " if not · range " + spec.Range.ToString("0.##") + " tiles";
                 }
 
                 case BehaviorKind.Sorter:
@@ -224,6 +191,11 @@ namespace Facet.Core
 
         // ---------------------------------------------------------------- the live card
 
+        /// <summary>The one "this machine has nowhere to push" sentence. Five behaviours can wait on a
+        /// wired outlet, and the wording is one sentence said here, not five copies waiting to drift.</summary>
+        private static ReadingNote NoOutlet()
+            => new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
+
         /// <summary>
         /// What this building is doing right now, dispatched on its behaviour. The geometry a sentence
         /// names (a drill's landing, a pipe's) comes from the same functions the tick delivers through,
@@ -239,100 +211,108 @@ namespace Facet.Core
                 case BehaviorKind.Drill:
                 {
                     Int2 onto = DrillLanding(cell, machine.Direction);
+                    Quad mineral = world.Terrain.OreAt(cell);
                     return world.TileGrid.Get(onto).Eats()
-                        ? new ReadingNote("mining " + Glyph(content, world.Terrain.OreAt(cell)) + " onto " + onto,
+                        ? new ReadingNote("mining " + Shape.MineralName(mineral) + " onto " + onto,
                             NoteSeverity.Neutral)
                         : new ReadingNote("nothing to push onto at " + onto + " - lay a belt facing it",
                             NoteSeverity.Warn);
                 }
 
-                case BehaviorKind.Converter:
+                case BehaviorKind.Cutter:
                 {
-                    if (machine.OutMask.IsEmpty)
-                        return new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
+                    if (machine.OutMask.IsEmpty) return NoOutlet();
 
-                    // The live sentence names the shapes themselves, which the snapshot does not carry -
-                    // read the state itself rather than the badge.
+                    // The sentence names the shapes themselves, which the snapshot does not carry - read
+                    // the state rather than the badge.
                     world.Machines.TryGet(cell, out MachineState state);
+                    Dir front = machine.Direction;
 
-                    if (state.Carried != ShapeType.None)
-                        return new ReadingNote("splitting " + Glyph(content, state.Carried) + " · " +
-                            Percent(machine.Work) + "% through", NoteSeverity.Neutral);
-
-                    if (state.OutputCount > 0)
-                        return new ReadingNote("holding " + Glyph(content, state.OutputShape) +
-                            " - every outlet is full", NoteSeverity.Warn);
-
-                    return new ReadingNote("idle - waiting for " + Diet(content, in def), NoteSeverity.Neutral);
-                }
-
-                case BehaviorKind.Assembler:
-                {
-                    if (machine.OutMask.IsEmpty)
-                        return new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
-
-                    // As the converter's: the sentence names shapes the snapshot does not carry.
-                    world.Machines.TryGet(cell, out MachineState state);
-
-                    if (state.Carried != ShapeType.None && state.Carried2 != ShapeType.None)
-                        return new ReadingNote("fusing " + Glyph(content, state.Carried) + " + " +
-                            Glyph(content, state.Carried2) + " · " + Percent(machine.Work) + "% through",
-                            NoteSeverity.Neutral);
-
-                    if (state.OutputCount > 0)
-                        return new ReadingNote("holding " + Glyph(content, state.OutputShape) +
-                            " - every outlet is full", NoteSeverity.Warn);
-
-                    if (state.Carried != ShapeType.None)
+                    if (!state.Carried.IsEmpty)
                     {
-                        // The recipe the machine actually committed to, not a fresh table-order pick:
-                        // with two fuses sharing an input those disagree, and the sentence would name a
-                        // shape the machine will never take.
-                        RecipeDef committed = state.CommittedRecipe.IsNone
-                            ? content.RecipeForInput(in def, state.Carried)
-                            : content.RecipeOrNull(state.CommittedRecipe);
-                        ShapeType missing = committed == null ? ShapeType.None
-                            : committed.Input == state.Carried ? committed.Input2 : committed.Input;
-                        return new ReadingNote("holding " + Glyph(content, state.Carried) +
-                            " - waiting for " + Glyph(content, missing), NoteSeverity.Neutral);
+                        (Shape frontPiece, Shape backPiece) = CutterBehavior.Pieces(state.Carried, front);
+                        return new ReadingNote("splitting " + state.Carried.Describe() + " · " +
+                            Percent(machine.Work) + "% through · " + frontPiece.Describe() + " leaves " +
+                            MachineReading.DirName(front) + ", " + backPiece.Describe() + " leaves " +
+                            MachineReading.DirName(front.Opposite()), NoteSeverity.Neutral);
                     }
 
-                    return new ReadingNote("idle - waiting for " + Diet(content, in def), NoteSeverity.Neutral);
+                    if (state.OutputCount > 0 || state.OutputCount2 > 0)
+                        return new ReadingNote("holding " + Held(in state) +
+                            " - an outlet is full", NoteSeverity.Warn);
+
+                    return new ReadingNote("idle - waiting for a shape to cut", NoteSeverity.Neutral);
+                }
+
+                case BehaviorKind.Rotator:
+                {
+                    if (machine.OutMask.IsEmpty) return NoOutlet();
+
+                    world.Machines.TryGet(cell, out MachineState state);
+                    if (state.Carried.IsEmpty)
+                        return new ReadingNote("idle - waiting for a shape to turn", NoteSeverity.Neutral);
+
+                    return new ReadingNote("turning " + state.Carried.Describe() + " into " +
+                        state.Carried.RotatedCW().Describe() + " · " + Percent(machine.Work) + "% through",
+                        NoteSeverity.Neutral);
+                }
+
+                case BehaviorKind.Stacker:
+                {
+                    if (machine.OutMask.IsEmpty) return NoOutlet();
+
+                    world.Machines.TryGet(cell, out MachineState state);
+
+                    if (!state.Carried.IsEmpty && !state.Carried2.IsEmpty)
+                        return new ReadingNote("fusing " + state.Carried.Describe() + " + " +
+                            state.Carried2.Describe() + " · " + Percent(machine.Work) + "% through",
+                            NoteSeverity.Neutral);
+
+                    if (!state.Carried.IsEmpty)
+                        return new ReadingNote("holding " + state.Carried.Describe() +
+                            " - waiting for a piece that does not overlap it", NoteSeverity.Neutral);
+
+                    if (state.OutputCount > 0)
+                        return new ReadingNote("holding " + state.OutputShape.Describe() +
+                            " - every outlet is full", NoteSeverity.Warn);
+
+                    return new ReadingNote("idle - waiting for two pieces that fit together",
+                        NoteSeverity.Neutral);
                 }
 
                 case BehaviorKind.Pipe:
                 {
                     Int2 lands = PipeLanding(cell, machine.Direction);
-                    return machine.Shape == ShapeType.None
+                    return machine.Shape.IsEmpty
                         ? new ReadingNote("empty - nothing delivered", NoteSeverity.Neutral)
-                        : new ReadingNote("carrying " + Glyph(content, machine.Shape) + " to " + lands + " · " +
+                        : new ReadingNote("carrying " + machine.Shape.Describe() + " to " + lands + " · " +
                             Percent(machine.Work) + "% across", NoteSeverity.Neutral);
                 }
 
                 case BehaviorKind.Splitter:
-                    if (machine.OutMask.IsEmpty)
-                        return new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
+                    if (machine.OutMask.IsEmpty) return NoOutlet();
 
-                    return machine.Shape == ShapeType.None
+                    return machine.Shape.IsEmpty
                         ? new ReadingNote("dealing whatever arrives round robin", NoteSeverity.Neutral)
-                        : new ReadingNote("holding " + Glyph(content, machine.Shape) + " - every outlet is full",
+                        : new ReadingNote("holding " + machine.Shape.Describe() + " - every outlet is full",
                             NoteSeverity.Warn);
 
                 case BehaviorKind.Sorter:
-                    if (machine.OutMask.IsEmpty)
-                        return new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
+                    if (machine.OutMask.IsEmpty) return NoOutlet();
 
-                    return new ReadingNote(Glyph(content, def.Filter) + " leaves by the side it faces · the rest take " +
-                        "the other outlets", NoteSeverity.Neutral);
+                    return new ReadingNote(machine.Filter.Describe() + " leaves by the side it faces · the rest " +
+                        "take the other outlets", NoteSeverity.Neutral);
 
                 case BehaviorKind.Turret:
                 {
-                    TurretDef spec = content.Turret(machine.Build);
                     if (!machine.Armed)
-                        return new ReadingNote("starved - no " + AmmoDiet(content, spec) + " waiting on its lines",
-                            NoteSeverity.Warn);
+                        return new ReadingNote("starved - nothing waiting on its lines", NoteSeverity.Warn);
 
-                    return new ReadingNote(machine.HasTarget ? "armed · a target in range" : "armed · nothing in range",
+                    string round = machine.Shape.IsEmpty
+                        ? string.Empty
+                        : " · last round " + machine.Shape.Describe();
+                    return new ReadingNote(
+                        (machine.HasTarget ? "armed · a target in range" : "armed · nothing in range") + round,
                         NoteSeverity.Good);
                 }
 
@@ -346,11 +326,12 @@ namespace Facet.Core
             }
         }
 
-        /// <summary>What a built machine's facing means to it: a sorter's filtered shape leaves by it,
-        /// a turret's barrel rests on it, a drill pushes onto it and a pipe carries across in it. The
-        /// hubs that read their ports off the belts around them have no facing of their own to name,
-        /// and say so - the same rule the ghost draws its arrow by, <see cref="MachineDef.UsesFacing"/>.</summary>
-        public static string FacingNote(in MachineDef def, in MachineSnapshot machine, ContentDatabase content)
+        /// <summary>What a built machine's facing means to it: a cutter's cut line and which piece leaves
+        /// by which side, a rotator's outlet, a sorter's filtered shape, a turret's resting barrel, a
+        /// drill's landing and a pipe's crossing. The hubs that read their ports off the belts around them
+        /// have no facing of their own to name, and say so - the same rule the ghost draws its arrow by,
+        /// <see cref="MachineDef.UsesFacing"/>.</summary>
+        public static string FacingNote(in MachineDef def, in MachineSnapshot machine)
         {
             if (def.Behavior == BehaviorKind.None && def.Tile != TileKind.Belt)
                 return "no facing - a wall only stands in the way";
@@ -360,13 +341,20 @@ namespace Facet.Core
             {
                 case BehaviorKind.Turret: return "barrel rests " + DirName(machine.Direction);
                 case BehaviorKind.Sorter:
-                    return Glyph(content, def.Filter) + " leaves " + DirName(machine.Direction);
+                    return machine.Filter.Describe() + " leaves " + DirName(machine.Direction);
+
+                case BehaviorKind.Cutter:
+                {
+                    bool vertical = machine.Direction == Dir.East || machine.Direction == Dir.West;
+                    return (vertical ? "cuts left from right" : "cuts top from bottom") +
+                           " - the front piece leaves " + DirName(machine.Direction);
+                }
 
                 case BehaviorKind.None:      // a belt: its facing is where it carries
                 case BehaviorKind.Drill:
                 case BehaviorKind.Pipe:
-                case BehaviorKind.Converter:
-                case BehaviorKind.Assembler:
+                case BehaviorKind.Rotator:
+                case BehaviorKind.Stacker:
                 case BehaviorKind.Splitter:
                     return "facing " + DirName(machine.Direction);
 
@@ -387,83 +375,108 @@ namespace Facet.Core
 
         /// <summary>
         /// What the building draws on itself. Keyed on the machine's <em>behaviour</em>, not its tile
-        /// kind: a converter shows what its recipe makes, a turret its diet, a sorter the shape it routes.
+        /// kind: a cutter shows the piece it is holding, a stacker the union it just made, a sorter the
+        /// shape it routes, a turret the last round it fired.
         ///
         /// Every behaviour that shows nothing says so by name; the fallback is a throw, because a new
         /// behaviour silently badge-less is the bug this file's design argues against.
         /// </summary>
-        public static ShapeType Badge(in MachineState m, in MachineDef def, ContentDatabase content)
+        public static Shape Badge(in MachineState m, in MachineDef def)
         {
             switch (def.Behavior)
             {
-                case BehaviorKind.Converter:
-                    // The pending batch while it drains, else the shape mid-split: what the machine is
-                    // holding, whichever recipe it came from.
+                case BehaviorKind.Cutter:
+                    // The pending piece while an outlet drains, else the shape mid-split.
                     if (m.OutputCount > 0) return m.OutputShape;
                     return m.Carried;
+
+                case BehaviorKind.Stacker:
+                    // The union while an outlet drains, else the piece already held.
+                    if (m.OutputCount > 0) return m.OutputShape;
+                    return m.Carried;
+
                 case BehaviorKind.Pipe:
                 case BehaviorKind.Splitter:
+                case BehaviorKind.Rotator:
                     return m.Carried;
-                case BehaviorKind.Assembler:
-                    // The pending fused batch while it drains, else the first half already held.
-                    if (m.OutputCount > 0) return m.OutputShape;
-                    return m.Carried;
+
                 case BehaviorKind.Turret:
-                    return content.Turret(m.Build).PrimaryAmmo;
+                    // The last round it fired: a universal chamber holds nothing, so the honest badge is
+                    // what the line most recently fed it.
+                    return m.Carried;
+
                 case BehaviorKind.Sorter:
                     // The filter, not what it happens to be holding: the badge is the machine's
                     // configuration - which shape leaves by the side it faces - and a badge that
-                    // flickered between two shapes would read as a flickering setting.
-                    return def.Filter;
+                    // flickered between two shapes would read as a flickering setting. Resolved through the
+                    // filter's own mode here rather than patched by the view, so the rule is said once: a
+                    // mineral rule has no exact item to draw and draws the full mineral it asks for, and an
+                    // any-shape rule draws nothing, which is its own honest badge.
+                    switch (m.Filter.Mode)
+                    {
+                        case FilterMode.Exact: return m.Filter.Exact;
+                        case FilterMode.Mineral: return Shape.Full(m.Filter.Mineral);
+                        default: return Shape.None;
+                    }
+
                 case BehaviorKind.None:
                 case BehaviorKind.Drill:
-                    return ShapeType.None;
+                    return Shape.None;
+
                 default:
                     throw new ArgumentOutOfRangeException(nameof(def), def.Behavior,
                         "a new behaviour must declare here what badge it wears");
             }
         }
 
-        /// <summary>The work fraction the view animates: the split progressing, the item crossing
-        /// the pipe. A pipe whose landing belt is blocked sits at 1 - parked at the far end.
-        /// Behaviours with nothing to animate name themselves; the fallback is a throw.</summary>
-        public static float Work(in MachineState m, in MachineDef def, ContentDatabase content)
+        /// <summary>The cutter's second badge: the other piece of the split in flight. Empty for every
+        /// behaviour that emits one thing at a time.</summary>
+        public static Shape Badge2(in MachineState m, in MachineDef def)
         {
             switch (def.Behavior)
             {
-                case BehaviorKind.Converter:
-                {
-                    RecipeDef running = content.RecipeForInput(in def, m.Carried);
-                    return running != null && running.Interval > 0f
-                        ? 1f - m.Cooldown / running.Interval
-                        : 0f;
-                }
-                case BehaviorKind.Assembler:
-                {
-                    // The committed recipe is what the cycle is running, so the fraction is its own clock.
-                    // The pair lookup is the fallback for a state that carries no commitment.
-                    RecipeDef running = m.Carried2 == ShapeType.None
-                        ? null
-                        : m.CommittedRecipe.IsNone
-                            ? content.RecipeForInputs(in def, m.Carried, m.Carried2)
-                            : content.RecipeOrNull(m.CommittedRecipe);
-                    return running != null && running.Interval > 0f
-                        ? 1f - m.Cooldown / running.Interval
-                        : 0f;
-                }
+                case BehaviorKind.Cutter: return m.OutputCount2 > 0 ? m.OutputShape2 : Shape.None;
+                case BehaviorKind.None:
+                case BehaviorKind.Drill:
+                case BehaviorKind.Rotator:
+                case BehaviorKind.Stacker:
                 case BehaviorKind.Pipe:
-                {
-                    float interval = def.Interval;
-                    return m.Carried != ShapeType.None && interval > 0f
-                        ? 1f - m.Cooldown / interval
-                        : 0f;
-                }
+                case BehaviorKind.Splitter:
+                case BehaviorKind.Sorter:
+                case BehaviorKind.Turret:
+                    return Shape.None;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(def), def.Behavior,
+                        "a new behaviour must declare here whether it wears a second badge");
+            }
+        }
+
+        /// <summary>The work fraction the view animates: the split progressing, the fuse, the turn, the
+        /// item crossing the pipe. A pipe whose landing belt is blocked sits at 1 - parked at the far end.
+        /// Behaviours with nothing to animate name themselves; the fallback is a throw.</summary>
+        public static float Work(in MachineState m, in MachineDef def)
+        {
+            switch (def.Behavior)
+            {
+                case BehaviorKind.Cutter:
+                    return m.Carried.IsEmpty ? 0f : Fraction(m.Cooldown, def.Interval);
+
+                case BehaviorKind.Rotator:
+                    return m.Carried.IsEmpty ? 0f : Fraction(m.Cooldown, def.Interval);
+
+                case BehaviorKind.Stacker:
+                    return m.Carried.IsEmpty || m.Carried2.IsEmpty ? 0f : Fraction(m.Cooldown, def.Interval);
+
+                case BehaviorKind.Pipe:
+                    return m.Carried.IsEmpty ? 0f : Fraction(m.Cooldown, def.Interval);
+
                 case BehaviorKind.None:
                 case BehaviorKind.Drill:
                 case BehaviorKind.Splitter:
                 case BehaviorKind.Sorter:
                 case BehaviorKind.Turret:
                     return 0f;
+
                 default:
                     throw new ArgumentOutOfRangeException(nameof(def), def.Behavior,
                         "a new behaviour must declare here whether it animates a work fraction");
@@ -501,96 +514,27 @@ namespace Facet.Core
             return text.Length == 0 ? "none" : text.ToString();
         }
 
-        private static string Glyph(ContentDatabase content, ShapeType shape) => content.Shape(shape).Glyph;
+        /// <summary>0 while a cycle has just begun, 1 as it completes - which is also the readout a parked
+        /// machine shows, since a pipe whose landing belt is blocked sits at 1. A machine with no interval
+        /// shows nothing rather than dividing by zero.</summary>
+        private static float Fraction(float cooldown, float interval)
+            => interval > 0f ? 1f - cooldown / interval : 0f;
 
-        /// <summary>A recipe's yield counted out in a sentence: the shape is spelled as a word, so a count
-        /// above one is said as "2 x ...".</summary>
-        private static string Repeat(string text, int count)
-            => count <= 1 ? text : count + " x " + text;
+        /// <summary>The share of full damage a round does to an enemy it does not match, as the catalogue
+        /// says it: read from the balance constant so a retune moves this sentence too.</summary>
+        private static string ResistShare()
+            => (Balance.ResistantDamageMultiplier * 100f).ToString("0.#") + "%";
+
+        /// <summary>What a cutter is holding back: the pending pieces, said in one phrase.</summary>
+        private static string Held(in MachineState state)
+        {
+            if (state.OutputCount > 0 && state.OutputCount2 > 0)
+                return state.OutputShape.Describe() + " and " + state.OutputShape2.Describe();
+
+            return (state.OutputCount > 0 ? state.OutputShape : state.OutputShape2).Describe();
+        }
 
         private static int Percent(float fraction)
             => (int)MathF.Round(fraction * 100f, MidpointRounding.AwayFromZero);
-
-        /// <summary>The recipes a machine runs: its one named recipe, or - naming none - every recipe in
-        /// the table with its behaviour's input count, so a converter's lines never quote the fuse and an
-        /// assembler's never quote a split.</summary>
-        private static IEnumerable<RecipeDef> RecipesFor(ContentDatabase content, MachineDef def)
-        {
-            if (!def.RecipeId.IsNone)
-            {
-                yield return content.Recipe(def.RecipeId);
-                yield break;
-            }
-
-            bool twoInput = def.Behavior == BehaviorKind.Assembler;
-            foreach (RecipeDef recipe in content.Recipes)
-                if (recipe != null && recipe.IsTwoInput == twoInput) yield return recipe;
-        }
-
-        /// <summary>What a converter or assembler eats, spelled for a sentence: every input of every
-        /// recipe it runs, duplicates dropped, joined with " or ".</summary>
-        private static string Diet(ContentDatabase content, in MachineDef def)
-        {
-            var text = new StringBuilder();
-            foreach (RecipeDef recipe in RecipesFor(content, def))
-            {
-                AppendDietShape(text, Glyph(content, recipe.Input));
-                if (recipe.Input2 != ShapeType.None)
-                    AppendDietShape(text, Glyph(content, recipe.Input2));
-            }
-
-            return text.ToString();
-        }
-
-        private static void AppendDietShape(StringBuilder text, string glyph)
-        {
-            if (("; " + text + "; ").Contains("; " + glyph + "; ")) return;
-            if (text.Length > 0) text.Append(" or ");
-            text.Append(glyph);
-        }
-
-        /// <summary>What a turret eats, spelled for a sentence: its diet's shapes joined with " or ".</summary>
-        private static string AmmoDiet(ContentDatabase content, TurretDef spec)
-        {
-            var text = new StringBuilder();
-            foreach (AmmoDef ammo in spec.AmmoTypes)
-            {
-                if (ammo == null) continue;
-                if (text.Length > 0) text.Append(" or ");
-                text.Append(Glyph(content, ammo.Shape));
-            }
-
-            return text.ToString();
-        }
-
-        /// <summary>The damage floor and ceiling across a turret's diet, for its stats line.</summary>
-        private static void DamageRange(TurretDef spec, out float min, out float max)
-        {
-            min = float.MaxValue;
-            max = float.MinValue;
-            foreach (AmmoDef ammo in spec.AmmoTypes)
-            {
-                if (ammo == null) continue;
-                if (ammo.Damage < min) min = ammo.Damage;
-                if (ammo.Damage > max) max = ammo.Damage;
-            }
-        }
-
-        /// <summary>One value read off every recipe a machine runs, duplicates dropped, joined with
-        /// " / " - so two recipes at the shipped 1.5 s read "1.5", and a retune of one reads "1.5 / 2".</summary>
-        private static string Distinct(ContentDatabase content, in MachineDef def,
-            Func<RecipeDef, string> field)
-        {
-            var seen = new StringBuilder();
-            foreach (RecipeDef recipe in RecipesFor(content, def))
-            {
-                string value = field(recipe);
-                if ((", " + seen + ", ").Contains(", " + value + ", ")) continue;
-                if (seen.Length > 0) seen.Append(" / ");
-                seen.Append(value);
-            }
-
-            return seen.ToString();
-        }
     }
 }

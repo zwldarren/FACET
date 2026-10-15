@@ -72,15 +72,23 @@ namespace Facet.EditorTools
             set => SessionState.SetInt(BrushKey, (int)value);
         }
 
-        /// <summary>The mineral the ore brush paints. Read back through <c>IsShape</c> for the same reason the
-        /// brush is read back through the array: session state outlives a recompile, and a shape the enum no
-        /// longer has would be a brush that refuses to paint without saying why.</summary>
-        private static ShapeType Ore
+        /// <summary>
+        /// The mineral the ore brush paints. Read back against the algebra's own minerals for the same reason
+        /// the brush is read back through the array: session state outlives a recompile, and a value the enum
+        /// no longer has would be a brush that refuses to paint without saying why.
+        ///
+        /// <b>The ordinals are not the retired <c>ShapeType</c>'s</b>, and the session key is older than the
+        /// rework that replaced it: a session that last held <c>HalfCircle</c> (2) would read as
+        /// <see cref="Quad.Square"/> and paint the wrong mineral into the map one stroke at a time, and one
+        /// that last held <c>Square</c> (3) would read as a mineral the algebra does not define at all. Both
+        /// are rejected here rather than trusted, so a stale session falls back to the circle.
+        /// </summary>
+        private static Quad Ore
         {
             get
             {
-                var stored = (ShapeType)SessionState.GetInt(OreKey, (int)ShapeType.Circle);
-                return stored.IsShape() ? stored : ShapeType.Circle;
+                var stored = (Quad)SessionState.GetInt(OreKey, (int)Quad.Circle);
+                return stored == Quad.Circle || stored == Quad.Square ? stored : Quad.Circle;
             }
             set => SessionState.SetInt(OreKey, (int)value);
         }
@@ -356,8 +364,8 @@ namespace Facet.EditorTools
 
             // The mineral only means something while the ore brush is in hand, so it appears with it.
             if (Brush == MapBrush.Ore)
-                Ore = (ShapeType)EditorGUILayout.EnumPopup(MapPainting.MineralLabel, Ore,
-                    MapPainting.ShapeChoices, false,
+                Ore = (Quad)EditorGUILayout.EnumPopup(MapPainting.MineralLabel, Ore,
+                    MapPainting.MineralChoices, false,
                     GUILayout.Width(150f));
 
             GUILayout.FlexibleSpace();

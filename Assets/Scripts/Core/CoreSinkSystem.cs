@@ -46,11 +46,11 @@ namespace Facet.Core
         private void TrySink(Int2 cell)
         {
             if (!_belts.TryGet(cell, out BeltState belt)) return;
-            if (belt.Jammed || belt.Item == ShapeType.None || belt.Progress < 1f) return;
+            if (belt.Jammed || belt.Item.IsEmpty || belt.Progress < 1f) return;
             if (_grid.Get(cell + belt.Direction.Offset()) != TileKind.Core) return;
 
-            _belts.TryTakeItem(cell, out ShapeType shape);
-            if (shape == ShapeType.Circle)
+            _belts.TryTakeItem(cell, out Shape shape);
+            if (shape == Shape.Full(Quad.Circle))
             {
                 _economy.Bank(1);
                 _events.Banked(cell);

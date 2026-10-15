@@ -10,8 +10,8 @@ namespace Facet.Core
         /// <summary>Which way items leave this cell.</summary>
         public Dir Direction;
 
-        /// <summary>Shape riding this cell, or <see cref="ShapeType.None"/>.</summary>
-        public ShapeType Item;
+        /// <summary>Shape riding this cell, or nothing.</summary>
+        public Shape Item;
 
         /// <summary>0 at the cell's entry edge, 1 at its exit edge. Sits at 1 while queued.</summary>
         public float Progress;
@@ -19,16 +19,18 @@ namespace Facet.Core
         /// <summary>Where the item was at the end of the previous tick, for view interpolation.</summary>
         public Vec2 PreviousWorldPosition;
 
-        /// <summary>A jammed cell freezes its item and refuses anything from upstream.</summary>
+        /// <summary>A jammed cell freezes its item and refuses anything from upstream. Only a machine whose
+        /// diet refuses an item jams a belt - see <see cref="MachineDef.Diet"/> - so a jam is always the
+        /// answer to "what did I feed that thing".</summary>
         public bool Jammed;
 
-        public bool HasItem => Item != ShapeType.None;
+        public bool HasItem => !Item.IsEmpty;
     }
 
     /// <summary>One item, flattened for the view layer.</summary>
     public struct ItemSnapshot
     {
-        public ShapeType Shape;
+        public Shape Shape;
         public Vec2 PreviousPosition;
         public Vec2 Position;
     }
@@ -184,35 +186,35 @@ namespace Facet.Core
             int i = _grid.Index(cell);
             if (_state[i].Jammed) JamCount--;
             _state[i].Jammed = false;
-            _state[i].Item = ShapeType.None;
+            _state[i].Item = Shape.None;
             _state[i].Progress = 0f;
             Revision++;
             _events.JamCleared(cell);
             return true;
         }
 
-        /// <summary>Take the item off a cell and keep the belt - how a turret eats and a decomposer takes
+        /// <summary>Take the item off a cell and keep the belt - how a turret eats and an operator takes
         /// its delivery: the machine consumes the delivery and the line carries on. The caller decides
         /// whether the shape was right; this only moves it.</summary>
-        public bool TryTakeItem(Int2 cell, out ShapeType shape)
+        public bool TryTakeItem(Int2 cell, out Shape shape)
         {
-            shape = ShapeType.None;
+            shape = Shape.None;
             if (!Has(cell)) return false;
 
             int i = _grid.Index(cell);
             if (!_state[i].HasItem || _state[i].Jammed) return false;
 
             shape = _state[i].Item;
-            _state[i].Item = ShapeType.None;
+            _state[i].Item = Shape.None;
             _state[i].Progress = 0f;
             return true;
         }
 
         /// <summary>Drop an item onto an empty, unjammed belt cell. Drills use this; so do the tests,
         /// which is why it is not gated behind anything.</summary>
-        public bool TrySpawnItem(Int2 cell, ShapeType shape)
+        public bool TrySpawnItem(Int2 cell, Shape shape)
         {
-            if (shape == ShapeType.None || !Has(cell)) return false;
+            if (shape.IsEmpty || !Has(cell)) return false;
 
             int i = _grid.Index(cell);
             if (_state[i].Jammed || _state[i].HasItem) return false;
@@ -287,7 +289,7 @@ namespace Facet.Core
                 _state[n].Progress = 0f;
                 _state[n].PreviousWorldPosition = _state[i].PreviousWorldPosition;
 
-                _state[i].Item = ShapeType.None;
+                _state[i].Item = Shape.None;
                 _state[i].Progress = 0f;
             }
         }

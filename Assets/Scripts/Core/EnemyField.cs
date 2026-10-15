@@ -8,7 +8,10 @@ namespace Facet.Core
     {
         public int Id;
         public EnemyKind Kind;
-        public ShapeType Weakness;
+
+        /// <summary>What kills it, assigned by the wave at spawn rather than by its kind: the generator
+        /// draws a demand per group, so the same archetype asks a different question every wave.</summary>
+        public Shape Weakness;
         public float Hp;
         public float MaxHp;
         public Vec2 Position;
@@ -30,7 +33,7 @@ namespace Facet.Core
     {
         public int Id;
         public EnemyKind Kind;
-        public ShapeType Weakness;
+        public Shape Weakness;
         public Vec2 PreviousPosition;
         public Vec2 Position;
         public float HealthFraction;
@@ -129,12 +132,19 @@ namespace Facet.Core
             _nextId = 1;
         }
 
-        /// <summary>Create one enemy. Returns its id, which is what shots home in on. The field is synced
-        /// here rather than trusted to have been stepped this tick: a spawner outside the tick - a test,
-        /// mostly - can place a building and spawn in the same breath, and the flanking judgement
-        /// (<see cref="EnemyState.AvoidsFire"/>) must read the ground as it stands. Sync is a no-op when
-        /// nothing changed.</summary>
-        public int Spawn(EnemyKind kind, Vec2 position)
+        /// <summary>Create one enemy, weak to <paramref name="weakness"/>. Returns its id, which is what
+        /// shots home in on. The field is synced here rather than trusted to have been stepped this tick: a
+        /// spawner outside the tick - a test, mostly - can place a building and spawn in the same breath,
+        /// and the flanking judgement (<see cref="EnemyState.AvoidsFire"/>) must read the ground as it
+        /// stands. Sync is a no-op when nothing changed.
+        ///
+        /// <paramref name="weakness"/> must not be <see cref="Shape.None"/>: under exact-identity damage an
+        /// enemy nothing matches takes a quarter damage from every round and can never be killed
+        /// efficiently - a silent trap rather than a loud one. Every shipped path is safe (the generator
+        /// never draws an empty demand, and <see cref="MapValidation"/> names an authored group that names
+        /// none); this note is here because a new call site that forgets the argument gets
+        /// <c>default(Shape)</c> for free.</summary>
+        public int Spawn(EnemyKind kind, Vec2 position, Shape weakness)
         {
             if (_count == _enemies.Length)
             {
@@ -150,7 +160,7 @@ namespace Facet.Core
             {
                 Id = id,
                 Kind = kind,
-                Weakness = spec.Weakness,
+                Weakness = weakness,
                 Hp = spec.Hp,
                 MaxHp = spec.Hp,
                 Position = position,
@@ -433,37 +443,20 @@ namespace Facet.Core
 
             return from;
         }
-        /// <summary>Hits one enemy for what the shot is worth against it: ammunition matching the enemy's
-        /// weakness lands its full damage, anything else a quarter. So a turret's damage is what it does to
-        /// the enemy it was built for, not a flat rate against the roster, and the diet table and
-        /// <see cref="EnemyDef.Weakness"/> are a real choice rather than a label on the card.</summary>
-        public void ApplyDamage(int id, float baseDamage, ShapeType ammo)
+        /// <summary>Hits one enemy for what the shot is worth against it: a round matching the enemy's
+        /// weakness lands its full damage, anything else a quarter. So a gun's damage is what the round it
+        /// was fed does to the enemy it was aimed at, and the briefing's demand shape is a real decision
+        /// rather than a label on the card.</summary>
+        public void ApplyDamage(int id, float baseDamage, Shape ammo)
         {
             if (!_slotById.TryGetValue(id, out int slot)) return;
             ApplyDamageAtSlot(slot, baseDamage, ammo);
         }
 
-        /// <summary>Hits every enemy within <paramref name="radius"/> of <paramref name="centre"/> for what
-        /// the shell is worth against each of them: a bursting shot pays one item for the whole pack, and
-        /// weakness is answered per enemy caught, not per shell. Walked backwards, because a kill
-        /// reorders the array (RemoveAt swaps the last into the gap) and a forward walk would skip the
-        /// enemy swapped into a slot already visited.</summary>
-        public void ApplyDamageInRadius(Vec2 centre, float radius, float baseDamage, ShapeType ammo)
+        private void ApplyDamageAtSlot(int slot, float baseDamage, Shape ammo)
         {
-            float radiusSq = radius * radius;
-            for (int i = _count - 1; i >= 0; i--)
-            {
-                Vec2 delta = _enemies[i].Position - centre;
-                if (delta.X * delta.X + delta.Y * delta.Y > radiusSq) continue;
-                ApplyDamageAtSlot(i, baseDamage, ammo);
-            }
-        }
-
-        private void ApplyDamageAtSlot(int slot, float baseDamage, ShapeType ammo)
-        {
-            // Weakness is structural: a shape matches when it IS the enemy's weakness or when its
-            // structure contains every mineral - the composite, which no enemy resists.
-            float damage = baseDamage * (ammo == _enemies[slot].Weakness || _content.Shape(ammo).MatchesAnyWeakness
+            // Weakness is exact identity now: the round is the shape the briefing named, or it is not.
+            float damage = baseDamage * (ammo == _enemies[slot].Weakness
                 ? Balance.WeaknessDamageMultiplier
                 : Balance.ResistantDamageMultiplier);
 
@@ -497,7 +490,7 @@ namespace Facet.Core
         /// can still scratch is in range, because a resisted shot is some damage and a held one is none. Ties
         /// go to the lower slot, so which of two equidistant enemies it picks is a function of the map state,
         /// not the caller. False when nothing is in range, in which case the outputs are unusable.</summary>
-        public bool TryFindPreferred(Vec2 centre, float range, ShapeType ammo, out int id, out Vec2 position)
+        public bool TryFindPreferred(Vec2 centre, float range, Shape ammo, out int id, out Vec2 position)
         {
             float bestSq = range * range;
             float bestWeakSq = range * range;

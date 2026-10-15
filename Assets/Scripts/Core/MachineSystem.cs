@@ -43,14 +43,15 @@ namespace Facet.Core
             _content = content ?? throw new ArgumentNullException(nameof(content));
             _events = events ?? throw new ArgumentNullException(nameof(events));
 
-            _byBehavior = new IMachineBehavior[Enum.GetValues(typeof(BehaviorKind)).Length];
+            _byBehavior = EnumTable.Create<BehaviorKind, IMachineBehavior>();
             _byBehavior[(int)BehaviorKind.Drill] = new DrillBehavior();
-            _byBehavior[(int)BehaviorKind.Converter] = new ConverterBehavior();
+            _byBehavior[(int)BehaviorKind.Cutter] = new CutterBehavior();
+            _byBehavior[(int)BehaviorKind.Rotator] = new RotatorBehavior();
+            _byBehavior[(int)BehaviorKind.Stacker] = new StackerBehavior();
             _byBehavior[(int)BehaviorKind.Pipe] = new PipeBehavior();
             _byBehavior[(int)BehaviorKind.Splitter] = new SplitterBehavior();
             _byBehavior[(int)BehaviorKind.Sorter] = new SorterBehavior();
             _byBehavior[(int)BehaviorKind.Turret] = new TurretBehavior();
-            _byBehavior[(int)BehaviorKind.Assembler] = new AssemblerBehavior();
 
             // A content row asking for an unregistered behaviour would build and silently do nothing.
             // Refuse to start instead: register new behaviours above and no call site must remember this.

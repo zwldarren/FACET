@@ -52,6 +52,18 @@ namespace Facet.Core
 
         /// <summary>Two ore entries naming one cell, of which only the first one counts.</summary>
         DuplicateOre = 14,
+
+        /// <summary>A wave group naming no weakness shape, so no round can ever match it and the wave is
+        /// only killable at a quarter damage.</summary>
+        GroupWithoutDemand = 15,
+
+        /// <summary>A wave group whose weakness shape this map's minerals and unlocked operators cannot
+        /// build, which is the same unwinnable wave as naming none - and just as invisible at runtime.</summary>
+        DemandNotBuildable = 16,
+
+        /// <summary>The generator is asked for waves but no vein yields a mineral, so the closure it draws
+        /// its demands from is empty and every generated wave arrives with nothing in it.</summary>
+        GeneratorWithoutMineral = 17,
     }
 
     /// <summary>One problem found in a map, with the sentence a designer can act on.</summary>
@@ -194,7 +206,7 @@ namespace Facet.Core
             for (int p = 0; p < map.Patches.Length; p++)
             {
                 ShapePatch patch = map.Patches[p];
-                if (!patch.Shape.IsShape())
+                if (patch.Mineral == Quad.Empty)
                 {
                     into.Add(new MapProblem(MapProblemKind.PatchWithoutMineral, patch.Origin,
                         map.Name + ": a shape patch at " + patch.Origin + " yields no mineral"));
@@ -250,11 +262,29 @@ namespace Facet.Core
                     map.Name + ": no entry points, so no wave can walk in"));
             }
 
-            if (map.Waves.Length == 0)
+            // A map with no authored waves is legitimate now: the wave generator replaces the hand-written
+            // table, and a map that hands the whole run to it (or to it after a scripted opening) says so
+            // with <see cref="MapDefinition.GeneratedWaves"/>. What is still a mistake is a map with
+            // neither - it can never be cleared and never ends.
+            if (map.Waves.Length == 0 && !map.GeneratesWaves)
             {
                 into.Add(new MapProblem(MapProblemKind.NoWaves, NoCell,
-                    map.Name + ": no waves, so the map can never be cleared"));
+                    map.Name + ": no waves and no generator, so the map can never be cleared"));
             }
+            else if (map.GeneratesWaves && map.MineralList().Length == 0)
+            {
+                // The generator roots its pool at the map's veins, so a map that mines nothing has an empty
+                // closure: every generated wave would be built out of nothing and arrive empty, which ends a
+                // bounded run without a fight and never ends an endless one.
+                into.Add(new MapProblem(MapProblemKind.GeneratorWithoutMineral, NoCell,
+                    map.Name + ": the generator runs but no vein names a mineral, so it has nothing to " +
+                    "demand and every generated wave arrives empty"));
+            }
+
+            // The hand-authored table is the one entrance the closure does not guard: ShapePool keeps the
+            // generator honest, but a designer naming an item the map cannot build ships a wave nothing can
+            // answer. Built once, and only when some group actually names a demand.
+            ShapePool pool = null;
 
             for (int w = 0; w < map.Waves.Length; w++)
             {
@@ -268,6 +298,29 @@ namespace Facet.Core
                 for (int g = 0; g < wave.Groups.Length; g++)
                 {
                     SpawnGroup group = wave.Groups[g];
+                    if (group.Weakness.IsEmpty)
+                    {
+                        into.Add(new MapProblem(MapProblemKind.GroupWithoutDemand, NoCell,
+                            map.Name + ": wave " + (w + 1) + "'s group of " + group.Count + " " +
+                            group.Kind + " names no weakness shape, so nothing can ever match it"));
+                    }
+                    else
+                    {
+                        // Asked of a map that mines something: a map with no vein at all can build nothing, so
+                        // every demand in it is unbuildable and the report would be one copy of the same
+                        // sentence per group - about the map, not about the wave. What this rule is for is a
+                        // designer naming an item the map's own minerals and operators do not reach, which is
+                        // exactly as unwinnable and much harder to see.
+                        pool ??= map.Pool();
+                        if (pool.Minerals.Count > 0 && !pool.CanProduce(group.Weakness))
+                        {
+                            into.Add(new MapProblem(MapProblemKind.DemandNotBuildable, NoCell,
+                                map.Name + ": wave " + (w + 1) + "'s group of " + group.Count + " " +
+                                group.Kind + " is weak to " + group.Weakness.Describe() + ", which this " +
+                                "map's minerals and unlocked operators cannot build"));
+                        }
+                    }
+
                     if (group.SpawnPoint >= 0 && group.SpawnPoint < map.SpawnPoints.Length) continue;
 
                     into.Add(new MapProblem(MapProblemKind.GroupAtMissingDoor, NoCell,

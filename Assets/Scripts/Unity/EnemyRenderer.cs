@@ -12,11 +12,12 @@ namespace Facet.Game
     ///
     /// Two art rules land here: "colour says which side it is on, polygon count says how damaged it is"
     /// - the body is a 3..6-sided polygon losing a side per health chunk, with the four bodies cached -
-    /// and every enemy wears its own weakness as an icon in the exact colour that ammo rides the belts.
+    /// and every enemy wears the round its own group demands as a quadrant figure in the mineral colours,
+    /// so what the briefing asked for and what the walker wants are the same picture.
     ///
-    /// The body and weakness icon may each be overridden from the Palette's <see cref="Palette.Visuals"/>:
-    /// a body override replaces the health-shaped polygon for that kind, and the icon follows the same
-    /// shape override the belt items use, so the two keep reading as one shape.
+    /// The body and weakness figure may each be overridden from the Palette's <see cref="Palette.Visuals"/>:
+    /// a body override replaces the health-shaped polygon for that kind, and the figure follows the same
+    /// per-mineral override the belt items use, so the two keep reading as one item.
     ///
     /// It is also the first consumer of the simulation's event stream: a shot flashes the enemy it hit,
     /// and a kill leaves an expanding ring. Both come off <see cref="SimWorld.Events"/> - the simulation
@@ -56,7 +57,7 @@ namespace Facet.Game
             for (int sides = 3; sides <= 6; sides++)
                 _bodies[sides - 3] = ProcMesh.RegularPolygon(sides, Colors.Enemies.BodyRadius, 90f);
 
-            // One style per kind, not one for the field: the Bulwark's override must not leak onto the Spike.
+            // One style per kind, not one for the field: the Tank's override must not leak onto the Runner.
             var kinds = (EnemyKind[])Enum.GetValues(typeof(EnemyKind));
             _styles = new VisualStyle[kinds.Length];
             _points = new Vector2[kinds.Length][];
@@ -66,8 +67,9 @@ namespace Facet.Game
                 _points[(int)kind] = VisualShapes.Points(_styles[(int)kind], Colors.CircleSides);
             }
 
-            // Same shape override as the belt items, so a weakness icon and the ammo that counters it read
-            // as the same shape; no outline, since an outlined shape inside an outlined body is noise.
+            // Same per-mineral override as the belt items, so a weakness figure and the round that
+            // counters it read as the same item; no outline, since an outlined figure inside an outlined
+            // body is noise.
             _weakness = Colors.ShapeIcons(Colors.Enemies.WeaknessRadius, 0f);
 
             _nextWaveSpawns = new bool[World.Map.SpawnPoints.Length];

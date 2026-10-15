@@ -8,8 +8,14 @@ namespace Facet.Tests
     /// <summary>
     /// The content table, unit-tested where the shipped numbers used to be a pile of statics. "What
     /// exists" is data: every kind the enums name must have a row, and a lookup for something that is
-    /// not a turret must fail loudly rather than quietly answering "turret". The old <see cref="Balance"/>
-    /// facade over this table is gone - the pins below read <see cref="Default"/> directly.
+    /// not a turret must fail loudly rather than quietly answering "turret".
+    ///
+    /// The rework removed three tables from this one - the recipe rows, the ammo rows and the shape rows.
+    /// Processing is an operator, so there is no recipe to name; a turret's chamber is universal, so there
+    /// is no diet to satisfy; and the item space is the algebra's fixed eighty, so a table of shape rows
+    /// would be a second, driftable statement of it. What is left is machines, guns and enemy
+    /// <em>archetypes</em> - an enemy has no weakness of its own any more, because a wave assigns one per
+    /// group.
     /// </summary>
     public class ContentDatabaseTests
     {
@@ -28,54 +34,65 @@ namespace Facet.Tests
                 // A sorter's whole job is the filter, so a row naming the behaviour without one would
                 // route nothing anywhere - a data error worth catching here rather than in a player's line.
                 if (def.Behavior == BehaviorKind.Sorter)
-                    Assert.IsTrue(def.Filter.IsShape(), kind + " is a sorter with no filter shape");
+                    Assert.IsFalse(def.Filter.IsNone, kind + " is a sorter with no filter at all");
             }
         }
 
         [Test]
-        public void TheShippedSorter_SendsCirclesTheWayItFaces()
+        public void TheShippedSorter_SendsAnythingWithACircleInIt_TheWayItFaces()
         {
-            // The shipped filter is the money shape, the split an opening wants: face the Core and the
-            // circles bank while everything else carries on down the line.
+            // The shipped filter is the money rule - "anything with a circle in it" - which is what an
+            // opening wants: face the Core and every circle-bearing item banks while the rest carries on
+            // down the line. One rule covers fifty mixed items, which is why the filter is a mineral
+            // predicate rather than a list of exact shapes.
             MachineDef sorter = Content.Machine(BuildKind.Sorter);
 
             Assert.AreEqual(BehaviorKind.Sorter, sorter.Behavior);
             Assert.AreEqual(TileKind.Sorter, sorter.Tile);
-            Assert.AreEqual(ShapeType.Circle, sorter.Filter);
+            Assert.AreEqual(FilterMode.Mineral, sorter.Filter.Mode);
+            Assert.AreEqual(Quad.Circle, sorter.Filter.Mineral);
+            Assert.IsTrue(sorter.Filter.Matches(Sim.TopHalfCircle), "a half-circle bears a circle");
+            Assert.IsFalse(sorter.Filter.Matches(Sim.Square), "a square does not");
         }
 
         [Test]
-        public void EveryEnemyKind_AndEveryShape_HasADefinition()
+        public void EveryEnemyKind_HasAnArchetype_AndNoWeaknessOfItsOwn()
         {
+            var seen = new HashSet<EnemyKind>();
+
             foreach (EnemyKind kind in (EnemyKind[])Enum.GetValues(typeof(EnemyKind)))
             {
                 EnemyDef def = Content.Enemy(kind);
                 Assert.AreEqual(kind, def.Kind);
-                Assert.IsTrue(def.Weakness.IsShape(), kind + " has no weakness shape");
+                Assert.IsFalse(string.IsNullOrEmpty(def.Name), kind + " has no name to print");
+                Assert.IsTrue(seen.Add(kind), kind + " is defined twice");
             }
 
-            foreach (ShapeType shape in (ShapeType[])Enum.GetValues(typeof(ShapeType)))
-            {
-                ShapeDef def = Content.Shape(shape);
-                Assert.AreEqual(shape, def.Shape);
-                Assert.IsFalse(string.IsNullOrEmpty(def.Glyph), shape + " has no glyph");
-            }
+            Assert.AreEqual(2, seen.Count,
+                "two archetypes are enough for v1: a fast fragile one and a slow heavy one");
+
+            // What kills an enemy is not a fact about its kind any more: the same archetype demands a
+            // different item every wave, so the demand is a field of the spawn and of the wave group - and
+            // there is deliberately no default for it, because a group with no demand can never be matched.
+            Assert.IsNull(typeof(EnemyDef).GetField("Weakness"),
+                "a weakness on the definition would make every wave of that kind the same puzzle again");
+
+            // The item space has no rows either: it is the algebra's fixed eighty.
+            Assert.AreEqual(80, ShapePool.All.Count, "the table of shapes is the algebra itself");
         }
 
         [Test]
         public void Turrets_AreFoundByIdentity_NotByOrdinalArithmetic()
         {
-            Assert.IsTrue(Content.IsTurret(BuildKind.Cannon));
-            Assert.AreEqual(BuildKind.Cannon, Content.Turret(BuildKind.Cannon).Build);
-            Assert.IsTrue(Content.IsTurret(BuildKind.Mortar), "the second gun is a turret too");
-            Assert.AreEqual(BuildKind.Mortar, Content.Turret(BuildKind.Mortar).Build);
+            Assert.IsTrue(Content.IsTurret(BuildKind.Turret));
+            Assert.AreEqual(BuildKind.Turret, Content.Turret(BuildKind.Turret).Build);
 
             // The old convention answered "turret" for anything it did not recognise, and read a spec by
-            // subtracting Cannon's ordinal. Neither is possible now: a non-turret is a hard failure, and
+            // subtracting a kind's ordinal. Neither is possible now: a non-turret is a hard failure, and
             // which kinds are turrets comes from the table, not a list of names.
             foreach (BuildKind kind in (BuildKind[])Enum.GetValues(typeof(BuildKind)))
             {
-                bool expected = kind == BuildKind.Cannon || kind == BuildKind.Mortar;
+                bool expected = kind == BuildKind.Turret;
                 Assert.AreEqual(expected, Content.IsTurret(kind), kind + " turret-ness");
                 if (!expected) Assert.Throws<ArgumentOutOfRangeException>(() => Content.Turret(kind));
             }
@@ -84,9 +101,11 @@ namespace Facet.Tests
         [Test]
         public void UnknownLookups_Throw_InsteadOfReturningADefault()
         {
-            Assert.Throws<ArgumentOutOfRangeException>(() => Content.Recipe(new ContentId("no-such-recipe")));
             Assert.Throws<ArgumentOutOfRangeException>(() => Content.Machine((BuildKind)200));
             Assert.Throws<ArgumentOutOfRangeException>(() => Content.Enemy((EnemyKind)200));
+            Assert.Throws<ArgumentOutOfRangeException>(() => Content.Turret(BuildKind.Drill));
+            Assert.Throws<ArgumentOutOfRangeException>(() => Content.Machine(new ContentId("no-such-machine")));
+            Assert.Throws<ArgumentOutOfRangeException>(() => Content.Enemy(new ContentId("no-such-enemy")));
         }
 
         [Test]
@@ -97,157 +116,179 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void DecomposeRecipe_IsOneCircleIntoTwoHalves()
+        public void EveryEatingMachine_EatsAnything_UnlessItsRowSaysOtherwise()
         {
-            RecipeDef recipe = Content.Recipe(ContentDatabase.DecomposeRecipeId);
+            // The rework's jam rule: the pressure moved from "never land the wrong item" to "make the item
+            // the briefing asked for", so every shipped machine that eats has a diet of anything and
+            // nothing in the shipped game jams. The rule is still a content field - a table may narrow one,
+            // and CustomContentTests proves that it bites - but the shipped answer is stated here so a row
+            // that quietly acquires a diet is a red test.
+            foreach (BuildKind kind in Content.BuildKinds)
+            {
+                MachineDef def = Content.Machine(kind);
+                if (def.Behavior == BehaviorKind.None)
+                {
+                    Assert.IsTrue(def.Diet.IsNone,
+                        kind + " has no behaviour, so it eats nothing at all");
+                    continue;
+                }
 
-            Assert.AreEqual(ShapeType.Circle, recipe.Input);
-            Assert.AreEqual(1, recipe.InputCount);
-            Assert.AreEqual(ShapeType.HalfCircle, recipe.Output);
-            Assert.AreEqual(2, recipe.OutputCount);
-            Assert.AreEqual(1.5f, recipe.Interval, Sim.Tol);
-            Assert.AreEqual(4, recipe.Buffer);
+                Assert.AreEqual(FilterMode.Any, def.Diet.Mode,
+                    kind + " eats, so its diet is anything a belt can carry");
+                Assert.IsTrue(def.Diet.Matches(Sim.Circle) && def.Diet.Matches(Sim.Composite),
+                    kind + " refuses nothing");
+            }
+        }
 
-            // The converter names no recipe - it runs them all, the delivered shape picking - and the
-            // drill mines an interval, not a recipe.
-            Assert.IsTrue(Content.Machine(BuildKind.Decomposer).RecipeId.IsNone);
-            Assert.AreSame(recipe,
-                Content.RecipeForInput(Content.Machine(BuildKind.Decomposer), ShapeType.Circle));
-            Assert.AreEqual(BehaviorKind.Converter, Content.Machine(BuildKind.Decomposer).Behavior);
-            Assert.AreEqual(BehaviorKind.Drill, Content.Machine(BuildKind.Drill).Behavior);
-            Assert.AreEqual(BehaviorKind.None, Content.Machine(BuildKind.Belt).Behavior,
-                "a belt is not a machine behaviour; it lives on the belt layer");
+        [Test]
+        public void TheThreeOperators_RequireTheirOwnUnlock_AndNothingElseDoes()
+        {
+            // The unlock ladder (§7) needs no separate table of "which machine does this map allow": the
+            // machine that IS an operator requires it, and every other building is scaffolding.
+            Assert.AreEqual(Operators.Cutter, Content.Machine(BuildKind.Cutter).Requires);
+            Assert.AreEqual(Operators.Rotator, Content.Machine(BuildKind.Rotator).Requires);
+            Assert.AreEqual(Operators.Stacker, Content.Machine(BuildKind.Stacker).Requires);
+
+            foreach (BuildKind kind in Content.BuildKinds)
+            {
+                if (kind == BuildKind.Cutter || kind == BuildKind.Rotator || kind == BuildKind.Stacker) continue;
+
+                Assert.AreEqual(Operators.None, Content.Machine(kind).Requires,
+                    kind + " is scaffolding: it needs no operator unlocked");
+            }
         }
 
         [Test]
         public void ShippedNumbers_AreTheOnesTheDesignWasBalancedOn()
         {
             // Pinned so a refactor cannot quietly retune the prototype: these are the exact values the
-            // tests' timing (30 ticks per item, 1.5 s per split) was derived from, read straight from the
-            // table now that the Balance facade is gone.
+            // tests' timing (30 ticks per item, 1.5 s per cut, 0.75 s per turn, 2 s per union) was derived
+            // from, read straight from the table.
             Assert.AreEqual(1f, Content.Machine(BuildKind.Drill).Interval, Sim.Tol);
-            Assert.AreEqual(1.5f, Content.Recipe(ContentDatabase.DecomposeRecipeId).Interval, Sim.Tol);
+            Assert.AreEqual(1.5f, Content.Machine(BuildKind.Cutter).Interval, Sim.Tol);
+            Assert.AreEqual(0.75f, Content.Machine(BuildKind.Rotator).Interval, Sim.Tol);
+            Assert.AreEqual(2f, Content.Machine(BuildKind.Stacker).Interval, Sim.Tol);
             Assert.AreEqual(0.25f, Content.Machine(BuildKind.Pipe).Interval, Sim.Tol);
-            Assert.AreEqual(2, Content.Recipe(ContentDatabase.DecomposeRecipeId).OutputCount);
-            Assert.AreEqual(4, Content.Recipe(ContentDatabase.DecomposeRecipeId).Buffer);
 
             Assert.AreEqual(1, Content.Machine(BuildKind.Belt).Cost);
             Assert.AreEqual(10, Content.Machine(BuildKind.Drill).Cost);
-            Assert.AreEqual(15, Content.Machine(BuildKind.Decomposer).Cost);
+            Assert.AreEqual(15, Content.Machine(BuildKind.Cutter).Cost);
+            Assert.AreEqual(10, Content.Machine(BuildKind.Rotator).Cost);
+            Assert.AreEqual(25, Content.Machine(BuildKind.Stacker).Cost);
             Assert.AreEqual(6, Content.Machine(BuildKind.Pipe).Cost);
             Assert.AreEqual(10, Content.Machine(BuildKind.Splitter).Cost);
-            Assert.AreEqual(20, Content.Machine(BuildKind.Cannon).Cost);
             Assert.AreEqual(12, Content.Machine(BuildKind.Sorter).Cost);
-            Assert.AreEqual(30, Content.Machine(BuildKind.Mortar).Cost);
             Assert.AreEqual(2, Content.Machine(BuildKind.Wall).Cost);
+            Assert.AreEqual(20, Content.Machine(BuildKind.Turret).Cost);
 
             // Health is content now: the wall is the pool the siege is balanced against (120 hp is twenty
-            // seconds of chewing for one Spike), and the belt's 0 is what says it is walkable and
+            // seconds of chewing for one Runner), and the belt's 0 is what says it is walkable and
             // untouchable rather than a machine with no health.
             Assert.AreEqual(120f, Content.Machine(BuildKind.Wall).MaxHp, Sim.Tol);
-            Assert.AreEqual(80f, Content.Machine(BuildKind.Cannon).MaxHp, Sim.Tol);
+            Assert.AreEqual(80f, Content.Machine(BuildKind.Turret).MaxHp, Sim.Tol);
             Assert.AreEqual(0f, Content.Machine(BuildKind.Belt).MaxHp, Sim.Tol,
                 "a belt is not a machine and has no health to chew");
 
-            TurretDef cannon = Content.Turret(BuildKind.Cannon);
-            Assert.AreEqual(ShapeType.HalfCircle, cannon.PrimaryAmmo);
-            Assert.AreEqual(1f, cannon.FireInterval, Sim.Tol);
-            Assert.AreEqual(3f, cannon.AmmoFor(ShapeType.HalfCircle).Damage, Sim.Tol);
-            Assert.AreEqual(7f, cannon.Range, Sim.Tol);
-            Assert.AreEqual(14f, cannon.ProjectileSpeed, Sim.Tol);
+            TurretDef turret = Content.Turret(BuildKind.Turret);
+            Assert.AreEqual(4f, turret.Damage, Sim.Tol, "one matched shot is 4 damage");
+            Assert.AreEqual(1f, turret.FireInterval, Sim.Tol);
+            Assert.AreEqual(1f, turret.ShotsPerSecond, Sim.Tol, "exactly one belt's worth");
+            Assert.AreEqual(7f, turret.Range, Sim.Tol);
+            Assert.AreEqual(14f, turret.ProjectileSpeed, Sim.Tol);
 
-            // Both guns also eat the composite: twice the cannon's base damage, never resisted, at a
-            // chain two minerals and an assembler deep.
-            Assert.AreEqual(6f, cannon.AmmoFor(ShapeType.Composite).Damage, Sim.Tol);
+            // There is no ammo table to read a damage out of: what a shot is worth is the round against the
+            // target's demand, and both multipliers live in Balance.
+            Assert.AreEqual(1f, Balance.WeaknessDamageMultiplier, Sim.Tol);
+            Assert.AreEqual(0.25f, Balance.ResistantDamageMultiplier, Sim.Tol);
+            Assert.AreEqual(turret.Damage * Balance.WeaknessDamageMultiplier, turret.Damage, Sim.Tol);
 
-            // The two guns are a pair, not a ladder: the mortar fires two-thirds as often for twice the
-            // damage, and its shell bursts over an area where the cannon's shot answers one enemy.
-            TurretDef mortar = Content.Turret(BuildKind.Mortar);
-            Assert.AreEqual(ShapeType.HalfSquare, mortar.PrimaryAmmo);
-            Assert.AreEqual(1.5f, mortar.FireInterval, Sim.Tol);
-            Assert.AreEqual(cannon.AmmoFor(ShapeType.HalfCircle).Damage * 2f,
-                mortar.AmmoFor(ShapeType.HalfSquare).Damage, Sim.Tol);
-            Assert.AreEqual(10f, mortar.AmmoFor(ShapeType.Composite).Damage, Sim.Tol);
-            Assert.AreEqual(cannon.FireInterval * 1.5f, mortar.FireInterval, Sim.Tol);
-            Assert.Greater(mortar.Range, cannon.Range, "the mortar reaches further");
-            Assert.AreEqual(0f, cannon.SplashRadius, Sim.Tol, "the cannon is the single-target gun");
-            Assert.Greater(mortar.SplashRadius, 0f, "and the mortar is the area one - the role, not a stat");
+            EnemyDef runner = Content.Enemy(EnemyKind.Runner);
+            Assert.AreEqual(6f, runner.Hp, Sim.Tol);
+            Assert.AreEqual(1.5f, runner.Speed, Sim.Tol);
+            Assert.AreEqual(6f, runner.Damage, Sim.Tol);
+            Assert.AreEqual(1.6f, runner.AggroRange, Sim.Tol, "the aggressive scan's reach");
+            Assert.AreEqual(2.5f, runner.DetectionRange, Sim.Tol, "and the range it charges from");
 
-            EnemyDef spike = Content.Enemy(EnemyKind.Spike);
-            Assert.AreEqual(6f, spike.Hp, Sim.Tol);
-            Assert.AreEqual(1.5f, spike.Speed, Sim.Tol);
-            Assert.AreEqual(6f, spike.Damage, Sim.Tol);
-            Assert.AreEqual(ShapeType.HalfCircle, spike.Weakness);
-            Assert.AreEqual(1.6f, spike.AggroRange, Sim.Tol, "the aggressive scan's reach");
-            Assert.AreEqual(2.5f, spike.DetectionRange, Sim.Tol, "and the range it charges from");
-        }
-
-        [Test]
-        public void BisectRecipe_IsOneSquareIntoTwoHalves()
-        {
-            // The second chain is the first one's shape applied to the other mineral - a row, not a
-            // machine: the one decomposer runs both recipes, chosen by what is fed to it. Pinned so the
-            // two cannot drift apart.
-            RecipeDef decom = Content.Recipe(ContentDatabase.DecomposeRecipeId);
-            RecipeDef bisect = Content.Recipe(ContentDatabase.BisectRecipeId);
-
-            Assert.AreEqual(ShapeType.Square, bisect.Input);
-            Assert.AreEqual(ShapeType.HalfSquare, bisect.Output);
-            Assert.AreEqual(decom.InputCount, bisect.InputCount);
-            Assert.AreEqual(decom.OutputCount, bisect.OutputCount);
-            Assert.AreEqual(decom.Interval, bisect.Interval, Sim.Tol);
-            Assert.AreEqual(decom.Buffer, bisect.Buffer);
-
-            // One converter, both recipes: the decomposer names no recipe and the delivered shape picks.
-            MachineDef decomposer = Content.Machine(BuildKind.Decomposer);
-            Assert.AreEqual(BehaviorKind.Converter, decomposer.Behavior);
-            Assert.IsTrue(decomposer.RecipeId.IsNone,
-                "the decomposer runs every recipe in the table - there is no second splitter machine");
-            Assert.AreSame(decom, Content.RecipeForInput(decomposer, ShapeType.Circle));
-            Assert.AreSame(bisect, Content.RecipeForInput(decomposer, ShapeType.Square));
-            Assert.IsNull(Content.RecipeForInput(decomposer, ShapeType.HalfCircle),
-                "a split shape has no recipe - feeding one back is the wrong-shape jam");
-
-            // And the minerals are distinct, or the two chains would be one line drawn twice.
-            Assert.AreNotEqual(decom.Input, bisect.Input);
-            Assert.AreNotEqual(decom.Output, bisect.Output);
+            EnemyDef tank = Content.Enemy(EnemyKind.Tank);
+            Assert.AreEqual(runner.Hp, tank.Hp, Sim.Tol, "the deep demand's archetype is the same health");
+            Assert.Less(tank.Speed, runner.Speed, "but it walks slower");
+            Assert.Greater(tank.Damage, runner.Damage, "and hits the Core harder");
+            Assert.Greater(tank.DetectionRange, runner.DetectionRange,
+                "and notices defences further out, so what stands in its way has to hurt it");
         }
 
         [Test]
         public void ATableIsNotASingleton_ACustomOneIsHonoured()
         {
             // The seam the whole layer exists for: a world can be handed a different table and get a
-            // different, reproducible game. Here the cannon costs more and hits harder.
+            // different, reproducible game. Here the one gun hits harder and the one archetype is a brute.
             var machines = new[]
             {
-                new MachineDef(new ContentId("cannon"), BuildKind.Cannon, TileKind.Turret,
-                    BehaviorKind.Turret, cost: 99, name: "Siege", description: "",
-                    recipeId: ContentId.None, interval: 0f),
+                new MachineDef(new ContentId("turret"), BuildKind.Turret, TileKind.Turret,
+                    BehaviorKind.Turret, cost: 99, name: "Siege", description: "", interval: 0f),
             };
             var turrets = new[]
             {
-                new TurretDef(BuildKind.Cannon, "Siege", new[] { new AmmoDef(ShapeType.HalfCircle, 9f) },
-                    fireInterval: 0.5f, range: 12f, projectileSpeed: 20f),
+                new TurretDef(BuildKind.Turret, "Siege", damage: 9f, fireInterval: 0.5f, range: 12f,
+                    projectileSpeed: 20f),
             };
             var enemies = new[]
             {
-                new EnemyDef(new ContentId("spike"), EnemyKind.Spike, "Brute", hp: 40f, speed: 1f,
-                    damage: 20f, attackInterval: 2f, weakness: ShapeType.Circle),
+                new EnemyDef(new ContentId("runner"), EnemyKind.Runner, "Brute", hp: 40f, speed: 1f,
+                    damage: 20f, attackInterval: 2f),
             };
-            var shapes = new[] { new ShapeDef(ShapeType.Circle, "circle", "Circle", "○") };
-            var recipes = new RecipeDef[0];
 
-            var custom = new ContentDatabase(machines, turrets, enemies, shapes, recipes);
+            var custom = new ContentDatabase(machines, turrets, enemies);
 
-            Assert.AreEqual(99, custom.Machine(BuildKind.Cannon).Cost);
-            Assert.AreEqual(9f, custom.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle).Damage, Sim.Tol);
-            Assert.AreEqual(ShapeType.Circle, custom.Enemy(EnemyKind.Spike).Weakness);
+            Assert.AreEqual(99, custom.Machine(BuildKind.Turret).Cost);
+            Assert.AreEqual(9f, custom.Turret(BuildKind.Turret).Damage, Sim.Tol);
+            Assert.AreEqual(40f, custom.Enemy(EnemyKind.Runner).Hp, Sim.Tol);
 
             Assert.Throws<ArgumentOutOfRangeException>(() => custom.Machine(BuildKind.Drill),
-                "a table that defines only a cannon has no drill to report");
+                "a table that defines only a turret has no drill to report");
+            Assert.Throws<ArgumentOutOfRangeException>(() => custom.Enemy(EnemyKind.Tank),
+                "nor a Tank archetype");
 
             // And the shipped table is untouched by any of it.
-            Assert.AreEqual(20, ContentDatabase.Default.Machine(BuildKind.Cannon).Cost);
+            Assert.AreEqual(20, ContentDatabase.Default.Machine(BuildKind.Turret).Cost);
+            Assert.AreEqual(4f, ContentDatabase.Default.Turret(BuildKind.Turret).Damage, Sim.Tol);
+        }
+
+        [Test]
+        public void AnInconsistentTable_IsRefusedAtConstruction_NotAtRuntime()
+        {
+            // The two silences the table used to ship: a turret row with no gun (a machine that stands
+            // built, unfireable and uncomplaining) and a sorter row with no filter (a machine that routes
+            // by no rule at all). Neither failure throws on its own, so the constructor refuses both.
+            var gunless = new MachineDef(new ContentId("gunless"), BuildKind.Splitter, TileKind.Splitter,
+                BehaviorKind.Turret, cost: 10, name: "Gunless", description: "", interval: 0f);
+
+            var thrown = Assert.Throws<ArgumentException>(() => BuildTable(machine: gunless));
+            StringAssert.Contains("Gunless", thrown.Message, "the row is named, not just the rule");
+
+            var blind = new MachineDef(new ContentId("blind"), BuildKind.Sorter, TileKind.Sorter,
+                BehaviorKind.Sorter, cost: 12, name: "Blind", description: "", interval: 0f);
+
+            Assert.Throws<ArgumentException>(() => BuildTable(machine: blind),
+                "a sorter filtering for nothing cannot be constructed");
+        }
+
+        [Test]
+        public void AMachineRow_WithAnUnimplementedBehaviour_IsRefusedWhenAWorldIsBuilt()
+        {
+            // The third silence, and the one only a world can catch: the table happily holds a row asking
+            // for a behaviour nothing implements, and MachineSystem is where that becomes a refusal naming
+            // the row. CustomContentTests holds the full rule; this is the content-table half of it.
+            const BehaviorKind alien99 = (BehaviorKind)99;
+            var alien = new MachineDef(new ContentId("alien"), BuildKind.Wall, TileKind.Wall,
+                alien99, cost: 1, name: "Alien", description: "unknown", interval: 0f);
+
+            ContentDatabase table = BuildTable(machine: alien);
+            Assert.AreEqual(alien99, table.Machine(BuildKind.Wall).Behavior,
+                "the table is data: it holds what it was handed");
+
+            Assert.Throws<InvalidOperationException>(() =>
+                new SimWorld(Sim.TestMap(12, 10), new SimConfig(), table));
         }
 
         [Test]
@@ -288,8 +329,29 @@ namespace Facet.Tests
 
             Assert.AreEqual(-1, ContentDatabase.Default.MachineSlot(new ContentId("nothing")),
                 "an id nothing carries resolves to no slot rather than to one");
-            Assert.Throws<ArgumentOutOfRangeException>(
-                () => ContentDatabase.Default.Enemy(new ContentId("nothing")));
+        }
+
+        /// <summary>The shipped table with one machine row swapped, built by reading the shipped rows rather
+        /// than restating them - so a test is explicit about what it changes and keeps passing when shipped
+        /// numbers are retuned.</summary>
+        private static ContentDatabase BuildTable(MachineDef machine)
+        {
+            ContentDatabase shipped = ContentDatabase.Default;
+
+            var machines = new MachineDef[shipped.BuildKinds.Length];
+            for (int i = 0; i < shipped.BuildKinds.Length; i++)
+                machines[i] = shipped.Machine(shipped.BuildKinds[i]);
+            machines[(int)machine.Build] = machine;
+
+            var turrets = new TurretDef[shipped.BuildKinds.Length];
+            for (int i = 0; i < shipped.BuildKinds.Length; i++)
+                if (shipped.IsTurret(shipped.BuildKinds[i])) turrets[i] = shipped.Turret(shipped.BuildKinds[i]);
+
+            var enemies = new EnemyDef[shipped.EnemyKinds.Length];
+            for (int i = 0; i < shipped.EnemyKinds.Length; i++)
+                enemies[i] = shipped.Enemy(shipped.EnemyKinds[i]);
+
+            return new ContentDatabase(machines, turrets, enemies);
         }
     }
 }

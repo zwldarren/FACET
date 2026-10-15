@@ -68,7 +68,7 @@ namespace Facet.Tests
             // entry points - and off the end of the marker list the view sizes from them.
             var map = new MapDefinition("two doors", 8, 8, 10, new ShapePatch[0],
                 new[] { new Int2(0, 0), new Int2(7, 0) },
-                new[] { new WaveDefinition(0f, new SpawnGroup(EnemyKind.Spike, 1, 3, 0f, 1f)) });
+                new[] { new WaveDefinition(0f, new SpawnGroup(EnemyKind.Runner, 1, 3, 0f, 1f, Shape.Full(Quad.Circle))) });
 
             Assert.AreEqual(0, map.ResolveSpawn(0), "the first door");
             Assert.AreEqual(1, map.ResolveSpawn(1), "the second");

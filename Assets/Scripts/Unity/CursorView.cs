@@ -169,7 +169,7 @@ namespace Facet.Game
         /// <summary>Does a placement of this kind show its facing? The rule lives on the machine definition
         /// (<see cref="MachineDef.UsesFacing"/>), because the HUD that names a built building's facing needs the
         /// same answer. It reads the run's table, not <see cref="ContentDatabase.Default"/>: a custom table can
-        /// make any building a converter or a splitter, and a ghost reading the shipped numbers would disagree
+        /// make a second operator or a second hub, and a ghost reading the shipped numbers would disagree
         /// with the ring the same method draws beside it.</summary>
         private bool HasFacing(BuildKind kind) => World.Content.Machine(kind).UsesFacing;
 

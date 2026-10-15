@@ -8,74 +8,124 @@ namespace Facet.Tests
     /// <summary>
     /// The Phase-1 promise, tested end to end: the machine behaviours read their numbers from the
     /// <see cref="ContentDatabase"/> the world was handed, so a different table is a different game - a
-    /// converter that eats half-circles, a turret that eats circles, an enemy with different stats - with
-    /// no switch anywhere edited. This is what "add content = fill in data" has to mean.
+    /// cutter that eats only circles, a turret with different numbers, an enemy with different stats -
+    /// with no switch anywhere edited. This is what "add content = fill in data" has to mean.
+    ///
+    /// It is also where the two rules the shipped table no longer triggers are proved, because they are
+    /// still live rules: <see cref="MachineDef.Diet"/> is a content field, so a table that narrows one gets
+    /// the old wrong-shape jam back, and <see cref="MachineSystem"/> refuses at construction a row asking
+    /// for a behaviour nothing implements.
     /// </summary>
     public class CustomContentTests
     {
         [Test]
-        public void AConverter_RunsWhateverRecipeItsDefinitionNames()
+        public void ANarrowedDiet_JamsTheBeltThatLandsTheWrongShape()
         {
-            // The shipped decomposer eats circles. Hand it the mirror recipe: eat a half-circle, put out
-            // two circles. Same behaviour, same code path, opposite machine.
-            var mirrored = new RecipeDef(ContentDatabase.DecomposeRecipeId, ShapeType.HalfCircle,
-                ShapeType.Circle, inputCount: 1, outputCount: 2, interval: 1f, buffer: 4);
+            // The shipped cutter eats anything (its diet is ShapeFilter.Any), because the rework moved the
+            // punishment for a wrong shape from the belt to the damage roll. The mechanism is still live -
+            // "what may a machine take" is one question with one answer per machine - so a table that
+            // narrows the diet gets the routing tension back for free, and this is that rule: a square
+            // landing on a circle-only cutter blocks the segment it landed on and stays blocked.
+            MachineDef picky = CutterOnADiet(ShapeFilter.Is(Sim.Circle));
+            SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig(), Rewrite(machine: picky));
 
-            SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig(), Rewrite(recipe: mirrored));
+            var input = new Int2(4, 9);
+            Sim.LayRun(world, input, Dir.East, 1);
+            Sim.Place(world, BuildKind.Cutter, new Int2(5, 9), Dir.North);
 
-            Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);                 // input belt
-            Sim.Place(world, BuildKind.Decomposer, new Int2(4, 2), Dir.East);
-            Sim.LayRun(world, new Int2(5, 2), Dir.East, 1);                 // output belt
+            Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Square));
+            Sim.Tick(world, 30 * 3);
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), ShapeType.HalfCircle));
-            Sim.Tick(world, 90);
+            Assert.IsTrue(world.Belts.IsJammed(input), "the diet refused it, so its own belt pays");
+            Assert.AreEqual(1, world.Belts.JamCount);
+            Assert.AreEqual(Sim.Square, Sim.ShapeAt(world, input),
+                "the offending shape is left where it stood, for the player to find");
+            Assert.IsTrue(Sim.MachineAt(world, new Int2(5, 9)).Carried.IsEmpty,
+                "and the cutter never swallowed it");
+            Assert.IsTrue(world.Events.TryLast(SimEventKind.Jammed, out SimEvent jam));
+            Assert.AreEqual(input, jam.Cell);
+            Assert.AreEqual(Sim.Square, jam.Shape, "the report names the shape that arrived wrong");
 
-            Assert.AreEqual(ShapeType.Circle, Sim.ShapeAt(world, new Int2(5, 2)),
-                "the converter produced its recipe's output, not the decomposer's hardcoded one");
-            Assert.IsFalse(world.Belts.IsJammed(new Int2(3, 2)),
-                "its recipe's input is accepted, so nothing jams");
+            // The control: the same machine, the shape its diet names. One rule, two answers.
+            SimWorld fed = new SimWorld(Sim.TestMap(20, 12), new SimConfig(), Rewrite(machine: picky));
+            Sim.LayRun(fed, input, Dir.East, 1);
+            Sim.Place(fed, BuildKind.Cutter, new Int2(5, 9), Dir.North);
+            Sim.LayRun(fed, new Int2(5, 10), Dir.North, 1);
+
+            Assert.IsTrue(fed.Belts.TrySpawnItem(input, Sim.Circle));
+            Sim.Tick(fed, 30 * 5);
+
+            Assert.AreEqual(0, fed.Belts.JamCount, "a circle is in the diet, so nothing jams");
+            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(fed, new Int2(5, 10)),
+                "and the machine did the work it was bought for");
         }
 
         [Test]
-        public void TheSameConversion_WithTheShippedTable_StillJams()
+        public void AMachineRow_WithNoRegisteredBehaviour_IsRefusedAtConstruction()
         {
-            // The control for the test above: identical layout and identical delivery, shipped table.
+            // A content row asking for a behaviour the machine system does not implement would build,
+            // stand on its tile, and silently do nothing forever - no ports, no badge, no tick, no error.
+            // The refusal is at construction, in MachineSystem, so it names the row rather than surfacing
+            // as a machine that appears broken in whichever world happened to use the table.
+            var alien = new MachineDef(new ContentId("alien"), BuildKind.Wall, TileKind.Wall,
+                (BehaviorKind)99, cost: 1, name: "Alien", description: "unknown", interval: 0f);
+
+            var thrown = Assert.Throws<InvalidOperationException>(
+                () => new SimWorld(Sim.TestMap(20, 12), new SimConfig(), Rewrite(machine: alien)));
+
+            StringAssert.Contains("Alien", thrown.Message, "the row that asked is named");
+            StringAssert.Contains("99", thrown.Message, "and so is the behaviour it asked for");
+
+            // And the shipped table passes the same check - the rule is a rule, not a special case.
+            Assert.DoesNotThrow(() => Sim.NewWorld(20, 12));
+        }
+
+        [Test]
+        public void ACutter_SplitsWhateverItIsFed_BecauseTheRecipeTableIsGone()
+        {
+            // The old decomposer ran a recipe chosen by the delivered shape; processing is an operator now,
+            // so there is no table to consult and the machine cuts whatever arrives - a square comes out as
+            // two half-squares, off the same machine that turned a circle into half-circles a moment ago.
             SimWorld world = Sim.NewWorld(20, 12);
-            Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);
-            Sim.Place(world, BuildKind.Decomposer, new Int2(4, 2), Dir.East);
-            Sim.LayRun(world, new Int2(5, 2), Dir.East, 1);
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), ShapeType.HalfCircle));
-            Sim.Tick(world, 90);
+            var input = new Int2(4, 9);
+            Sim.LayRun(world, input, Dir.East, 1);
+            Sim.Place(world, BuildKind.Cutter, new Int2(5, 9), Dir.North);
+            Sim.LayRun(world, new Int2(5, 10), Dir.North, 1);   // the top piece's outlet
 
-            Assert.IsTrue(world.Belts.IsJammed(new Int2(3, 2)),
-                "the shipped decomposer eats circles, so a half-circle is a wrong-shape delivery");
+            Assert.IsTrue(world.Belts.TrySpawnItem(input, Sim.Square));
+            Sim.Tick(world, 30 * 4);
+
+            Assert.AreEqual(Sim.TopHalfSquare, Sim.ShapeAt(world, new Int2(5, 10)),
+                "a square in, a half-square out - no recipe chose that, the cut line did");
+            Assert.AreEqual(0, world.Belts.JamCount, "and nothing about it was a wrong-shape delivery");
         }
 
         [Test]
-        public void ATurret_EatsItsDefinitionsDiet_AndTheEnemysDefinitionSetsThePrice()
+        public void ATurret_EatsAnyShape_AndTheRoundsOwnShapeSetsThePrice()
         {
-            // A circle-fed turret against a 3-HP spike: one shot, not the shipped two.
-            var rockThrower = new TurretDef(BuildKind.Cannon, "Rock Thrower",
-                new[] { new AmmoDef(ShapeType.Circle, 3f) },
-                fireInterval: 1f, range: 7f, projectileSpeed: 14f);
-            var fragile = new EnemyDef(new ContentId("spike"), EnemyKind.Spike, "Fragile", hp: 3f, speed: 1f,
-                damage: 6f, attackInterval: 1f, weakness: ShapeType.Circle);
+            // The universal chamber: there is no diet to satisfy, so a circle line feeds the gun as readily
+            // as a half-circle line - and what the shot is worth is the round against the enemy's own
+            // demand, assigned at spawn. A 3-HP enemy weak to circles dies to one circle round here, where
+            // the shipped enemy would have taken two halves.
+            var fragile = new EnemyDef(new ContentId("runner"), EnemyKind.Runner, "Fragile", hp: 3f, speed: 1f,
+                damage: 6f, attackInterval: 1f);
 
             SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig { CoreMaxHp = 1000000f },
-                Rewrite(turret: rockThrower, enemy: fragile));
+                Rewrite(enemy: fragile));
 
-            Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);                 // a circle line into the turret
-            Sim.Place(world, BuildKind.Cannon, new Int2(4, 2), Dir.East);
+            Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);
+            Sim.Place(world, BuildKind.Turret, new Int2(4, 2), Dir.East);
 
-            int id = world.Enemies.Spawn(EnemyKind.Spike, new Vec2(4.5f, 5f));
+            int id = world.Enemies.Spawn(EnemyKind.Runner, new Vec2(4.5f, 5f), Sim.Circle);
             Assert.Greater(id, 0);
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), Sim.Circle));
             Sim.Tick(world, 120);
 
-            Assert.Greater(world.ShotsFired, 0, "the turret's diet is a circle, so the circle line fed it");
-            Assert.AreEqual(0, world.Enemies.AliveCount, "and one 3-damage shot killed the 3-HP enemy");
+            Assert.Greater(world.ShotsFired, 0, "the chamber has no diet, so the circle line fed it");
+            Assert.AreEqual(0, world.Enemies.AliveCount,
+                "and one matched shot of the shipped 4 damage killed the 3-HP enemy");
         }
 
         [Test]
@@ -83,31 +133,26 @@ namespace Facet.Tests
         {
             // The economy reads the injected table too, so a retuned cost is a real constraint, not just a
             // HUD string.
-            var dearCannon = new MachineDef(new ContentId("cannon"), BuildKind.Cannon, TileKind.Turret,
-                BehaviorKind.Turret, cost: Sim.TestCircles + 1, name: "Cannon", description: "",
-                recipeId: ContentId.None, interval: 0f);
+            MachineDef dearTurret = Turret(BuildKind.Turret, cost: Sim.TestCircles + 1);
 
-            SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig(), Rewrite(machine: dearCannon));
+            SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig(), Rewrite(machine: dearTurret));
 
-            Assert.AreEqual(Sim.TestCircles + 1, world.Content.Machine(BuildKind.Cannon).Cost);
-            Assert.IsFalse(world.Economy.CanAfford(BuildKind.Cannon),
+            Assert.AreEqual(Sim.TestCircles + 1, world.Content.Machine(BuildKind.Turret).Cost);
+            Assert.IsFalse(world.Economy.CanAfford(BuildKind.Turret),
                 "the start stockpile cannot cover the retuned cost");
-            Assert.IsFalse(world.TryPlace(BuildKind.Cannon, new Int2(2, 2), Dir.East));
+            Assert.IsFalse(world.TryPlace(BuildKind.Turret, new Int2(2, 2), Dir.East));
 
-            Assert.AreEqual(20, ContentDatabase.Default.Machine(BuildKind.Cannon).Cost,
+            Assert.AreEqual(20, ContentDatabase.Default.Machine(BuildKind.Turret).Cost,
                 "the shipped table is not affected by a table one world was handed");
-            Assert.IsTrue(Sim.NewWorld(20, 12).Economy.CanAfford(BuildKind.Cannon));
+            Assert.IsTrue(Sim.NewWorld(20, 12).Economy.CanAfford(BuildKind.Turret));
         }
 
         [Test]
         public void ASorter_FiltersWhateverItsDefinitionNames()
         {
-            // Mirror the shipped sorter: send half-circles out the facing side instead of circles. Same
-            // behaviour, same code path, opposite machine - a row, not a class.
-            var mirrored = new MachineDef(new ContentId("sorter"), BuildKind.Sorter, TileKind.Sorter,
-                BehaviorKind.Sorter, cost: 12, name: "Ammo Router", description: "",
-                recipeId: ContentId.None, interval: 0f, filter: ShapeType.HalfCircle);
-
+            // Mirror the shipped sorter: route half-circles out the facing side instead of anything with a
+            // circle in it. Same behaviour, same code path, opposite machine - a row, not a class.
+            MachineDef mirrored = SorterRouting(ShapeFilter.Is(Sim.TopHalfCircle));
             SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig(), Rewrite(machine: mirrored));
 
             Sim.LayRun(world, new Int2(3, 2), Dir.East, 1);       // input
@@ -115,13 +160,41 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(5, 2), Dir.East, 1);       // the facing outlet
             Sim.LayRun(world, new Int2(4, 3), Dir.North, 1);      // the other outlet
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 2), Sim.TopHalfCircle));
             Sim.Tick(world, 90);
 
-            Assert.AreEqual(ShapeType.HalfCircle, Sim.ShapeAt(world, new Int2(5, 2)),
-                "the retuned filter sent the half-circle out the side it faces");
-            Assert.AreEqual(ShapeType.None, Sim.ShapeAt(world, new Int2(4, 3)),
+            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(world, new Int2(5, 2)),
+                "the retuned filter sent the item it names out the side it faces");
+            Assert.AreEqual(Shape.None, Sim.ShapeAt(world, new Int2(4, 3)),
                 "and the other outlet stayed empty");
+        }
+
+        // ---------------------------------------------------------------- the two rows a test retunes
+
+        /// <summary>The shipped cutter with a diet that admits one shape rule and nothing else - the row a
+        /// table narrows when it wants the old wrong-shape jam back. Shared with the event suite, which
+        /// proves the jam the mechanism produces is reported with the shape that caused it.</summary>
+        internal static MachineDef CutterOnADiet(ShapeFilter diet)
+        {
+            MachineDef shipped = ContentDatabase.Default.Machine(BuildKind.Cutter);
+            return new MachineDef(shipped.Id, shipped.Build, shipped.Tile, shipped.Behavior, shipped.Cost,
+                shipped.Name, shipped.Description, shipped.Interval, maxHp: shipped.MaxHp, diet: diet);
+        }
+
+        /// <summary>The shipped turret's row with a different cost and nothing else changed.</summary>
+        private static MachineDef Turret(BuildKind build, int cost)
+        {
+            MachineDef shipped = ContentDatabase.Default.Machine(build);
+            return new MachineDef(shipped.Id, shipped.Build, shipped.Tile, shipped.Behavior, cost,
+                shipped.Name, shipped.Description, shipped.Interval);
+        }
+
+        /// <summary>The shipped sorter's row with a different filter. Shared with the sorter suite, which proves both filter modes route correctly.</summary>
+        internal static MachineDef SorterRouting(ShapeFilter filter)
+        {
+            MachineDef shipped = ContentDatabase.Default.Machine(BuildKind.Sorter);
+            return new MachineDef(shipped.Id, shipped.Build, shipped.Tile, shipped.Behavior, shipped.Cost,
+                shipped.Name, shipped.Description, shipped.Interval, filter: filter, maxHp: shipped.MaxHp);
         }
 
         /// <summary>
@@ -130,8 +203,8 @@ namespace Facet.Tests
         /// explicit about what it changes and keeps passing when shipped numbers are retuned. Shared with
         /// the other suites that need a table of their own.
         /// </summary>
-        internal static ContentDatabase Rewrite(MachineDef machine = null, RecipeDef recipe = null,
-            TurretDef turret = null, EnemyDef enemy = null, RecipeDef extraRecipe = null)
+        internal static ContentDatabase Rewrite(MachineDef machine = null, TurretDef turret = null,
+            EnemyDef enemy = null)
         {
             ContentDatabase shipped = ContentDatabase.Default;
 
@@ -150,22 +223,7 @@ namespace Facet.Tests
                 enemies[i] = shipped.Enemy(shipped.EnemyKinds[i]);
             if (enemy != null) enemies[(int)enemy.Kind] = enemy;
 
-            var shapes = new ShapeDef[Enum.GetValues(typeof(ShapeType)).Length];
-            foreach (ShapeType shape in (ShapeType[])Enum.GetValues(typeof(ShapeType)))
-                shapes[(int)shape] = shipped.Shape(shape);
-
-            // Every shipped recipe is carried, plus an optional extra row: the decomposer names no recipe
-            // and runs the whole table, so a table missing one would quietly halve its diet rather than
-            // fail at construction. The extra row is how a suite gives two recipes a shared input.
-            var recipes = new List<RecipeDef>
-            {
-                recipe ?? shipped.Recipe(ContentDatabase.DecomposeRecipeId),
-                shipped.Recipe(ContentDatabase.BisectRecipeId),
-                shipped.Recipe(ContentDatabase.CombineRecipeId),
-            };
-            if (extraRecipe != null) recipes.Add(extraRecipe);
-
-            return new ContentDatabase(machines, turrets, enemies, shapes, recipes.ToArray());
+            return new ContentDatabase(machines, turrets, enemies);
         }
     }
 }

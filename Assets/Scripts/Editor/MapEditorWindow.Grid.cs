@@ -38,9 +38,7 @@ namespace Facet.EditorTools
         private static readonly Color RockTone = new Color(0.34f, 0.36f, 0.42f);
         private static readonly Color WaterTone = new Color(0.24f, 0.46f, 0.80f);
         private static readonly Color CircleTone = new Color(0.98f, 0.80f, 0.35f);
-        private static readonly Color HalfCircleTone = new Color(0.86f, 0.55f, 0.20f);
         private static readonly Color SquareTone = new Color(0.45f, 0.85f, 0.80f);
-        private static readonly Color HalfSquareTone = new Color(0.26f, 0.60f, 0.62f);
         private static readonly Color LineTone = new Color(0.45f, 0.45f, 0.45f, 0.45f);
 
         /// <summary>Tinted rather than opaque, for the same reason on both: a door standing on rock or a Core
@@ -121,10 +119,10 @@ namespace Facet.EditorTools
             for (int y = 0; y < drawn.Height; y++)
                 for (int x = 0; x < drawn.Width; x++)
                 {
-                    ShapeType shape = drawn.MineralAt(x, y);
-                    if (!shape.IsShape()) continue;
+                    Quad mineral = drawn.MineralAt(x, y);
+                    if (mineral == Quad.Empty) continue;
 
-                    EditorGUI.DrawRect(frame.CellRect(x, y), OreTone(shape));
+                    EditorGUI.DrawRect(frame.CellRect(x, y), OreTone(mineral));
                 }
         }
 
@@ -215,7 +213,7 @@ namespace Facet.EditorTools
             if (down)
                 _stroke = new MapEdit.Session(asset, erase ? "Erase map" : "Paint map");
 
-            _stroke.Paint(x, y, _brush, _oreShape, erase);
+            _stroke.Paint(x, y, _brush, _ore, erase);
 
             // A drag event does not redraw the window on its own, so without this the tile just painted
             // would not appear until some unrelated event came along.
@@ -248,24 +246,22 @@ namespace Facet.EditorTools
         }
 
         /// <summary>
-        /// A mineral's tone. Distinct per shape because a shape is the only identity a mineral has in Core, and
-        /// a glyph would need a texture or a font the window does not own - so the tone is the key, and the
-        /// legend above states it. None draws as ground, which is what a vein nobody assigned yields; an
-        /// unknown shape throws rather than drawing ground-coloured - a vein the editor silently cannot show is
-        /// a map bug authored one brush stroke at a time.
+        /// A mineral's tone. One tone per mineral because a mineral is the only identity a vein has, and a
+        /// glyph would need a texture or a font the window does not own - so the tone is the key, and the
+        /// legend above states it. Empty draws as ground, which is what a vein nobody assigned yields; an
+        /// unknown mineral throws rather than drawing ground-coloured - a vein the editor silently cannot show
+        /// is a map bug authored one brush stroke at a time.
         /// </summary>
-        private static Color OreTone(ShapeType shape)
+        private static Color OreTone(Quad mineral)
         {
-            switch (shape)
+            switch (mineral)
             {
-                case ShapeType.None: return GroundTone;
-                case ShapeType.Circle: return CircleTone;
-                case ShapeType.HalfCircle: return HalfCircleTone;
-                case ShapeType.Square: return SquareTone;
-                case ShapeType.HalfSquare: return HalfSquareTone;
+                case Quad.Empty: return GroundTone;
+                case Quad.Circle: return CircleTone;
+                case Quad.Square: return SquareTone;
                 default:
-                    throw new System.ArgumentOutOfRangeException(nameof(shape), shape,
-                        "a new shape must get a tone here (editor grid) and in the Palette");
+                    throw new System.ArgumentOutOfRangeException(nameof(mineral), mineral,
+                        "a new mineral must get a tone here (editor grid) and in the Palette");
             }
         }
     }

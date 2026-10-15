@@ -312,27 +312,45 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>Draw one shape icon: the authored Sprite when the style names one, otherwise the
-        /// procedural silhouette with its outline. A <paramref name="tint"/> recolours either form (how
-        /// a silenced turret's ammo goes grey); null keeps the style's fill. The one place every view
-        /// that draws a shape as an icon goes through.</summary>
-        protected void AppendIcon(ShapeIconSet icons, ShapeType shape, Vector2 centre, Color? tint)
+        /// <summary>
+        /// Draw one item as its quadrant figure: every filled quadrant's mark, in that mineral's colour
+        /// with the standard outline. Empty quadrants are drawn as nothing - the filled part alone is the
+        /// silhouette, so a full circle is a disc and a circle-left/square-right item is half a disc beside
+        /// half a square.
+        ///
+        /// A quadrant whose mineral is overridden with a Sprite draws that sprite inside the quadrant
+        /// instead (a sprite is a whole mark and has no point list); a <paramref name="tint"/> recolours
+        /// either form, which is how a silenced turret's last round goes grey. The one place every view that
+        /// draws an item on the map goes through, and it allocates nothing: the points and styles are the
+        /// icon set's, cached at initialisation.
+        /// </summary>
+        protected void AppendIcon(ShapeIconSet icons, Shape shape, Vector2 centre, Color? tint)
         {
-            if (shape == ShapeType.None) return;
-
-            VisualStyle style = icons.Style(shape);
-            if (style == null) return;
-
-            if (style.Source == VisualSource.Sprite)
+            for (int quadrant = 0; quadrant < Shape.QuadrantCount; quadrant++)
             {
-                DrawSprite(style.Sprite, centre, style.Size, style.Rotation, style.Offset, tint ?? Color.white);
-                return;
+                Quad mineral = shape.At(quadrant);
+                if (mineral == Quad.Empty) continue;
+
+                VisualStyle style = icons.Style(mineral, quadrant);
+                if (style == null) continue;
+
+                if (style.Source == VisualSource.Sprite)
+                {
+                    // The sprite's own size is the author's; how much of the quadrant it may fill and where
+                    // the quadrant is are the item's, so a sprite authored larger than its quadrant is
+                    // clamped into it rather than laid over its neighbours.
+                    DrawSprite(style.Sprite, centre, Mathf.Min(style.Size, icons.Radius) * 0.5f, style.Rotation,
+                        style.Offset + VisualShapes.QuadrantCentre(icons.Radius, quadrant),
+                        tint ?? Color.white);
+                    continue;
+                }
+
+                IReadOnlyList<Vector2> points = icons.Points(mineral, quadrant);
+                if (points == null) continue;
+
+                AppendPolygon(points, centre + style.Offset, tint ?? style.Fill, style.Outline,
+                    OutlineWidthFor(style));
             }
-
-            Vector2[] points = icons.Points(shape);
-            if (points == null) return;
-
-            AppendPolygon(points, centre + style.Offset, tint ?? style.Fill, style.Outline, OutlineWidthFor(style));
         }
 
         private SpriteRenderer RentSprite()

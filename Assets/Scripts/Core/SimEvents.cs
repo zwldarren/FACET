@@ -23,6 +23,10 @@ namespace Facet.Core
         /// <summary>The tile is a wave's doorway: the map's tile, kept walkable, so a machine there
         /// would seal the wave in (<see cref="MachineField.CanPlace"/>).</summary>
         Doorway = 4,
+
+        /// <summary>This map has not unlocked the operator the building is
+        /// (<see cref="MachineDef.Requires"/>): the campaign's progression, said as a refusal.</summary>
+        Locked = 5,
     }
 
     /// <summary>Everything the simulation reports having done. A closed set for the same reason
@@ -109,7 +113,10 @@ namespace Facet.Core
         public readonly int EnemyId;
 
         public readonly EnemyKind Enemy;
-        public readonly ShapeType Shape;
+
+        /// <summary>The shape involved, where one is: the item a jam is made of, the round a shot was
+        /// fired with, the full circle that banked. Nothing where no shape is.</summary>
+        public readonly Shape Shape;
 
         /// <summary>The building involved, for the events about one
         /// (<see cref="SimEventKind.BuildingDamaged"/>, <see cref="SimEventKind.BuildingDestroyed"/>).
@@ -126,7 +133,7 @@ namespace Facet.Core
         public readonly RejectionReason Reason;
 
         internal SimEvent(SimEventKind kind, int tick, Int2 cell, Vec2 position, int enemyId,
-            EnemyKind enemy, ShapeType shape, float amount, BuildKind building = default,
+            EnemyKind enemy, Shape shape, float amount, BuildKind building = default,
             RejectionReason reason = default)
         {
             Kind = kind;
@@ -276,16 +283,21 @@ namespace Facet.Core
         public void Removed(Int2 cell, int refund)
             => Push(SimEventKind.Removed, cell, amount: refund);
 
-        public void Jammed(Int2 cell, ShapeType item)
+        public void Jammed(Int2 cell, Shape item)
             => Push(SimEventKind.Jammed, cell, shape: item);
 
         public void JamCleared(Int2 cell)
             => Push(SimEventKind.JamCleared, cell);
 
+        /// <summary>One circle reached the Core and became currency. A full circle is the only thing the
+        /// Core banks - anything else it destroys - so the shape is the caller's invariant rather than a
+        /// parameter: <see cref="CoreSinkSystem"/> guards on <c>Shape.Full(Quad.Circle)</c> before calling
+        /// here, and a second banking path, or a change to what counts as currency, has to keep that
+        /// guard or this event will report a circle for whatever was really banked.</summary>
         public void Banked(Int2 cell)
-            => Push(SimEventKind.Banked, cell, amount: 1f, shape: ShapeType.Circle);
+            => Push(SimEventKind.Banked, cell, amount: 1f, shape: Shape.Full(Quad.Circle));
 
-        public void ShotFired(Int2 cell, ShapeType ammo, float damage)
+        public void ShotFired(Int2 cell, Shape ammo, float damage)
             => Push(SimEventKind.ShotFired, cell, amount: damage, shape: ammo);
 
         public void EnemyDamaged(int id, EnemyKind kind, Vec2 position, float damage)
@@ -321,7 +333,7 @@ namespace Facet.Core
 
         private void Push(SimEventKind kind, Int2 cell = default, float amount = 0f,
             Vec2 position = default, int enemyId = 0, EnemyKind enemy = default,
-            ShapeType shape = ShapeType.None, BuildKind building = default,
+            Shape shape = default, BuildKind building = default,
             RejectionReason reason = default)
         {
             var e = new SimEvent(kind, Tick, cell, position, enemyId, enemy, shape, amount, building, reason);

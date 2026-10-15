@@ -1,6 +1,7 @@
 using System;
 using Facet.Core;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Facet.Game
 {
@@ -47,7 +48,7 @@ namespace Facet.Game
         [Tooltip("A jammed belt segment - the twist's failure state, so it has to shout.")]
         public Color Jam = new Color(0.878f, 0.263f, 0.263f, 1f);
 
-        [Tooltip("The bed of a shape patch in the ground. The shape itself is drawn in its own colour.")]
+        [Tooltip("The bed of an ore patch in the ground. The mark itself is drawn in its mineral's colour.")]
         public Color ShapePatchBed = new Color(0.902f, 0.898f, 0.871f, 1f);
 
         [Tooltip("Map-authored rock: the ground a wave has to walk around. Dark and inert, so it reads " +
@@ -55,52 +56,41 @@ namespace Facet.Game
             "machine, in the machines' colour.")]
         public Color Rock = new Color(0.290f, 0.318f, 0.365f, 1f);
 
-        [Tooltip("Map-authored water: the other impassable ground. Blue is otherwise the half-circle " +
-            "ammunition's colour, so this is deliberately a paler, greyer blue than the shapes use - " +
-            "the ground must never be mistaken for something riding a belt.")]
+        [Tooltip("Map-authored water: the other impassable ground. Deliberately a paler, greyer blue than " +
+            "anything an item wears - the ground must never be mistaken for something riding a belt.")]
         public Color Water = new Color(0.478f, 0.663f, 0.796f, 1f);
 
-        [Tooltip("Drill and decomposer bodies: a machine that is not a turret.")]
+        [Tooltip("Machine bodies: every building that is not a turret.")]
         public Color MachineBody = new Color(0.361f, 0.408f, 0.482f, 1f);
 
-        [Tooltip("Turret bodies, one shade darker than the production machines.")]
+        [Tooltip("Turret bodies, one shade darker than the other machines.")]
         public Color TurretBody = new Color(0.239f, 0.278f, 0.345f, 1f);
 
-        [Tooltip("A machine icon with nothing to work on: a starved turret's ammo shape, an idle decomposer.")]
+        [Tooltip("A machine icon with nothing to work on: a starved turret's last round, an idle operator.")]
         public Color MachineIdle = new Color(0.749f, 0.776f, 0.816f, 1f);
 
         [Tooltip("Range ring drawn around the turret being placed.")]
         public Color RangeRing = new Color(0.243f, 0.353f, 0.549f, 0.5f);
 
-        [Tooltip("Spike: fast and light, weak to half-circles.")]
-        public Color SpikeBody = new Color(0.867f, 0.286f, 0.247f, 1f);
+        [Tooltip("Runner: fast and light. Its weakness is a wave's demand, not this colour's business.")]
+        public Color RunnerBody = new Color(0.867f, 0.286f, 0.247f, 1f);
 
-        [Tooltip("Bulwark: slow and heavy, weak to half-squares. A darker brick red than the Spike - " +
-            "colour says which side it is on, so the second enemy stays in the enemy family rather " +
-            "than wearing one of the ammunitions' cool colours.")]
-        public Color BulwarkBody = new Color(0.545f, 0.173f, 0.192f, 1f);
+        [Tooltip("Tank: slow and heavy. A darker brick red than the Runner - colour says which side it " +
+            "is on, so the second archetype stays in the enemy family rather than wearing a mineral's " +
+            "warm colour.")]
+        public Color TankBody = new Color(0.545f, 0.173f, 0.192f, 1f);
 
         [Tooltip("Wave entry points: brighter while the next wave is counting down.")]
         public Color SpawnMarker = new Color(0.851f, 0.290f, 0.259f, 1f);
 
-        [Tooltip("Circle mineral - the currency: banked at the Core, spent on buildings.")]
-        public Color CircleShape = new Color(1f, 0.780f, 0.280f, 1f);
+        [Tooltip("Circle mineral: the currency. Banked at the Core, spent on buildings - and the colour " +
+            "every circle quadrant wears, wherever it is drawn.")]
+        public Color CircleMineral = new Color(1f, 0.780f, 0.280f, 1f);
 
-        [Tooltip("Half-circle ammo - the Cannon's diet, split out of circles.")]
-        public Color HalfCircleShape = new Color(0.361f, 0.757f, 1f, 1f);
-
-        [Tooltip("Square mineral - the second chain's food, mined from square patches. Warm like the " +
-            "circle, so the two minerals read as 'mined' rather than as one mineral and one product.")]
-        public Color SquareShape = new Color(0.941f, 0.376f, 0.678f, 1f);
-
-        [Tooltip("Half-square ammo - the Mortar's diet, split out of squares. Cool like the half-circle, " +
-            "but green rather than blue: the two ammunitions have to be told apart at a glance, because " +
-            "feeding the wrong gun one of them jams the line.")]
-        public Color HalfSquareShape = new Color(0.322f, 0.831f, 0.729f, 1f);
-
-        [Tooltip("Composite ammo - the assembler's fused round, eaten by both guns. Violet: the two " + 
-            "minerals' colours fused, and clearly not either chain's own.")]
-        public Color CompositeShape = new Color(0.780f, 0.541f, 0.949f, 1f);
+        [Tooltip("Square mineral: the second chain's food, mined from square patches and the colour every " +
+            "square quadrant wears. Warm like the circle, so the two minerals read as 'mined' rather than " +
+            "as one mineral and one of its products.")]
+        public Color SquareMineral = new Color(0.941f, 0.376f, 0.678f, 1f);
 
         [Tooltip("The defended Core.")]
         public Color Core = new Color(0.976f, 0.980f, 0.988f, 1f);
@@ -141,7 +131,9 @@ namespace Facet.Game
         public Material ViewMaterial;
 
         [Header("Shapes")]
-        [Tooltip("Sides of every 'circle' polygon. 16 reads as round at any zoom the camera allows.")]
+        [Tooltip("Sides of a full 'circle' polygon: 16 reads as round at any zoom the camera allows. A " +
+            "circle mineral's quadrant takes a quarter of them, so its arc carries the same segment count " +
+            "as a whole disc would.")]
         public int CircleSides = 16;
 
         [Header("Layers")]
@@ -170,7 +162,7 @@ namespace Facet.Game
         [Header("Items riding the belts")]
         public ItemLook Items = new ItemLook();
 
-        [Header("Drills, decomposers and turrets")]
+        [Header("Drills, operators and turrets")]
         public MachineLook Machines = new MachineLook();
 
         [Header("Enemies and wave entry points")]
@@ -190,9 +182,9 @@ namespace Facet.Game
 
         [Header("Per-content visual overrides")]
         [Tooltip("Tick an entry's Override to replace that content's built-in look - a sprite for the " +
-            "Core, the shapes, an enemy or a machine body, or a different procedural silhouette/colour. " +
-            "Untouched entries keep the shipped look, so this block is purely additive: open " +
-            "Assets/Data/Palette.asset to re-skin one thing without touching code.")]
+            "Core, a mineral's quadrants, an enemy or a machine body, or a different procedural " +
+            "silhouette/colour. Untouched entries keep the shipped look, so this block is purely " +
+            "additive: open Assets/Data/Palette.asset to re-skin one thing without touching code.")]
         public VisualCatalog Visuals = new VisualCatalog();
 
         /// <summary>Body colour for a machine, keyed on what it <em>does</em> rather than its tile kind,
@@ -200,76 +192,54 @@ namespace Facet.Game
         public Color BodyColor(BehaviorKind behavior)
             => behavior == BehaviorKind.Turret ? TurretBody : MachineBody;
 
-        /// <summary>Body colour for an enemy; every kind is named, so a third enemy cannot borrow the
-        /// Spike's colour - the switch says there is no colour for it yet. The roster test walks the same
+        /// <summary>Body colour for an enemy; every kind is named, so a third archetype cannot borrow the
+        /// Runner's colour - the switch says there is no colour for it yet. The roster test walks the same
         /// enum.</summary>
         public Color EnemyColor(EnemyKind kind)
         {
             switch (kind)
             {
-                case EnemyKind.Spike: return SpikeBody;
-                case EnemyKind.Bulwark: return BulwarkBody;
+                case EnemyKind.Runner: return RunnerBody;
+                case EnemyKind.Tank: return TankBody;
                 default:
                     throw new System.ArgumentOutOfRangeException(nameof(kind), kind,
                         "a new enemy must get a body colour here (Palette) and a look in EnemyVisuals");
             }
         }
 
-        /// <summary>Colour for one shape. <see cref="ShapeType.None"/> deliberately draws as the
-        /// outline; an unlisted shape is a hole in this file, not a fallback.</summary>
-        public Color ShapeColor(ShapeType shape)
+        /// <summary>
+        /// Colour for one quadrant's mineral - the item's look, mineral by mineral, because an item is a
+        /// figure of quadrants rather than one of six silhouettes: a half-circle is half a gold disc, and a
+        /// mixed piece wears both colours at once.
+        ///
+        /// Every mineral is named and everything else throws, <see cref="Quad.Empty"/> included: a hole has
+        /// no colour, and a caller that asked for one has lost the quadrant it meant. Drawing the outline
+        /// instead would hide that, which is why the old shape table's "None draws as the outline" case is
+        /// gone rather than translated.</summary>
+        public Color MineralColor(Quad mineral)
         {
-            switch (shape)
+            switch (mineral)
             {
-                case ShapeType.None: return Outline;
-                case ShapeType.Circle: return CircleShape;
-                case ShapeType.HalfCircle: return HalfCircleShape;
-                case ShapeType.Square: return SquareShape;
-                case ShapeType.HalfSquare: return HalfSquareShape;
-                case ShapeType.Composite: return CompositeShape;
+                case Quad.Circle: return CircleMineral;
+                case Quad.Square: return SquareMineral;
                 default:
-                    throw new System.ArgumentOutOfRangeException(nameof(shape), shape,
-                        "a new shape must get a colour here (Palette) and a silhouette below");
+                    throw new System.ArgumentOutOfRangeException(nameof(mineral), mineral,
+                        "a new mineral must get a colour here (Palette) and a quadrant silhouette");
             }
         }
 
-        /// <summary>The one place that decides a shape's shipped silhouette: a ground patch, a belt item, a
-        /// machine's held item and an enemy's weakness all come through here, so a new mineral is a colour
-        /// and a case rather than four drawings.</summary>
-        public ProcShape ProcShapeOf(ShapeType shape)
-        {
-            switch (shape)
-            {
-                case ShapeType.None:
-                case ShapeType.Circle: return ProcShape.Circle;
-                case ShapeType.HalfCircle: return ProcShape.HalfDisc;
-                case ShapeType.Square: return ProcShape.RegularPolygon;
-                case ShapeType.HalfSquare: return ProcShape.HalfRect;
-                // The fused round reads as both parents at once: a polygon with more sides than the
-                // square, fewer than the circle.
-                case ShapeType.Composite: return ProcShape.RegularPolygon;
-                default:
-                    throw new System.ArgumentOutOfRangeException(nameof(shape), shape,
-                        "a new shape must get a silhouette here (Palette.ProcShapeOf)");
-            }
-        }
-
-        /// <summary>Sides for a shape drawn as a regular polygon. The other silhouettes ignore it.</summary>
-        public int SidesOf(ShapeType shape)
-        {
-            switch (shape)
-            {
-                case ShapeType.Square: return 4;
-                case ShapeType.Composite: return 6;
-                default: return CircleSides;   // every round shape - and only the known ones reach here
-            }
-        }
-
-        /// <summary>The icon set every view that draws a shape as an icon builds from - a belt item, a
-        /// ground patch, an enemy's weakness, a machine's held item, a shot. One set covers every shape in
-        /// the content table.</summary>
+        /// <summary>The icon set every view that draws an item as a figure builds from - a belt item, an
+        /// enemy's weakness, a machine's badge, a shot. One set covers every item the algebra can make,
+        /// because the figure is assembled from quadrants rather than looked up. Resolved from the item
+        /// block, so re-skinning what a belt carries leaves the ground alone.</summary>
         public ShapeIconSet ShapeIcons(float radius, float outlinePixels)
             => new ShapeIconSet(this, Visuals.Items, radius, outlinePixels);
+
+        /// <summary>The same figures for the ground: an ore patch is the mineral's whole shape stamped in
+        /// the dirt, and it is re-skinned on its own block rather than following the belt items - which is
+        /// what <see cref="VisualCatalog.Patches"/> is for, and why it is read here.</summary>
+        public ShapeIconSet PatchIcons(float radius, float outlinePixels)
+            => new ShapeIconSet(this, Visuals.Patches, radius, outlinePixels);
 
         /// <summary>The material every view shares: the assigned asset, or a runtime-built fallback on the
         /// vertex-colour shader, which keeps an unwired scene and the PlayMode tests runnable.</summary>
@@ -337,10 +307,15 @@ namespace Facet.Game
             [Tooltip("Drill frame: bar thickness, in tiles.")]
             public float FrameThickness = 0.14f;
 
-            public float DecomposerRadius = 0.44f;
-            public float DecomposerIconRadius = 0.24f;
+            [FormerlySerializedAs("DecomposerRadius")]
+            [Tooltip("Operator chamber: the body radius of a cutter, rotator or stacker.")]
+            public float OperatorRadius = 0.44f;
+
+            [FormerlySerializedAs("DecomposerIconRadius")]
+            [Tooltip("Operator chamber: the radius of the badge drawn in it - the piece the machine holds.")]
+            public float OperatorIconRadius = 0.24f;
             public float TurretRadius = 0.42f;
-            [Tooltip("Ammo icon on a turret - the armed/silenced readout.")]
+            [Tooltip("The radius of a turret's round badge - the armed/silenced readout.")]
             public float AmmoIconRadius = 0.22f;
 
             [Tooltip("Barrel length measured from the turret centre.")]

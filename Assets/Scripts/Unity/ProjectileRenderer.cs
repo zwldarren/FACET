@@ -5,13 +5,13 @@ using UnityEngine;
 namespace Facet.Game
 {
     /// <summary>Draws every shot in flight as one mesh, rebuilt each frame because shots never stop moving. A kill
-    /// should be visibly a shape that left a belt and flew to its target, so each shot is its ammo shape at a small
-    /// radius. Positions interpolate between the last two ticks with the frame's Alpha, so flight is smooth instead
-    /// of stepping at 30 Hz.
+    /// should be visibly an item that left a belt and flew to its target, so each shot is the round it was fed - its
+    /// own quadrant figure at a small radius, in the mineral colours. Positions interpolate between the last two ticks
+    /// with the frame's Alpha, so flight is smooth instead of stepping at 30 Hz.
     ///
-    /// The in-flight shape follows the same item-shape override as the belts, so a re-skinned resource stays
-    /// recognisable to the impact. These shapes carry no outline by default, unlike belt items: at projectile size
-    /// the outline would be more pixels than the shape itself, and the colour alone is the message.</summary>
+    /// The in-flight item follows the same per-mineral override as the belts, so a re-skinned mineral stays
+    /// recognisable to the impact. These marks carry no outline by default, unlike belt items: at projectile size
+    /// the outline would be more pixels than the figure itself, and the colour alone is the message.</summary>
     [DefaultExecutionOrder(114)]
     public sealed class ProjectileRenderer : MeshView
     {
@@ -22,7 +22,7 @@ namespace Facet.Game
 
         protected override void OnInitialized()
         {
-            // Same shape override the belts use, at the projectile radius, with no outline.
+            // Same per-mineral override the belts use, at the projectile radius, with no outline.
             _icons = Colors.ShapeIcons(Colors.Projectiles.Radius, 0f);
         }
 

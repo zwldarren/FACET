@@ -54,7 +54,7 @@ namespace Facet.PlayTests
             MachineRenderer plainView = plain.AddComponent<MachineRenderer>();
             plainView.Initialize(world, clock, _palette);
 
-            Assert.IsTrue(world.TryPlace(BuildKind.Cannon, new Int2(20, 10), Dir.East));
+            Assert.IsTrue(world.TryPlace(BuildKind.Turret, new Int2(20, 10), Dir.East));
             yield return null;
             Assert.IsNull(plain.transform.Find("Sprites"), "an untouched palette draws no sprite");
 
@@ -63,7 +63,7 @@ namespace Facet.PlayTests
             {
                 new MachineVisuals.Entry
                 {
-                    Build = BuildKind.Cannon,
+                    Build = BuildKind.Turret,
                     Style = new VisualStyle
                     {
                         Override = true,

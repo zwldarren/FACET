@@ -204,6 +204,54 @@ namespace Facet.Tests
             }
         }
 
+        /// <summary>
+        /// The info card's grown state - the sorter picker's band - is the same two properties as the base
+        /// one, and the reason it needs its own case is that a reader has to be told about it: the locator draws
+        /// its arrows off these boxes, so an arrow under a band nobody declared points at nothing the player can
+        /// see. Asserted in the reader's own terms: the box <see cref="HudLayout.Panels"/> reports has to be the
+        /// box <see cref="HudLayout.Info"/> lays out, it has to be taller than the base card, and it still has to
+        /// clear everything else the HUD draws.
+        /// </summary>
+        [Test]
+        public void TheGrownInfoCard_IsWhatThePanelReaderReports_AndStillClearsTheRest()
+        {
+            foreach (Vector2 screen in Screens)
+            {
+                string at = " at " + screen.x + "x" + screen.y;
+                float s = HudLayout.Scale(screen.y);
+                Rect bar = HudLayout.Bar(screen.x, screen.y, s);
+                Rect grown = HudLayout.Info(bar, s, pickerUp: true);
+
+                Assert.Greater(grown.height, HudLayout.Info(bar, s).height,
+                    "the picker's band makes the card taller, which is the whole reason it grows" + at);
+                Assert.AreEqual(HudLayout.Info(bar, s).yMax, grown.yMax, 1e-2f,
+                    "and it grows upward from the same bottom edge, so the bar under it does not move" + at);
+                Assert.Less(grown.yMin, HudLayout.Info(bar, s).yMin,
+                    "which means its far edge is higher up the screen" + at);
+
+                var panels = new Rect[HudLayout.PanelCount];
+                int count = HudLayout.Panels(screen.x, screen.y, s, tutorialUp: false, into: panels,
+                    pickerUp: true);
+
+                bool reported = false;
+                for (int i = 0; i < count; i++) reported |= panels[i] == grown;
+                Assert.IsTrue(reported,
+                    "the panel reader has to report the card the view actually draws" + at);
+
+                foreach (Rect other in new[]
+                         {
+                             HudLayout.Stockpile(screen.x, s),
+                             HudLayout.Status(s),
+                             HudLayout.Controls(screen.x, s),
+                             bar,
+                         })
+                {
+                    Assert.IsFalse(Overlaps(grown, other),
+                        "the grown info card overlaps a panel it is drawn beside" + at);
+                }
+            }
+        }
+
         private static bool Overlaps(Rect a, Rect b)
             => a.xMin < b.xMax - 1e-2f && b.xMin < a.xMax - 1e-2f &&
                a.yMin < b.yMax - 1e-2f && b.yMin < a.yMax - 1e-2f;

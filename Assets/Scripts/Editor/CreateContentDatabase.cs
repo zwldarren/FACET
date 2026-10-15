@@ -88,29 +88,9 @@ namespace Facet.EditorTools
         {
             ContentDatabase shipped = ContentDatabase.Default;
 
-            asset.Shapes = FillShapes(shipped);
-            asset.Recipes = FillRecipes(shipped);
             asset.Machines = FillMachines(shipped);
             asset.Turrets = FillTurrets(shipped);
             asset.Enemies = FillEnemies(shipped);
-        }
-
-        private static ContentDatabaseAsset.ShapeRow[] FillShapes(ContentDatabase shipped)
-        {
-            var rows = new List<ContentDatabaseAsset.ShapeRow>();
-            foreach (ShapeType shape in (ShapeType[])Enum.GetValues(typeof(ShapeType)))
-                rows.Add(ContentDatabaseAsset.ShapeRow.FromDef(shipped.Shape(shape)));
-
-            return rows.ToArray();
-        }
-
-        private static ContentDatabaseAsset.RecipeRow[] FillRecipes(ContentDatabase shipped)
-        {
-            var rows = new List<ContentDatabaseAsset.RecipeRow>();
-            foreach (RecipeDef recipe in shipped.Recipes)
-                rows.Add(ContentDatabaseAsset.RecipeRow.FromDef(recipe));
-
-            return rows.ToArray();
         }
 
         private static ContentDatabaseAsset.MachineRow[] FillMachines(ContentDatabase shipped)
@@ -122,6 +102,10 @@ namespace Facet.EditorTools
             return rows.ToArray();
         }
 
+        /// <summary>
+        /// The numbers behind a machine's row, as the asset writes them back: every machine's row is rebuilt
+        /// from the shipped table, so the asset is always a complete, tunable record of the shipped game.
+        /// </summary>
         private static ContentDatabaseAsset.TurretRow[] FillTurrets(ContentDatabase shipped)
         {
             var rows = new List<ContentDatabaseAsset.TurretRow>();

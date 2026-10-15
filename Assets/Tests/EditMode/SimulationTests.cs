@@ -71,9 +71,9 @@ namespace Facet.Tests
             SimWorld world = Sim.Rig();
 
             world.Paused = true;
-            world.Tick(new InputCommand(selected: BuildKind.Mortar));
+            world.Tick(new InputCommand(selected: BuildKind.Turret));
 
-            Assert.AreEqual(BuildKind.Mortar, world.SelectedKind, "the palette selected while paused");
+            Assert.AreEqual(BuildKind.Turret, world.SelectedKind, "the palette selected while paused");
             Assert.AreEqual(0, world.TickCount, "and nothing else advanced");
         }
 
@@ -112,8 +112,8 @@ namespace Facet.Tests
 
             for (int i = 0; i < 20; i++)
             {
-                a.Belts.TrySpawnItem(new Int2(2, 2), ShapeType.Circle);
-                b.Belts.TrySpawnItem(new Int2(2, 2), ShapeType.Circle);
+                a.Belts.TrySpawnItem(new Int2(2, 2), Sim.Circle);
+                b.Belts.TrySpawnItem(new Int2(2, 2), Sim.Circle);
                 Sim.Tick(a, 7);
                 Sim.Tick(b, 7);
             }
@@ -153,7 +153,7 @@ namespace Facet.Tests
 
             Assert.IsTrue(terrain.CanLayBelt(cell), "bare ground takes a belt");
 
-            terrain.SetOre(cell, ShapeType.Circle);
+            terrain.SetOre(cell, Quad.Circle);
             Assert.IsTrue(terrain.HasOre(cell), "and so does a shape patch: transport crosses ore");
             Assert.IsTrue(terrain.CanLayBelt(cell), "which is the point of the rule");
             Assert.IsFalse(grid.IsOccupied(cell), "but ore is not a building");
@@ -186,7 +186,7 @@ namespace Facet.Tests
 
             // Ore is the one ground with an exception, and it is the drill's: the vein takes the machine
             // that mines it, and nothing else.
-            terrain.SetOre(cell, ShapeType.Circle);
+            terrain.SetOre(cell, Quad.Circle);
             Assert.IsTrue(terrain.CanPlaceMachine(cell, needsOre: true), "a vein takes a drill");
             Assert.IsFalse(terrain.CanPlaceMachine(cell, needsOre: false), "and nothing else");
 
@@ -209,7 +209,8 @@ namespace Facet.Tests
             Assert.AreEqual(TerrainKind.Void, terrain.KindAt(new Int2(8, 2)));
             Assert.IsFalse(terrain.Walkable(new Int2(8, 2)));
             Assert.IsFalse(terrain.CanLayBelt(new Int2(0, 4)));
-            Assert.AreEqual(ShapeType.None, terrain.OreAt(new Int2(-1, -1)));
+            Assert.AreEqual(Quad.Empty, terrain.OreAt(new Int2(-1, -1)),
+                "and a cell off the map yields no mineral: a vein is a quadrant of content, or nothing");
         }
     }
 }

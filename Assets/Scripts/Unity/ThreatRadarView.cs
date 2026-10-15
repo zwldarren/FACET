@@ -41,6 +41,7 @@ namespace Facet.Game
 
         private Camera _camera;
         private bool _tutorialUp;
+        private bool _infoGrown;
 
         /// <summary>The window's panel boxes, measured fresh each frame: the same boxes the HUD draws, so a
         /// walker under one is out of view for the arrows and for the card alike.</summary>
@@ -55,6 +56,20 @@ namespace Facet.Game
         {
             _camera = camera;
             _tutorialUp = tutorialUp;
+            MarkDirty();
+        }
+
+        /// <summary>
+        /// Say whether the HUD's info card is wearing its taller sorter-picker band this frame. The driver
+        /// relays it, because the card's state is the HUD's and the panel boxes are the locator's: without
+        /// it an arrow would be placed on a strip the picker is drawn over, which is exactly the "out of
+        /// view" the arrow exists to answer. Cheap to call every frame - a compare and a flag.
+        /// </summary>
+        public void SetInfoGrown(bool grown)
+        {
+            if (_infoGrown == grown) return;
+
+            _infoGrown = grown;
             MarkDirty();
         }
 
@@ -74,7 +89,7 @@ namespace Facet.Game
             if (_markers.Length != look.MaxMarkers)
                 _markers = new ThreatRadar.Marker[Mathf.Max(1, look.MaxMarkers)];
 
-            var view = _screen.Measure(_camera, _tutorialUp, look.EdgeInsetPixels);
+            var view = _screen.Measure(_camera, _tutorialUp, look.EdgeInsetPixels, _infoGrown);
 
             world.Enemies.GetEnemies(_enemies);
             world.Belts.GetJammed(_jams);

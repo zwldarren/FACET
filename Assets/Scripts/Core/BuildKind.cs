@@ -1,40 +1,48 @@
 namespace Facet.Core
 {
     /// <summary>
-    /// Everything the player can put on the map, in hotkey order. The ordinal is both the selecting
-    /// control and the <see cref="ContentDatabase"/> index, so a new kind is appended, never inserted;
-    /// adding one is an enum value plus its row, with no second list or switch to update.
+    /// Everything the player can put on the map, in the order the design's final machine list gives
+    /// (DESIGN §3): mine, then the three operators that build the shape ladder, then transport, routing,
+    /// the maze tool and the gun. The ordinal is both the selecting control and the
+    /// <see cref="ContentDatabase"/> index, so the order is the hotkey order and a new kind is appended.
+    ///
+    /// The rework reshaped this enum rather than appending to it: the decomposer, the mortar and the
+    /// assembler are retired and their processing is <em>operators</em> now, so the ladder reads in
+    /// teaching order - which is what a player's first ten minutes are spent on.
     /// </summary>
     public enum BuildKind : byte
     {
         Belt = 0,
         Drill = 1,
-        Decomposer = 2,
-        Pipe = 3,
-        Splitter = 4,
-        Cannon = 5,
 
-        /// <summary>Routes by shape: the shape its definition filters for leaves by the side it faces,
-        /// everything else by the other wired outlets.</summary>
-        Sorter = 6,
+        /// <summary>Splits one item along the line its facing selects. Two outlets - front and back -
+        /// and a buffer per outlet, so one blocked side never loses the other piece.</summary>
+        Cutter = 2,
 
-        /// <summary>The second gun: eats half-squares, fires slower, hits harder, reaches further, and
-        /// its shell bursts over an area.</summary>
-        Mortar = 7,
+        /// <summary>Turns an item a quarter clockwise. The one machine that makes orientation fixable:
+        /// the briefing asked for a top half-circle and the line is running bottom halves, so one turn
+        /// repairs it. Counter-clockwise is three of these in series, on purpose.</summary>
+        Rotator = 3,
+
+        /// <summary>Unions two disjoint items into one: the operator that makes every mixed shape. An
+        /// overlapping pair stalls at the intake - a visible queue, not a jam.</summary>
+        Stacker = 4,
+
+        Pipe = 5,
+        Splitter = 6,
+
+        /// <summary>Routes by shape: what its filter matches leaves by the side it faces, everything else
+        /// by the other wired outlets. The filter is either an exact item or "contains this mineral".</summary>
+        Sorter = 7,
 
         /// <summary>Cheap, high-HP and behaviourless: the maze tool the siege mechanic needs. It has no
         /// <see cref="BehaviorKind"/>, so it is placed and forgotten - it just stands and soaks.</summary>
         Wall = 8,
 
-        /// <summary>Fuses one half-circle and one half-square into a composite round: the deep end of
-        /// the ammunition ladder, where the two mineral chains meet. Appended after the wall - new kinds
-        /// go last, so the hotkey order of what shipped before never shifts under a player.</summary>
-        Assembler = 9,
-
-        // There was a Cutter between Sorter and Mortar until the two splitters merged: one decomposer
-        // now runs every recipe, chosen by what is fed to it. Removing it shifted Mortar and Wall down a
-        // slot; the content asset keys its rows by id, so only the ordinals pinned in ContentFormatTests
-        // had to move.
+        /// <summary>The one gun, merged from the cannon and the mortar: a universal chamber that eats any
+        /// non-empty shape, one round per shot, no diet table and no splash. What a shot is worth is the
+        /// shape it was made of against the enemy it hits - see <see cref="TurretBehavior"/>.</summary>
+        Turret = 9,
     }
 
     /// <summary>Convenience reads over the <b>shipped</b> content table, for code that does not care

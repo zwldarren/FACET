@@ -45,7 +45,7 @@ namespace Facet.Tests
         {
             MachineDef wall = ContentDatabase.Default.Machine(BuildKind.Wall);
             return new MachineDef(wall.Id, wall.Build, wall.Tile, wall.Behavior, wall.Cost, wall.Name,
-                wall.Description, wall.RecipeId, wall.Interval, wall.Filter, maxHp: 0f);
+                wall.Description, wall.Interval, wall.Filter, maxHp: 0f);
         }
 
         [Test]
@@ -59,7 +59,7 @@ namespace Facet.Tests
             SimWorld world = new SimWorld(SealedMap(), new SimConfig { CoreMaxHp = 1000000f });
             Sim.Place(world, BuildKind.Wall, WestGap, Dir.East);
             Sim.Place(world, BuildKind.Wall, EastGap, Dir.East);
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 20.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 20.5f), Sim.Circle);
 
             Vec2 last = world.Enemies.EnemyAt(0).Position;
             int still = 0, worstStill = 0;
@@ -110,7 +110,7 @@ namespace Facet.Tests
 
             Sim.Place(world, BuildKind.Wall, nearGap, Dir.East);
             Sim.Place(world, BuildKind.Pipe, farGap, Dir.East);
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 20.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 20.5f), Sim.Circle);
 
             for (int i = 0; i < 30 * 120 && world.Events.CountOf(SimEventKind.CoreDamaged) == 0; i++)
                 world.Tick(InputCommand.None);
@@ -138,10 +138,10 @@ namespace Facet.Tests
 
             var wall = new Int2(10, 8);
             Sim.Place(world, BuildKind.Wall, wall, Dir.East);
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 10.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 10.5f), Sim.Circle);
 
             Assert.Greater((new Vec2(10.5f, 10.5f) - new Vec2(10.5f, 8.5f)).Magnitude,
-                world.Content.Enemy(EnemyKind.Spike).AggroRange, "the test's premise: not in reach yet");
+                world.Content.Enemy(EnemyKind.Runner).AggroRange, "the test's premise: not in reach yet");
 
             for (int i = 0; i < 30 * 60; i++)
             {
@@ -167,7 +167,7 @@ namespace Facet.Tests
             SimWorld world = Sim.NewWorld(20, 12);
             var wall = new Int2(10, 9);
             Sim.Place(world, BuildKind.Wall, wall, Dir.North);
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 10.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 10.5f), Sim.Circle);
 
             for (int i = 0; i < 60; i++)
             {
@@ -204,7 +204,7 @@ namespace Facet.Tests
                 CustomContentTests.Rewrite(machine: UnattackableWall()));
             var block = new Int2(10, 9);
             Sim.Place(world, BuildKind.Wall, block, Dir.North);
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 10.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 10.5f), Sim.Circle);
 
             bool leftTheLane = false;
             for (int i = 0; i < 600 && world.Status == GameStatus.Playing; i++)
@@ -233,13 +233,13 @@ namespace Facet.Tests
             SimWorld world = Sim.NewWorld(20, 12);
             var wall = new Int2(10, 8);
             Sim.Place(world, BuildKind.Wall, wall, Dir.North);
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 10.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 10.5f), Sim.Circle);
 
-            EnemyDef spike = world.Content.Enemy(EnemyKind.Spike);
+            EnemyDef runner = world.Content.Enemy(EnemyKind.Runner);
             var wallCentre = new Vec2(10.5f, 8.5f);
             float from = (new Vec2(10.5f, 10.5f) - wallCentre).Magnitude;
-            Assert.Greater(from, spike.AggroRange, "the test's premise: two tiles is not in reach");
-            Assert.LessOrEqual(from, spike.DetectionRange, "but it is in notice range");
+            Assert.Greater(from, runner.AggroRange, "the test's premise: two tiles is not in reach");
+            Assert.LessOrEqual(from, runner.DetectionRange, "but it is in notice range");
 
             world.Tick(InputCommand.None);
             EnemyState charged = world.Enemies.EnemyAt(0);
@@ -252,7 +252,7 @@ namespace Facet.Tests
             EnemyState engaged = world.Enemies.EnemyAt(0);
             Assert.IsTrue(engaged.Attacking, "and it starts hitting it once it is in reach");
             float gap = (engaged.Position - wallCentre).Magnitude;
-            Assert.LessOrEqual(gap, spike.AggroRange + Sim.Tol, "from inside the reach");
+            Assert.LessOrEqual(gap, runner.AggroRange + Sim.Tol, "from inside the reach");
             Assert.GreaterOrEqual(gap, 0.5f, "without entering the machine's cell");
 
             Sim.Tick(world, 60);
@@ -269,7 +269,7 @@ namespace Facet.Tests
             SimWorld world = Sim.NewWorld(20, 12);
             var machine = new Int2(14, 10);
             Sim.Place(world, BuildKind.Pipe, machine, Dir.North);
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 10.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 10.5f), Sim.Circle);
 
             for (int i = 0; i < 600 && world.Events.CountOf(SimEventKind.CoreDamaged) == 0; i++)
                 world.Tick(InputCommand.None);
@@ -288,7 +288,7 @@ namespace Facet.Tests
             SimWorld world = Sim.NewWorld(20, 12);
             var pipe = new Int2(11, 8);
             Sim.Place(world, BuildKind.Pipe, pipe, Dir.North);
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 10.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 10.5f), Sim.Circle);
 
             float stoppedAt = 10.5f;
             int stoppedTick = 0;
@@ -331,24 +331,24 @@ namespace Facet.Tests
         [Test]
         public void ADestroyedMachine_PaysNoRefund()
         {
-            // An unarmed cannon has no ammo line, so it never fires and cannot defend itself: the spike
+            // An unarmed turret has no line, so it never fires and cannot defend itself: the Runner
             // grinds it down. Destruction must not refund what the player paid, or a chewed building is a
             // free undo.
             SimWorld world = Sim.NewWorld(20, 12);
-            var cannon = new Int2(5, 5);
-            Sim.Place(world, BuildKind.Cannon, cannon, Dir.North);
+            var gun = new Int2(5, 5);
+            Sim.Place(world, BuildKind.Turret, gun, Dir.North);
             int paid = world.Economy.Circles;
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(5.5f, 6.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(5.5f, 6.5f), Sim.Circle);
 
-            for (int i = 0; i < 1200 && world.Machines.Has(cannon); i++)
+            for (int i = 0; i < 1200 && world.Machines.Has(gun); i++)
                 world.Tick(InputCommand.None);
 
-            Assert.IsFalse(world.Machines.Has(cannon), "the unarmed gun is chewed down");
-            Assert.AreEqual(TileKind.Empty, world.TileGrid.Get(cannon), "and its tile goes back to ground");
+            Assert.IsFalse(world.Machines.Has(gun), "the unarmed gun is chewed down");
+            Assert.AreEqual(TileKind.Empty, world.TileGrid.Get(gun), "and its tile goes back to ground");
             Assert.AreEqual(paid, world.Economy.Circles, "destruction is not a refund");
             Assert.IsTrue(world.Events.TryLast(SimEventKind.BuildingDestroyed, out SimEvent gone));
-            Assert.AreEqual(cannon, gone.Cell);
-            Assert.AreEqual(BuildKind.Cannon, gone.Building);
+            Assert.AreEqual(gun, gone.Cell);
+            Assert.AreEqual(BuildKind.Turret, gone.Building);
 
             int shots = world.ShotsFired;
             Sim.Tick(world, 60);
@@ -359,12 +359,12 @@ namespace Facet.Tests
         public void ZeroMaxHp_Machines_AreIndestructible()
         {
             // 0 on the definition is the opt-out: solid, walk-around-able, immune to the siege. Park a
-            // spike next to one for ten seconds and nothing about it may change.
+            // Runner next to one for ten seconds and nothing about it may change.
             SimWorld world = new SimWorld(Sim.TestMap(20, 12), new SimConfig(),
                 CustomContentTests.Rewrite(machine: UnattackableWall()));
             var wall = new Int2(10, 9);
             Sim.Place(world, BuildKind.Wall, wall, Dir.North);
-            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 10.5f));
+            world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 10.5f), Sim.Circle);
 
             Sim.Tick(world, 300);
 

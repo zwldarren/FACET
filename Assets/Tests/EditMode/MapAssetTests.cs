@@ -14,6 +14,11 @@ namespace Facet.Tests
     /// </summary>
     public class MapAssetTests
     {
+        /// <summary>A demand every authored group in this file carries, so the maps here are held to the rule
+        /// that a group names the exact item it is weak to - the one wave error a designer can make that is
+        /// invisible at runtime.</summary>
+        private static ShapeField Demand(Quad mineral) => new ShapeField(mineral, Quad.Empty, Quad.Empty, Quad.Empty);
+
         private MapAsset _asset;
 
         [SetUp]
@@ -33,8 +38,16 @@ namespace Facet.Tests
                     Intermission = 0f,
                     Groups = new[]
                     {
-                        new MapAsset.SpawnGroupRow { Kind = EnemyKind.Spike, Count = 4, SpawnPoint = 0, Interval = 2f },
-                        new MapAsset.SpawnGroupRow { Kind = EnemyKind.Bulwark, Count = 2, SpawnPoint = 1, Interval = 1.5f },
+                        new MapAsset.SpawnGroupRow
+                        {
+                            Kind = EnemyKind.Runner, Count = 4, SpawnPoint = 0, Interval = 2f,
+                            Weakness = Demand(Quad.Circle),
+                        },
+                        new MapAsset.SpawnGroupRow
+                        {
+                            Kind = EnemyKind.Tank, Count = 2, SpawnPoint = 1, Interval = 1.5f,
+                            Weakness = Demand(Quad.Square),
+                        },
                     },
                 },
                 new MapAsset.WaveRow { Intermission = 45f },
@@ -56,8 +69,8 @@ namespace Facet.Tests
             _asset.Paint(5, 7, TerrainKind.Rock);
             _asset.Paint(7, 8, TerrainKind.Water);
             _asset.Paint(0, 0, TerrainKind.Void);
-            _asset.PaintOre(8, 2, ShapeType.Square);
-            _asset.PaintOre(9, 2, ShapeType.Square);
+            _asset.PaintOre(8, 2, Quad.Square);
+            _asset.PaintOre(9, 2, Quad.Square);
 
             MapDefinition map = _asset.ToCore();
 
@@ -82,12 +95,15 @@ namespace Facet.Tests
             Assert.AreEqual(new Int2(8, 2), map.Patches[0].Origin);
             Assert.AreEqual(2, map.Patches[0].Width);
             Assert.AreEqual(1, map.Patches[0].Height);
-            Assert.AreEqual(ShapeType.Square, map.Patches[0].Shape);
+            Assert.AreEqual(Quad.Square, map.Patches[0].Mineral);
 
             Assert.AreEqual(2, map.Waves.Length);
             Assert.AreEqual(2, map.Waves[0].Groups.Length);
-            Assert.AreEqual(6, map.Waves[0].Total, "four Spikes and two Bulwarks");
+            Assert.AreEqual(6, map.Waves[0].Total, "four Runners and two Tanks");
             Assert.AreEqual(0, map.Waves[1].Total, "and the second wave is the empty one it was authored as");
+            Assert.AreEqual(map.Waves[0].Groups[1].Weakness,
+                Shape.Quarter(Shape.NW, Quad.Square),
+                "a group's demand crosses as the exact item it names");
 
             // And the map it describes is one a world can actually be built on: the point of the conversion is
             // that both halves of the game agree about it.
@@ -97,8 +113,33 @@ namespace Facet.Tests
             Assert.AreEqual(TerrainKind.Ore, world.Terrain.KindAt(new Int2(8, 2)),
                 "the painted vein is ore in the ground the world stamped");
             Assert.IsTrue(world.Terrain.HasOre(new Int2(9, 2)));
-            Assert.AreEqual(ShapeType.Square, world.Terrain.OreAt(new Int2(9, 2)));
+            Assert.AreEqual(Quad.Square, world.Terrain.OreAt(new Int2(9, 2)));
             Assert.IsFalse(world.CanPlaceBelt(new Int2(0, 0)), "and the void takes nothing");
+        }
+
+        [Test]
+        public void ToCore_CarriesTheProgression_SoAMapsLadderIsItsOwnData()
+        {
+            // The rework's one addition to a map: which operators it hands over, the seed its waves are
+            // generated from, and whether it generates at all. All three are the map's, not the campaign's -
+            // progression is not a map ordinal.
+            _asset.Unlocked = Operators.Cutter | Operators.Rotator;
+            _asset.Seed = 4242;
+            _asset.GeneratedWaves = 7;
+
+            MapDefinition map = _asset.ToCore();
+
+            Assert.AreEqual(Operators.Cutter | Operators.Rotator, map.Unlocked);
+            Assert.AreEqual(4242, map.Seed);
+            Assert.AreEqual(7, map.GeneratedWaves);
+            Assert.IsTrue(map.GeneratesWaves);
+
+            // And the ladder reaches the simulation: the operator a map has not unlocked cannot be built on it.
+            var world = new SimWorld(map, new SimConfig());
+            Assert.IsTrue(world.IsUnlocked(BuildKind.Cutter));
+            Assert.IsTrue(world.IsUnlocked(BuildKind.Rotator));
+            Assert.IsFalse(world.IsUnlocked(BuildKind.Stacker), "the stacker is not this map's to give");
+            Assert.IsTrue(world.IsUnlocked(BuildKind.Drill), "and the scaffolding needs no unlocking at all");
         }
 
         [Test]
@@ -117,7 +158,7 @@ namespace Facet.Tests
         [Test]
         public void Paint_TakesTheMineralWithTheGround()
         {
-            _asset.PaintOre(3, 3, ShapeType.Circle);
+            _asset.PaintOre(3, 3, Quad.Circle);
 
             MapDefinition painted = _asset.ToCore();
             Assert.AreEqual(TerrainKind.Ground, painted.TerrainAt(new Int2(3, 3)),
@@ -125,7 +166,7 @@ namespace Facet.Tests
             Assert.AreEqual(TerrainKind.Ore, painted.AuthoredGroundAt(new Int2(3, 3)),
                 "and the vein is the patch the list turned into");
             Assert.AreEqual(1, painted.Patches.Length);
-            Assert.AreEqual(ShapeType.Circle, painted.Patches[0].Shape);
+            Assert.AreEqual(Quad.Circle, painted.Patches[0].Mineral);
 
             // Painting over it is what a designer does when they change their mind: what they must not be left
             // with is a rock that still yields a mineral.
@@ -140,11 +181,11 @@ namespace Facet.Tests
         {
             // The window paints with a dragged pointer, so the same cell arrives more than once: a second
             // paint is a change of mineral, not a second vein.
-            _asset.PaintOre(3, 3, ShapeType.Circle);
-            _asset.PaintOre(3, 3, ShapeType.Square);
+            _asset.PaintOre(3, 3, Quad.Circle);
+            _asset.PaintOre(3, 3, Quad.Square);
 
             Assert.AreEqual(1, _asset.Ore.Length);
-            Assert.AreEqual(ShapeType.Square, _asset.Ore[0].Shape);
+            Assert.AreEqual(Quad.Square, _asset.Ore[0].Mineral);
             Assert.AreEqual(TerrainKind.Ground, _asset.TerrainAt(3, 3),
                 "and the ground under it is still plain: a vein is the one entry");
         }
@@ -154,11 +195,35 @@ namespace Facet.Tests
         {
             // The two rules the writer keeps: the array never says ore, and the list never names a cell twice. A
             // brush stroke breaking either would be a map error no designer could see, so painting is held to them.
-            _asset.PaintOre(7, 7, ShapeType.Circle);
+            _asset.PaintOre(7, 7, Quad.Circle);
             List<MapProblem> problems = _asset.Validate();
 
             AssertNoProblem(problems, MapProblemKind.OreInTerrain);
             AssertNoProblem(problems, MapProblemKind.DuplicateOre);
+        }
+
+        [Test]
+        public void Validate_AGroupWithNoDemand_IsReported()
+        {
+            // The wave rule the rework added, and the reason a group carries a shape at all: a group weak to
+            // nothing can only ever be shot at a quarter damage, so the map is a wave nobody can beat rather
+            // than a hard one. Painting is where a designer finds that out.
+            _asset.Waves = new[]
+            {
+                new MapAsset.WaveRow
+                {
+                    Intermission = 0f,
+                    Groups = new[]
+                    {
+                        new MapAsset.SpawnGroupRow { Kind = EnemyKind.Runner, Count = 3, Interval = 1f },
+                    },
+                },
+            };
+
+            AssertProblem(_asset.Validate(), MapProblemKind.GroupWithoutDemand, new Int2(-1, -1));
+
+            _asset.Waves[0].Groups[0].Weakness = Demand(Quad.Circle);
+            AssertNoProblem(_asset.Validate(), MapProblemKind.GroupWithoutDemand);
         }
 
         [Test]
@@ -178,18 +243,18 @@ namespace Facet.Tests
             // entry is the one that counts, here and in the conversion alike.
             _asset.Ore = new[]
             {
-                new MapAsset.OreCell { Cell = new Vector2Int(7, 7), Shape = ShapeType.Circle },
-                new MapAsset.OreCell { Cell = new Vector2Int(7, 7), Shape = ShapeType.Square },
+                new MapAsset.OreCell { Cell = new Vector2Int(7, 7), Mineral = Quad.Circle },
+                new MapAsset.OreCell { Cell = new Vector2Int(7, 7), Mineral = Quad.Square },
             };
 
             AssertProblem(_asset.Validate(), MapProblemKind.DuplicateOre, new Int2(7, 7));
-            Assert.AreEqual(ShapeType.Circle, _asset.DrawableView().MineralAt(7, 7), "and the first entry wins");
+            Assert.AreEqual(Quad.Circle, _asset.DrawableView().MineralAt(7, 7), "and the first entry wins");
         }
 
         [Test]
         public void Erase_IsGroundAndNoMineral()
         {
-            _asset.PaintOre(3, 3, ShapeType.Circle);
+            _asset.PaintOre(3, 3, Quad.Circle);
             _asset.Paint(4, 3, TerrainKind.Water);
 
             _asset.Erase(3, 3);
@@ -206,8 +271,8 @@ namespace Facet.Tests
         {
             _asset.Paint(0, 0, TerrainKind.Rock);
             _asset.Paint(5, 5, TerrainKind.Water);
-            _asset.PaintOre(1, 1, ShapeType.Circle);
-            _asset.PaintOre(5, 5, ShapeType.Square);
+            _asset.PaintOre(1, 1, Quad.Circle);
+            _asset.PaintOre(5, 5, Quad.Square);
 
             _asset.Resize(3, 3);
 
@@ -249,7 +314,14 @@ namespace Facet.Tests
                 new MapAsset.WaveRow
                 {
                     Intermission = 0f,
-                    Groups = new[] { new MapAsset.SpawnGroupRow { Kind = EnemyKind.Spike, Count = 3, Interval = 1f } },
+                    Groups = new[]
+                    {
+                        new MapAsset.SpawnGroupRow
+                        {
+                            Kind = EnemyKind.Runner, Count = 3, Interval = 1f,
+                            Weakness = Demand(Quad.Circle),
+                        },
+                    },
                 },
             };
             _asset.CoreCell = new Vector2Int(8, 5);
@@ -362,15 +434,15 @@ namespace Facet.Tests
             // The same map, two hand-written spellings: the ore list in the other insertion order, each with a
             // junk entry off the map. What draws is one picture either way, but the digest used to hash the raw
             // list - junk and order included.
-            _asset.PaintOre(2, 6, ShapeType.Circle);
-            _asset.PaintOre(3, 6, ShapeType.Circle);
+            _asset.PaintOre(2, 6, Quad.Circle);
+            _asset.PaintOre(3, 6, Quad.Circle);
             int forward = _asset.ContentHash();
 
             _asset.Ore = new[]
             {
-                new MapAsset.OreCell { Cell = new Vector2Int(3, 6), Shape = ShapeType.Circle },
-                new MapAsset.OreCell { Cell = new Vector2Int(2, 6), Shape = ShapeType.Circle },
-                new MapAsset.OreCell { Cell = new Vector2Int(40, 40), Shape = ShapeType.Square },
+                new MapAsset.OreCell { Cell = new Vector2Int(3, 6), Mineral = Quad.Circle },
+                new MapAsset.OreCell { Cell = new Vector2Int(2, 6), Mineral = Quad.Circle },
+                new MapAsset.OreCell { Cell = new Vector2Int(40, 40), Mineral = Quad.Square },
             };
 
             Assert.AreEqual(forward, _asset.ContentHash(),
@@ -378,7 +450,7 @@ namespace Facet.Tests
 
             MapDefinition map = _asset.ToCore();
             DrawnMap drawn = _asset.DrawableView();
-            Assert.AreEqual(ShapeType.Circle, drawn.MineralAt(2, 6));
+            Assert.AreEqual(Quad.Circle, drawn.MineralAt(2, 6));
             Assert.AreEqual(1, map.Patches.Length, "the row-run rule is the walk's too");
             Assert.AreEqual(new Int2(2, 6), map.Patches[0].Origin);
             Assert.AreEqual(2, map.Patches[0].Width);
@@ -392,11 +464,11 @@ namespace Facet.Tests
             // enumeration twice.
             _asset.Ore = new[]
             {
-                new MapAsset.OreCell { Cell = new Vector2Int(5, 5), Shape = ShapeType.None },
-                new MapAsset.OreCell { Cell = new Vector2Int(5, 5), Shape = ShapeType.Circle },
+                new MapAsset.OreCell { Cell = new Vector2Int(5, 5), Mineral = Quad.Empty },
+                new MapAsset.OreCell { Cell = new Vector2Int(5, 5), Mineral = Quad.Circle },
             };
 
-            Assert.AreEqual(ShapeType.None, _asset.DrawableView().MineralAt(5, 5), "first entry wins, here");
+            Assert.AreEqual(Quad.Empty, _asset.DrawableView().MineralAt(5, 5), "first entry wins, here");
             Assert.IsEmpty(_asset.ToCore().Patches, "and in the conversion");
         }
 
@@ -421,7 +493,7 @@ namespace Facet.Tests
             // Every cell the picture draws and every cell the runtime gets are the same answer - the agreement
             // the four hand-walks used to be hoped for and never tested.
             _asset.Paint(1, 8, TerrainKind.Void);
-            _asset.PaintOre(6, 1, ShapeType.HalfSquare);
+            _asset.PaintOre(6, 1, Quad.Square);
 
             MapDefinition map = _asset.ToCore();
             DrawnMap drawn = _asset.DrawableView();
@@ -430,12 +502,12 @@ namespace Facet.Tests
                 for (int x = 0; x < drawn.Width; x++)
                     Assert.AreEqual(map.TerrainAt(new Int2(x, y)), drawn.GroundAt(x, y), "cell " + x + "," + y);
 
-            Assert.AreEqual(ShapeType.HalfSquare, drawn.MineralAt(6, 1));
+            Assert.AreEqual(Quad.Square, drawn.MineralAt(6, 1));
             Assert.AreEqual(TerrainKind.Ground, drawn.GroundAt(6, 1),
                 "a vein's ground is plain, as it is in the array - the mineral is what says there is a vein");
             Assert.AreEqual(map.CoreCell.X, drawn.Core.x);
             Assert.AreEqual(map.CoreCell.Y, drawn.Core.y);
-            Assert.AreEqual(ShapeType.None, drawn.MineralAt(0, 0), "plain ground carries no mineral");
+            Assert.AreEqual(Quad.Empty, drawn.MineralAt(0, 0), "plain ground carries no mineral");
         }
 
         /// <summary>The problem of that kind at that cell, so a test asks about the one rule it broke rather

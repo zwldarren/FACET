@@ -73,7 +73,7 @@ namespace Facet.Tests
 
             void AssertEdge(Vector2 at, float edgeX, float edgeY)
             {
-                int arrows = ThreatRadar.Collect(Screen, new[] { Enemy(EnemyKind.Spike, at.x, at.y) },
+                int arrows = ThreatRadar.Collect(Screen, new[] { Enemy(EnemyKind.Runner, at.x, at.y) },
                     NoJams, Centre, 1f, Markers(4, out ThreatRadar.Marker[] into), out _);
 
                 Assert.AreEqual(1, arrows, "one enemy, one arrow, at " + at);
@@ -96,7 +96,7 @@ namespace Facet.Tests
         [Test]
         public void AnArrowIsSteppedClearOfTheCardItWouldOtherwiseSitUnder()
         {
-            int arrows = ThreatRadar.Collect(Screen, new[] { Enemy(EnemyKind.Spike, 12f, 26f) },
+            int arrows = ThreatRadar.Collect(Screen, new[] { Enemy(EnemyKind.Runner, 12f, 26f) },
                 NoJams, Centre, 1f, Markers(4, out ThreatRadar.Marker[] into), out ThreatRadar.Summary summary);
 
             Assert.AreEqual(1, summary.Threats, "the walker under the status card is out of view");
@@ -115,12 +115,47 @@ namespace Facet.Tests
         [Test]
         public void AnArrowAboveTheBuildBar_ClearsItsWholeLength()
         {
-            ThreatRadar.Collect(Screen, new[] { Enemy(EnemyKind.Spike, 20f, 5f) }, NoJams, Centre,
+            ThreatRadar.Collect(Screen, new[] { Enemy(EnemyKind.Runner, 20f, 5f) }, NoJams, Centre,
                 1f, Markers(4, out ThreatRadar.Marker[] into), out _);
 
             Assert.IsFalse(Screen.Covers(into[0].At));
             Assert.AreEqual(13.5f, into[0].At.y, 1e-3f, "just clear of the bar, with the marker's own margin");
             Assert.AreEqual(20f, into[0].At.x, 1e-3f, "and still on the way south");
+        }
+
+        /// <summary>
+        /// The same rule applied to the one panel that is only sometimes there: the info card's band while a
+        /// sorter's picker is on it. A reader has to be <em>told</em> about it - it is a parameter of the panel
+        /// list, not something the card's place implies - so a reader that was not told draws its arrow under the
+        /// picker, which is the one outcome the band exists to prevent. Pinned on the reader's side of that
+        /// contract, where the arrow's answer actually lives.
+        /// </summary>
+        [Test]
+        public void AnArrowIsSteppedClearOfTheGrownInfoCard_WhileTheSorterPickerIsUp()
+        {
+            // The band the picker grows by: the info card's own strip, floating above the build bar's right end.
+            var band = new Rect(16f, 13f, 6f, 4f);
+            var panels = new[] { Panels[0], Panels[1], band };
+            var screen = new ThreatRadar.Viewport(Centre, new Vector2(10f, 10f), Margin, panels, panels.Length);
+            var wave = new[] { Enemy(EnemyKind.Runner, 20f, 5f) };      // due south, off the window's bottom
+
+            Assert.IsTrue(screen.Covers(new Vector2(20f, 15f)), "the test's premise: the band is a panel");
+            Assert.IsFalse(Screen.Covers(new Vector2(20f, 15f)),
+                "and without it that tile is free, which is why the reader has to be told");
+
+            // Without the band the arrow is clear of the build bar and nothing else.
+            ThreatRadar.Collect(Screen, wave, NoJams, Centre, 1f,
+                Markers(4, out ThreatRadar.Marker[] under), out _);
+            Assert.AreEqual(13.5f, under[0].At.y, 1e-3f, "the bar alone puts it just above itself");
+
+            int arrows = ThreatRadar.Collect(screen, wave, NoJams, Centre, 1f,
+                Markers(4, out ThreatRadar.Marker[] into), out _);
+
+            Assert.AreEqual(1, arrows);
+            Assert.IsFalse(screen.Covers(into[0].At), "the band is not where the arrow is left");
+            Assert.Greater(into[0].At.y, under[0].At.y,
+                "it was stepped further up the sight line to clear the picker");
+            Assert.AreEqual(20f, into[0].At.x, 1e-3f, "and it never left the way south to get there");
         }
 
         /// <summary>The warning frame is drawn on the free area - the ring with any side pushed in past the card
@@ -141,9 +176,9 @@ namespace Facet.Tests
         {
             int arrows = ThreatRadar.Collect(Screen, new[]
             {
-                Enemy(EnemyKind.Spike, 20f, 20f),
-                Enemy(EnemyKind.Bulwark, 27f, 27f),      // on the window, clear of every card
-                Enemy(EnemyKind.Bulwark, 12f, 15f),      // on the free ground under the status card
+                Enemy(EnemyKind.Runner, 20f, 20f),
+                Enemy(EnemyKind.Tank, 27f, 27f),      // on the window, clear of every card
+                Enemy(EnemyKind.Tank, 12f, 15f),      // on the free ground under the status card
             }, NoJams, Centre, 1f, Markers(4, out _), out ThreatRadar.Summary summary);
 
             Assert.AreEqual(0, arrows);
@@ -157,7 +192,7 @@ namespace Facet.Tests
         [Test]
         public void AnArrowKnowsHowFarAway_WhatItPointsAtIs()
         {
-            ThreatRadar.Collect(Screen, new[] { Enemy(EnemyKind.Spike, 40f, 20f) }, NoJams, Centre,
+            ThreatRadar.Collect(Screen, new[] { Enemy(EnemyKind.Runner, 40f, 20f) }, NoJams, Centre,
                 1f, Markers(4, out _), out ThreatRadar.Summary summary);
 
             Assert.AreEqual(20f, summary.Nearest, 1e-3f);
@@ -170,9 +205,9 @@ namespace Facet.Tests
         {
             int arrows = ThreatRadar.Collect(Screen, new[]
             {
-                Enemy(EnemyKind.Spike, 40f, 19.6f),
-                Enemy(EnemyKind.Spike, 40f, 20.2f),
-                Enemy(EnemyKind.Bulwark, 41f, 20.4f),
+                Enemy(EnemyKind.Runner, 40f, 19.6f),
+                Enemy(EnemyKind.Runner, 40f, 20.2f),
+                Enemy(EnemyKind.Tank, 41f, 20.4f),
             }, NoJams, Centre, 2f, Markers(4, out ThreatRadar.Marker[] into), out ThreatRadar.Summary summary);
 
             Assert.AreEqual(1, arrows, "the three of them fold into one arrow");
@@ -187,8 +222,8 @@ namespace Facet.Tests
         {
             int arrows = ThreatRadar.Collect(Screen, new[]
             {
-                Enemy(EnemyKind.Spike, 40f, 20f),         // east
-                Enemy(EnemyKind.Spike, 0f, 20f),          // west
+                Enemy(EnemyKind.Runner, 40f, 20f),         // east
+                Enemy(EnemyKind.Runner, 0f, 20f),          // west
             }, NoJams, Centre, 2f, Markers(4, out _), out _);
 
             Assert.AreEqual(2, arrows);
@@ -202,14 +237,14 @@ namespace Facet.Tests
         [Test]
         public void AClusterWearsItsNearestEnemy_ButShoutsForAnyOfThem()
         {
-            var near = Enemy(EnemyKind.Bulwark, 35f, 20f);
-            var farButHitting = Enemy(EnemyKind.Spike, 60f, 20f, attacking: true);
+            var near = Enemy(EnemyKind.Tank, 35f, 20f);
+            var farButHitting = Enemy(EnemyKind.Runner, 60f, 20f, attacking: true);
 
             int arrows = ThreatRadar.Collect(Screen, new[] { farButHitting, near }, NoJams, Centre,
                 8f, Markers(4, out ThreatRadar.Marker[] into), out ThreatRadar.Summary summary);
 
             Assert.AreEqual(1, arrows);
-            Assert.AreEqual(EnemyKind.Bulwark, into[0].Kind, "the nearer of the two is the face it wears");
+            Assert.AreEqual(EnemyKind.Tank, into[0].Kind, "the nearer of the two is the face it wears");
             Assert.AreEqual(15f, into[0].Distance, 1e-3f, "and the number it fades by");
             Assert.IsTrue(into[0].Urgent, "but the one hitting something is what makes it shout");
             Assert.IsTrue(summary.Urgent);
@@ -222,10 +257,10 @@ namespace Facet.Tests
         {
             int arrows = ThreatRadar.Collect(Screen, new[]
             {
-                Enemy(EnemyKind.Spike, 40f, 20f),
-                Enemy(EnemyKind.Spike, 20f, 2f),
-                Enemy(EnemyKind.Spike, 0f, 20f),
-                Enemy(EnemyKind.Spike, 20f, 40f),
+                Enemy(EnemyKind.Runner, 40f, 20f),
+                Enemy(EnemyKind.Runner, 20f, 2f),
+                Enemy(EnemyKind.Runner, 0f, 20f),
+                Enemy(EnemyKind.Runner, 20f, 40f),
             }, NoJams, Centre, 0.1f, Markers(1, out ThreatRadar.Marker[] into), out ThreatRadar.Summary summary);
 
             Assert.AreEqual(1, arrows, "one arrow, because one is what there is room for");
@@ -271,19 +306,19 @@ namespace Facet.Tests
         public void FoldingTwoArrowsAtOnePlace_KeepsTheCountAndTheShout()
         {
             var idle = new ThreatRadar.Marker(ThreatRadar.Subject.Threat, new Vector2(28f, 20f),
-                Vector2.right, 1, 12f, false, EnemyKind.Bulwark);
+                Vector2.right, 1, 12f, false, EnemyKind.Tank);
             var hitting = new ThreatRadar.Marker(ThreatRadar.Subject.Threat, new Vector2(28f, 20f),
-                Vector2.right, 1, 30f, true, EnemyKind.Spike);
+                Vector2.right, 1, 30f, true, EnemyKind.Runner);
 
             ThreatRadar.Marker folded = idle.Fold(in hitting);
             Assert.AreEqual(2, folded.Count);
             Assert.IsTrue(folded.Urgent, "a cluster that starts hitting keeps shouting");
             Assert.AreEqual(12f, folded.Distance, "and keeps the nearer distance");
-            Assert.AreEqual(EnemyKind.Bulwark, folded.Kind);
+            Assert.AreEqual(EnemyKind.Tank, folded.Kind);
 
             ThreatRadar.Marker nearerLast = hitting.Fold(in idle);
             Assert.AreEqual(12f, nearerLast.Distance, "the fold does not care which came first");
-            Assert.AreEqual(EnemyKind.Bulwark, nearerLast.Kind);
+            Assert.AreEqual(EnemyKind.Tank, nearerLast.Kind);
             Assert.AreEqual(2, nearerLast.Count);
         }
 

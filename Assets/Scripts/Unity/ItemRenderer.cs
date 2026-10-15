@@ -8,10 +8,12 @@ namespace Facet.Game
     /// interpolate between the last two ticks with the frame's Alpha, so transport is smooth instead of stepping at
     /// 30 Hz.
     ///
-    /// The shape is the one thing on screen the player must identify at a glance, so its appearance comes from the
-    /// Palette's <see cref="Palette.Visuals"/> override for that shape: unticked it is the built-in circle / half-disc
-    /// in the shape's colour, ticked it can be a different silhouette, colour or Sprite. The icon set is built once, so
-    /// a busy belt rebuilds without per-item allocation.</summary>
+    /// The item is the thing on screen the player must identify at a glance, so it is drawn as what it
+    /// <em>is</em>: its four quadrants, each in its own mineral's colour - a full circle is a disc, a left
+    /// half-circle is half a disc, and a mixed piece shows both minerals and the seam where a cutter would
+    /// split it. The look comes from the Palette's per-mineral <see cref="Palette.Visuals"/> override:
+    /// unticked it is the shipped quarter disc or quadrant cell, ticked it can be a different silhouette,
+    /// colour or Sprite. The icon set is built once, so a busy belt rebuilds without per-item allocation.</summary>
     [DefaultExecutionOrder(110)]
     public sealed class ItemRenderer : MeshView
     {

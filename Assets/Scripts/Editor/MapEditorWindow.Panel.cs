@@ -59,6 +59,20 @@ namespace Facet.EditorTools
             asset.Name = TextField(asset, "Name", asset.Name, "Rename map");
             asset.StartCircles = IntField(asset, "Start circles", asset.StartCircles, "Edit the map's stockpile");
 
+            // Progression. The operator set is the campaign's ladder, so it is edited here beside the map
+            // rather than inferred from the map's ordinal - a map teaches exactly what its author says.
+            asset.Unlocked = OperatorsField(asset, "Unlocked", asset.Unlocked, "Edit the map's unlocks");
+            asset.Seed = IntField(asset, "Seed", asset.Seed,
+                "0 draws a fresh seed every run; a non-zero value pins every run to it");
+            asset.GeneratedWaves = IntField(asset, "Generated waves",
+                asset.GeneratedWaves, "Edit the map's generated waves");
+            EditorGUILayout.LabelField(asset.GeneratedWaves < 0
+                    ? "  endless: the generator never runs out of demands"
+                    : asset.GeneratedWaves == 0
+                        ? "  scripted only: the map ends with its wave table"
+                        : "  " + asset.GeneratedWaves + " generated waves after the table",
+                EditorStyles.miniLabel);
+
             // Width and Height are the one pair of fields not written straight back. A resize re-lays the
             // terrain array and drops everything past the new edge, so a half-typed number must not do it; the
             // buffer is read back off the asset whenever neither field has focus, so the window never shows a
@@ -132,9 +146,7 @@ namespace Facet.EditorTools
             LegendRow("water", WaterTone);
             LegendRow("void - not drawn", NoTone);
             LegendRow("circle vein", CircleTone);
-            LegendRow("half-circle vein", HalfCircleTone);
             LegendRow("square vein", SquareTone);
-            LegendRow("half-square vein", HalfSquareTone);
             LegendRow("core footprint", CoreTone);
             LegendRow("wave entry point", DoorTone);
         }
@@ -239,6 +251,39 @@ namespace Facet.EditorTools
         {
             EditorGUI.BeginChangeCheck();
             var edited = (EnemyKind)EditorGUILayout.EnumPopup(label, value);
+            return CommitChange(asset, undo, EditorGUI.EndChangeCheck(), value, edited);
+        }
+
+        /// <inheritdoc cref="TextField"/>
+        /// <summary>The map's unlocked operator set: a flags popup, so a map hands over exactly the machines its
+        /// author means it to.</summary>
+        private static Operators OperatorsField(MapAsset asset, string label, Operators value, string undo)
+        {
+            EditorGUI.BeginChangeCheck();
+            var edited = (Operators)EditorGUILayout.EnumFlagsField(label, value);
+            return CommitChange(asset, undo, EditorGUI.EndChangeCheck(), value, edited);
+        }
+
+        /// <summary>
+        /// One item, edited as its four quadrants - the same four cells the player paints on the sorter's
+        /// picker and the view draws, so an author and a player read one figure. Each quadrant cycles
+        /// Empty &gt; Circle &gt; Square, which is every value it has, and the label beside the row spells the
+        /// result in words because four popups are hard to read at a glance.
+        /// </summary>
+        private static ShapeField ShapeFieldField(MapAsset asset, ShapeField value, string undo)
+        {
+            EditorGUI.BeginChangeCheck();
+
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("Item", EditorStyles.miniLabel, GUILayout.Width(60f));
+            var edited = new ShapeField(
+                (Quad)EditorGUILayout.EnumPopup(value.NW, GUILayout.Width(64f)),
+                (Quad)EditorGUILayout.EnumPopup(value.NE, GUILayout.Width(64f)),
+                (Quad)EditorGUILayout.EnumPopup(value.SE, GUILayout.Width(64f)),
+                (Quad)EditorGUILayout.EnumPopup(value.SW, GUILayout.Width(64f)));
+            EditorGUILayout.LabelField("NW NE SE SW = " + edited, EditorStyles.miniLabel);
+            EditorGUILayout.EndHorizontal();
+
             return CommitChange(asset, undo, EditorGUI.EndChangeCheck(), value, edited);
         }
 

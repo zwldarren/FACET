@@ -1,21 +1,26 @@
 using System;
+using System.Collections.Generic;
 
 namespace Facet.Core
 {
-    /// <summary>One rectangular shape patch in the ground.</summary>
+    /// <summary>One rectangular shape patch in the ground: a vein of one mineral.</summary>
     public readonly struct ShapePatch
     {
         public readonly Int2 Origin;
         public readonly int Width;
         public readonly int Height;
-        public readonly ShapeType Shape;
 
-        public ShapePatch(Int2 origin, int width, int height, ShapeType shape)
+        /// <summary>The mineral the vein yields. A drill mines it as the full shape of that mineral, which
+        /// is the root of every chain the map can build - and the reason the wave generator's demand pool
+        /// is a map property: no square ore, no square-family shapes.</summary>
+        public readonly Quad Mineral;
+
+        public ShapePatch(Int2 origin, int width, int height, Quad mineral)
         {
             Origin = origin;
             Width = width;
             Height = height;
-            Shape = shape;
+            Mineral = mineral;
         }
 
         public bool Contains(Int2 cell)
@@ -25,8 +30,10 @@ namespace Facet.Core
 
     /// <summary>
     /// One map: size, starting stockpile, ground, mineral patches, the Core, wave doorways and the wave
-    /// table. All fixed data, so a run is reproducible from the world's state. Engine-free - the Editor's
-    /// authoring surface is <c>MapAsset</c>, which converts with <c>ToCore()</c> to this same data.
+    /// table - plus the two things the rework added to it: which operators the map has unlocked, and how
+    /// its waves are sourced. All fixed data, so a run is reproducible from the world's state. Engine-free
+    /// - the Editor's authoring surface is <c>MapAsset</c>, which converts with <c>ToCore()</c> to this
+    /// same data.
     /// </summary>
     public sealed class MapDefinition
     {
@@ -42,6 +49,27 @@ namespace Facet.Core
         public readonly Int2[] SpawnPoints;
         public readonly WaveDefinition[] Waves;
 
+        /// <summary>
+        /// The operator machines this map has unlocked. Progression is this set rather than the map's
+        /// ordinal (§7): a map teaches the operators it hands over, so a locked rotator is not merely
+        /// unaffordable, it cannot be built at all.
+        /// </summary>
+        public readonly Operators Unlocked;
+
+        /// <summary>The seed a run defaults to: the only source of randomness in Core, and what the wave
+        /// generator draws from. Zero - the authored default - means the host draws a fresh seed per run
+        /// instead (§5: one seed per run, shown in the HUD); a non-zero value pins every run of this map
+        /// to it, for a demo that must replay exactly. Shown in the HUD either way.</summary>
+        public readonly int Seed;
+
+        /// <summary>
+        /// How many generated waves follow the authored table, or <b>-1 for endless</b>. 0 - the authored
+        /// default - means the map is finished when its table is cleared, which is what every scripted
+        /// tutorial map wants; -1 is how a map becomes endless mode, since the generator then never runs
+        /// out of demands.
+        /// </summary>
+        public readonly int GeneratedWaves;
+
         /// <summary>Ground of every tile, row-major (<c>y * Width + x</c>), or <see langword="null"/> for
         /// plain, buildable ground everywhere - not a special case anywhere. <see cref="TerrainLayout.Rects"/>
         /// is the authoring form; the painted asset carries the array itself, cell by cell.</summary>
@@ -54,7 +82,8 @@ namespace Facet.Core
 
         public MapDefinition(string name, int width, int height, int startCircles,
             ShapePatch[] patches, Int2[] spawnPoints, WaveDefinition[] waves,
-            TerrainKind[] terrain = null, Int2? coreCell = null)
+            TerrainKind[] terrain = null, Int2? coreCell = null,
+            Operators unlocked = Operators.All, int seed = 0, int generatedWaves = 0)
         {
             Name = name;
             Width = width;
@@ -65,7 +94,45 @@ namespace Facet.Core
             Waves = waves ?? new WaveDefinition[0];
             Terrain = terrain;
             CoreCell = coreCell ?? CentredCore(width, height);
+            Unlocked = unlocked;
+            Seed = seed;
+            GeneratedWaves = generatedWaves;
         }
+
+        /// <summary>
+        /// The closure of this map's minerals under its unlocked operators: every item a player on this map
+        /// can actually build, and therefore the only pool the wave generator may demand from. Built on
+        /// demand and cheap (a breadth-first walk over at most 80 items) - the map is fixed, so the answer
+        /// is too.
+        /// </summary>
+        public ShapePool Pool() => new ShapePool(MineralList(), Unlocked);
+
+        /// <summary>The distinct minerals this map's veins yield, in the order the patches list them. What
+        /// the generator roots its pool at.</summary>
+        public Quad[] MineralList()
+        {
+            var minerals = new List<Quad>();
+            for (int i = 0; i < Patches.Length; i++)
+            {
+                Quad mineral = Patches[i].Mineral;
+                if (mineral == Quad.Empty || minerals.Contains(mineral)) continue;
+                minerals.Add(mineral);
+            }
+
+            return minerals.ToArray();
+        }
+
+        /// <summary>Does this map source waves procedurally? A generated map may author a scripted opening
+        /// and then hand over to the generator, or author nothing at all and be generated from wave 1.</summary>
+        public bool GeneratesWaves => GeneratedWaves != 0;
+
+        /// <summary>The same map, with its wave count unbounded: the campaign's entry into endless mode
+        /// (§7) is the last map played again with the generator answering forever, and the driver - not
+        /// the map data - is what flips it, so an authored map stays what the editor drew. Everything else
+        /// is carried over as-is; the run's seed remains the host's per-run decision.</summary>
+        public MapDefinition WithEndless()
+            => new MapDefinition(Name, Width, Height, StartCircles, Patches, SpawnPoints, Waves,
+                Terrain, CoreCell, Unlocked, Seed, -1);
 
         /// <summary>Centre of a spawn point in world units, where enemies are created. The index is
         /// resolved by <see cref="ResolveSpawn"/> like every other reader, so the entry tile is the one the
@@ -120,7 +187,7 @@ namespace Facet.Core
         public bool PatchClaims(Int2 cell)
         {
             for (int p = 0; p < Patches.Length; p++)
-                if (Patches[p].Shape.IsShape() && Patches[p].Contains(cell)) return true;
+                if (Patches[p].Mineral != Quad.Empty && Patches[p].Contains(cell)) return true;
 
             return false;
         }
@@ -139,8 +206,8 @@ namespace Facet.Core
         /// plain ground; a patch claims its cells as ore (a vein is the more specific intent, so a rock
         /// drawn across one cannot delete the mineral); the terrain array paints what nobody claimed.
         /// An array that states ore is a map no writer produces, and <see cref="MapValidation"/> names it.
-        /// <paramref name="shape"/> optionally receives the mineral of every ore cell.</summary>
-        public void StampTerrain(TerrainKind[] kind, ShapeType[] shape = null)
+        /// <paramref name="mineral"/> optionally receives the mineral of every ore cell.</summary>
+        public void StampTerrain(TerrainKind[] kind, Quad[] mineral = null)
         {
             if (kind == null) throw new ArgumentNullException(nameof(kind));
 
@@ -160,7 +227,7 @@ namespace Facet.Core
                         if (i >= kind.Length) continue;
 
                         kind[i] = TerrainKind.Ore;
-                        if (shape != null && i < shape.Length) shape[i] = patch.Shape;
+                        if (mineral != null && i < mineral.Length) mineral[i] = patch.Mineral;
                     }
                 }
             }

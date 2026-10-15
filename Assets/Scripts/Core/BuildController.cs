@@ -25,6 +25,9 @@ namespace Facet.Core
         private readonly MachineField _machines;
         private readonly EconomyState _economy;
 
+        /// <summary>The content table: what a building costs, and which operator it needs unlocked.</summary>
+        private readonly ContentDatabase _content;
+
         /// <summary>The ground and the map itself: the things the read cursor can name that are not
         /// buildings - a vein, a rock, a pond, and a wave's doorway.</summary>
         private readonly TerrainField _terrain;
@@ -71,7 +74,7 @@ namespace Facet.Core
                 : GhostDirection;
 
         public BuildController(TileGrid grid, TerrainField terrain, MapDefinition map, BeltField belts,
-            MachineField machines, EconomyState economy, SimEventBuffer events)
+            MachineField machines, EconomyState economy, ContentDatabase content, SimEventBuffer events)
         {
             _grid = grid ?? throw new ArgumentNullException(nameof(grid));
             _terrain = terrain ?? throw new ArgumentNullException(nameof(terrain));
@@ -79,6 +82,7 @@ namespace Facet.Core
             _belts = belts ?? throw new ArgumentNullException(nameof(belts));
             _machines = machines ?? throw new ArgumentNullException(nameof(machines));
             _economy = economy ?? throw new ArgumentNullException(nameof(economy));
+            _content = content ?? throw new ArgumentNullException(nameof(content));
             _events = events ?? throw new ArgumentNullException(nameof(events));
             Reset();
         }
@@ -103,7 +107,20 @@ namespace Facet.Core
         /// <summary>Would a placement of this kind be allowed here? Structural only - whether the stockpile
         /// can cover it is <see cref="EconomyState.CanAfford"/>, and the cursor ghost reads both.</summary>
         public bool CanPlace(BuildKind kind, Int2 cell)
-            => kind == BuildKind.Belt ? _terrain.CanLayBelt(cell) : _machines.CanPlace(kind, cell);
+            => IsUnlocked(kind)
+               && (kind == BuildKind.Belt ? _terrain.CanLayBelt(cell) : _machines.CanPlace(kind, cell));
+
+        /// <summary>Has this map unlocked the operator this building needs? The campaign's progression is
+        /// the operator set (<see cref="MapDefinition.Unlocked"/>), so map 1 refuses a rotator outright
+        /// rather than merely making it expensive - a locked machine is not a thing the player should be
+        /// able to buy and then find useless.
+        ///
+        /// A kind the run's own table does not define reads as locked, not as an error: the build bar offers
+        /// the <em>shipped</em> kinds, a table may legitimately carry fewer rows than the enum has values,
+        /// and a machine nothing defines could not be placed anyway.</summary>
+        public bool IsUnlocked(BuildKind kind)
+            => _content.TryMachine(kind, out MachineDef machine)
+               && (machine.Requires & ~_map.Unlocked) == 0;
 
         /// <summary>Place one building and pay for it. A drag lays belts cell by cell through this, so a
         /// line simply stops growing when the stockpile runs dry - skipped like a blocked tile, not an
@@ -150,6 +167,7 @@ namespace Facet.Core
         private RejectionReason ReasonFor(BuildKind kind, Int2 cell)
         {
             if (CanPlace(kind, cell)) return RejectionReason.NoFunds;
+            if (!IsUnlocked(kind)) return RejectionReason.Locked;
             if (!_grid.InBounds(cell)) return RejectionReason.OffMap;
             if (kind != BuildKind.Belt && _map.SpawnIndexOf(cell) >= 0) return RejectionReason.Doorway;
             if (_grid.IsOccupied(cell)) return RejectionReason.Occupied;
@@ -187,6 +205,25 @@ namespace Facet.Core
         private void ForgetInspected(Int2 cell)
         {
             if (cell == InspectedCell) InspectedCell = NoCell;
+        }
+
+        /// <summary>
+        /// Re-route a standing sorter: the picker's verb. Only a sorter has a filter to set, so a command
+        /// aimed at anything else is ignored rather than treated as an error - the picker is drawn from the
+        /// machine under the cursor, and a cursor that moved between the click and the tick must not turn a
+        /// routing change into a refusal.
+        ///
+        /// A filter that routes nothing is refused: <see cref="ShapeFilter.None"/> would leave the machine
+        /// taking items it can never send anywhere, which stalls a line with no explanation.
+        /// </summary>
+        public bool SetFilter(Int2 cell, ShapeFilter filter)
+        {
+            if (filter.IsNone) return false;
+            if (!_machines.TryGet(cell, out MachineState machine)) return false;
+            if (_content.Machine(machine.Build).Behavior != BehaviorKind.Sorter) return false;
+
+            _machines.RefAt(cell).Filter = filter;
+            return true;
         }
 
         /// <summary>Change the selection outside the press/release gesture. The HUD's build bar and a number
@@ -238,6 +275,10 @@ namespace Facet.Core
             // would lay a belt run instead of placing the drill. The ghost shows what the release will
             // build.
             ApplySelection(cmd);
+
+            // A sorter's filter is a setting, not a gesture: it lands before anything else so a click on
+            // the picker cannot also be read as a press on the map.
+            if (cmd.FilterSet) SetFilter(cmd.FilterCell, cmd.SetFilter);
 
             if (cmd.RotateSteps != 0) GhostDirection = Rotate(GhostDirection, cmd.RotateSteps);
 

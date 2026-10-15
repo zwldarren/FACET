@@ -35,19 +35,24 @@ namespace Facet.Game
         public struct OreCell
         {
             public Vector2Int Cell;
-            public ShapeType Shape;
+            [Tooltip("The mineral this tile yields. A drill mines it as the full shape of that mineral.")]
+            public Quad Mineral;
         }
 
         /// <summary>One block of a wave, as the Inspector and the wave table edit it.</summary>
         [Serializable]
         public sealed class SpawnGroupRow
         {
-            public EnemyKind Kind = EnemyKind.Spike;
+            public EnemyKind Kind = EnemyKind.Runner;
             [Min(1)] public int Count = 6;
             [Tooltip("Position in this map's Spawn Points list, wrapped the way the map itself wraps it.")]
             public int SpawnPoint;
             public float FirstDelay;
             [Min(0.01f)] public float Interval = 2f;
+            [Tooltip("The exact item this group is weak to, orientation included: the demand the player has " +
+                "to build a line for. A group with no shape here can never be matched, and the map validator " +
+                "says so.")]
+            public ShapeField Weakness;
         }
 
         [Serializable]
@@ -71,7 +76,7 @@ namespace Facet.Game
                         if (group == null) continue;
 
                         groups.Add(new SpawnGroup(group.Kind, group.Count, group.SpawnPoint,
-                            group.FirstDelay, group.Interval));
+                            group.FirstDelay, group.Interval, group.Weakness.ToCore()));
                     }
 
                 return new WaveDefinition(Intermission, groups.ToArray());
@@ -108,6 +113,24 @@ namespace Facet.Game
         public Vector2Int[] SpawnPoints = new Vector2Int[0];
         public WaveRow[] Waves = new WaveRow[0];
 
+        [Header("Progression")]
+        [Tooltip("The operator machines this map hands the player. Progression is this set rather than a map " +
+            "ordinal: map 1 unlocks the cutter, map 2 the second mineral and the rotator, map 3 the stacker. " +
+            "A locked machine cannot be built at all, and the wave generator never demands a shape this map's " +
+            "minerals and unlocked operators cannot build.")]
+        public Operators Unlocked = Operators.All;
+
+        [Tooltip("The map's default seed. 0 - the shipped default - draws a FRESH seed every run, so two " +
+            "runs of one map play out differently (the run's seed is shown in the HUD either way). A " +
+            "non-zero value pins every run of this map to that seed, for a demo or a lesson that must " +
+            "replay exactly.")]
+        public int Seed = 0;
+
+        [Tooltip("How many generated waves follow the authored table: 0 finishes the map when the table is " +
+            "cleared (what every scripted map wants), a positive count hands over to the generator for that " +
+            "many exam waves, and -1 is ENDLESS - the generator never runs out of demands.")]
+        public int GeneratedWaves = 0;
+
         /// <summary>Whether a cell is one the asset holds - the one answer to "is this on the map",
         /// shared by every method here and the painting surfaces.</summary>
         public bool InBounds(int x, int y) => x >= 0 && y >= 0 && x < Width && y < Height;
@@ -140,9 +163,9 @@ namespace Facet.Game
         /// is plain, so there is no second half to leave behind. Inside a batch
         /// (<see cref="BeginBatch"/>) the append lands on the buffer, written back once at
         /// <see cref="EndBatch"/>.</summary>
-        public void PaintOre(int x, int y, ShapeType shape)
+        public void PaintOre(int x, int y, Quad mineral)
         {
-            if (!InBounds(x, y) || !shape.IsShape()) return;
+            if (!InBounds(x, y) || mineral == Quad.Empty) return;
 
             var cell = new Vector2Int(x, y);
 
@@ -151,11 +174,11 @@ namespace Facet.Game
 
             if (_batch != null)
             {
-                _batch.Add(new OreCell { Cell = cell, Shape = shape });
+                _batch.Add(new OreCell { Cell = cell, Mineral = mineral });
                 return;
             }
 
-            var grown = new List<OreCell>(Ore) { new OreCell { Cell = cell, Shape = shape } };
+            var grown = new List<OreCell>(Ore) { new OreCell { Cell = cell, Mineral = mineral } };
             Ore = grown.ToArray();
         }
 
@@ -232,7 +255,10 @@ namespace Facet.Game
                 spawnPoints: SpawnPointArray(),
                 waves: WaveDefinitions(),
                 terrain: TerrainArray(width, height),
-                coreCell: CoreCell.x < 0 || CoreCell.y < 0 ? (Int2?)null : new Int2(CoreCell.x, CoreCell.y));
+                coreCell: CoreCell.x < 0 || CoreCell.y < 0 ? (Int2?)null : new Int2(CoreCell.x, CoreCell.y),
+                unlocked: Unlocked,
+                seed: Seed,
+                generatedWaves: GeneratedWaves);
         }
 
         /// <summary>Everything wrong with this map as the simulation would read it; pure, because it runs
@@ -276,7 +302,7 @@ namespace Facet.Game
 
             // The per-cell mineral, claimed as the conversion claims it: the FIRST entry per in-map
             // cell counts, so an Inspector-handwritten list reads as it does in OrePatches.
-            var mineral = new ShapeType[width * height];
+            var mineral = new Quad[width * height];
             var claimed = new bool[width * height];
             if (Ore != null)
                 for (int i = 0; i < Ore.Length; i++)
@@ -289,7 +315,7 @@ namespace Facet.Game
                     if (claimed[at]) continue;
 
                     claimed[at] = true;
-                    mineral[at] = cell.Shape;
+                    mineral[at] = cell.Mineral;
                 }
 
             var doorCells = new List<Vector2Int>();
@@ -565,7 +591,7 @@ namespace Facet.Game
         /// a scan. The first entry for a cell counts, as in <see cref="DrawableView"/>.</summary>
         private ShapePatch[] OrePatches(int width, int height)
         {
-            var shapes = new ShapeType[width * height];
+            var minerals = new Quad[width * height];
             var claimed = new bool[width * height];
 
             if (Ore != null)
@@ -579,7 +605,7 @@ namespace Facet.Game
                     if (claimed[at]) continue;
 
                     claimed[at] = true;
-                    shapes[at] = ore.Shape;
+                    minerals[at] = ore.Mineral;
                 }
 
             var patches = new List<ShapePatch>();
@@ -588,12 +614,12 @@ namespace Facet.Game
                 int x = 0;
                 while (x < width)
                 {
-                    ShapeType shape = shapes[y * width + x];
-                    if (!shape.IsShape()) { x++; continue; }
+                    Quad mineral = minerals[y * width + x];
+                    if (mineral == Quad.Empty) { x++; continue; }
 
                     int start = x;
-                    while (x < width && shapes[y * width + x] == shape) x++;
-                    patches.Add(new ShapePatch(new Int2(start, y), x - start, 1, shape));
+                    while (x < width && minerals[y * width + x] == mineral) x++;
+                    patches.Add(new ShapePatch(new Int2(start, y), x - start, 1, mineral));
                 }
             }
 

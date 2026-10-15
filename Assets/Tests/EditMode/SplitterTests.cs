@@ -36,7 +36,7 @@ namespace Facet.Tests
         public void OneIn_TwoOut_Alternates()
         {
             // South input, east and west outputs: four circles in, dealt alternately like cards. The
-            // round-robin is what lets one decomposer share two cannons evenly.
+            // round-robin is what lets one cutter share two guns evenly.
             SimWorld world = Sim.NewWorld(20, 12);
             Sim.LayRun(world, new Int2(4, 4), Dir.North, 1);
             Sim.Place(world, BuildKind.Splitter, Hub, Dir.North);
@@ -45,7 +45,7 @@ namespace Facet.Tests
 
             for (int i = 0; i < 4; i++)
             {
-                Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), ShapeType.Circle));
+                Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), Sim.Circle));
                 Sim.Tick(world, 45);
             }
             Sim.Tick(world, 120);
@@ -53,7 +53,7 @@ namespace Facet.Tests
             Assert.AreEqual(2, East(world), "two went east");
             Assert.AreEqual(2, West(world), "two went west");
             Assert.AreEqual(4, Sim.ItemCount(world), "a splitter moves items, it never eats them");
-            Assert.AreEqual(ShapeType.None, Sim.MachineAt(world, Hub).Carried, "and the hub empties");
+            Assert.AreEqual(Shape.None, Sim.MachineAt(world, Hub).Carried, "and the hub empties");
         }
 
         [Test]
@@ -68,9 +68,9 @@ namespace Facet.Tests
             Sim.Place(world, BuildKind.Splitter, Hub, Dir.North);
             Sim.LayRun(world, new Int2(4, 6), Dir.North, 3);   // north out
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), ShapeType.Circle));
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 5), ShapeType.HalfCircle));
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 5), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), Sim.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 5), Sim.TopHalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 5), Sim.TopHalfCircle));
             Sim.Tick(world, 180);
 
             Assert.AreEqual(3, North(world), "all three left by the one output");
@@ -89,13 +89,13 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(5, 5), Dir.East, 2);    // east out
             Sim.LayRun(world, new Int2(4, 6), Dir.North, 2);   // north out
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), Sim.Circle));
             Sim.Tick(world, 45);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 5), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 5), Sim.Circle));
             Sim.Tick(world, 45);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), Sim.Circle));
             Sim.Tick(world, 45);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 5), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(3, 5), Sim.Circle));
             Sim.Tick(world, 180);
 
             Assert.AreEqual(2, East(world), "two went east");
@@ -117,7 +117,7 @@ namespace Facet.Tests
 
             for (int i = 0; i < 2; i++)
             {
-                Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), ShapeType.Circle));
+                Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), Sim.Circle));
                 Sim.Tick(world, 60);
             }
 
@@ -135,17 +135,17 @@ namespace Facet.Tests
             Sim.Place(world, BuildKind.Splitter, Hub, Dir.North);
             Sim.LayRun(world, new Int2(5, 5), Dir.East, 1);    // the only output, one cell, full
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 5), ShapeType.HalfCircle));   // parks there
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 5), Sim.TopHalfCircle));   // parks there
             Sim.Tick(world, 60);
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 3), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 3), Sim.Circle));
             Sim.Tick(world, 90);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 3), ShapeType.Circle), "a second follows it");
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 3), Sim.Circle), "a second follows it");
             Sim.Tick(world, 120);
 
-            Assert.AreEqual(ShapeType.Circle, Sim.MachineAt(world, Hub).Carried,
+            Assert.AreEqual(Sim.Circle, Sim.MachineAt(world, Hub).Carried,
                 "the hub holds the one it took");
-            Assert.AreEqual(ShapeType.HalfCircle, Sim.ShapeAt(world, new Int2(5, 5)),
+            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(world, new Int2(5, 5)),
                 "the full output is untouched");
             Assert.AreEqual(2, Sim.ItemCount(world),
                 "two items on belts - the one parked on the line and the blocker - plus the one the " +
@@ -163,12 +163,12 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(4, 6), Dir.North, 2);   // north out
             Sim.LayRun(world, new Int2(5, 4), Dir.North, 3);   // the passing line: (5,4)..(5,6)
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), ShapeType.Circle));
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 4), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), Sim.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(5, 4), Sim.TopHalfCircle));
             Sim.Tick(world, 150);
 
-            Assert.AreEqual(ShapeType.Circle, Sim.ShapeAt(world, new Int2(4, 7)), "the circle went north");
-            Assert.AreEqual(ShapeType.HalfCircle, Sim.ShapeAt(world, new Int2(5, 6)),
+            Assert.AreEqual(Sim.Circle, Sim.ShapeAt(world, new Int2(4, 7)), "the circle went north");
+            Assert.AreEqual(Sim.TopHalfCircle, Sim.ShapeAt(world, new Int2(5, 6)),
                 "and the passing belt kept its own item");
             Assert.AreEqual(2, Sim.ItemCount(world));
         }

@@ -65,7 +65,7 @@ namespace Facet.Game
                 AppendLane(centre, centre + forward * exitLength, w, bed);
 
                 // A lane from every side something feeds in from: belts pointing at me, and machines whose facing pushes
-                // onto me (drills and decomposers pushing out, a splitter whose output port I am). A pipe lands from
+                // onto me (a drill or an operator pushing out, a splitter whose output port I am). A pipe lands from
                 // above instead - its own tube, drawn by the machine view, is that hand-off's visual.
                 for (int s = 0; s < Sides.Length; s++)
                 {

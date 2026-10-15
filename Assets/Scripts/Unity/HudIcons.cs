@@ -1,22 +1,28 @@
 using System;
+using System.Collections.Generic;
 using Facet.Core;
 using UnityEngine;
 
 namespace Facet.Game
 {
     /// <summary>
-    /// The shapes, as pictures the HUD can draw.
+    /// The item figures, as pictures the HUD can draw.
     ///
-    /// The content table spells each shape with one character, which the built-in IMGUI font does not
-    /// carry in a built player, so every place the HUD quoted it prints a gap; the map draws shapes as
-    /// polygons and the HUD now does the same. Each shape is rasterised once from the same silhouette
-    /// and colour the belt items, ore and weakness icons use (<see cref="Palette.ShapeIcons"/>) - an
-    /// authored Sprite is drawn as itself, a procedural override rasterised - and is used where a
-    /// shape is a <em>mark</em>; inside a sentence the sentence says its name.
+    /// The content table once spelled a shape with one character, which the built-in IMGUI font does not
+    /// carry in a built player, so every place the HUD quoted it printed a gap; the map draws items as
+    /// quadrant figures and the HUD now does the same, from the same resolved marks
+    /// (<see cref="Palette.ShapeIcons"/>) - so a mark on a card and the item on the belt it describes are
+    /// one picture. It is used where an item is a <em>mark</em>; inside a sentence the sentence says
+    /// <see cref="Shape.Describe"/>.
+    ///
+    /// Rasterised per item rather than per shape word: an item is four quadrants, so one texture is built by
+    /// drawing each filled quadrant's mark into it, and a code is only ever rasterised once. The code is the
+    /// key because it is the whole of an item's identity - there are eighty of them, and the four-character
+    /// code is what a test failure prints.
     /// </summary>
     public sealed class HudIcons
     {
-        /// <summary>A picture of one shape: the texture to draw and the region of it that is the shape.</summary>
+        /// <summary>A picture of one item: the texture to draw and the region of it that is the figure.</summary>
         public readonly struct Icon
         {
             public readonly Texture2D Texture;
@@ -35,73 +41,191 @@ namespace Facet.Game
         /// nothing to build.</summary>
         private const int Size = 32;
 
-        /// <summary>The silhouette is built at this radius, then fitted into the icon with a margin so the
-        /// outline has room to be drawn inside the box.</summary>
+        /// <summary>The figure is built at this item radius - the half-extent of the item's own square -
+        /// then fitted into the icon with a margin so the outline has room to be drawn inside the box.</summary>
         private const float SilhouetteRadius = 0.5f;
 
         /// <summary>The outline's width as a fraction of the icon, matched to the map's own 2 px outline.</summary>
         private const float OutlineFraction = 0.11f;
 
         private readonly Palette _palette;
-        private readonly Icon[] _byShape;
+
+        /// <summary>The four quadrant marks, resolved once from the same per-mineral overrides the views
+        /// use, so a re-skin reaches the cards too.</summary>
+        private readonly ShapeIconSet _marks;
+
+        /// <summary>One texture per item code: 0 is nothing (never built), and every legal code is one of
+        /// the eighty the algebra makes. Built on first ask, kept for the run.</summary>
+        private readonly Icon[] _byCode = new Icon[256];
+
+        /// <summary>The one unfitted picture the HUD ever needs - the sorter picker's canvas: the item's own
+        /// square filling the icon, so its quadrants land in the icon's quadrants and the player is clicking
+        /// the very cells the figure is drawn in. One slot, rebuilt only when the painted item changes,
+        /// because the picker shows one item at a time.</summary>
+        private Shape _canvasCode;
+        private Icon _canvas;
+
         private readonly Color32[] _pixels = new Color32[Size * Size];
+
+        /// <summary>Scratch for one build: each filled quadrant's point list (moved by the mineral's own
+        /// offset) and its two colours, so rasterising an item allocates nothing but its own texture. The
+        /// buffers are pooled per quadrant - a quadrant's mark is the same length every time it is built -
+        /// and the compact lists are what the rasteriser walks.</summary>
+        private readonly Vector2[][] _markScratch = new Vector2[Shape.QuadrantCount][];
+        private readonly Vector2[][] _markPoints = new Vector2[Shape.QuadrantCount][];
+        private readonly int[] _markLength = new int[Shape.QuadrantCount];
+        private readonly Color32[] _markFill = new Color32[Shape.QuadrantCount];
+        private readonly Color32[] _markLine = new Color32[Shape.QuadrantCount];
+        private int _markCount;
 
         public HudIcons(Palette palette)
         {
             _palette = palette ?? throw new ArgumentNullException(nameof(palette));
-            _byShape = new Icon[((ShapeType[])Enum.GetValues(typeof(ShapeType))).Length];
+            _marks = palette.ShapeIcons(SilhouetteRadius, 0f);
         }
 
-        /// <summary>The picture of one shape, built on first ask and kept for the run. An invalid icon is
-        /// <see cref="ShapeType.None"/> or a Palette that cannot name one, and the caller draws nothing
-        /// rather than a gap.</summary>
-        public Icon Shape(ShapeType shape)
+        /// <summary>The picture of one item, built on first ask and kept for the run. An invalid icon is
+        /// nothing at all (or a palette that cannot name a mineral), and the caller draws nothing rather
+        /// than a gap.</summary>
+        public Icon Mark(Shape shape)
         {
-            int slot = (int)shape;
-            if (slot <= 0 || slot >= _byShape.Length) return default;
-            if (_byShape[slot].Valid) return _byShape[slot];
+            if (shape.IsEmpty) return default;
 
-            _byShape[slot] = Build(shape);
-            return _byShape[slot];
+            int code = (int)shape.Code;
+
+            // The table is one slot per two-bit quadrant, so it holds every item the algebra can make - but
+            // only because Shape's constructor masks the code to eight bits. A code outside the table is a
+            // wider algebra than this cache expects, and the honest answer is the one this class already
+            // promises for anything it cannot draw: nothing, rather than an index off the end of the array.
+            if (code <= 0 || code >= _byCode.Length) return default;
+            if (_byCode[code].Valid) return _byCode[code];
+
+            _byCode[code] = Build(shape, fit: true);
+            return _byCode[code];
+        }
+
+        /// <summary>
+        /// The same figure drawn <em>unfitted</em>: the item's own square is the icon, so a quarter disc
+        /// lands in the icon's own quadrant and the four quadrant buttons of the sorter picker sit exactly
+        /// over the cells they paint. The fitted picture above scales the figure to its own bounding box,
+        /// which is right for a chip and wrong for a canvas - a single quadrant scaled up would read as a
+        /// whole item.
+        /// </summary>
+        public Icon Canvas(Shape shape)
+        {
+            if (shape.IsEmpty) return default;
+            if (_canvas.Valid && _canvasCode == shape) return _canvas;
+
+            Free(ref _canvas);
+
+            _canvasCode = shape;
+            _canvas = Build(shape, fit: false);
+            return _canvas;
         }
 
         /// <summary>Free the textures built here. It is for the Editor's previews and anything else that
-        /// builds one and throws it away; a built player never calls it.</summary>
+        /// builds one and throws it away; a built player never calls it - which is exactly why the free
+        /// happens through <see cref="Free"/>: in the Editor, outside play mode, <c>Destroy</c> is refused
+        /// (an object is destroyed permanently there), so a preview that freed its pictures this way would
+        /// log an error per texture and leak every one of them.</summary>
         public void Dispose()
         {
-            for (int i = 0; i < _byShape.Length; i++)
-                if (_byShape[i].Texture != null) UnityEngine.Object.Destroy(_byShape[i].Texture);
-            Array.Clear(_byShape, 0, _byShape.Length);
+            for (int i = 0; i < _byCode.Length; i++) Free(ref _byCode[i]);
+
+            Free(ref _canvas);
+            _canvasCode = Shape.None;
         }
 
-        private Icon Build(ShapeType shape)
+        /// <summary>Release one icon's texture the way the mode allows, and empty the slot.</summary>
+        private static void Free(ref Icon icon)
         {
-            ShapeIconSet icons = _palette.ShapeIcons(SilhouetteRadius, 0f);
-            VisualStyle style = icons.Style(shape);
+            if (icon.Texture == null) return;
 
-            if (style != null && style.Source == VisualSource.Sprite && style.Sprite != null)
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
             {
-                Sprite sprite = style.Sprite;
-                Texture2D atlas = sprite.texture;
-                Rect r = sprite.textureRect;
-                return new Icon(atlas, new Rect(
-                    r.x / atlas.width, r.y / atlas.height, r.width / atlas.width, r.height / atlas.height));
+                UnityEngine.Object.DestroyImmediate(icon.Texture);
+                icon = default;
+                return;
+            }
+#endif
+
+            UnityEngine.Object.Destroy(icon.Texture);
+            icon = default;
+        }
+
+        /// <summary>
+        /// Rasterise one item: the union of its quadrants' marks, each in its own mineral's colour with the
+        /// standard outline.
+        ///
+        /// A Sprite-overridden mineral is drawn here as the shipped mark in the palette's mineral colour,
+        /// because this is the HUD's picture and it is assembled from point lists - a Sprite has no point
+        /// list, and a card has no SpriteRenderer to hand. The override is not ignored anywhere else: on the
+        /// map <see cref="MeshView.AppendIcon"/> draws that Sprite at the item's own quadrant.
+        ///
+        /// <paramref name="fit"/> is the choice between a chip and a canvas: true fits the figure's own box
+        /// into the icon, false makes the icon the item's square.
+        /// </summary>
+        private Icon Build(Shape shape, bool fit)
+        {
+            _markCount = 0;
+
+            float minX = float.MaxValue, minY = float.MaxValue;
+            float maxX = float.MinValue, maxY = float.MinValue;
+
+            for (int quadrant = 0; quadrant < Shape.QuadrantCount; quadrant++)
+            {
+                Quad mineral = shape.At(quadrant);
+                if (mineral == Quad.Empty) continue;
+
+                IReadOnlyList<Vector2> points = _marks.Points(mineral, quadrant);
+                if (points == null || points.Count < 3) continue;
+
+                VisualStyle style = _marks.Style(mineral, quadrant);
+                bool sprite = style != null && style.Source == VisualSource.Sprite;
+                Vector2 offset = style != null ? style.Offset : Vector2.zero;
+
+                Vector2[] scratch = _markScratch[quadrant];
+                if (scratch == null || scratch.Length < points.Count)
+                    scratch = _markScratch[quadrant] = new Vector2[points.Count];
+
+                for (int i = 0; i < points.Count; i++)
+                {
+                    Vector2 p = points[i] + offset;
+                    scratch[i] = p;
+                    if (p.x < minX) minX = p.x;
+                    if (p.x > maxX) maxX = p.x;
+                    if (p.y < minY) minY = p.y;
+                    if (p.y > maxY) maxY = p.y;
+                }
+
+                _markPoints[_markCount] = scratch;
+                _markLength[_markCount] = points.Count;
+                _markFill[_markCount] = sprite ? _palette.MineralColor(mineral) : style.Fill;
+                _markLine[_markCount] = sprite ? _palette.Outline : style.Outline;
+                _markCount++;
             }
 
-            Vector2[] points = icons.Points(shape);
-            if (points == null || points.Length < 3) return default;
+            if (_markCount == 0) return default;
 
-            // Fit the silhouette's own bounding box into the icon, keeping its proportions and a margin, so
-            // a half-disc and a square read as big as they can rather than small inside a box sized for a circle.
-            Bounds2D box = Bounds2D.Of(points);
-            float scale = (Size - 2f) / Mathf.Max(0.001f, Mathf.Max(box.Width, box.Height));
-            Vector2 centre = box.Centre;
+            // A canvas is the item's own square, whatever the figure fills; a chip fits the figure's own
+            // box, keeping its proportions and a margin, so a half disc and a square read as big as they
+            // can rather than small inside a box sized for a disc. A half item therefore fills a chip and
+            // sits in its half of a canvas - which is the difference between reading a mark and clicking a
+            // quadrant.
+            if (!fit)
+            {
+                minX = -SilhouetteRadius;
+                minY = -SilhouetteRadius;
+                maxX = SilhouetteRadius;
+                maxY = SilhouetteRadius;
+            }
 
-            Color fill = style != null ? style.Fill : _palette.ShapeColor(shape);
-            Color line = style != null ? style.Outline : _palette.Outline;
+            float scale = (Size - 2f) / Mathf.Max(0.001f, Mathf.Max(maxX - minX, maxY - minY));
+            var centre = new Vector2((minX + maxX) * 0.5f, (minY + maxY) * 0.5f);
 
-            // The outline's width in the silhouette's own units: the rasteriser asks "is this pixel within
-            // this much of an edge", and the edges are measured in tiles, not in icon pixels.
+            // The outline's width in the figure's own units: the rasteriser asks "is this pixel within this
+            // much of an edge", and the edges are measured in tiles, not in icon pixels.
             float outline = (Size * OutlineFraction) / scale;
 
             for (int y = 0; y < Size; y++)
@@ -111,17 +235,15 @@ namespace Facet.Game
                     var p = new Vector2((x + 0.5f - Size * 0.5f) / scale + centre.x,
                         (y + 0.5f - Size * 0.5f) / scale + centre.y);
 
-                    _pixels[y * Size + x] = Inside(p, points)
-                        ? DistanceToEdge(p, points) <= outline ? line : fill
-                        : new Color(0f, 0f, 0f, 0f);
+                    _pixels[y * Size + x] = Sample(p, outline);
                 }
             }
 
             var texture = new Texture2D(Size, Size, TextureFormat.RGBA32, false)
             {
-                name = "FACET/HudIcon/" + shape,
+                name = (fit ? "FACET/HudIcon/" : "FACET/HudCanvas/") + shape,
                 hideFlags = HideFlags.DontSave,
-                filterMode = FilterMode.Bilinear,
+                filterMode = UnityEngine.FilterMode.Bilinear,
                 wrapMode = TextureWrapMode.Clamp,
             };
             texture.SetPixels32(_pixels);
@@ -130,15 +252,32 @@ namespace Facet.Game
             return new Icon(texture, new Rect(0f, 0f, 1f, 1f));
         }
 
+        /// <summary>What colour one pixel of the figure is: the mark it lands in, filled or outlined.
+        /// Quadrant cells never overlap, so the first mark containing the point is the one it belongs to,
+        /// and a point in none is the hole the shape does not occupy.</summary>
+        private Color32 Sample(Vector2 p, float outline)
+        {
+            for (int i = 0; i < _markCount; i++)
+            {
+                if (!Inside(p, _markPoints[i], _markLength[i])) continue;
+
+                return DistanceToEdge(p, _markPoints[i], _markLength[i]) <= outline
+                    ? _markLine[i]
+                    : _markFill[i];
+            }
+
+            return new Color32(0, 0, 0, 0);
+        }
+
         // ---------------------------------------------------------------- the rasterising
         //
         // Two questions per pixel on the same polygon the map draws: inside (even-odd), and close enough
         // to an edge to be the outline (point-to-segment). Neither allocates.
 
-        private static bool Inside(Vector2 p, Vector2[] points)
+        private static bool Inside(Vector2 p, Vector2[] points, int count)
         {
             bool inside = false;
-            for (int i = 0, j = points.Length - 1; i < points.Length; j = i++)
+            for (int i = 0, j = count - 1; i < count; j = i++)
             {
                 Vector2 a = points[i], b = points[j];
                 if ((a.y > p.y) == (b.y > p.y)) continue;
@@ -148,10 +287,10 @@ namespace Facet.Game
             return inside;
         }
 
-        private static float DistanceToEdge(Vector2 p, Vector2[] points)
+        private static float DistanceToEdge(Vector2 p, Vector2[] points, int count)
         {
             float best = float.MaxValue;
-            for (int i = 0, j = points.Length - 1; i < points.Length; j = i++)
+            for (int i = 0, j = count - 1; i < count; j = i++)
             {
                 float d = DistanceToSegment(p, points[j], points[i]);
                 if (d < best) best = d;
@@ -166,37 +305,6 @@ namespace Facet.Game
             float length = ab.sqrMagnitude;
             float t = length <= 0f ? 0f : Mathf.Clamp01(Vector2.Dot(p - a, ab) / length);
             return Vector2.Distance(p, a + ab * t);
-        }
-
-        /// <summary>The box a point list occupies - the silhouette's own extent, whatever shape it is.</summary>
-        private readonly struct Bounds2D
-        {
-            public readonly float MinX, MinY, MaxX, MaxY;
-
-            private Bounds2D(float minX, float minY, float maxX, float maxY)
-            {
-                MinX = minX; MinY = minY; MaxX = maxX; MaxY = maxY;
-            }
-
-            public Vector2 Centre => new Vector2((MinX + MaxX) * 0.5f, (MinY + MaxY) * 0.5f);
-            public float Width => MaxX - MinX;
-            public float Height => MaxY - MinY;
-
-            public static Bounds2D Of(Vector2[] points)
-            {
-                float minX = float.MaxValue, minY = float.MaxValue;
-                float maxX = float.MinValue, maxY = float.MinValue;
-                for (int i = 0; i < points.Length; i++)
-                {
-                    Vector2 p = points[i];
-                    if (p.x < minX) minX = p.x;
-                    if (p.x > maxX) maxX = p.x;
-                    if (p.y < minY) minY = p.y;
-                    if (p.y > maxY) maxY = p.y;
-                }
-
-                return new Bounds2D(minX, minY, maxX, maxY);
-            }
         }
     }
 }

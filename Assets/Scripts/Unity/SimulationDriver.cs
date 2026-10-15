@@ -173,13 +173,20 @@ namespace Facet.Game
             // the mouse, so pressing a panel button cannot also drop a belt under it.
             _input.Sample(_camera, World, _hud != null && _hud.PointerOverHud);
 
-            // N means "go on" in both run states: start the next wave mid-map, and carry on to the next map
-            // once won. The world drops a post-run start-wave request, so this is the only reader here - and
-            // the one-shot is consumed either way, so the new map does not spend the same press twice.
+            // The info card grows while a sorter's filter picker is on it, and the locator has to know:
+            // the panel boxes it folds arrows past are the boxes the HUD draws, so a card the arrows do
+            // not know about is a place an enemy can stand unseen. One frame of lag, like the pointer's.
+            if (_radar != null && _hud != null) _radar.SetInfoGrown(_hud.InfoGrown);
+
+            // N means "go on" in every run state there is: start the next wave mid-map, carry on to the
+            // next map once won, and - the campaign spent - keep going on the last map, endless (§7). The
+            // world drops a post-run start-wave request, so this is the only reader here - and the
+            // one-shot is consumed either way, so the new run does not spend the same press twice.
             if (World.Status == GameStatus.Won && _input.StartWaveRequested)
             {
                 _input.ConsumeOneShots();
                 if (Campaign.EnterNext()) LoadMap();
+                else EnterEndless();
             }
 
             InputCommand cmd = _input.Snapshot();
@@ -229,9 +236,13 @@ namespace Facet.Game
         /// The world is <em>replaced</em> rather than reset: a world is one run, sized and fixed by its
         /// map, so a new map is a new world built from its own data with the same content table. The
         /// views rebind rather than rebuild, their meshes and sprites being the same objects either way.</summary>
-        public void LoadMap()
+        public void LoadMap() => LoadMap(Catalog.At(Campaign.MapIndex));
+
+        /// <summary>The same swap, for a map the catalog does not hand out: the endless re-entry of the
+        /// campaign's last map, whose world is built from a derived copy rather than the authored data.</summary>
+        private void LoadMap(MapDefinition map)
         {
-            World = NewWorld(Catalog.At(Campaign.MapIndex));
+            World = NewWorld(map);
             ReportMapProblems(World.Map);
 
             // The frame the views are about to draw must describe the new world: no leftover tick backlog,
@@ -249,10 +260,19 @@ namespace Facet.Game
             // card is up on this map or it is not.
             if (_radar != null) _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
             if (_hud != null)
-                _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog);
+                _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,
+                    _input.RequestFilter);
 
             Debug.Log("FACET: loaded map " + (Campaign.MapIndex + 1) + " of " + Campaign.MapCount +
-                " - " + World.Map.Name, this);
+                " - " + World.Map.Name + (World.Map.GeneratedWaves < 0 ? " (endless)" : string.Empty), this);
+        }
+
+        /// <summary>The campaign has no map after this one, and the player asked to go on: the same map
+        /// again, played endless (§7's entry). A new world from a copy of the map's own data with the
+        /// generator unbounded - the exam keeps setting questions forever, on a seed of its own.</summary>
+        private void EnterEndless()
+        {
+            LoadMap(Catalog.At(Campaign.MapIndex).WithEndless());
         }
 
         /// <summary>Say what is wrong with a map's own data, once, when it is loaded.
@@ -276,12 +296,25 @@ namespace Facet.Game
 
         private SimWorld NewWorld(MapDefinition map)
         {
-            return new SimWorld(map, new SimConfig
+            var config = new SimConfig
             {
                 BeltSpeed = beltSpeedTilesPerSecond,
                 CoreMaxHp = coreMaxHp,
-            }, Content);
+            };
+
+            // §5: one seed per run, shown in the HUD. A map that names no seed - the default - gets a
+            // fresh one here, at the engine boundary, because Core never draws a number of its own; so
+            // two runs of one map play out differently. A map that pins a seed keeps every run of it
+            // reproducible to that number instead.
+            if (map.Seed == 0) config.FreshSeed = NewRunSeed;
+
+            return new SimWorld(map, config, Content);
         }
+
+        /// <summary>A fresh run seed, from Unity's random - the one place the game reaches for entropy,
+        /// and the reason the HUD prints a seed at all: note the number, and the run can be replayed
+        /// from it by pinning it on the map.</summary>
+        private static int NewRunSeed() => Random.Range(1, int.MaxValue);
 
         private void BuildViews()
         {
@@ -302,7 +335,8 @@ namespace Facet.Game
             _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
 
             _hud = AddView<HudView>("Hud");
-            _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog);
+            _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,
+                _input.RequestFilter);
 
             _rig = _camera.GetComponent<CameraRig>();
             if (_rig == null) _rig = _camera.gameObject.AddComponent<CameraRig>();

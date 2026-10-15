@@ -1,10 +1,9 @@
 # FACET
 
-A 2D top-down tower-defense prototype where **circles are money and half-circles are ammunition** —
-and both are physical items riding conveyor belts. There is no abstract currency: a circle mined at
-the edge of the map is not spendable until a belt delivers it into the Core, and a cannon fires only
-the half-circles that physically reach it. A wrong-shape delivery jams the belt segment it lands on
-and silences everything downstream, so the answer to pressure is re-plumbing the line.
+A 2D top-down factory-defence prototype where **an enemy's weakness is an exact shape and your damage is a
+function of the shape your factory runs**. Every item on the map is four quadrants of two minerals - cut,
+turned and stacked by three operator machines into one of eighty items - and a turret fires only the round a
+belt physically delivered to it. A round matching the wave's demand does full damage; anything else a quarter.
 
 Unity 6 (`6000.3.23f1`), 2D, built for WebGL. A run walks the **Map Set**
 (`Assets/Data/Campaign.asset`): clear a map and the next one is built in place, under the same views,
@@ -12,16 +11,16 @@ carrying over only where the player is.
 
 ## How to play
 
-Mine a circle, belt it home, split it into ammunition, and shoot what comes through the door. The
-run opens with a stockpile of circles and one rule that explains everything else: **a machine's ports
-are read off the belts around it** — a belt pointing in is an input, a belt pointing away is an
-output — so a line is wired by laying belts at it, not by configuring it.
+Mine a mineral, cut it up, build the shape the briefing asks for, and shoot what comes through the door. The
+run opens with a stockpile of circles and one rule that explains everything else: **a machine's ports are
+read off the belts around it** - a belt pointing in is an input, a belt pointing away is an output - so a line
+is wired by laying belts at it, not by configuring it.
 
 | Input | Action |
 |---|---|
 | `WASD` / arrows, mouse wheel | pan and zoom the camera |
-| click the build bar, or `1`–`9`, `0` | select a building (`0` is the assembler); the same digit or tile again drops the selection |
-| `Q` / `E` | turn the placement ghost (splitter, converters and the wall have no facing) |
+| click the build bar, or `1`–`9`, `0` | select a building (`0` is the turret); the same digit or tile again drops the selection |
+| `Q` / `E` | turn the placement ghost - a cutter's cut line and a rotator's outlet are chosen this way |
 | `Esc` | drop the selection: the cursor then only **reads** what is under it, which is the state a run opens in |
 | left mouse | place one belt, or land a machine; **drag** to lay a belt run or to aim a machine. With nothing selected, the same click pins whatever is under it and the info card describes *it* |
 | right mouse | delete for a full refund; on a jammed segment it **clears the jam** instead |
@@ -31,16 +30,21 @@ output — so a line is wired by laying belts at it, not by configuring it.
 | `H` | open or close the controls card — the keyboard and the restart button, over the map |
 | `R` | restart the run |
 
-The HUD is four clickable regions: a status card top-left (map and wave, the Core's health and the wave
-clock as two bars, what is coming as a row of chips — the count, the enemy, and the shape it is weak to —
-and two diagnostic lines that speak only when something needs them: a jam or a starved gun, what is out of
-view — with the card's edge strip warning-coloured whenever any of those need you), a controls cluster
-top-right (pause, and a help button that opens the keyboard and the restart button over the map; `H` opens
-it too), the build bar along the bottom (tiles tinted when the stockpile cannot cover them, with a line
-showing how far from covering them), and an info card above it. Beside the status card floats the
-**stockpile**: the shape the run banks, in that shape's own colour. A refused placement says why in a
-**toast**, and whatever is under the pointer says what it is and what it is doing in a **tooltip** beside
-the cursor — the map is readable at the pointer whether or not a building is selected.
+A sorter's filter is set from the info card: pin a sorter and the card grows a **quadrant canvas** - four
+cells you cycle through hole / circle / square, plus the choice between "contains a mineral" and "exactly this
+item". The machine's badge is the shape (or the mineral) it routes for.
+
+The HUD is four clickable regions: a status card top-left (map and wave, the run's **seed**, the Core's health
+and the wave clock as two bars, what is coming as a row of chips - the count, the enemy, and the exact shape it
+is weak to, drawn as a quadrant figure, for the next wave *and* the one after - and two diagnostic lines that
+speak only when something needs them: a jam or a starved gun, what is out of view - with the card's edge strip
+warning-coloured whenever any of those need you), a controls cluster top-right (pause, and a help button that
+opens the keyboard and the restart button over the map; `H` opens it too), the build bar along the bottom
+(the operators this map has not unlocked are greyed out and refuse to be selected, and tiles are tinted when
+the stockpile cannot cover them), and an info card above it. Beside the status card floats the **stockpile**:
+the shape the run banks, in that shape's own colour. A refused placement says why in a **toast**, and whatever
+is under the pointer says what it is and what it is doing in a **tooltip** beside the cursor — the map is
+readable at the pointer whether or not a building is selected.
 
 A map is bigger than a screen, so the edge of the screen answers *where*: the **locator** points at
 everything the player can neither see nor click. A wave off-view is one chevron in the colour of its nearest
@@ -52,30 +56,58 @@ otherwise sit under. While the Core is being chewed on out of view the screen we
 status card says the same thing in numbers, off the same answer, so the arrows and the sentence cannot
 disagree.
 
-The rules a run is played against:
+## The shape algebra
 
-* **Everything costs circles, and circles are only spendable once belted into the Core.** A drill mines
-  one circle per second onto the belt it faces; the line home is a purchase (1 ○ per belt cell), so the
-  map's distances are the economy. Removal refunds in full.
-* **The decomposer splits either mineral — ○ → ◠◠ or □ → ▭▭ — in 1.5 s**, the recipe chosen by what is
-  fed to it, and jams on anything already split. One outlet caps it at 1/s, which is exactly a cannon's
-  rate; a second outlet lets it run faster.
-* **The assembler fuses ◠ + ▭ → ◈** in 2 s — the deep end of the ammunition ladder, where the two
-  mineral chains meet. A composite round **matches every weakness**: its structure contains both
-  minerals, so no enemy resists it.
-* **Square veins open a second chain:** the same decomposer runs □ → ▭▭, and a **mortar** eats ▭ and ◈.
-  The mortar cycles half again as long and its shell **bursts over an area** — it answers a pack where
-  the cannon answers a trickle, so it is a choice rather than an upgrade.
-* **The cannon eats ◠ and ◈, the mortar ▭ and ◈** — which ammunition a shot is made of is which belt
-  delivered it, so what a gun fires is a routing decision. Each fires at most one shot per interval;
-  their real fire rates are `min(1/interval, what their lines deliver)`. Damage is a throughput
-  property of the layout, not a purchase.
-* **A wrong-shape delivery jams that segment** and it stays jammed. Right-click clears it, destroying
-  that item and keeping the belt.
-* **A belt is transport, not a machine:** it may cross a vein or a wave's doorway, and it never jams
-  on a wrong *destination* — a belt pointed at rock just stalls at full progress.
+**An item is four quadrants** - NW, NE, SE, SW - each one a hole, a circle or a square. Two bits a quadrant,
+so an item is a `uint` and equality is exact: a top half-circle and a bottom half-circle are two different
+items, and so are circle-left/square-right and square-left/circle-right. There are `3⁴ - 1 = 80` of them, and
+the whole set is enumerable at build time.
+
+Three operators act on that space:
+
+* **The cutter** splits one item along the line its facing selects. Facing north or south cuts across (top
+  piece and bottom piece); facing east or west cuts down the middle (left and right). Both pieces leave at
+  once, one per outlet - the facing side takes the piece on that side, the side opposite takes the other - and
+  each outlet keeps its own buffer, so one blocked side never costs the other piece. Cutting a quarter yields
+  the quarter plus nothing, and that is why "an item can be cut at most twice" is a corollary rather than a
+  rule.
+* **The rotator** turns an item a quarter clockwise, always clockwise: counter-clockwise is three of them in
+  series, which is a logistics puzzle rather than a second machine. A half turn is *not* the identity - it
+  gives the complement piece on the same cut line - so the rotator is also the orientation fix: the briefing
+  asked for a top half-circle and the line is running bottom halves, and one turn repairs it.
+* **The stacker** unions two items whose filled quadrants do not overlap: circle-left beside square-right is
+  one round, and an overlapping second piece simply waits on its belt. That is a stall, not a jam - the item
+  it cannot merge is one the player spent a chain building.
+
+One worked example, which is also a test: cut a circle and a square, both across. The circle's bottom half
+turned once is the left half-circle; the square's top half turned once is the right half-square; stack them
+and you have circle-left / square-right. The leftovers - top half-circle under bottom half-square - stack
+directly into circle-top / square-bottom. One pair of cutters, two turns and two stacks, both mixed rounds
+done.
+
+## The rules a run is played against
+
+* **Everything costs circles, and circles are only spendable once belted into the Core.** A drill mines one
+  full shape per second onto the belt it faces; the line home is a purchase (1 ○ per belt cell), so the map's
+  distances are the economy. Removal refunds in full. A full circle delivered to the Core is one currency;
+  anything else delivered is destroyed — which is the standing tension: **every circle ore is money or
+  ammunition**, and a mixed round's material spans both mineral chains.
+* **The briefing names an exact item per group, orientation included**, and the wave generator draws those
+  demands only from what this map can actually build - the closure of its minerals under its unlocked
+  operators. Deep demands come with the tougher, slower archetype, so progression lives in the shapes asked
+  for rather than in a stat table.
+* **Matched rounds do full damage, anything else a quarter.** There is one gun: a **universal chamber** that
+  eats any shape, one round per shot, no diet table and no splash. It does not consume while it has no target
+  or is cooling down, so ammunition queues visibly on the belt. It prefers the enemy its chambered round
+  actually hurts. Its real fire rate is `min(1/s, what its lines deliver)` — damage is a throughput property
+  of the layout *and* a shape property of the round.
+* **A run's only randomness is its seed**, which the HUD prints: the wave generator is a seeded stream, so a
+  run is reproducible from the number on the screen. The seed is drawn fresh every run — two runs of one map
+  do not play out identically — and a map may pin a non-zero seed of its own to replay exactly.
+* **A belt is transport, not a machine:** it may cross a vein or a wave's doorway, and it never jams on a
+  wrong *destination* — a belt pointed at rock just stalls at full progress.
 * **The pipe jumps one tile** (two cells ahead), which is how two belts cross. The **sorter** routes by
-  shape: the shape it filters for leaves by the side it faces, everything else by the other outlets.
+  shape: what its filter matches leaves by the side it faces, everything else by the other outlets.
 * **Machines are solid and destructible; belts are walkable and are not.** Enemies follow a flow field
   to the Core *around* machines, attack what they walk into, and **charge a turret they notice** from a
   little further out — so a gun belongs three tiles off the lane, and a bare wall beside the road is
@@ -93,6 +125,22 @@ The rules a run is played against:
 * **The ground is the map's, not the player's.** Rock, water and the void outside the map are the
   author's obstacles: nothing is built on them and the walkers' flow field reads them. A wall the player
   buys can be chewed through; a rock ridge cannot fall.
+
+## The campaign
+
+Progression is the **operator unlock ladder**, not the map's number: a map declares which operators it hands
+over (`Unlocked`), and a machine whose operator is locked cannot be built at all - the build bar does not
+offer it and a placement is refused.
+
+| Map | Size | Teaches | Unlocks | Waves |
+|---|---|---|---|---|
+| Quarry | 48×72 | Cutting, and the money loop | Cutter | 6 scripted |
+| Foundry | 64×40 | The second mineral, and orientation | Cutter, Rotator | 8 scripted |
+| Canyon | 72×44 | Combination - mixed rounds | All three | 3 scripted, then 12 generated |
+
+Canyon's authored table teaches the mixed round; the twelve waves after it are the generator's exam, drawn
+from exactly what that map can build. **Endless mode** is the same mechanism with no bound: a map whose
+`Generated Waves` is `-1` never runs out of demands.
 
 ## Development
 
@@ -121,7 +169,7 @@ Assets/Scripts/Core        the engine-free simulation (no UnityEngine reference)
 Assets/Scripts/Unity       the view layer: one renderer per concern, one mesh each, Palette for colour
 Assets/Scripts/Editor      the WebGL build tool, the content-asset tools, the map painting window
                            (FACET ▸ Map Editor) and the Scene view's own map editor
-Assets/Tests/EditMode      the simulation, the content table, the painting and the campaign machinery
+Assets/Tests/EditMode      the simulation, the shape algebra, the generator, the content table, the maps
 Assets/Tests/PlayMode      the shipped scene booting for real, through the driver and the views
 Assets/Data                the assets the scene is wired to: Palette, ContentDatabase, Campaign, Maps
 ```
@@ -134,17 +182,23 @@ definitions (`ContentDatabaseAsset.ToCore()`, `MapAsset.ToCore()`).
 
 The scene wires `Assets/Data/Palette.asset` (the whole look: material, colours, line widths, geometry,
 and a per-content Sprite or procedural override block) and `Assets/Data/ContentDatabase.asset` (every
-cost, turret and enemy stat, shape word and conversion recipe). Every row of both is an **override**,
-so a kind with no row keeps the shipped value and an asset is purely additive; edit a value and it
-takes effect on the next Play, with no recompile.
+cost, gun and enemy stat). Every row of both is an **override**, so a kind with no row keeps the shipped
+value and an asset is purely additive; edit a value and it takes effect on the next Play, with no
+recompile.
 
-* **Retune** — a cost, a fire interval, a drill's rate, a building's or an enemy's HP, how far an enemy
+* **Retune** — a cost, a cutter's cycle, a gun's damage, a building's or an enemy's HP, how far an enemy
   notices machines. The HUD prints its numbers from the same definitions, so what it claims and what
   the tick does cannot disagree.
 * **Add a machine that reuses a behaviour** — an enum value in `BuildKind` plus a row naming its `Id`,
-  `Tile`, `Behavior` and `Cost` (and, for a converter, a `Recipe Id`). No switch has to learn about it.
-* **Add an enemy or a shape** — the same: an enum value plus a row, a colour, and a shipped look. Leave
-  one out and the game throws with the kind's name; `ContentFormatTests` goes red before you press Play.
+  `Tile`, `Behavior` and `Cost`. No switch has to learn about it. A new *behaviour* is bigger on purpose:
+  it must be given a role, a catalogue line, a badge and a port rule by name, and every one of those
+  dispatches throws rather than guessing.
+* **Narrow a machine's diet** — set the row's `Override Diet`. Every shipped machine eats any shape, so
+  nothing in the shipped game jams; a machine that refuses something brings the old routing tension back,
+  and the belt it landed on jams until a right-click clears it.
+* **Add an enemy or a mineral** — a colour, a shipped look, and (for an enemy) an enum value plus a row.
+  Shapes are *not* content: the item space is the algebra's 80, so a new mineral would be a third value in
+  `Quad` and everything else follows - which is why the retune block has no shape rows to edit.
 * `FACET ▸ Refresh Content Database from shipped table` rebuilds the committed asset from the shipped
   numbers in place, keeping its GUID; `FACET ▸ Create Content Database` writes a fresh one.
 
@@ -154,11 +208,12 @@ A map is a `MapAsset` in `Assets/Data/Maps`. **`FACET ▸ Map Editor`** paints o
 **`FACET ▸ Edit Map in Scene`** paints the same map where it is drawn, and `Assets ▸ Create ▸ FACET ▸
 Map` makes an empty one to start from. The brushes are Ground, Ore (with the mineral it yields), Rock,
 Water, Void, the Core and the wave entry points; right-drag erases, one stroke is one undo entry, and
-the window shows the map's size, starting stockpile, wave table and **every problem the map has**, from
-`MapValidation` — a door with no walkable route to the Core, a wave spawning inside rock, a vein no
-belt can reach, a patch hanging off the edge. None of those throws at runtime; they produce a wave
-that stands at its door forever. **Preview** (and the Scene view editor) draws the map with the game's
-own views, with no Play mode.
+the window shows the map's size, starting stockpile, **unlocked operators, seed and generated waves**,
+the wave table - where each group also names the exact item it is weak to - and **every problem the map
+has**, from `MapValidation`: a door with no walkable route to the Core, a wave spawning inside rock, a
+vein no belt can reach, a patch hanging off the edge, a group with no demand. None of those throws at
+runtime; they produce a wave that stands at its door forever, or one that can never be matched.
+**Preview** (and the Scene view editor) draws the map with the game's own views, with no Play mode.
 
 A vein is written in one place: the `Ore:` list names its cell and its mineral, and the cell's
 `Terrain:` byte stays plain. The conversion lets a patch claim its cells as ore whatever the array says,
@@ -166,7 +221,7 @@ so the array is not where a vein is added or taken away - editing that half alon
 quietly. An array that says Ore with no entry beside it is a tile only a drill may stand on and that
 yields nothing when it does; a second entry for one cell is ignored, because the first one counts.
 `MapValidation` names both and the window shows them, and `python Tools/check-maps.py` checks them in the
-file itself, where a hand edit lands before any Editor is open.
+file itself - together with the two wave rules - where a hand edit lands before any Editor is open.
 
 Wiring a map into the game is one step: add it to the **Map Set** (`Assets/Data/Campaign.asset`) in the
 position it should be played.

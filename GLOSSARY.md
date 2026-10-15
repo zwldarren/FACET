@@ -7,15 +7,57 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
 
 ## The economy of things
 
-- **Content table** (`ContentDatabase`) - the one table of what exists: shapes, recipes, machines,
-  turrets, enemies, costs. Enum ordinals into it are the save format; rows are keyed by `Id`.
+- **Content table** (`ContentDatabase`) - the one table of what exists: machines, guns, enemies, costs.
+  Enum ordinals into it are the save format; rows are keyed by `Id`. Shapes are deliberately *not* rows:
+  the item space is the algebra's (see **Shape**), fixed by the encoding rather than by content, so a
+  shape table would be a second, driftable statement of it.
 - **Row / slot** - one machine's entry, indexed by its `BuildKind`. A `MachineRow` in the ScriptableObject
-  carrier overrides the whole definition except its `Id`, its slot, and the additive `MaxHp`.
-- **Behaviour** (`BehaviorKind`) - what a machine *does*: drill, converter, pipe, splitter, sorter,
-  turret, or none. The tick, the badge, the draw and the narration all dispatch on it - and every
+  carrier overrides the whole definition except its `Id`, its slot, and the additive `MaxHp` - and a
+  `ShapeFilterField`/`ShapeField` is how the two shape-valued fields cross that boundary.
+- **Behaviour** (`BehaviorKind`) - what a machine *does*: drill, cutter, rotator, stacker, pipe, splitter,
+  sorter, turret, or none. The tick, the badge, the draw and the narration all dispatch on it - and every
   dispatch that dispatches on it names every kind it has an answer for, and throws on the rest.
+- **Operator** (`Operators`) - a machine that *transforms* an item rather than moving it: the cutter, the
+  rotator and the stacker. The campaign's progression **is** this set (`MapDefinition.Unlocked`,
+  `MachineDef.Requires`), so a locked operator is a machine the map refuses to let the player build.
 - **Belt, hub, run** - the transport vocabulary: a **belt** carries one item per cell, a **hub**
   (splitter/sorter) reads its outlets off the belts wired around it, a **run** is a laid line of belts.
+
+## Shapes
+
+- **Shape** (`Shape`) - one item, as four quadrants: two bits each, in NW NE SE SW order, so equality,
+  hashing and a save are the `uint` code itself. Identity is the *exact* quadrant content - a top
+  half-circle and a bottom one are two different items - which is what makes orientation a real operator
+  rather than a display detail.
+- **Quad / mineral** (`Quad`) - one quadrant's content: `Empty` (a hole) or one of the two minerals,
+  `Circle` and `Square`. A vein yields a mineral; a drill mines it as the **full shape** of that mineral,
+  which is the root of every chain on the map.
+- **Quadrant figure** - how a shape is *drawn*: a circle quadrant is a quarter disc of the item's square,
+  a square quadrant is that square cell, a hole is nothing. Four circle quadrants therefore read as a
+  disc, the top two as a half disc, and circle-left beside square-right as exactly that - the figure and
+  the algebra are one picture. It is what the belt items, the ore, the badges, the demand icons and the
+  sorter's picker all draw.
+- **Cut / cut line** (`Shape.Cut`, `CutterBehavior.Pieces`) - splitting an item along one of its two axes,
+  keeping the quadrants on each side. The machine's *facing* selects the line (north/south cut across,
+  east/west cut down the middle - opposite facings are the same line) and each piece leaves by its own
+  side: the one it faces takes the piece on that side, the side opposite takes the other. Cutting a
+  quarter yields the quarter plus nothing, which is why "an item can be cut at most twice" is a corollary
+  rather than a rule.
+- **Rotation** (`Shape.RotatedCW`) - a quarter turn clockwise: NW to NE to SE to SW and back. Four turns
+  are the identity and **two turns are not**: a half turn gives the complement piece on the same cut
+  line. The rotator's second job is orientation repair.
+- **Stack / disjoint union** (`Shape.Stacked`) - merging two items whose filled quadrants do not overlap;
+  overlapping is illegal in the algebra and a *stall* at the machine, never a jam, because the item that
+  cannot be merged is one the player spent a chain building.
+- **Depth** (`ShapePool.Depth`) - how many operator steps an item is from a mined mineral. It is the
+  game's progression currency: the wave generator's deeper demands come with the tougher archetype, so
+  "harder" is a property of the algebra rather than of a stat table.
+- **Producible pool** (`ShapePool`) - the closure of a map's minerals under the operators it has unlocked:
+  every item a player on that map can actually build, and the only set the generator may draw a demand
+  from. A map with no stacker is never briefed a mixed round, because no line on it could make one.
+- **Demand / weakness** (`SpawnGroup.Weakness`, `EnemyState.Weakness`) - the exact item a wave group is
+  weak to, assigned per group by the generator or by the map's own table. It lives on the *wave*, not on
+  the enemy's kind, so the same archetype asks a different question every time.
 
 ## Laying belts
 
@@ -80,13 +122,13 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   back", not "look here" - the arrows are what say where - and it is timed off the same event window the
   health bar's flash fades over (`ThreatRadar.CoreHitAge`), so the card and the frame pulse together.
 
-- **Shape word / shape mark** (`ShapeDef.Glyph`, `HudIcons`) - the two ways a shape is shown, and the rule
-  for which is which. In a sentence the shape's *word* is spelled from the content table ("starved - no
-  half-circle waiting on its lines"); where a shape is a *mark* - beside the stockpile, on a build tile -
-  the HUD draws the silhouette the map draws, from the same Palette. It used to spell both with one
-  character ("○", "◠"), and in a built player every one of those came out as a gap: the font the IMGUI text
-  is drawn with has no such character. Same reasoning kept the HUD's shipped strings inside ASCII plus the
-  middle dot - no en dash, no triangle - for the same reason.
+- **Shape word / shape figure** (`Shape.Describe`, `ShapeIconSet`) - the two ways a shape is shown, and the
+  rule for which is which. In a sentence the shape is *spelled from its own quadrants* ("left half-circle",
+  "circle top-left + square top-right"); where a shape is a *mark* - beside the stockpile, on a build tile,
+  in the briefing - the HUD draws the quadrant figure. It used to be a word per shape read from a content
+  row, and before that one character ("○", "◠"), which came out as a gap in a built player because the font
+  the IMGUI text is drawn with has no such character. Same reasoning kept the HUD's shipped strings inside
+  ASCII plus the middle dot - no en dash, no triangle - for the same reason.
 
 ## Reading machines
 
@@ -107,9 +149,19 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   tile it faces), and the cell a pipe drops its carried shape onto (two tiles along its facing,
   jumping exactly one). One statement each: the tick delivers through them and the card describes
   them, so the picture cannot drift from the simulation - the same deal the port masks make.
-- **Badge / work** (`Badge`, `Work`) - what a building draws on itself (its diet, its filter, the
-  shape in hand) and the 0..1 fraction the view animates. Both dispatched on behaviour; both throw
-  on one they have no answer for.
+- **Badge / work** (`Badge`, `Badge2`, `Work`) - what a building draws on itself (a cutter's pending
+  piece *and* the other one, a stacker's held piece, a sorter's filter, a turret's last round) and the
+  0..1 fraction the view animates. Both dispatched on behaviour; both throw on one they have no answer for.
+- **Universal chamber** (`TurretBehavior`, `TurretDef`) - the one gun's rule: it eats any non-empty shape,
+  one round per shot, and the *round* decides the damage - full against the enemy whose weakness it is, a
+  quarter against anything else. There is no diet table and no splash, so what a shot is worth is a shape
+  property of the round and a layout property of the line that delivered it.
+- **Diet** (`MachineDef.Diet`) - what a machine accepts, as a `ShapeFilter`. Every shipped machine eats any
+  shape, so nothing in the shipped game jams; the rule stays because "what may this machine take" has to
+  have one answer per machine, and a table may still declare a narrower one.
+- **Shape filter** (`ShapeFilter`) - a rule over items in one of three live modes: anything, contains a
+  mineral, or exactly this item. A sorter's own filter is the machine's (`MachineState.Filter`), seeded
+  from its row and re-routable from the picker without rebuilding it.
 
 ## The clock and the stream
 
@@ -122,6 +174,22 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   `TryLastWithin`, `DroppedSince`. The HUD's "last 1s" line and the refusal toast read these instead
   of hand-filtering the ring; drop honesty (`DroppedSince`, next to `Dropped` and `LastDropTick`)
   is stated once, where the ring's bound is.
+- **Wave generator** (`WaveGenerator`) - the default source of waves (§5 of the design). One wave is a
+  **budget** of enemies (`base * growth^(n-1)`, jittered), every group in it pairs an **archetype** with a
+  **demand**, and the demand is drawn only from the map's producible pool. Depth drives both: a shallow
+  demand comes as Runners, a deeper one as Tanks.
+- **Determinism / seed** - the generator's own xorshift stream, one seed per run mixed with the wave
+  number, is the only randomness in Core: no `System.Random`, because a run that replays differently
+  after a runtime upgrade is not a replay. The seed is printed in the HUD, and a run is reproducible
+  from it: a map that names no seed (`Seed 0`) draws a fresh one every run, so two runs of one map do
+  not play out identically, and a map that pins a non-zero seed replays exactly.
+- **Preview** (`NextWaveDefinition`, `WaveAfterNextDefinition`) - the briefing's two waves: the one the
+  intermission counts down to and the one after it, per group = archetype x count + the demand drawn as a
+  quadrant figure. Lookups are by wave *number* and pure, so showing the preview does not disturb the
+  stream the running wave came from.
+- **Endless** (`MapDefinition.GeneratedWaves`) - how a map sources waves past its authored table: 0 finishes
+  the map when the table is cleared, a positive count hands over to the generator for that many exam waves,
+  and -1 never runs out. Endless mode is this one number rather than a mode.
 
 ## Input
 
@@ -185,5 +253,12 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
 - **Event stream** (`SimEvents`) - what the simulation reports having done; a fixed ring that
   overwrites its oldest, with `Dropped` and `LastDropTick` so a reader can tell when "nothing
   happened" is actually "I stopped seeing".
-- **Twist** - the game's one designed tension: a turret is only *armed* when the right shape is
-  waiting on its input belts, so the defence line and the production line are the same line.
+- **Twist** - the game's one designed tension, and the rework re-cut it: the defence line and the production
+  line are the same line, because a gun fires only what the factory fed it - and now *what shape* it fed it,
+  since a round that is not the demand does a quarter damage. The pressure therefore stays on the factory
+  side: the answer to a packed wave is a longer, better-shaped line, not a bigger purchase.
+- **Jam** (`BeltState.Jammed`) - a belt segment blocked by a delivery its machine refuses, cleared by a
+  right-click. In the shipped table nothing refuses anything (every diet is "any shape"), so the shipped
+  game never jams: the punishment for the wrong shape moved from the belt to the damage roll. The mechanism
+  is live for a table that narrows a diet, and the HUD's jam diagnostics read it either way.
+

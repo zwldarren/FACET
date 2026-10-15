@@ -61,40 +61,40 @@ namespace Facet.Tests
         [Test]
         public void Stroke_AGroundBrush_PaintsThatGroundAndNothingElse()
         {
-            MapPainting.Stroke(_asset, MapBrush.Rock, ShapeType.None, 2, 3, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Rock, Quad.Empty, 2, 3, erase: false);
 
             Assert.AreEqual(TerrainKind.Rock, _asset.TerrainAt(2, 3), "the rock brush paints rock");
             Assert.AreEqual(TerrainKind.Ground, _asset.TerrainAt(3, 3), "and it paints one cell, not a row");
             Assert.AreEqual(0, _asset.SpawnPoints.Length, "and it places nothing");
             Assert.AreEqual(0, _asset.Ore.Length, "and it yields nothing");
 
-            MapPainting.Stroke(_asset, MapBrush.Water, ShapeType.None, 2, 3, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Water, Quad.Empty, 2, 3, erase: false);
             Assert.AreEqual(TerrainKind.Water, _asset.TerrainAt(2, 3), "water over rock is water");
 
-            MapPainting.Stroke(_asset, MapBrush.Void, ShapeType.None, 0, 0, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Void, Quad.Empty, 0, 0, erase: false);
             Assert.AreEqual(TerrainKind.Void, _asset.TerrainAt(0, 0), "the void is a ground kind like any other");
         }
 
         [Test]
         public void Stroke_Ore_WritesTheMineralAndLeavesTheGroundPlain()
         {
-            MapPainting.Stroke(_asset, MapBrush.Ore, ShapeType.HalfSquare, 1, 1, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Ore, Quad.Square, 1, 1, erase: false);
 
             Assert.AreEqual(1, _asset.Ore.Length, "a vein is the mineral written down");
             Assert.AreEqual(TerrainKind.Ground, _asset.TerrainAt(1, 1),
                 "and the ground under it stays plain: one place a vein exists");
 
             ShapePatch patch = _asset.ToCore().Patches[0];
-            Assert.AreEqual(ShapeType.HalfSquare, patch.Shape, "and the conversion reads the mineral back");
+            Assert.AreEqual(Quad.Square, patch.Mineral, "and the conversion reads the mineral back");
             Assert.IsTrue(patch.Contains(new Int2(1, 1)), "at the cell it was painted in");
         }
 
         [Test]
         public void Stroke_WithNoMineral_PaintsNothingAtAll()
         {
-            // ShapeType.None is a shape the enum has but not one a vein can carry: the brush refuses it
+            // Quad.Empty is a shape the enum has but not one a vein can carry: the brush refuses it
             // rather than writing an ore tile that yields nothing.
-            MapPainting.Stroke(_asset, MapBrush.Ore, ShapeType.None, 4, 4, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Ore, Quad.Empty, 4, 4, erase: false);
 
             Assert.AreEqual(TerrainKind.Ground, _asset.TerrainAt(4, 4), "no mineral is no vein");
             Assert.AreEqual(0, _asset.Ore.Length, "and nothing written down");
@@ -103,10 +103,10 @@ namespace Facet.Tests
         [Test]
         public void Stroke_ErasingATile_TakesEveryHalfOfItAway()
         {
-            MapPainting.Stroke(_asset, MapBrush.Door, ShapeType.None, 5, 2, erase: false);
-            MapPainting.Stroke(_asset, MapBrush.Ore, ShapeType.Circle, 5, 2, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Door, Quad.Empty, 5, 2, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Ore, Quad.Circle, 5, 2, erase: false);
 
-            MapPainting.Stroke(_asset, MapBrush.Ore, ShapeType.Circle, 5, 2, erase: true);
+            MapPainting.Stroke(_asset, MapBrush.Ore, Quad.Circle, 5, 2, erase: true);
 
             Assert.AreEqual(TerrainKind.Ground, _asset.TerrainAt(5, 2), "erasing clears the ground");
             Assert.AreEqual(0, _asset.Ore.Length, "and the mineral with it");
@@ -116,7 +116,7 @@ namespace Facet.Tests
         [Test]
         public void Stroke_TheCoreBrush_NamesTheFootprintsCornerAndNothingElse()
         {
-            MapPainting.Stroke(_asset, MapBrush.Core, ShapeType.None, 3, 1, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Core, Quad.Empty, 3, 1, erase: false);
 
             Assert.AreEqual(new Vector2Int(3, 1), _asset.CoreCell, "the brush writes the footprint's corner");
             Assert.AreEqual(new Vector2Int(3, 1), _asset.CoreFootprint, "which is then where the Core stands");
@@ -127,10 +127,10 @@ namespace Facet.Tests
         [Test]
         public void Stroke_ErasingUnderTheCoreBrush_LeavesTheCoreWhereItWasPut()
         {
-            MapPainting.Stroke(_asset, MapBrush.Core, ShapeType.None, 3, 1, erase: false);
-            MapPainting.Stroke(_asset, MapBrush.Rock, ShapeType.None, 6, 4, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Core, Quad.Empty, 3, 1, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Rock, Quad.Empty, 6, 4, erase: false);
 
-            MapPainting.Stroke(_asset, MapBrush.Core, ShapeType.None, 6, 4, erase: true);
+            MapPainting.Stroke(_asset, MapBrush.Core, Quad.Empty, 6, 4, erase: true);
 
             Assert.AreEqual(TerrainKind.Ground, _asset.TerrainAt(6, 4), "erasing clears the ground");
             Assert.AreEqual(new Vector2Int(3, 1), _asset.CoreCell,
@@ -141,14 +141,14 @@ namespace Facet.Tests
         [Test]
         public void Stroke_TheDoorBrush_AddsOneEntryPointHoweverOftenItIsPainted()
         {
-            MapPainting.Stroke(_asset, MapBrush.Door, ShapeType.None, 0, 5, erase: false);
-            MapPainting.Stroke(_asset, MapBrush.Door, ShapeType.None, 0, 5, erase: false);
-            MapPainting.Stroke(_asset, MapBrush.Door, ShapeType.None, 7, 0, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Door, Quad.Empty, 0, 5, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Door, Quad.Empty, 0, 5, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Door, Quad.Empty, 7, 0, erase: false);
 
             CollectionAssert.AreEqual(new[] { new Vector2Int(0, 5), new Vector2Int(7, 0) }, _asset.SpawnPoints,
                 "two doors, in the order they were painted - a tile is one place, however often it is named");
 
-            MapPainting.Stroke(_asset, MapBrush.Door, ShapeType.None, 0, 5, erase: true);
+            MapPainting.Stroke(_asset, MapBrush.Door, Quad.Empty, 0, 5, erase: true);
             CollectionAssert.AreEqual(new[] { new Vector2Int(7, 0) }, _asset.SpawnPoints,
                 "and erasing takes the one that is there");
         }
@@ -156,9 +156,9 @@ namespace Facet.Tests
         [Test]
         public void Stroke_OutsideTheMap_WritesNothing()
         {
-            MapPainting.Stroke(_asset, MapBrush.Rock, ShapeType.None, -3, 2, erase: false);
-            MapPainting.Stroke(_asset, MapBrush.Ore, ShapeType.Circle, 8, 6, erase: false);
-            MapPainting.Stroke(_asset, MapBrush.Door, ShapeType.None, 100, 100, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Rock, Quad.Empty, -3, 2, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Ore, Quad.Circle, 8, 6, erase: false);
+            MapPainting.Stroke(_asset, MapBrush.Door, Quad.Empty, 100, 100, erase: false);
 
             Assert.AreEqual(TerrainKind.Ground, _asset.TerrainAt(0, 0), "nothing inside the map moved");
             Assert.AreEqual(0, _asset.Ore.Length, "and nothing was written past its edge");
@@ -168,7 +168,7 @@ namespace Facet.Tests
         [Test]
         public void Fill_AGroundBrush_PaintsEveryTile()
         {
-            MapPainting.Fill(_asset, MapBrush.Rock, ShapeType.None);
+            MapPainting.Fill(_asset, MapBrush.Rock, Quad.Empty);
 
             for (int y = 0; y < _asset.Height; y++)
             {
@@ -182,8 +182,8 @@ namespace Facet.Tests
         {
             // The buttons for a fill say the same thing by being disabled; this is the half of the rule
             // that holds even for a caller that forgot to ask.
-            MapPainting.Fill(_asset, MapBrush.Core, ShapeType.None);
-            MapPainting.Fill(_asset, MapBrush.Door, ShapeType.None);
+            MapPainting.Fill(_asset, MapBrush.Core, Quad.Empty);
+            MapPainting.Fill(_asset, MapBrush.Door, Quad.Empty);
 
             Assert.AreEqual(new Vector2Int(-1, -1), _asset.CoreCell, "a whole map of Core cells is not a map");
             Assert.AreEqual(0, _asset.SpawnPoints.Length, "and neither is a whole map of doors");

@@ -5,7 +5,7 @@ namespace Facet.Core
     /// one losing object, how forgiving a projectile's hit test is, how long a stray shot lives, how much
     /// room a wave gives itself, and what hitting an enemy's weakness is worth.
     ///
-    /// Everything else - build costs, turret and enemy stats, the machine table, the decomposer recipe -
+    /// Everything else - build costs, turret and enemy stats, the machine table, the operator numbers -
     /// lives in <see cref="ContentDatabase"/>, the single source of truth the simulation, the view and the
     /// Editor asset all read. Call sites that mean the shipped table say <c>ContentDatabase.Default</c>;
     /// those that mean <em>this</em> world say <c>world.Content</c>. No table, no lookup here.

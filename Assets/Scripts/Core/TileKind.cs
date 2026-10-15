@@ -7,6 +7,11 @@ namespace Facet.Core
     /// learning about them. What the ground is lives in <see cref="TerrainField"/>; this enum only ever
     /// answers "is something built here". The Core is the one kind the map places rather than the player,
     /// but it is a building all the same - which is why <see cref="TileKindExtensions.IsBuilding"/> counts it.
+    ///
+    /// Values are authored data: every row of <c>Assets/Data/ContentDatabase.asset</c> names its tile by
+    /// ordinal, so a retired kind leaves its number dead rather than handing it to whatever is added
+    /// next. The rework appended the three operators past the last authored value for exactly that
+    /// reason.
     /// </summary>
     public enum TileKind : byte
     {
@@ -23,12 +28,11 @@ namespace Facet.Core
         // (TerrainField), and leaving the number dead keeps every authored TileKind value in
         // Assets/Data/ContentDatabase.asset meaning what it meant before.
 
-        /// <summary>Mines the ore under it and pushes a shape onto the belt it faces.</summary>
+        /// <summary>Mines the ore under it and pushes a full shape onto the belt it faces.</summary>
         Drill = 4,
 
-        /// <summary>Splits one circle into two half-circles, pushed out the way it faces. Eats only
-        /// circles - a half-circle delivered back to it jams the feeding belt.</summary>
-        Decomposer = 5,
+        // 5 was Decomposer. Retired and not to be reused: splitting is the cutter's job now, and the
+        // cutter cuts whatever it is fed rather than running a recipe chosen by the input.
 
         /// <summary>Carries one item over a single tile: eats anything delivered to it and drops it
         /// on the belt two cells ahead in its facing, so two belts can cross. Transport, not a
@@ -40,7 +44,7 @@ namespace Facet.Core
         /// the same building on different streets.</summary>
         Splitter = 7,
 
-        /// <summary>Fires half-circles and eats only half-circles. See <see cref="TurretDef"/>.</summary>
+        /// <summary>Eats any shape and fires it at whatever is in range. See <see cref="TurretDef"/>.</summary>
         Turret = 8,
 
         /// <summary>Routes by shape: the shape its definition filters for leaves by the side it faces,
@@ -48,21 +52,26 @@ namespace Facet.Core
         /// belts around it, so it is the same kind of hub on a different job.</summary>
         Sorter = 9,
 
-        // 10 was Cutter. Retired and not to be reused, for the same reason as 3: every authored
-        // TileKind value in Assets/Data/ContentDatabase.asset must keep meaning what it meant.
+        // 10 was Cutter, from the first pass at this game. Retired and not to be reused, for the same
+        // reason as 3: every authored TileKind value in ContentDatabase.asset must keep its meaning.
 
-        /// <summary>The second turret: fires half-squares in area-bursting shells, slower than the
-        /// cannon. Same <see cref="BehaviorKind.Turret"/>; its diet and numbers come from its
-        /// <see cref="TurretDef"/>.</summary>
-        Mortar = 11,
+        // 11 was Mortar. Retired: one universal chamber replaced both guns.
 
         /// <summary>Cheap solid block with HP and nothing else: no ports, no behaviour. Enemies walk
         /// around it, and chew through it when they cannot.</summary>
         Wall = 12,
 
-        /// <summary>Fuses two different halves into one composite round. Ports read off the belts around
-        /// it, like every hub. Appended past the retired 10 - TileKind values are authored data.</summary>
-        Assembler = 13,
+        // 13 was Assembler. Retired: combining is the stacker's job now.
+
+        /// <summary>Splits an item along the line its facing selects, one piece out each of two outlets.
+        /// The number is past every retired one, so nothing authored moved.</summary>
+        Cutter = 14,
+
+        /// <summary>Turns an item a quarter clockwise, out the side it faces.</summary>
+        Rotator = 15,
+
+        /// <summary>Unions two disjoint items into one, out through any wired outlet.</summary>
+        Stacker = 16,
     }
 
     public static class TileKindExtensions

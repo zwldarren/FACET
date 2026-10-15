@@ -18,9 +18,9 @@ namespace Facet.Tests
         [Test]
         public void StartingStockpile_ComesFromTheMap()
         {
-            // The opening budget is a map number, not a simulation constant, so the rig's 62 and a
+            // The opening budget is a map number, not a simulation constant, so the rig's 80 and a
             // hand-made map's 3 both arrive exactly as authored.
-            Assert.AreEqual(62, Sim.Rig().Economy.Circles, "the rig's budget, to the circle");
+            Assert.AreEqual(80, Sim.Rig().Economy.Circles, "the rig's budget, to the circle");
             Assert.AreEqual(3, PoorWorld(3).Economy.Circles);
             Assert.AreEqual(0, PoorWorld(0).Economy.Circles, "and a map that funds nothing opens with nothing");
         }
@@ -30,9 +30,9 @@ namespace Facet.Tests
         {
             SimWorld world = PoorWorld(50);
 
-            Sim.Place(world, BuildKind.Cannon, new Int2(2, 2), Dir.East);
-            Assert.AreEqual(50 - world.Content.Machine(BuildKind.Cannon).Cost, world.Economy.Circles,
-                "the cannon is paid for");
+            Sim.Place(world, BuildKind.Turret, new Int2(2, 2), Dir.East);
+            Assert.AreEqual(50 - world.Content.Machine(BuildKind.Turret).Cost, world.Economy.Circles,
+                "the turret is paid for");
 
             Assert.IsTrue(world.TryRemoveBuilding(new Int2(2, 2)));
             Assert.AreEqual(50, world.Economy.Circles,
@@ -53,7 +53,7 @@ namespace Facet.Tests
             // The ghost reads both halves of the answer: legal ground, no money.
             Assert.IsTrue(world.CanPlace(BuildKind.Belt, new Int2(4, 1)), "the cell itself is fine");
             Assert.IsFalse(world.Economy.CanAfford(BuildKind.Belt), "the stockpile is not");
-            Assert.IsFalse(world.Economy.CanAfford(BuildKind.Cannon), "let alone a cannon");
+            Assert.IsFalse(world.Economy.CanAfford(BuildKind.Turret), "let alone a turret");
         }
 
         [Test]
@@ -74,7 +74,7 @@ namespace Facet.Tests
         {
             SimWorld world = PoorWorld(10);
             Sim.LayRun(world, new Int2(1, 1), Dir.East, 2);
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(1, 1), Sim.Circle));
             Assert.IsTrue(world.Belts.TryJam(new Int2(1, 1)));
             int before = world.Economy.Circles;
 
@@ -93,7 +93,7 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(6, 5), Dir.East, 2);
             int before = world.Economy.Circles;
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(6, 5), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(6, 5), Sim.Circle));
             Sim.Tick(world, 90);
 
             Assert.AreEqual(before + 1, world.Economy.Circles, "one circle delivered is one circle banked");
@@ -108,7 +108,7 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(6, 5), Dir.East, 2);
             int before = world.Economy.Circles;
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(6, 5), ShapeType.HalfCircle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(6, 5), Sim.TopHalfCircle));
             Sim.Tick(world, 90);
 
             Assert.AreEqual(before, world.Economy.Circles, "ammunition is not money");
@@ -125,7 +125,7 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(7, 5), Dir.West, 1);
             int before = world.Economy.Circles;
 
-            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 5), ShapeType.Circle));
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(7, 5), Sim.Circle));
             Sim.Tick(world, 90);
 
             Assert.AreEqual(before, world.Economy.Circles);
@@ -141,7 +141,7 @@ namespace Facet.Tests
         /// <summary>A world with one patch and the Core pinned at (8,4), for the rate tests.</summary>
         private static SimWorld RateWorld(int startCircles = 1000)
             => new SimWorld(new MapDefinition("rates", 30, 12, startCircles,
-                new[] { new ShapePatch(new Int2(24, 5), 3, 2, ShapeType.Circle) },
+                new[] { new ShapePatch(new Int2(24, 5), 3, 2, Quad.Circle) },
                 new Int2[0], new WaveDefinition[0], coreCell: new Int2(8, 4)), new SimConfig());
 
         /// <summary>
@@ -192,9 +192,11 @@ namespace Facet.Tests
 
         /// <summary>
         /// The armed lane - the build that makes one drill pay for a gun and an income at once: a
-        /// splitter halves the stream, one branch banks at the Core, the other feeds a decomposer whose
-        /// half-circles are the cannon's ammunition. The bank's share is about one circle every two
-        /// seconds; the ammo branch demonstrably runs, while its output is destroyed at the sink.
+        /// splitter halves the stream, one branch banks at the Core, the other feeds a cutter whose halves
+        /// are ammunition. While both branches drain, the bank's share is the splitter's half; and because
+        /// the ammo branch throttles itself (a one-outlet cutter can only hold so many of the piece it has
+        /// nowhere to put), the splitter ends up skipping it and the money branch carries everything - the
+        /// two halves of "one drill, two destinations", read off the stockpile.
         /// </summary>
         [Test]
         public void AnArmedLane_SplitsOneDrillBetweenMoneyAndAmmo()
@@ -204,18 +206,39 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(26, 5), Dir.West, 6);                 // (26,5) .. (21,5), the trunk
             Sim.Place(world, BuildKind.Splitter, new Int2(20, 5), Dir.West);
             Sim.LayRun(world, new Int2(19, 5), Dir.West, 8);                 // money branch, (19,5) .. (12,5)
-            Sim.LayRun(world, new Int2(20, 6), Dir.North, 1);                // ammo branch north: the splitter's outlet into the decomposer
-            Sim.Place(world, BuildKind.Decomposer, new Int2(20, 7), Dir.West);
-            Sim.LayRun(world, new Int2(19, 7), Dir.West, 8);                 // halves west, into the sink
+            Sim.LayRun(world, new Int2(20, 6), Dir.North, 1);                // ammo branch north, into the cutter
+            Sim.Place(world, BuildKind.Cutter, new Int2(20, 7), Dir.West);
+            Sim.LayRun(world, new Int2(19, 7), Dir.West, 8);                 // the left halves west, into the sink
+
+            // The ammo branch is throttled by its own second piece: the cutter facing west sends the left
+            // half down this line and has nowhere to put the right one, so once that slot holds
+            // CutterBehavior.SlotBuffer halves the machine stops cutting. The claim here is that the branch
+            // runs at all, so it is observed while it runs rather than at one arbitrary tick.
+            bool ammoRan = false;
+            for (int i = 0; i < 30 * (int)SimConfig.TickRate; i++)
+            {
+                world.Tick(InputCommand.None);
+                ammoRan |= Sim.ShapeAt(world, new Int2(19, 7)) == Sim.LeftHalfCircle;
+            }
+
+            Assert.IsTrue(ammoRan,
+                "the ammo branch runs: the cutter pushes the piece on the side it faces down the line");
+            Assert.AreEqual(0, world.Belts.JamCount, "and nothing about it is a wrong-shape delivery");
+
+            // Half the drill, with the lane's own latency paid first: the first circle lands in the
+            // sixteenth second, so half of what has crossed the splitter by now is a handful.
+            int halfShare = world.Economy.TotalBanked;
+            Assert.Greater(halfShare, 3, "the bank took its share of a drill that has been running a while");
+            Assert.Less(halfShare, 14, "and its share is about half - one circle every two seconds");
 
             Sim.Tick(world, 30 * (int)SimConfig.TickRate);
-            Assert.IsTrue(world.Belts.TryGet(new Int2(19, 7), out BeltState outlet) && outlet.Item == ShapeType.HalfCircle,
-                "the ammo branch runs: the converter pushes its halves down the line");
 
-            Sim.Tick(world, 30 * (int)SimConfig.TickRate);
-            Assert.Greater(world.Economy.TotalBanked, 18);
-            Assert.Less(world.Economy.TotalBanked, 24,
-                "the bank's share is the splitter's half - about one circle every two seconds");
+            // Once the ammo branch stops draining, the splitter skips the outlet that cannot take anything
+            // and the money branch carries the whole drill - so the bank's second half is worth far more
+            // than its first, which is what makes an un-drained branch a real decision rather than a label.
+            Assert.Greater(world.Economy.TotalBanked, halfShare * 2,
+                "with the ammo branch backed up, the money branch carries the whole drill");
+            Assert.Less(world.Economy.TotalBanked, 50, "and never more than the drill produces");
         }
     }
 }

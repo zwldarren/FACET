@@ -7,7 +7,7 @@ namespace Facet.Core
     public struct OreSnapshot
     {
         public Int2 Cell;
-        public ShapeType Shape;
+        public Quad Mineral;
     }
 
     /// <summary>
@@ -34,13 +34,13 @@ namespace Facet.Core
         private readonly TerrainKind[] _kind;
 
         /// <summary>The mineral under an ore tile, meaningless anywhere else.</summary>
-        private readonly ShapeType[] _shape;
+        private readonly Quad[] _mineral;
 
         public TerrainField(TileGrid grid)
         {
             _grid = grid ?? throw new ArgumentNullException(nameof(grid));
             _kind = new TerrainKind[grid.Width * grid.Height];
-            _shape = new ShapeType[grid.Width * grid.Height];
+            _mineral = new Quad[grid.Width * grid.Height];
         }
 
         /// <summary>
@@ -52,13 +52,13 @@ namespace Facet.Core
 
         public bool HasOre(Int2 cell) => KindAt(cell) == TerrainKind.Ore;
 
-        /// <summary>The mineral a cell yields, or <see cref="ShapeType.None"/> where the ground is not
+        /// <summary>The mineral a cell yields, or <see cref="Quad.Empty"/> where the ground is not
         /// ore. The one answer to "what is under there", so the drill, the icon in the ground and the
         /// read cursor cannot disagree.</summary>
-        public ShapeType OreAt(Int2 cell)
+        public Quad OreAt(Int2 cell)
         {
-            if (KindAt(cell) != TerrainKind.Ore) return ShapeType.None;
-            return _shape[_grid.Index(cell)];
+            if (KindAt(cell) != TerrainKind.Ore) return Quad.Empty;
+            return _mineral[_grid.Index(cell)];
         }
 
         /// <summary>
@@ -117,19 +117,19 @@ namespace Facet.Core
             _kind[i] = kind;
 
             // The mineral is only meaningful under ore, so a tile that stops being ore stops yielding:
-            // leaving the shape behind would let a re-stamp hand back a patch nobody drew.
-            if (kind != TerrainKind.Ore) _shape[i] = ShapeType.None;
+            // leaving it behind would let a re-stamp hand back a patch nobody drew.
+            if (kind != TerrainKind.Ore) _mineral[i] = Quad.Empty;
         }
 
         /// <summary>Stamp an ore tile: the ground a drill mines. The one place ore and its mineral are
         /// written together, so "is this ore" and "what does it yield" can never disagree.</summary>
-        public void SetOre(Int2 cell, ShapeType shape)
+        public void SetOre(Int2 cell, Quad mineral)
         {
-            if (!_grid.InBounds(cell) || !shape.IsShape()) return;
+            if (!_grid.InBounds(cell) || mineral == Quad.Empty) return;
 
             int i = _grid.Index(cell);
             _kind[i] = TerrainKind.Ore;
-            _shape[i] = shape;
+            _mineral[i] = mineral;
         }
 
         /// <summary>
@@ -158,7 +158,7 @@ namespace Facet.Core
             if (map == null) throw new ArgumentNullException(nameof(map));
 
             Clear();
-            map.StampTerrain(_kind, _shape);
+            map.StampTerrain(_kind, _mineral);
         }
 
         /// <summary>Wipe every tile back to plain ground. Only used by a restart, which re-stamps the
@@ -166,7 +166,7 @@ namespace Facet.Core
         public void Clear()
         {
             Array.Clear(_kind, 0, _kind.Length);
-            Array.Clear(_shape, 0, _shape.Length);
+            Array.Clear(_mineral, 0, _mineral.Length);
         }
 
         /// <summary>
@@ -180,9 +180,9 @@ namespace Facet.Core
             for (int i = 0; i < _kind.Length; i++)
             {
                 if (_kind[i] != TerrainKind.Ore) continue;
-                if (!_shape[i].IsShape()) continue;
+                if (_mineral[i] == Quad.Empty) continue;
 
-                into.Add(new OreSnapshot { Cell = _grid.CellOf(i), Shape = _shape[i] });
+                into.Add(new OreSnapshot { Cell = _grid.CellOf(i), Mineral = _mineral[i] });
             }
         }
     }
