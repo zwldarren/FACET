@@ -98,6 +98,10 @@ namespace Facet.Game
             "feeding the wrong gun one of them jams the line.")]
         public Color HalfSquareShape = new Color(0.322f, 0.831f, 0.729f, 1f);
 
+        [Tooltip("Composite ammo - the assembler's fused round, eaten by both guns. Violet: the two " + 
+            "minerals' colours fused, and clearly not either chain's own.")]
+        public Color CompositeShape = new Color(0.780f, 0.541f, 0.949f, 1f);
+
         [Tooltip("The defended Core.")]
         public Color Core = new Color(0.976f, 0.980f, 0.988f, 1f);
 
@@ -222,6 +226,7 @@ namespace Facet.Game
                 case ShapeType.HalfCircle: return HalfCircleShape;
                 case ShapeType.Square: return SquareShape;
                 case ShapeType.HalfSquare: return HalfSquareShape;
+                case ShapeType.Composite: return CompositeShape;
                 default:
                     throw new System.ArgumentOutOfRangeException(nameof(shape), shape,
                         "a new shape must get a colour here (Palette) and a silhouette below");
@@ -240,6 +245,9 @@ namespace Facet.Game
                 case ShapeType.HalfCircle: return ProcShape.HalfDisc;
                 case ShapeType.Square: return ProcShape.RegularPolygon;
                 case ShapeType.HalfSquare: return ProcShape.HalfRect;
+                // The fused round reads as both parents at once: a polygon with more sides than the
+                // square, fewer than the circle.
+                case ShapeType.Composite: return ProcShape.RegularPolygon;
                 default:
                     throw new System.ArgumentOutOfRangeException(nameof(shape), shape,
                         "a new shape must get a silhouette here (Palette.ProcShapeOf)");
@@ -252,6 +260,7 @@ namespace Facet.Game
             switch (shape)
             {
                 case ShapeType.Square: return 4;
+                case ShapeType.Composite: return 6;
                 default: return CircleSides;   // every round shape - and only the known ones reach here
             }
         }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 
 namespace Facet.Core
@@ -61,7 +62,8 @@ namespace Facet.Core
             {
                 case BehaviorKind.Turret: return MachineRole.Defence;
                 case BehaviorKind.Drill: return MachineRole.Mining;
-                case BehaviorKind.Converter: return MachineRole.Processing;
+                case BehaviorKind.Converter:
+                case BehaviorKind.Assembler: return MachineRole.Processing;
                 case BehaviorKind.Splitter:
                 case BehaviorKind.Sorter: return MachineRole.Routing;
                 case BehaviorKind.Pipe: return MachineRole.Transport;
@@ -100,15 +102,44 @@ namespace Facet.Core
                 case BehaviorKind.Turret:
                 {
                     TurretDef spec = content.Turret(def.Build);
-                    return "eats " + Glyph(content, spec.Ammo) + " from any side · fires at whatever is in range";
+                    string eats = "eats " + AmmoDiet(content, spec) + " from any side";
+                    return spec.SplashRadius > 0f
+                        ? eats + " · shells burst over an area"
+                        : eats + " · fires at whatever is in range";
+                }
+
+                case BehaviorKind.Assembler:
+                {
+                    // "fuses half-circle + half-square into composite", per two-input recipe it runs.
+                    var text = new StringBuilder("fuses ");
+                    bool first = true;
+                    foreach (RecipeDef recipe in RecipesFor(content, def))
+                    {
+                        if (!first) text.Append(", ");
+                        first = false;
+                        text.Append(Glyph(content, recipe.Input)).Append(" + ")
+                            .Append(Glyph(content, recipe.Input2)).Append(" into ")
+                            .Append(Glyph(content, recipe.Output));
+                    }
+
+                    return text + " · outlets read off the belts pointing away";
                 }
 
                 case BehaviorKind.Converter:
                 {
-                    RecipeDef recipe = content.Recipe(def.RecipeId);
-                    return "splits " + Glyph(content, recipe.Input) + " into " +
-                           Repeat(Glyph(content, recipe.Output), recipe.OutputCount) +
-                           " · outlets read off the belts pointing away";
+                    // "splits circle into 2 x half-circle", or every recipe the table holds for a
+                    // machine that names none: "splits circle into 2 x half-circle, square into ...".
+                    var text = new StringBuilder("splits ");
+                    bool first = true;
+                    foreach (RecipeDef recipe in RecipesFor(content, def))
+                    {
+                        if (!first) text.Append(", ");
+                        first = false;
+                        text.Append(Glyph(content, recipe.Input)).Append(" into ")
+                            .Append(Repeat(Glyph(content, recipe.Output), recipe.OutputCount));
+                    }
+
+                    return text + " · outlets read off the belts pointing away";
                 }
 
                 case BehaviorKind.Sorter:
@@ -139,8 +170,18 @@ namespace Facet.Core
 
                 case BehaviorKind.Converter:
                 {
-                    RecipeDef recipe = content.Recipe(def.RecipeId);
-                    return recipe.Interval.ToString("0.##") + " s per split · holds " + recipe.Buffer + " when blocked";
+                    // The numbers the recipes share, said once; a recipe retuned away from the others
+                    // surfaces as both values, slash-joined, rather than passing as uniform.
+                    string intervals = Distinct(content, in def, r => r.Interval.ToString("0.##"));
+                    string buffers = Distinct(content, in def, r => r.Buffer.ToString());
+                    return intervals + " s per split · holds " + buffers + " when blocked";
+                }
+
+                case BehaviorKind.Assembler:
+                {
+                    string fuseIntervals = Distinct(content, in def, r => r.Interval.ToString("0.##"));
+                    string fuseBuffers = Distinct(content, in def, r => r.Buffer.ToString());
+                    return fuseIntervals + " s per fuse · holds " + fuseBuffers + " when blocked";
                 }
 
                 case BehaviorKind.Pipe:
@@ -151,8 +192,15 @@ namespace Facet.Core
                 case BehaviorKind.Turret:
                 {
                     TurretDef spec = content.Turret(def.Build);
-                    return spec.ShotsPerSecond.ToString("0.##") + " shots/s · " + spec.Damage.ToString("0.##") +
-                           " dmg · range " + spec.Range.ToString("0.##") + " tiles";
+                    DamageRange(spec, out float min, out float max);
+                    string damage = min >= max
+                        ? min.ToString("0.##") + " dmg"
+                        : min.ToString("0.##") + "-" + max.ToString("0.##") + " dmg";
+                    string line = spec.ShotsPerSecond.ToString("0.##") + " shots/s · " + damage +
+                           " · range " + spec.Range.ToString("0.##") + " tiles";
+                    return spec.SplashRadius > 0f
+                        ? line + " · bursts over " + spec.SplashRadius.ToString("0.##") + " tiles"
+                        : line;
                 }
 
                 case BehaviorKind.Sorter:
@@ -200,19 +248,56 @@ namespace Facet.Core
 
                 case BehaviorKind.Converter:
                 {
-                    RecipeDef recipe = content.Recipe(def.RecipeId);
                     if (machine.OutMask.IsEmpty)
                         return new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
 
-                    if (machine.Work > 0f)
-                        return new ReadingNote("splitting " + Glyph(content, recipe.Input) + " · " +
+                    // The live sentence names the shapes themselves, which the snapshot does not carry -
+                    // read the state itself rather than the badge.
+                    world.Machines.TryGet(cell, out MachineState state);
+
+                    if (state.Carried != ShapeType.None)
+                        return new ReadingNote("splitting " + Glyph(content, state.Carried) + " · " +
                             Percent(machine.Work) + "% through", NoteSeverity.Neutral);
 
-                    return machine.Shape == recipe.Output
-                        ? new ReadingNote("holding " + Glyph(content, recipe.Output) + " - every outlet is full",
-                            NoteSeverity.Warn)
-                        : new ReadingNote("idle - waiting for " + Glyph(content, recipe.Input),
+                    if (state.OutputCount > 0)
+                        return new ReadingNote("holding " + Glyph(content, state.OutputShape) +
+                            " - every outlet is full", NoteSeverity.Warn);
+
+                    return new ReadingNote("idle - waiting for " + Diet(content, in def), NoteSeverity.Neutral);
+                }
+
+                case BehaviorKind.Assembler:
+                {
+                    if (machine.OutMask.IsEmpty)
+                        return new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
+
+                    // As the converter's: the sentence names shapes the snapshot does not carry.
+                    world.Machines.TryGet(cell, out MachineState state);
+
+                    if (state.Carried != ShapeType.None && state.Carried2 != ShapeType.None)
+                        return new ReadingNote("fusing " + Glyph(content, state.Carried) + " + " +
+                            Glyph(content, state.Carried2) + " · " + Percent(machine.Work) + "% through",
                             NoteSeverity.Neutral);
+
+                    if (state.OutputCount > 0)
+                        return new ReadingNote("holding " + Glyph(content, state.OutputShape) +
+                            " - every outlet is full", NoteSeverity.Warn);
+
+                    if (state.Carried != ShapeType.None)
+                    {
+                        // The recipe the machine actually committed to, not a fresh table-order pick:
+                        // with two fuses sharing an input those disagree, and the sentence would name a
+                        // shape the machine will never take.
+                        RecipeDef committed = state.CommittedRecipe.IsNone
+                            ? content.RecipeForInput(in def, state.Carried)
+                            : content.RecipeOrNull(state.CommittedRecipe);
+                        ShapeType missing = committed == null ? ShapeType.None
+                            : committed.Input == state.Carried ? committed.Input2 : committed.Input;
+                        return new ReadingNote("holding " + Glyph(content, state.Carried) +
+                            " - waiting for " + Glyph(content, missing), NoteSeverity.Neutral);
+                    }
+
+                    return new ReadingNote("idle - waiting for " + Diet(content, in def), NoteSeverity.Neutral);
                 }
 
                 case BehaviorKind.Pipe:
@@ -244,7 +329,7 @@ namespace Facet.Core
                 {
                     TurretDef spec = content.Turret(machine.Build);
                     if (!machine.Armed)
-                        return new ReadingNote("starved - no " + Glyph(content, spec.Ammo) + " waiting on its lines",
+                        return new ReadingNote("starved - no " + AmmoDiet(content, spec) + " waiting on its lines",
                             NoteSeverity.Warn);
 
                     return new ReadingNote(machine.HasTarget ? "armed · a target in range" : "armed · nothing in range",
@@ -281,6 +366,7 @@ namespace Facet.Core
                 case BehaviorKind.Drill:
                 case BehaviorKind.Pipe:
                 case BehaviorKind.Converter:
+                case BehaviorKind.Assembler:
                 case BehaviorKind.Splitter:
                     return "facing " + DirName(machine.Direction);
 
@@ -311,17 +397,19 @@ namespace Facet.Core
             switch (def.Behavior)
             {
                 case BehaviorKind.Converter:
-                {
-                    RecipeDef recipe = RecipeOf(def, content);
-                    if (recipe == null) return ShapeType.None;
-                    if (m.OutputCount > 0) return recipe.Output;
-                    return m.Carried == recipe.Input ? recipe.Input : ShapeType.None;
-                }
+                    // The pending batch while it drains, else the shape mid-split: what the machine is
+                    // holding, whichever recipe it came from.
+                    if (m.OutputCount > 0) return m.OutputShape;
+                    return m.Carried;
                 case BehaviorKind.Pipe:
                 case BehaviorKind.Splitter:
                     return m.Carried;
+                case BehaviorKind.Assembler:
+                    // The pending fused batch while it drains, else the first half already held.
+                    if (m.OutputCount > 0) return m.OutputShape;
+                    return m.Carried;
                 case BehaviorKind.Turret:
-                    return content.Turret(m.Build).Ammo;
+                    return content.Turret(m.Build).PrimaryAmmo;
                 case BehaviorKind.Sorter:
                     // The filter, not what it happens to be holding: the badge is the machine's
                     // configuration - which shape leaves by the side it faces - and a badge that
@@ -345,9 +433,23 @@ namespace Facet.Core
             {
                 case BehaviorKind.Converter:
                 {
-                    RecipeDef recipe = RecipeOf(def, content);
-                    if (recipe == null || recipe.Interval <= 0f) return 0f;
-                    return m.Carried == recipe.Input ? 1f - m.Cooldown / recipe.Interval : 0f;
+                    RecipeDef running = content.RecipeForInput(in def, m.Carried);
+                    return running != null && running.Interval > 0f
+                        ? 1f - m.Cooldown / running.Interval
+                        : 0f;
+                }
+                case BehaviorKind.Assembler:
+                {
+                    // The committed recipe is what the cycle is running, so the fraction is its own clock.
+                    // The pair lookup is the fallback for a state that carries no commitment.
+                    RecipeDef running = m.Carried2 == ShapeType.None
+                        ? null
+                        : m.CommittedRecipe.IsNone
+                            ? content.RecipeForInputs(in def, m.Carried, m.Carried2)
+                            : content.RecipeOrNull(m.CommittedRecipe);
+                    return running != null && running.Interval > 0f
+                        ? 1f - m.Cooldown / running.Interval
+                        : 0f;
                 }
                 case BehaviorKind.Pipe:
                 {
@@ -409,10 +511,86 @@ namespace Facet.Core
         private static int Percent(float fraction)
             => (int)MathF.Round(fraction * 100f, MidpointRounding.AwayFromZero);
 
-        private static RecipeDef RecipeOf(in MachineDef def, ContentDatabase content)
+        /// <summary>The recipes a machine runs: its one named recipe, or - naming none - every recipe in
+        /// the table with its behaviour's input count, so a converter's lines never quote the fuse and an
+        /// assembler's never quote a split.</summary>
+        private static IEnumerable<RecipeDef> RecipesFor(ContentDatabase content, MachineDef def)
         {
-            ContentId id = def.RecipeId;
-            return id.IsNone ? null : content.Recipe(id);
+            if (!def.RecipeId.IsNone)
+            {
+                yield return content.Recipe(def.RecipeId);
+                yield break;
+            }
+
+            bool twoInput = def.Behavior == BehaviorKind.Assembler;
+            foreach (RecipeDef recipe in content.Recipes)
+                if (recipe != null && recipe.IsTwoInput == twoInput) yield return recipe;
+        }
+
+        /// <summary>What a converter or assembler eats, spelled for a sentence: every input of every
+        /// recipe it runs, duplicates dropped, joined with " or ".</summary>
+        private static string Diet(ContentDatabase content, in MachineDef def)
+        {
+            var text = new StringBuilder();
+            foreach (RecipeDef recipe in RecipesFor(content, def))
+            {
+                AppendDietShape(text, Glyph(content, recipe.Input));
+                if (recipe.Input2 != ShapeType.None)
+                    AppendDietShape(text, Glyph(content, recipe.Input2));
+            }
+
+            return text.ToString();
+        }
+
+        private static void AppendDietShape(StringBuilder text, string glyph)
+        {
+            if (("; " + text + "; ").Contains("; " + glyph + "; ")) return;
+            if (text.Length > 0) text.Append(" or ");
+            text.Append(glyph);
+        }
+
+        /// <summary>What a turret eats, spelled for a sentence: its diet's shapes joined with " or ".</summary>
+        private static string AmmoDiet(ContentDatabase content, TurretDef spec)
+        {
+            var text = new StringBuilder();
+            foreach (AmmoDef ammo in spec.AmmoTypes)
+            {
+                if (ammo == null) continue;
+                if (text.Length > 0) text.Append(" or ");
+                text.Append(Glyph(content, ammo.Shape));
+            }
+
+            return text.ToString();
+        }
+
+        /// <summary>The damage floor and ceiling across a turret's diet, for its stats line.</summary>
+        private static void DamageRange(TurretDef spec, out float min, out float max)
+        {
+            min = float.MaxValue;
+            max = float.MinValue;
+            foreach (AmmoDef ammo in spec.AmmoTypes)
+            {
+                if (ammo == null) continue;
+                if (ammo.Damage < min) min = ammo.Damage;
+                if (ammo.Damage > max) max = ammo.Damage;
+            }
+        }
+
+        /// <summary>One value read off every recipe a machine runs, duplicates dropped, joined with
+        /// " / " - so two recipes at the shipped 1.5 s read "1.5", and a retune of one reads "1.5 / 2".</summary>
+        private static string Distinct(ContentDatabase content, in MachineDef def,
+            Func<RecipeDef, string> field)
+        {
+            var seen = new StringBuilder();
+            foreach (RecipeDef recipe in RecipesFor(content, def))
+            {
+                string value = field(recipe);
+                if ((", " + seen + ", ").Contains(", " + value + ", ")) continue;
+                if (seen.Length > 0) seen.Append(" / ");
+                seen.Append(value);
+            }
+
+            return seen.ToString();
         }
     }
 }

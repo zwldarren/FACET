@@ -48,18 +48,99 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// First cell delivering an item of the *wrong* shape: the delivery that jams. Separate from a
-        /// good delivery because a wrong shape always jams, even while the turret cools down - the rule
-        /// is about the delivery, not the shot.
+        /// The same question for a machine whose diet is a set of recipes rather than one shape: the
+        /// first cell delivering an item the machine has no recipe for. A converter reads its diet off
+        /// its definition, so the jam rule and the intake rule cannot drift apart - both are this table's
+        /// answer to "is this shape any use to you".
         /// </summary>
-        public static bool TryFindWrongDelivery(BeltField belts, Int2 cell, ShapeType ammo, out Int2 deliveryCell)
+        public static bool TryFindWrongDelivery(BeltField belts, Int2 cell, ContentDatabase content,
+            in MachineDef def, out Int2 deliveryCell)
         {
             deliveryCell = default;
 
             for (int i = 0; i < Ports.Length; i++)
             {
                 if (!TryReadyAt(belts, cell, Ports[i], rejectJammed: false, out Int2 neighbour, out BeltState state)) continue;
-                if (state.Item == ammo) continue;
+                if (content.RecipeForInput(in def, state.Item) != null) continue;
+
+                deliveryCell = neighbour;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The intake mirror of the recipe diet: the first cell delivering an item a recipe covers that the
+        /// machine can also take - the recipe's output is what the buffer already holds, and one more cycle
+        /// of it fits. Both gates are applied per candidate rather than to the first match, because a
+        /// delivery the buffer cannot absorb is a reason to look at the next port, not to stop looking:
+        /// aborting the scan would starve a compatible item parked one port over. Like
+        /// <see cref="TryFindDelivery"/>, a jammed belt still counts - taking the item is how a line gets
+        /// going again.
+        /// </summary>
+        public static bool TryFindRecipeDelivery(BeltField belts, Int2 cell, ContentDatabase content,
+            in MachineDef def, ShapeType bufferedShape, int bufferedCount,
+            out Int2 deliveryCell, out ShapeType shape, out RecipeDef recipe)
+        {
+            deliveryCell = default;
+            shape = ShapeType.None;
+            recipe = null;
+
+            for (int i = 0; i < Ports.Length; i++)
+            {
+                if (!TryReadyAt(belts, cell, Ports[i], rejectJammed: false, out Int2 neighbour, out BeltState state)) continue;
+
+                recipe = content.RecipeForInput(in def, state.Item);
+                if (recipe == null) continue;
+                if (bufferedCount > 0 && bufferedShape != recipe.Output) continue;
+                if (bufferedCount > recipe.Buffer - recipe.OutputCount) continue;
+
+                deliveryCell = neighbour;
+                shape = state.Item;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The turret's half of the diet rule: the first cell delivering an item the gun eats, and the
+        /// diet entry it will fire - so which ammunition a shot is made of is decided by which belt
+        /// delivered it, in the ports' fixed scan order.
+        /// </summary>
+        public static bool TryFindAmmoDelivery(BeltField belts, Int2 cell, TurretDef spec,
+            out Int2 deliveryCell, out AmmoDef ammo)
+        {
+            deliveryCell = default;
+            ammo = null;
+
+            for (int i = 0; i < Ports.Length; i++)
+            {
+                if (!TryReadyAt(belts, cell, Ports[i], rejectJammed: false, out Int2 neighbour, out BeltState state)) continue;
+
+                ammo = spec.AmmoFor(state.Item);
+                if (ammo == null) continue;
+
+                deliveryCell = neighbour;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// And its jam half: the first cell delivering an item the gun does not eat. A wrong-shape
+        /// delivery jams even while the turret cools down - the rule is about the delivery, not the shot.
+        /// </summary>
+        public static bool TryFindWrongDelivery(BeltField belts, Int2 cell, TurretDef spec, out Int2 deliveryCell)
+        {
+            deliveryCell = default;
+
+            for (int i = 0; i < Ports.Length; i++)
+            {
+                if (!TryReadyAt(belts, cell, Ports[i], rejectJammed: false, out Int2 neighbour, out BeltState state)) continue;
+                if (spec.AmmoFor(state.Item) != null) continue;
 
                 deliveryCell = neighbour;
                 return true;
@@ -145,7 +226,13 @@ namespace Facet.Core
         /// difference between the two ways this gets asked: a machine that consumes or fires the item
         /// it takes ignores the jam flag - taking the item is how a line gets going again - while a
         /// machine that carries it somewhere else must not pick a jammed item up.</summary>
-        private static bool TryReadyAt(BeltField belts, Int2 cell, Dir side, bool rejectJammed,
+        /// <summary>Is there a belt on the <paramref name="side"/> of <paramref name="cell"/>, pointing
+        /// into it, with an item parked on its exit edge? <paramref name="rejectJammed"/> is the
+        /// difference between the two ways this gets asked: a machine that consumes or fires the item
+        /// it takes ignores the jam flag - taking the item is how a line gets going again - while a
+        /// machine that carries it somewhere else must not pick a jammed item up. Public so a behaviour
+        /// with a rule between the two packaged scans - the assembler's - can ask it directly.</summary>
+        public static bool TryReadyAt(BeltField belts, Int2 cell, Dir side, bool rejectJammed,
             out Int2 neighbour, out BeltState state)
         {
             neighbour = cell + side.Offset();
@@ -162,7 +249,7 @@ namespace Facet.Core
         /// fed on, which is what makes a stub pointing inward read as an input.
         ///
         /// <paramref name="outMask"/>: every side a belt points away on, when the machine's kind has an
-        /// output there. A drill's facing <em>is</em> its output (exactly one); a decomposer, cutter,
+        /// output there. A drill's facing <em>is</em> its output (exactly one); a decomposer,
         /// splitter and sorter read their outlets off the belts around them (every side wired that way);
         /// a pipe (lands two cells ahead) and a turret (never pushes) get none.
         ///
@@ -199,6 +286,7 @@ namespace Facet.Core
             {
                 case BehaviorKind.Drill: return facing == side;
                 case BehaviorKind.Converter:
+                case BehaviorKind.Assembler:
                 case BehaviorKind.Splitter:
                 case BehaviorKind.Sorter: return true;
                 case BehaviorKind.None:

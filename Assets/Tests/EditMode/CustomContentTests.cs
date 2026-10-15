@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Facet.Core;
 using NUnit.Framework;
 
@@ -55,8 +56,9 @@ namespace Facet.Tests
         public void ATurret_EatsItsDefinitionsDiet_AndTheEnemysDefinitionSetsThePrice()
         {
             // A circle-fed turret against a 3-HP spike: one shot, not the shipped two.
-            var rockThrower = new TurretDef(BuildKind.Cannon, "Rock Thrower", ShapeType.Circle,
-                fireInterval: 1f, damage: 3f, range: 7f, projectileSpeed: 14f);
+            var rockThrower = new TurretDef(BuildKind.Cannon, "Rock Thrower",
+                new[] { new AmmoDef(ShapeType.Circle, 3f) },
+                fireInterval: 1f, range: 7f, projectileSpeed: 14f);
             var fragile = new EnemyDef(new ContentId("spike"), EnemyKind.Spike, "Fragile", hp: 3f, speed: 1f,
                 damage: 6f, attackInterval: 1f, weakness: ShapeType.Circle);
 
@@ -129,7 +131,7 @@ namespace Facet.Tests
         /// the other suites that need a table of their own.
         /// </summary>
         internal static ContentDatabase Rewrite(MachineDef machine = null, RecipeDef recipe = null,
-            TurretDef turret = null, EnemyDef enemy = null)
+            TurretDef turret = null, EnemyDef enemy = null, RecipeDef extraRecipe = null)
         {
             ContentDatabase shipped = ContentDatabase.Default;
 
@@ -152,16 +154,18 @@ namespace Facet.Tests
             foreach (ShapeType shape in (ShapeType[])Enum.GetValues(typeof(ShapeType)))
                 shapes[(int)shape] = shipped.Shape(shape);
 
-            // A swapped recipe keeps the shipped id, so the converter's definition still finds it. Both
-            // shipped recipes are carried because a table with a cutter row that cannot name its recipe is
-            // refused at construction.
-            var recipes = new[]
+            // Every shipped recipe is carried, plus an optional extra row: the decomposer names no recipe
+            // and runs the whole table, so a table missing one would quietly halve its diet rather than
+            // fail at construction. The extra row is how a suite gives two recipes a shared input.
+            var recipes = new List<RecipeDef>
             {
                 recipe ?? shipped.Recipe(ContentDatabase.DecomposeRecipeId),
                 shipped.Recipe(ContentDatabase.BisectRecipeId),
+                shipped.Recipe(ContentDatabase.CombineRecipeId),
             };
+            if (extraRecipe != null) recipes.Add(extraRecipe);
 
-            return new ContentDatabase(machines, turrets, enemies, shapes, recipes);
+            return new ContentDatabase(machines, turrets, enemies, shapes, recipes.ToArray());
         }
     }
 }

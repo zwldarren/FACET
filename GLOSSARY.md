@@ -29,10 +29,21 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
 ## The wave's walk
 
 - **Flow field** (`PathField`) - the way to the Core from every walkable cell, stored as one step
-  per cell rather than a path per enemy. It is kept twice: the **direct field** (the plain
-  breadth-first flood the game has always simulated) and the **flank field** (a Dijkstra where a
-  cell under a standing gun's range costs `Balance.PathThreatWeight` extra). Both rebuild only when
-  a building comes or goes; terrain is fixed and cannot invalidate them.
+  per cell rather than a path per enemy. It is kept three times: the **direct field** (the plain
+  breadth-first flood the game has always simulated), the **flank field** (a Dijkstra where a cell
+  under a standing gun's range costs `Balance.PathThreatWeight` extra) and the **breach field** (a
+  Dijkstra where a cell carrying a building costs `Balance.PathBreachWeight`). All three rebuild only
+  when a building comes or goes; terrain is fixed and cannot invalidate them.
+- **Breach** (`TryBreach`) - the way in when there is no way round: the route that walks *through*
+  what the player built, priced per building cell so the wave takes the shortest crossing rather than
+  the nearest one. Read only by a walker whose chosen field has no direction for its cell, so an
+  unsealed run walks exactly as it always did - and rock stays a wall to it, as does a building with no
+  health (`MachineDef.MaxHp` 0), which nothing may chew.
+- **Sight** (`EnemyField.Sees`) - whether the straight line from a walker to a machine's cell centre
+  crosses ground it cannot cross. The one thing that keeps the wave's aggression honest: a machine it
+  notices but cannot see is walked round rather than pressed at, and since a line in sight is a line
+  `Advance` can walk, a charge never grinds. It settles what may be hit as well as what may be charged:
+  the reach is asked about a machine the walker can see, not merely one that is near.
 - **Threat** - 1 for a cell whose centre is inside a standing turret's range, 0 elsewhere. Asked of
   the machines, not of the shots: a starved gun still covers its ground, because a wave reads the
   gun on the ground and not the magazine behind it. Belts and walls project none - a wall is there

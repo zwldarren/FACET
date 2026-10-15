@@ -28,9 +28,14 @@ MonoBehaviour:
   - Shape: 4
     Name: Half-square
     Glyph: half-square
+  - Shape: 5
+    Name: Composite
+    Glyph: composite
+    MatchesAnyWeakness: 1
   Recipes:
   - Id: decompose
     Input: 1
+    Input2: 0
     Output: 2
     InputCount: 1
     OutputCount: 2
@@ -38,11 +43,20 @@ MonoBehaviour:
     Buffer: 4
   - Id: bisect
     Input: 3
+    Input2: 0
     Output: 4
     InputCount: 1
     OutputCount: 2
     Interval: 1.5
     Buffer: 4
+  - Id: combine
+    Input: 2
+    Input2: 4
+    Output: 5
+    InputCount: 1
+    OutputCount: 1
+    Interval: 2
+    Buffer: 2
   Machines:
   - Id: belt
     Build: 0
@@ -71,7 +85,7 @@ MonoBehaviour:
     Cost: 15
     Name: Decomposer
     Description: splits one shape into its parts
-    RecipeId: decompose
+    RecipeId: 
     Interval: 0
     Filter: 0
   - Id: pipe
@@ -114,18 +128,8 @@ MonoBehaviour:
     RecipeId: 
     Interval: 0
     Filter: 1
-  - Id: cutter
-    Build: 7
-    Tile: 10
-    Behavior: 2
-    Cost: 15
-    Name: Cutter
-    Description: splits one shape into its parts
-    RecipeId: bisect
-    Interval: 0
-    Filter: 0
   - Id: mortar
-    Build: 8
+    Build: 7
     Tile: 11
     Behavior: 5
     Cost: 30
@@ -134,23 +138,41 @@ MonoBehaviour:
     RecipeId: 
     Interval: 0
     Filter: 0
+  - Id: assembler
+    Build: 9
+    Tile: 13
+    Behavior: 7
+    Cost: 25
+    Name: Assembler
+    Description: fuses two different halves into one round
+    RecipeId: 
+    Interval: 0
+    Filter: 0
   Turrets:
   - Id: cannon
     Build: 5
     Name: Cannon
-    Ammo: 2
+    AmmoTypes:
+    - Shape: 2
+      Damage: 3
+    - Shape: 5
+      Damage: 6
     FireInterval: 1
-    Damage: 3
     Range: 7
     ProjectileSpeed: 14
+    SplashRadius: 0
   - Id: mortar
-    Build: 8
+    Build: 7
     Name: Mortar
-    Ammo: 4
+    AmmoTypes:
+    - Shape: 4
+      Damage: 6
+    - Shape: 5
+      Damage: 10
     FireInterval: 1.5
-    Damage: 6
     Range: 9
     ProjectileSpeed: 12
+    SplashRadius: 1.25
   Enemies:
   - Id: spike
     Kind: 0

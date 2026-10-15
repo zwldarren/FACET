@@ -15,8 +15,8 @@ namespace Facet.Core
         Drill = 1,
 
         /// <summary>Runs a <see cref="RecipeDef"/>: eats its input, waits out the interval, pushes its
-        /// output through any wired outlet. The decomposer and cutter are the same behaviour with two
-        /// recipes.</summary>
+        /// output through any wired outlet. Which recipes it runs is the definition's: one named recipe,
+        /// or - naming none - every recipe in the table, chosen per delivery by the input shape.</summary>
         Converter = 2,
 
         /// <summary>Carries one item across a tile and drops it two cells ahead.</summary>
@@ -32,6 +32,11 @@ namespace Facet.Core
         /// everything else out the other wired outlets. Like a splitter it reads its ports off the belts, so
         /// it is the same hub on a different job.</summary>
         Sorter = 6,
+
+        /// <summary>Runs a two-input <see cref="RecipeDef"/>: holds one of each input, waits out the
+        /// interval, pushes the fused output through any wired outlet. The assembler is the deep end of
+        /// the ammunition ladder - it is where the two mineral chains meet.</summary>
+        Assembler = 7,
     }
 
     /// <summary>A stable, human-readable identity for a piece of content. Strings, not enum ordinals: an
@@ -73,18 +78,24 @@ namespace Facet.Core
         public readonly string Name;
         public readonly string Glyph;
 
-        public ShapeDef(ShapeType shape, string id, string name, string glyph)
+        /// <summary>True for ammunition whose structure contains every mineral, so no enemy resists it:
+        /// the composite. What a deep chain buys is never having to ask what a wave is weak to.</summary>
+        public readonly bool MatchesAnyWeakness;
+
+        public ShapeDef(ShapeType shape, string id, string name, string glyph,
+            bool matchesAnyWeakness = false)
         {
             Shape = shape;
             Id = new ContentId(id);
             Name = name;
             Glyph = glyph;
+            MatchesAnyWeakness = matchesAnyWeakness;
         }
     }
 
-    /// <summary>One transformation a <see cref="BehaviorKind.Converter"/> performs per cycle. The decomposer
-    /// is the shipped example - one circle in, two half-circles out per 1.5 s - and a later furnace or
-    /// assembler is another row, not another behaviour.</summary>
+    /// <summary>One transformation a <see cref="BehaviorKind.Converter"/> performs per cycle. The two
+    /// splits are the shipped examples - one mineral in, two halves out per 1.5 s - and a later furnace
+    /// or assembler is another row, not another behaviour.</summary>
     public sealed class RecipeDef
     {
         public readonly ContentId Id;
@@ -92,13 +103,19 @@ namespace Facet.Core
         /// <summary>The shape this recipe consumes.</summary>
         public readonly ShapeType Input;
 
+        /// <summary>The second shape a two-input recipe consumes, one per cycle; <see cref="ShapeType.None"/>
+        /// for the splits. Which kind of machine may run the recipe is this field: a converter runs only
+        /// single-input recipes, an assembler only two-input ones, so "a converter runs every recipe the
+        /// table holds" can never teach the decomposer to eat ammunition.</summary>
+        public readonly ShapeType Input2;
+
         /// <summary>The shape it produces.</summary>
         public readonly ShapeType Output;
 
         /// <summary>Inputs consumed per cycle. One, for every recipe shipped so far.</summary>
         public readonly int InputCount;
 
-        /// <summary>Outputs produced per cycle: two, for the decomposer, and the reason its output
+        /// <summary>Outputs produced per cycle: two, for the splits, and the reason their output
         /// outruns a single belt.</summary>
         public readonly int OutputCount;
 
@@ -110,8 +127,17 @@ namespace Facet.Core
         public readonly int Buffer;
 
         public RecipeDef(ContentId id, ShapeType input, ShapeType output, int inputCount,
-            int outputCount, float interval, int buffer)
+            int outputCount, float interval, int buffer, ShapeType input2 = ShapeType.None)
         {
+            // A two-input recipe whose halves are the same shape can never run: RecipeForInputs refuses
+            // first == second, so an assembler would take one item and then stall every duplicate on its
+            // belt forever - not a jam, because the recipe does accept the shape, so nothing complains.
+            // Refused here rather than at the machine, where the symptom is silence.
+            if (input2 != ShapeType.None && input2 == input)
+                throw new ArgumentException(
+                    "recipe \"" + id.Value + "\" lists " + input + " as both its inputs, so no second " +
+                    "delivery could ever complete it", nameof(input2));
+
             Id = id;
             Input = input;
             Output = output;
@@ -119,6 +145,30 @@ namespace Facet.Core
             OutputCount = outputCount;
             Interval = interval;
             Buffer = buffer;
+            Input2 = input2;
+        }
+
+        /// <summary>Is this shape one of the recipe's inputs? A recipe accepts its <see cref="Input"/>
+        /// and, on a two-input recipe, its <see cref="Input2"/>.</summary>
+        public bool Accepts(ShapeType shape)
+            => shape == Input || (Input2 != ShapeType.None && shape == Input2);
+
+        /// <summary>Two-input recipes are the assembler's; single-input ones the converter's.</summary>
+        public bool IsTwoInput => Input2 != ShapeType.None;
+    }
+
+    /// <summary>One entry in a turret's diet: the shape it eats and the damage a shot of it does. The
+    /// turret's own numbers say how often and how far; the ammunition says how hard - damage is what the
+    /// belt delivered, not what the gun was sold with.</summary>
+    public sealed class AmmoDef
+    {
+        public readonly ShapeType Shape;
+        public readonly float Damage;
+
+        public AmmoDef(ShapeType shape, float damage)
+        {
+            Shape = shape;
+            Damage = damage;
         }
     }
 
@@ -164,13 +214,14 @@ namespace Facet.Core
         /// <summary>Does this machine's own facing mean anything? A drill pushes onto the cell it faces, a
         /// pipe carries across in its facing, a sorter sends its filtered shape out the side it faces, and a
         /// turret's barrel rests where it faces - all four are placed by aiming them, and a view can draw that
-        /// facing. False for the hubs that read their ports off the belts around them (a converter, a
-        /// splitter): their stored facing is never read, so an arrow would promise what turning cannot set.
-        /// Asked by the ghost that draws the arrow and the HUD that names the side.</summary>
+        /// facing. False for the hubs that read their ports off the belts around them (a converter, an
+        /// assembler, a splitter): their stored facing is never read, so an arrow would promise what turning
+        /// cannot set. Asked by the ghost that draws the arrow and the HUD that names the side.</summary>
         public bool UsesFacing
             => Tile == TileKind.Belt
                || (Behavior != BehaviorKind.None
                    && Behavior != BehaviorKind.Converter
+                   && Behavior != BehaviorKind.Assembler
                    && Behavior != BehaviorKind.Splitter);
 
         public MachineDef(ContentId id, BuildKind build, TileKind tile, BehaviorKind behavior, int cost,
@@ -193,27 +244,55 @@ namespace Facet.Core
 
     /// <summary>One turret's numbers. A turret is a machine that also fires, so it carries its
     /// <see cref="BuildKind"/> for the definition table rather than the whole <see cref="MachineDef"/> - and
-    /// no <see cref="ContentId"/> of its own, because a turret's identity is its machine's.</summary>
+    /// no <see cref="ContentId"/> of its own, because a turret's identity is its machine's.
+    ///
+    /// The diet is a table, not a shape: every entry pairs an ammunition the gun eats with the damage a
+    /// shot of it does, so what a turret fires is a routing decision - which line the player ran to it -
+    /// not a fixed label on the gun.</summary>
     public sealed class TurretDef
     {
         public readonly BuildKind Build;
         public readonly string Name;
-        public readonly ShapeType Ammo;
+
+        /// <summary>The gun's diet, in the order the HUD names it. Never empty: a turret with nothing
+        /// it eats never fires, and the constructor refuses it for exactly that reason.</summary>
+        public readonly AmmoDef[] AmmoTypes;
+
         public readonly float FireInterval;
-        public readonly float Damage;
         public readonly float Range;
         public readonly float ProjectileSpeed;
 
-        public TurretDef(BuildKind build, string name, ShapeType ammo, float fireInterval,
-            float damage, float range, float projectileSpeed)
+        /// <summary>The burst radius of a landed shell, in tiles: every enemy within it of the impact
+        /// takes the hit, not just the homed target. 0 is a single-target gun - what makes the mortar
+        /// an area weapon and the cannon not one is this number, not a behaviour.</summary>
+        public readonly float SplashRadius;
+
+        public TurretDef(BuildKind build, string name, AmmoDef[] ammoTypes, float fireInterval,
+            float range, float projectileSpeed, float splashRadius = 0f)
         {
+            if (ammoTypes == null || ammoTypes.Length == 0)
+                throw new ArgumentException("turret \"" + name + "\" has an empty diet", nameof(ammoTypes));
+
             Build = build;
             Name = name;
-            Ammo = ammo;
+            AmmoTypes = ammoTypes;
             FireInterval = fireInterval;
-            Damage = damage;
             Range = range;
             ProjectileSpeed = projectileSpeed;
+            SplashRadius = splashRadius;
+        }
+
+        /// <summary>The diet's head: the ammunition the badge wears and the HUD names first.</summary>
+        public ShapeType PrimaryAmmo => AmmoTypes[0].Shape;
+
+        /// <summary>The diet entry for a shape, or null when the gun does not eat it - the delivery that
+        /// jams the feeding belt.</summary>
+        public AmmoDef AmmoFor(ShapeType shape)
+        {
+            for (int i = 0; i < AmmoTypes.Length; i++)
+                if (AmmoTypes[i] != null && AmmoTypes[i].Shape == shape) return AmmoTypes[i];
+
+            return null;
         }
 
         /// <summary>Shots per second at an unlimited supply. Whether it ever reaches this is the
@@ -281,8 +360,12 @@ namespace Facet.Core
         /// <summary>The shipped decomposer recipe's id: circle in, half-circles out.</summary>
         public static readonly ContentId DecomposeRecipeId = new ContentId("decompose");
 
-        /// <summary>The shipped cutter recipe's id: square in, half-squares out.</summary>
+        /// <summary>The shipped bisect recipe's id: square in, half-squares out.</summary>
         public static readonly ContentId BisectRecipeId = new ContentId("bisect");
+
+        /// <summary>The shipped assembler recipe's id: half-circle and half-square in, composite out -
+        /// the rung of the ammunition ladder that makes the two chains meet.</summary>
+        public static readonly ContentId CombineRecipeId = new ContentId("combine");
 
         private readonly MachineDef[] _machines;
         private readonly TurretDef[] _turrets;
@@ -322,14 +405,23 @@ namespace Facet.Core
                 MachineDef def = _machines[i];
                 if (def == null) continue;
 
-                if (def.Behavior == BehaviorKind.Converter)
+                if (def.Behavior == BehaviorKind.Converter || def.Behavior == BehaviorKind.Assembler)
                 {
-                    if (def.RecipeId.IsNone || !HasRecipe(def.RecipeId))
-                        throw new ArgumentException(
-                            "converter row \"" + def.Name + "\" (" + def.Id + ") " +
-                            (def.RecipeId.IsNone ? "names no recipe"
-                                : "names recipe \"" + def.RecipeId.Value + "\", which this table does not hold"),
-                            "recipes");
+                    if (!def.RecipeId.IsNone)
+                    {
+                        if (!HasRecipe(def.RecipeId))
+                            throw new ArgumentException(
+                                "converter row \"" + def.Name + "\" (" + def.Id + ") names recipe \"" +
+                                def.RecipeId.Value + "\", which this table does not hold",
+                                "recipes");
+
+                        if (Recipe(def.RecipeId).IsTwoInput != (def.Behavior == BehaviorKind.Assembler))
+                            throw new ArgumentException(
+                                "\"" + def.Name + "\" (" + def.Id + ") is an " + def.Behavior +
+                                " naming a recipe with the wrong input count - converters run " +
+                                "single-input recipes, assemblers two-input ones",
+                                "recipes");
+                    }
                 }
 
                 if (def.Behavior == BehaviorKind.Turret && _turrets[i] == null)
@@ -339,13 +431,7 @@ namespace Facet.Core
             }
         }
 
-        private bool HasRecipe(ContentId id)
-        {
-            for (int i = 0; i < _recipes.Length; i++)
-                if (_recipes[i] != null && _recipes[i].Id.Equals(id)) return true;
-
-            return false;
-        }
+        private bool HasRecipe(ContentId id) => RecipeOrNull(id) != null;
 
         /// <summary>Every buildable kind, in ordinal (hotkey) order.</summary>
         public BuildKind[] BuildKinds { get; }
@@ -421,10 +507,20 @@ namespace Facet.Core
 
         public RecipeDef Recipe(ContentId id)
         {
-            for (int i = 0; i < _recipes.Length; i++)
-                if (_recipes[i].Id.Equals(id)) return _recipes[i];
+            RecipeDef found = RecipeOrNull(id);
+            if (found == null) throw new ArgumentOutOfRangeException(nameof(id), id.Value, "no such recipe");
+            return found;
+        }
 
-            throw new ArgumentOutOfRangeException(nameof(id), id.Value, "no such recipe");
+        /// <summary>The recipe with this id, or null when the table holds none: the forgiving half of
+        /// <see cref="Recipe"/>, for a machine that must keep ticking when the table is retuned under the
+        /// item it is holding. Null is "no such recipe", never "a recipe that happens to be null".</summary>
+        public RecipeDef RecipeOrNull(ContentId id)
+        {
+            for (int i = 0; i < _recipes.Length; i++)
+                if (_recipes[i] != null && _recipes[i].Id.Equals(id)) return _recipes[i];
+
+            return null;
         }
 
         /// <summary>The shipped table. Every number is the design's, with its reasoning next to it, and every
@@ -445,6 +541,9 @@ namespace Facet.Core
                 new ShapeDef(ShapeType.HalfCircle, "half-circle", "Half-circle", "half-circle"),
                 new ShapeDef(ShapeType.Square, "square", "Square", "square"),
                 new ShapeDef(ShapeType.HalfSquare, "half-square", "Half-square", "half-square"),
+                // The fused round: its structure contains both minerals, so no enemy resists it.
+                new ShapeDef(ShapeType.Composite, "composite", "Composite", "composite",
+                    matchesAnyWeakness: true),
             };
 
             // One circle in, two halves out, 1.5 s per split. A drill feeds circles at 1/s but the split
@@ -456,11 +555,18 @@ namespace Facet.Core
                 new RecipeDef(DecomposeRecipeId, ShapeType.Circle, ShapeType.HalfCircle,
                     inputCount: 1, outputCount: 2, interval: 1.5f, buffer: 4),
 
-                // The same recipe shape on the other mineral, so the cutter's numbers are the decomposer's:
-                // the second chain is a second chain, not a rebalance of the first. What differs between the
-                // two lines is the guns at the end, not the splitting.
+                // The same recipe shape on the other mineral: the second chain's split is a row, not a
+                // second machine - the one decomposer runs both, chosen by what is fed to it. What differs
+                // between the two lines is the guns at the end, not the splitting.
                 new RecipeDef(BisectRecipeId, ShapeType.Square, ShapeType.HalfSquare,
                     inputCount: 1, outputCount: 2, interval: 1.5f, buffer: 4),
+
+                // The ladder's deep rung: one of each halves fuse into a composite no enemy resists.
+                // 2 s per fuse halves the ammunition rate of the chains feeding it - the premium is
+                // universality, not volume. Two-input, so only the assembler may run it.
+                new RecipeDef(CombineRecipeId, ShapeType.HalfCircle, ShapeType.Composite,
+                    inputCount: 1, outputCount: 1, interval: 2f, buffer: 2,
+                    input2: ShapeType.HalfSquare),
             };
 
             var machines = new[]
@@ -479,10 +585,16 @@ namespace Facet.Core
                     description: "on a shape patch · mines the belt it faces",
                     recipeId: ContentId.None, interval: 1f, maxHp: 40f),
 
+                // Splits either mineral into its halves: no RecipeId, so it runs every recipe the table
+                // holds, chosen by what is fed to it. One circle or square in, two halves out, 1.5 s per
+                // split. A drill feeds at 1/s but the split consumes at 0.67/s, so the mineral backs up
+                // behind the decomposer - it, not the drill, is the stage that starves the line, and a
+                // second decomposer is the fix. Two halves per cycle is why one belt pointing away caps
+                // it at 1 half/s; a second outlet runs at its own 1.33 halves/s.
                 new MachineDef(new ContentId("decomposer"), BuildKind.Decomposer, TileKind.Decomposer,
                     BehaviorKind.Converter, cost: 15, name: "Decomposer",
                     description: "splits one shape into its parts",
-                    recipeId: DecomposeRecipeId, interval: 0f, maxHp: 60f),
+                    recipeId: ContentId.None, interval: 0f, maxHp: 60f),
 
                 // Well under a belt's one second per item, so a pipe never throttles the line it carries.
                 new MachineDef(new ContentId("pipe"), BuildKind.Pipe, TileKind.Pipe, BehaviorKind.Pipe,
@@ -495,8 +607,7 @@ namespace Facet.Core
                     description: "ports read off the belts around it · in/out by their direction",
                     recipeId: ContentId.None, interval: 0f, maxHp: 40f),
 
-                // Mid-rate, mid-range, eats half-circles. Two shots kill a Spike, so a single fed cannon
-                // holds a trickle; a packed wave wants two lines or a split feed.
+                // The cheap gun: its numbers live on its TurretDef, its diet is the table there.
                 new MachineDef(new ContentId("cannon"), BuildKind.Cannon, TileKind.Turret,
                     BehaviorKind.Turret, cost: 20, name: "Cannon", description: string.Empty,
                     recipeId: ContentId.None, interval: 0f, maxHp: 80f),
@@ -509,19 +620,20 @@ namespace Facet.Core
                     description: "routes by shape · one shape leaves by the side it faces",
                     recipeId: ContentId.None, interval: 0f, filter: ShapeType.Circle, maxHp: 45f),
 
-                // The second chain's converter. Identical to the decomposer but for which recipe it names -
-                // the point of the behaviour seam: a new production stage is a row here, and nothing that steps
-                // machines has to know it exists.
-                new MachineDef(new ContentId("cutter"), BuildKind.Cutter, TileKind.Cutter,
-                    BehaviorKind.Converter, cost: 15, name: "Cutter",
-                    description: "splits one shape into its parts",
-                    recipeId: BisectRecipeId, interval: 0f, maxHp: 60f),
-
-                // The second gun. Deliberately not a straight upgrade: the mortar buys damage with a slower
-                // cycle and a longer line, so the two guns answer different waves.
+                // The second gun. Deliberately not a straight upgrade: the mortar buys damage and an
+                // area burst with a slower cycle and a longer line, so the two guns answer different
+                // waves - the cannon a trickle, the mortar a pack.
                 new MachineDef(new ContentId("mortar"), BuildKind.Mortar, TileKind.Mortar,
                     BehaviorKind.Turret, cost: 30, name: "Mortar", description: string.Empty,
                     recipeId: ContentId.None, interval: 0f, maxHp: 100f),
+
+                // The deep end of the ammunition ladder: one half-circle and one half-square fuse into
+                // a composite. Two inputs of different shapes is what a converter cannot do - this is the
+                // behaviour seam the RecipeDef table was shaped for.
+                new MachineDef(new ContentId("assembler"), BuildKind.Assembler, TileKind.Assembler,
+                    BehaviorKind.Assembler, cost: 25, name: "Assembler",
+                    description: "fuses two different halves into one round",
+                    recipeId: ContentId.None, interval: 0f, maxHp: 60f),
 
                 // The maze tool: cheap per cell, three times a drill's health, and nothing to do. It exists so
                 // an enemy's walk can be shaped - and so a sealed Core is a decision the player can make and
@@ -533,16 +645,27 @@ namespace Facet.Core
 
             var turrets = new[]
             {
-                new TurretDef(BuildKind.Cannon, "Cannon", ShapeType.HalfCircle,
-                    fireInterval: 1f, damage: 3f, range: 7f, projectileSpeed: 14f),
+                // Mid-rate, mid-range. Two half-circle shots kill a Spike, so a single fed cannon holds a
+                // trickle; a packed wave wants the mortar - or composite rounds, which it also eats: twice
+                // the damage and never resisted, at a chain two minerals and an assembler deep.
+                new TurretDef(BuildKind.Cannon, "Cannon", new[]
+                {
+                    new AmmoDef(ShapeType.HalfCircle, 3f),
+                    new AmmoDef(ShapeType.Composite, 6f),
+                },
+                    fireInterval: 1f, range: 7f, projectileSpeed: 14f),
 
                 // Twice the damage on a cycle half again as long - 1.5 s against the cannon's 1 s, so
-                // two-thirds the shot rate, not half. What the second gun really buys is the second ammunition,
-                // which keeps it from being an upgrade: half-squares are resisted by a Spike, so a mortar needs
-                // four shells where a cannon needs two shots, and they match a Bulwark. Each gun answers one
-                // enemy.
-                new TurretDef(BuildKind.Mortar, "Mortar", ShapeType.HalfSquare,
-                    fireInterval: 1.5f, damage: 6f, range: 9f, projectileSpeed: 12f),
+                // two-thirds the shot rate, not half - and the shell bursts over an area, so a packed wave
+                // pays one shell for several enemies. Its composite shell is the run's hardest answer:
+                // ten damage across the burst, to whatever is standing in it.
+                new TurretDef(BuildKind.Mortar, "Mortar", new[]
+                {
+                    new AmmoDef(ShapeType.HalfSquare, 6f),
+                    new AmmoDef(ShapeType.Composite, 10f),
+                },
+                    fireInterval: 1.5f, range: 9f, projectileSpeed: 12f,
+                    splashRadius: 1.25f),
             };
 
             var enemies = new[]
@@ -588,6 +711,48 @@ namespace Facet.Core
 
         private static T At<T>(T[] slots, int index) where T : class
             => index >= 0 && index < slots.Length ? slots[index] : null;
+
+        /// <summary>The recipe a machine with this definition runs on a delivered shape: the one
+        /// accepting it. A machine naming a recipe eats only that recipe's inputs; one naming none eats
+        /// the inputs of every recipe <em>its behaviour runs</em> - a converter the single-input recipes,
+        /// an assembler the two-input ones, so the decomposer can never develop a taste for ammunition.
+        /// Null when the shape is nothing the machine eats - the delivery that jams the feeding belt.</summary>
+        public RecipeDef RecipeForInput(in MachineDef def, ShapeType shape)
+        {
+            if (!def.RecipeId.IsNone)
+            {
+                RecipeDef named = Recipe(def.RecipeId);
+                return named.Accepts(shape) ? named : null;
+            }
+
+            bool twoInput = def.Behavior == BehaviorKind.Assembler;
+            for (int i = 0; i < _recipes.Length; i++)
+                if (_recipes[i] != null && _recipes[i].IsTwoInput == twoInput && _recipes[i].Accepts(shape))
+                    return _recipes[i];
+
+            return null;
+        }
+
+        /// <summary>The recipe an assembler is committed to once it holds <paramref name="first"/>: the
+        /// first two-input recipe accepting both held shapes, in table order. Null while the held set
+        /// matches nothing - which cannot happen from play, since intake only takes what a recipe accepts,
+        /// but a custom table can commit to a recipe a later row shadowed.</summary>
+        public RecipeDef RecipeForInputs(in MachineDef def, ShapeType first, ShapeType second)
+        {
+            if (!def.RecipeId.IsNone)
+            {
+                RecipeDef named = Recipe(def.RecipeId);
+                return named.Accepts(first) && named.Accepts(second) && first != second ? named : null;
+            }
+
+            for (int i = 0; i < _recipes.Length; i++)
+                if (_recipes[i] != null && _recipes[i].IsTwoInput
+                    && _recipes[i].Accepts(first) && _recipes[i].Accepts(second)
+                    && first != second)
+                    return _recipes[i];
+
+            return null;
+        }
 
         /// <summary>The slot a definition with <paramref name="id"/> occupies, or -1 when nothing carries it.
         /// Linear scan: the table is a handful of rows, and an index would be more state to keep true than it

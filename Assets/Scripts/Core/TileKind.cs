@@ -48,19 +48,21 @@ namespace Facet.Core
         /// belts around it, so it is the same kind of hub on a different job.</summary>
         Sorter = 9,
 
-        /// <summary>The second converter: runs the bisect recipe (square in, half-squares out). The
-        /// same <see cref="BehaviorKind.Converter"/> as the decomposer - a different row, not a
-        /// different behaviour.</summary>
-        Cutter = 10,
+        // 10 was Cutter. Retired and not to be reused, for the same reason as 3: every authored
+        // TileKind value in Assets/Data/ContentDatabase.asset must keep meaning what it meant.
 
-        /// <summary>The second turret: fires half-squares, slower and harder than the cannon. Same
-        /// <see cref="BehaviorKind.Turret"/>; its diet and numbers come from its
+        /// <summary>The second turret: fires half-squares in area-bursting shells, slower than the
+        /// cannon. Same <see cref="BehaviorKind.Turret"/>; its diet and numbers come from its
         /// <see cref="TurretDef"/>.</summary>
         Mortar = 11,
 
         /// <summary>Cheap solid block with HP and nothing else: no ports, no behaviour. Enemies walk
         /// around it, and chew through it when they cannot.</summary>
         Wall = 12,
+
+        /// <summary>Fuses two different halves into one composite round. Ports read off the belts around
+        /// it, like every hub. Appended past the retired 10 - TileKind values are authored data.</summary>
+        Assembler = 13,
     }
 
     public static class TileKindExtensions

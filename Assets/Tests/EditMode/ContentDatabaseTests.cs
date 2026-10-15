@@ -108,8 +108,11 @@ namespace Facet.Tests
             Assert.AreEqual(1.5f, recipe.Interval, Sim.Tol);
             Assert.AreEqual(4, recipe.Buffer);
 
-            // The converter points at this recipe; the drill mines an interval, not a recipe.
-            Assert.AreEqual(ContentDatabase.DecomposeRecipeId, Content.Machine(BuildKind.Decomposer).RecipeId);
+            // The converter names no recipe - it runs them all, the delivered shape picking - and the
+            // drill mines an interval, not a recipe.
+            Assert.IsTrue(Content.Machine(BuildKind.Decomposer).RecipeId.IsNone);
+            Assert.AreSame(recipe,
+                Content.RecipeForInput(Content.Machine(BuildKind.Decomposer), ShapeType.Circle));
             Assert.AreEqual(BehaviorKind.Converter, Content.Machine(BuildKind.Decomposer).Behavior);
             Assert.AreEqual(BehaviorKind.Drill, Content.Machine(BuildKind.Drill).Behavior);
             Assert.AreEqual(BehaviorKind.None, Content.Machine(BuildKind.Belt).Behavior,
@@ -135,7 +138,6 @@ namespace Facet.Tests
             Assert.AreEqual(10, Content.Machine(BuildKind.Splitter).Cost);
             Assert.AreEqual(20, Content.Machine(BuildKind.Cannon).Cost);
             Assert.AreEqual(12, Content.Machine(BuildKind.Sorter).Cost);
-            Assert.AreEqual(15, Content.Machine(BuildKind.Cutter).Cost);
             Assert.AreEqual(30, Content.Machine(BuildKind.Mortar).Cost);
             Assert.AreEqual(2, Content.Machine(BuildKind.Wall).Cost);
 
@@ -148,20 +150,28 @@ namespace Facet.Tests
                 "a belt is not a machine and has no health to chew");
 
             TurretDef cannon = Content.Turret(BuildKind.Cannon);
-            Assert.AreEqual(ShapeType.HalfCircle, cannon.Ammo);
+            Assert.AreEqual(ShapeType.HalfCircle, cannon.PrimaryAmmo);
             Assert.AreEqual(1f, cannon.FireInterval, Sim.Tol);
-            Assert.AreEqual(3f, cannon.Damage, Sim.Tol);
+            Assert.AreEqual(3f, cannon.AmmoFor(ShapeType.HalfCircle).Damage, Sim.Tol);
             Assert.AreEqual(7f, cannon.Range, Sim.Tol);
             Assert.AreEqual(14f, cannon.ProjectileSpeed, Sim.Tol);
 
-            // The two guns are a pair, not a ladder: the mortar fires half as often for twice the damage,
-            // the same damage per second out of half as many items.
+            // Both guns also eat the composite: twice the cannon's base damage, never resisted, at a
+            // chain two minerals and an assembler deep.
+            Assert.AreEqual(6f, cannon.AmmoFor(ShapeType.Composite).Damage, Sim.Tol);
+
+            // The two guns are a pair, not a ladder: the mortar fires two-thirds as often for twice the
+            // damage, and its shell bursts over an area where the cannon's shot answers one enemy.
             TurretDef mortar = Content.Turret(BuildKind.Mortar);
-            Assert.AreEqual(ShapeType.HalfSquare, mortar.Ammo);
+            Assert.AreEqual(ShapeType.HalfSquare, mortar.PrimaryAmmo);
             Assert.AreEqual(1.5f, mortar.FireInterval, Sim.Tol);
-            Assert.AreEqual(cannon.Damage * 2f, mortar.Damage, Sim.Tol);
+            Assert.AreEqual(cannon.AmmoFor(ShapeType.HalfCircle).Damage * 2f,
+                mortar.AmmoFor(ShapeType.HalfSquare).Damage, Sim.Tol);
+            Assert.AreEqual(10f, mortar.AmmoFor(ShapeType.Composite).Damage, Sim.Tol);
             Assert.AreEqual(cannon.FireInterval * 1.5f, mortar.FireInterval, Sim.Tol);
             Assert.Greater(mortar.Range, cannon.Range, "the mortar reaches further");
+            Assert.AreEqual(0f, cannon.SplashRadius, Sim.Tol, "the cannon is the single-target gun");
+            Assert.Greater(mortar.SplashRadius, 0f, "and the mortar is the area one - the role, not a stat");
 
             EnemyDef spike = Content.Enemy(EnemyKind.Spike);
             Assert.AreEqual(6f, spike.Hp, Sim.Tol);
@@ -175,8 +185,9 @@ namespace Facet.Tests
         [Test]
         public void BisectRecipe_IsOneSquareIntoTwoHalves()
         {
-            // The second chain is the first one's shape applied to the other mineral, which is what makes
-            // the cutter a row rather than a behaviour. Pinned so the two cannot drift apart.
+            // The second chain is the first one's shape applied to the other mineral - a row, not a
+            // machine: the one decomposer runs both recipes, chosen by what is fed to it. Pinned so the
+            // two cannot drift apart.
             RecipeDef decom = Content.Recipe(ContentDatabase.DecomposeRecipeId);
             RecipeDef bisect = Content.Recipe(ContentDatabase.BisectRecipeId);
 
@@ -187,14 +198,17 @@ namespace Facet.Tests
             Assert.AreEqual(decom.Interval, bisect.Interval, Sim.Tol);
             Assert.AreEqual(decom.Buffer, bisect.Buffer);
 
-            // Both converters run this shape of recipe, and each names its own.
-            Assert.AreEqual(BehaviorKind.Converter, Content.Machine(BuildKind.Cutter).Behavior);
-            Assert.AreEqual(ContentDatabase.BisectRecipeId, Content.Machine(BuildKind.Cutter).RecipeId);
-            Assert.AreNotEqual(Content.Machine(BuildKind.Decomposer).RecipeId,
-                Content.Machine(BuildKind.Cutter).RecipeId);
+            // One converter, both recipes: the decomposer names no recipe and the delivered shape picks.
+            MachineDef decomposer = Content.Machine(BuildKind.Decomposer);
+            Assert.AreEqual(BehaviorKind.Converter, decomposer.Behavior);
+            Assert.IsTrue(decomposer.RecipeId.IsNone,
+                "the decomposer runs every recipe in the table - there is no second splitter machine");
+            Assert.AreSame(decom, Content.RecipeForInput(decomposer, ShapeType.Circle));
+            Assert.AreSame(bisect, Content.RecipeForInput(decomposer, ShapeType.Square));
+            Assert.IsNull(Content.RecipeForInput(decomposer, ShapeType.HalfCircle),
+                "a split shape has no recipe - feeding one back is the wrong-shape jam");
 
-            // And the minerals are distinct: a cutter must never be fed a circle, nor a decomposer a
-            // square, or the wrong-shape jam rule would have nothing to say.
+            // And the minerals are distinct, or the two chains would be one line drawn twice.
             Assert.AreNotEqual(decom.Input, bisect.Input);
             Assert.AreNotEqual(decom.Output, bisect.Output);
         }
@@ -212,8 +226,8 @@ namespace Facet.Tests
             };
             var turrets = new[]
             {
-                new TurretDef(BuildKind.Cannon, "Siege", ShapeType.HalfCircle,
-                    fireInterval: 0.5f, damage: 9f, range: 12f, projectileSpeed: 20f),
+                new TurretDef(BuildKind.Cannon, "Siege", new[] { new AmmoDef(ShapeType.HalfCircle, 9f) },
+                    fireInterval: 0.5f, range: 12f, projectileSpeed: 20f),
             };
             var enemies = new[]
             {
@@ -226,7 +240,7 @@ namespace Facet.Tests
             var custom = new ContentDatabase(machines, turrets, enemies, shapes, recipes);
 
             Assert.AreEqual(99, custom.Machine(BuildKind.Cannon).Cost);
-            Assert.AreEqual(9f, custom.Turret(BuildKind.Cannon).Damage, Sim.Tol);
+            Assert.AreEqual(9f, custom.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle).Damage, Sim.Tol);
             Assert.AreEqual(ShapeType.Circle, custom.Enemy(EnemyKind.Spike).Weakness);
 
             Assert.Throws<ArgumentOutOfRangeException>(() => custom.Machine(BuildKind.Drill),

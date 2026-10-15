@@ -6,8 +6,9 @@ namespace Facet.Core
     /// <summary>One shot in flight.</summary>
     public struct ProjectileState
     {
-        /// <summary>The shape it was fired from, carried so the view can draw what is in the air.
-        /// It is always the firing turret's own diet: a line of the wrong shape jams, it never fires.</summary>
+        /// <summary>The shape it was fired as, carried so the view can draw what is in the air.
+        /// It is always a shape from the firing turret's diet: a line of anything else jams, it never
+        /// fires.</summary>
         public ShapeType Ammo;
         public float Damage;
         public float Speed;
@@ -19,6 +20,11 @@ namespace Facet.Core
         /// <summary>Where the target was the last time it was seen, so a shot whose target dies on
         /// the way still lands where the enemy was rather than flying on forever.</summary>
         public Vec2 LastKnownTarget;
+
+        /// <summary>The burst radius on landing, in tiles: 0 is a single-target shot, anything more
+        /// hits every enemy that close to the impact. Carried per shot from the firing turret's spec,
+        /// so a retune mid-flight cannot change what a shot already in the air does.</summary>
+        public float SplashRadius;
 
         public Vec2 Position;
         public Vec2 PreviousPosition;
@@ -50,17 +56,20 @@ namespace Facet.Core
             _count = 0;
         }
 
-        public void Spawn(Vec2 from, int targetId, Vec2 targetPosition, TurretDef spec)
+        /// <summary>Fire one shot of <paramref name="ammo"/>: the turret's numbers set the flight, the
+        /// diet entry sets the damage - the item that left the belt is what the enemy takes.</summary>
+        public void Spawn(Vec2 from, int targetId, Vec2 targetPosition, TurretDef spec, ShapeType ammo)
         {
             if (_count == _shots.Length) Array.Resize(ref _shots, _shots.Length * 2);
 
             _shots[_count] = new ProjectileState
             {
-                Ammo = spec.Ammo,
-                Damage = spec.Damage,
+                Ammo = ammo,
+                Damage = spec.AmmoFor(ammo).Damage,
                 Speed = spec.ProjectileSpeed,
                 TargetId = targetId,
                 LastKnownTarget = targetPosition,
+                SplashRadius = spec.SplashRadius,
                 Position = from,
                 PreviousPosition = from,
                 Age = 0f,
@@ -86,7 +95,13 @@ namespace Facet.Core
 
                 if (distance <= MathF.Max(step, Balance.ProjectileHitRadius))
                 {
-                    enemies.ApplyDamage(shot.TargetId, shot.Damage, shot.Ammo);
+                    // A bursting shell lands on the spot whether or not the homed target is still
+                    // standing - that is what a pack pays one shell for.
+                    if (shot.SplashRadius > 0f)
+                        enemies.ApplyDamageInRadius(shot.LastKnownTarget, shot.SplashRadius,
+                            shot.Damage, shot.Ammo);
+                    else
+                        enemies.ApplyDamage(shot.TargetId, shot.Damage, shot.Ammo);
                     RemoveAt(i);
                     continue;
                 }

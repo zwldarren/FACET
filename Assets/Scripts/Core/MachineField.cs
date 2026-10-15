@@ -27,13 +27,30 @@ namespace Facet.Core
         /// item inside. Decomposer: the remaining split time of the circle inside.</summary>
         public float Cooldown;
 
-        /// <summary>What the machine is holding: a decomposer's circle being split, a pipe's item in
+        /// <summary>What the machine is holding: a converter's input being split, a pipe's item in
         /// transit, a splitter's buffered item, or None.</summary>
         public ShapeType Carried;
 
-        /// <summary>Decomposer: outputs made but not yet pushed onto the belt, 0..the recipe's buffer
-        /// (4 for the shipped decomposer).</summary>
+        /// <summary>Converter: outputs made but not yet pushed onto the belt, 0..the running recipe's
+        /// buffer (4 for the shipped splits).</summary>
         public int OutputCount;
+
+        /// <summary>Converter: what the buffered outputs are, remembered from the recipe that made them.
+        /// A converter that runs every recipe (the shipped decomposer) picks the recipe per input, so
+        /// the outputs cannot be read back off the definition once the input that made them is gone -
+        /// and a buffer holds one shape at a time: intake of a different recipe's input waits until the
+        /// buffer drains.</summary>
+        public ShapeType OutputShape;
+
+        /// <summary>Assembler: the second held input, once the first is in <see cref="Carried"/>. The
+        /// cycle runs while both are held, and both clear when the fused output lands in the buffer.</summary>
+        public ShapeType Carried2;
+
+        /// <summary>Assembler: the recipe the first held input committed to - what
+        /// <see cref="Carried2"/> must complete, and what the running cycle reads its output and interval
+        /// from. Stored as an id rather than re-derived from the held pair, because several two-input
+        /// recipes may share an input; <see cref="ContentId.None"/> while nothing is held.</summary>
+        public ContentId CommittedRecipe;
 
         /// <summary>Splitter and sorter: the port the next item tries first, so a balanced hub rotates
         /// instead of always favouring the lowest-numbered output.</summary>

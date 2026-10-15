@@ -62,12 +62,22 @@ namespace Facet.Core
         }
 
         /// <summary>
+        /// Is this cell's ground crossable at all, whatever stands on it? The half of
+        /// <see cref="Walkable"/> that is about the map rather than about what a player built, asked by
+        /// the one reader that prices a building instead of refusing it
+        /// (<see cref="PathField"/>'s breach flood). One statement of "the ground is open", so the two
+        /// questions cannot come apart: rock, water and the void outside the map are the map's own walls.
+        /// </summary>
+        public bool GroundWalkable(Int2 cell)
+            => _grid.InBounds(cell) && KindAt(cell).Walkable();
+
+        /// <summary>
         /// May a walker stand here? The ground has to be open and nothing solid may stand on it. The
         /// Core's footprint is open ground - reaching it is the wave's purpose - and a belt is open too,
         /// because a conveyor is flat.
         /// </summary>
         public bool Walkable(Int2 cell)
-            => _grid.InBounds(cell) && !_grid.Get(cell).IsMachine() && KindAt(cell).Walkable();
+            => GroundWalkable(cell) && !_grid.Get(cell).IsMachine();
 
         /// <summary>
         /// May transport be laid here? In bounds, nothing standing there, and ground that takes one -

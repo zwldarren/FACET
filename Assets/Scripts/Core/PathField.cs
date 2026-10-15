@@ -2,13 +2,17 @@ using System;
 
 namespace Facet.Core
 {
-    /// <summary>The way to the Core from every walkable cell, in two copies: the plain shortest way (a
+    /// <summary>The way to the Core from every walkable cell, in three copies: the plain shortest way (a
     /// breadth-first flood from the Core's footprint, same queue and relaxation order, so a world with no
-    /// turret walks bit-for-bit as it always did) and the way a wave with sense would rather walk (a
+    /// turret walks bit-for-bit as it always did), the way a wave with sense would rather walk (a
     /// Dijkstra over the same ground where a cell under a standing turret's fire costs
-    /// <see cref="Balance.PathThreatWeight"/> extra). Storing both lets the wave's one judgement be made
-    /// once, whole: <see cref="FlankAt"/> weighs the open route against the covered one at the cell a walker
-    /// starts from, and the walker then follows its chosen field (<see cref="TryDirection"/>).
+    /// <see cref="Balance.PathThreatWeight"/> extra), and the way in when there is no way round (a
+    /// Dijkstra where a cell carrying a building costs <see cref="Balance.PathBreachWeight"/>). Storing
+    /// them lets the wave's one judgement be made once, whole: <see cref="FlankAt"/> weighs the open
+    /// route against the covered one at the cell a walker starts from, the walker then follows its chosen
+    /// field (<see cref="TryDirection"/>), and a walker whose field has no direction at all - the Core
+    /// walled off behind the player's buildings - follows the breach field instead
+    /// (<see cref="TryBreach"/>).
     ///
     /// "A walker may enter" is <see cref="TerrainField.Walkable"/> and nothing else, so rock, water and void
     /// are walls exactly as a building is - a map's own ground decides the way before the player builds,
@@ -16,7 +20,10 @@ namespace Facet.Core
     /// judgement: it will not walk far out of its way to dodge a gun it could overrun (the flanking rule
     /// demands a real margin), but a corridor swept end to end is flanked. The threat is asked of the
     /// machines, not the shots: a standing turret projects its range whether or not it is fed; belts and
-    /// walls project nothing.
+    /// walls project nothing. The breach is the one field where the ground rule is relaxed: a building is
+    /// crossable there at a price, so a wave sealed in walks to the cheapest hole and tears it, while
+    /// rock - which nothing may chew - stays a wall to the end, and so does a building nothing may attack
+    /// (<see cref="MachineDef.MaxHp"/> of 0), which is the same promise by another name.
     ///
     /// Recomputed lazily when <see cref="MachineField.Revision"/> says solidity changed; terrain is fixed for
     /// the world's lifetime, so it cannot invalidate this. Each cell stores the direction back toward the
@@ -50,6 +57,12 @@ namespace Facet.Core
         /// <see cref="Balance.PathThreatWeight"/>, and the step it starts with.</summary>
         private readonly int[] _flankCost;
         private readonly byte[] _flankToward;
+
+        /// <summary>The breach: the cost of the cheapest route that walks through the player's buildings
+        /// at <see cref="Balance.PathBreachWeight"/> a cell, and the step it starts with. Read only by a
+        /// walker no other field has a direction for.</summary>
+        private readonly int[] _breachCost;
+        private readonly byte[] _breachToward;
 
         /// <summary>1 where a standing turret's range covers the cell's centre, 0 elsewhere. Written before
         /// every rebuild - threat moves with the guns, so it is not a terrain fact.</summary>
@@ -86,13 +99,15 @@ namespace Facet.Core
             _directWeighted = new int[cells];
             _flankCost = new int[cells];
             _flankToward = new byte[cells];
+            _breachCost = new int[cells];
+            _breachToward = new byte[cells];
             _threat = new byte[cells];
             _queue = new int[cells];
             _heapCell = new int[4 * cells];
             _heapCost = new int[4 * cells];
         }
 
-        /// <summary>Rebuild both fields if the buildings have changed since the last rebuild, and do
+        /// <summary>Rebuild every field if the buildings have changed since the last rebuild, and do
         /// nothing otherwise - the common case, since a tick usually places nothing.</summary>
         public void Sync()
         {
@@ -102,6 +117,7 @@ namespace Facet.Core
             MarkThreat();
             FloodDirect();
             FloodFlank();
+            FloodBreach();
         }
 
         /// <summary>Is the open way the one worth walking from this cell? True when the threat-weighted
@@ -141,6 +157,25 @@ namespace Facet.Core
 
             int index = _grid.Index(cell);
             byte toward = flank ? _flankToward[index] : _directToward[index];
+            direction = toward == 0 ? Dir.North : (Dir)(toward - 1);
+            return toward != 0;
+        }
+
+        /// <summary>The way in for a walker both other fields have no direction for: the first step of the
+        /// cheapest route that carries it <em>through</em> the player's buildings, at
+        /// <see cref="Balance.PathBreachWeight"/> a building cell. False when even that route does not
+        /// exist - the map's own rock has sealed this cell off from the Core, and no amount of chewing
+        /// opens it - which is the caller's cue to press on as it always did.</summary>
+        public bool TryBreach(Int2 cell, out Dir direction)
+        {
+            if (!_grid.InBounds(cell))
+            {
+                direction = Dir.North;
+                return false;
+            }
+
+            int index = _grid.Index(cell);
+            byte toward = _breachToward[index];
             direction = toward == 0 ? Dir.North : (Dir)(toward - 1);
             return toward != 0;
         }
@@ -277,6 +312,65 @@ namespace Facet.Core
                 }
             }
         }
+
+        /// <summary>The breach flood: the way in when there is no way round. The same ground as the other
+        /// two fields - rock, water and the void are walls to the end - but a standing building is crossable
+        /// at <see cref="Balance.PathBreachWeight"/> a cell, so the field prices the player's wall instead of
+        /// refusing it and names the cheapest hole to tear. A building nothing may attack is priced as what
+        /// it is, the map's own rock: <see cref="MachineDef.MaxHp"/> of 0 is the siege's opt-out, and a wall
+        /// no walker may chew must never be named as the way in.
+        ///
+        /// Deterministic like the flank flood - the same pushes, sifts and lazy deletions every time - and
+        /// the heap is the flank flood's, reset here, because the two never run at once.</summary>
+        private void FloodBreach()
+        {
+            Array.Fill(_breachCost, -1);
+            Array.Fill(_breachToward, (byte)0);
+            _heapCount = 0;
+
+            for (int i = 0; i < _breachCost.Length; i++)
+            {
+                if (_grid.Get(_grid.CellOf(i)) != TileKind.Core) continue;
+                _breachCost[i] = 0;
+                Push(i, 0);
+            }
+
+            while (_heapCount > 0)
+            {
+                int current = Pop(out int popped);
+                if (popped > _breachCost[current]) continue;   // a stale entry: the cell found a cheaper way
+
+                Int2 cell = _grid.CellOf(current);
+
+                for (int k = 0; k < Sides.Length; k++)
+                {
+                    Dir side = Sides[k];
+                    Int2 neighbour = cell + side.Offset();
+                    if (!_terrain.GroundWalkable(neighbour)) continue;
+
+                    int step = 1;
+                    if (_grid.Get(neighbour).IsMachine())
+                    {
+                        if (!Chewable(neighbour)) continue;
+                        step = Balance.PathBreachWeight;
+                    }
+
+                    int index = _grid.Index(neighbour);
+                    int next = _breachCost[current] + step;
+                    if (_breachCost[index] >= 0 && _breachCost[index] <= next) continue;
+
+                    _breachCost[index] = next;
+                    _breachToward[index] = (byte)((byte)side.Opposite() + 1);
+                    Push(index, next);
+                }
+            }
+        }
+
+        /// <summary>May the walkers tear this building down? The siege's own rule, asked here so the
+        /// breach field and the enemy that walks it cannot disagree: a definition with no health is solid,
+        /// untargetable and permanent, so there is no point walking at it.</summary>
+        private bool Chewable(Int2 cell)
+            => _machines.TryGet(cell, out MachineState machine) && _content.Machine(machine.Build).MaxHp > 0f;
 
         /// <summary>Push a (cell, cost) pair, sifted up. The arrays are sized for the bound of one push per
         /// incoming edge; a world that exceeds it grows them rather than corrupting.</summary>

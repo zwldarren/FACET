@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Facet.Core;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Facet.Game
 {
@@ -34,15 +35,20 @@ namespace Facet.Game
                 "character the player's font happens to carry.")]
             public string Glyph = "circle";
 
+            [Tooltip("Tick for ammunition no enemy resists - the composite's trick.")]
+            public bool MatchesAnyWeakness = false;
+
             /// <summary>This row as a definition. It keeps the shipped id: that is the simulation's identity for the shape,
             /// not a display name, so a row may rename what a shape is called without changing what it is.</summary>
-            public ShapeDef ToDef(ContentId shippedId) => new ShapeDef(Shape, shippedId.Value, Name, Glyph);
+            public ShapeDef ToDef(ContentId shippedId) => new ShapeDef(Shape, shippedId.Value, Name, Glyph,
+                MatchesAnyWeakness);
 
             public static ShapeRow FromDef(ShapeDef def) => new ShapeRow
             {
                 Shape = def.Shape,
                 Name = def.Name,
                 Glyph = def.Glyph,
+                MatchesAnyWeakness = def.MatchesAnyWeakness,
             };
         }
 
@@ -53,6 +59,8 @@ namespace Facet.Game
             public string Id = "decompose";
             [Tooltip("The shape consumed per cycle.")]
             public ShapeType Input = ShapeType.Circle;
+            [Tooltip("The second shape a two-input (assembler) recipe consumes; None for a split.")]
+            public ShapeType Input2 = ShapeType.None;
             [Tooltip("The shape produced per cycle.")]
             public ShapeType Output = ShapeType.HalfCircle;
             [Min(1)] public int InputCount = 1;
@@ -63,12 +71,13 @@ namespace Facet.Game
             public int Buffer = 4;
 
             public RecipeDef ToDef() => new RecipeDef(new ContentId(Id), Input, Output, InputCount,
-                OutputCount, Interval, Buffer);
+                OutputCount, Interval, Buffer, Input2);
 
             public static RecipeRow FromDef(RecipeDef def) => new RecipeRow
             {
                 Id = def.Id.Value,
                 Input = def.Input,
+                Input2 = def.Input2,
                 Output = def.Output,
                 InputCount = def.InputCount,
                 OutputCount = def.OutputCount,
@@ -135,6 +144,19 @@ namespace Facet.Game
         }
 
         [Serializable]
+        public sealed class AmmoEntry
+        {
+            [Tooltip("The shape the gun eats.")]
+            public ShapeType Shape = ShapeType.HalfCircle;
+            [Tooltip("What a shot of it does.")]
+            public float Damage = 3f;
+
+            public AmmoDef ToDef() => new AmmoDef(Shape, Damage);
+
+            public static AmmoEntry FromDef(AmmoDef def) => new AmmoEntry { Shape = def.Shape, Damage = def.Damage };
+        }
+
+        [Serializable]
         public sealed class TurretRow
         {
             [Tooltip("The id of the machine this gun is - a turret's identity is its machine's, so " +
@@ -143,27 +165,45 @@ namespace Facet.Game
             [Tooltip("Which slot this row fills. Ignored when Id names something already shipped.")]
             public BuildKind Build = BuildKind.Cannon;
             public string Name = "Cannon";
-            [Tooltip("The shape it eats. A line of anything else jams at its input.")]
-            public ShapeType Ammo = ShapeType.HalfCircle;
+            [Tooltip("The gun's whole diet: every shape it eats and what a shot of it does. An empty " +
+                "list keeps the shipped diet, so a row can retune the gun without restating its ammunition.")]
+            public AmmoEntry[] AmmoTypes;
+
+            // The gun's diet before it became a list: one shape and one damage number. Kept - renamed,
+            // hidden, and read only by MergeTurrets - so an asset authored as (Ammo, Damage) still loads
+            // its retune instead of silently reverting to the shipped ammunition, which is what Unity's
+            // dropping of the old fields would otherwise do. A row authored today leaves these at None/0,
+            // which is exactly how the merge tells a legacy row from an untouched one.
+            [HideInInspector, FormerlySerializedAs("Ammo")] public ShapeType LegacyAmmo = ShapeType.None;
+            [HideInInspector, FormerlySerializedAs("Damage")] public float LegacyDamage = 0f;
+
             public float FireInterval = 1f;
-            public float Damage = 3f;
             public float Range = 7f;
             public float ProjectileSpeed = 14f;
+            [Tooltip("The shell's burst radius in tiles: every enemy that close to the impact takes the " +
+                "hit. Negative keeps the shipped value, so 0 can mean what it says - a single-target gun.")]
+            public float SplashRadius = -1f;
 
-            public TurretDef ToDef(BuildKind build) => new TurretDef(build, Name, Ammo, FireInterval,
-                Damage, Range, ProjectileSpeed);
+            public TurretDef ToDef(BuildKind build, AmmoDef[] ammoTypes, float splashRadius)
+                => new TurretDef(build, Name, ammoTypes, FireInterval, Range, ProjectileSpeed, splashRadius);
 
-            public static TurretRow FromDef(ContentId id, TurretDef def) => new TurretRow
+            public static TurretRow FromDef(ContentId id, TurretDef def)
             {
-                Id = id.Value,
-                Build = def.Build,
-                Name = def.Name,
-                Ammo = def.Ammo,
-                FireInterval = def.FireInterval,
-                Damage = def.Damage,
-                Range = def.Range,
-                ProjectileSpeed = def.ProjectileSpeed,
-            };
+                var ammo = new AmmoEntry[def.AmmoTypes.Length];
+                for (int i = 0; i < ammo.Length; i++) ammo[i] = AmmoEntry.FromDef(def.AmmoTypes[i]);
+
+                return new TurretRow
+                {
+                    Id = id.Value,
+                    Build = def.Build,
+                    Name = def.Name,
+                    AmmoTypes = ammo,
+                    FireInterval = def.FireInterval,
+                    Range = def.Range,
+                    ProjectileSpeed = def.ProjectileSpeed,
+                    SplashRadius = def.SplashRadius,
+                };
+            }
         }
 
         [Serializable]
@@ -252,7 +292,8 @@ namespace Facet.Game
             {
                 if (row == null) continue;
 
-                int slot = SlotFor(shipped.MachineSlot(new ContentId(row.Id)), (int)row.Build);
+                int slot = SlotFor(new ContentId(row.Id), shipped.MachineSlot(new ContentId(row.Id)),
+                    (int)row.Build, "Machines");
                 MachineDef shippedDef = shipped.Machine(shipped.BuildKinds[slot]);
 
                 // 0 on the row means "unset", so a row (or a whole asset) authored before HP existed keeps the shipped value -
@@ -267,8 +308,20 @@ namespace Facet.Game
         /// <summary>Which slot a row fills. An id the shipped table carries wins over the row's own enum, and that is why
         /// the rows may carry one: an enum value inserted above a building moves every later ordinal, so a row keyed by
         /// ordinal alone would retune its new neighbour instead. A row with no id (the default) is keyed by its dropdown,
-        /// exactly as before ids existed.</summary>
-        private static int SlotFor(int byId, int byOrdinal) => byId >= 0 ? byId : byOrdinal;
+        /// exactly as before ids existed - but an id that names nothing is <b>refused rather than fallen back on</b>,
+        /// because a retired or misspelled id falling back to the ordinal would silently retune whatever now occupies
+        /// that slot (a legacy "cutter" row, Build 7, would become the mortar).</summary>
+        private static int SlotFor(ContentId id, int byId, int byOrdinal, string rows)
+        {
+            if (id.IsNone) return byOrdinal;
+            if (byId < 0)
+                throw new ArgumentException(
+                    rows + " row names \"" + id.Value + "\", which the shipped table does not hold. " +
+                    "Falling back to the row's own ordinal would silently retune whatever now occupies slot " +
+                    byOrdinal + " - correct the id, or clear it to key the row by its dropdown.", rows);
+
+            return byId;
+        }
 
         private TurretDef[] MergeTurrets(ContentDatabase shipped)
         {
@@ -282,8 +335,42 @@ namespace Facet.Game
                 if (row == null) continue;
 
                 // A turret row names its machine, since that is where a turret's identity lives.
-                int slot = SlotFor(shipped.MachineSlot(new ContentId(row.Id)), (int)row.Build);
-                defs[slot] = row.ToDef(shipped.BuildKinds[slot]);
+                var turretId = new ContentId(row.Id);
+                int slot = SlotFor(turretId, shipped.MachineSlot(turretId), (int)row.Build, "Turrets");
+
+                // A row pointing at a machine with no gun definition would otherwise surface as "empty
+                // diet", which blames the diet rather than the row.
+                if (!shipped.IsTurret(shipped.BuildKinds[slot]))
+                    throw new ArgumentException(
+                        "turret row \"" + row.Name + "\" points at \"" + shipped.BuildKinds[slot] +
+                        "\", which has no gun definition", "Turrets");
+
+                // Empty means "unset", the purely-additive rule the machine and enemy rows follow for
+                // their own optional numbers: a row may retune the gun without restating its diet.
+                AmmoDef[] ammoTypes = null;
+                if (row.AmmoTypes != null && row.AmmoTypes.Length > 0)
+                {
+                    ammoTypes = new AmmoDef[row.AmmoTypes.Length];
+                    for (int i = 0; i < ammoTypes.Length; i++) ammoTypes[i] = row.AmmoTypes[i].ToDef();
+                }
+                else if (row.LegacyAmmo != ShapeType.None)
+                {
+                    // An asset authored before the diet became a list: its one (Ammo, Damage) pair is the
+                    // gun's whole diet. Honoured rather than dropped, so a retuned legacy gun keeps its
+                    // retune instead of quietly returning to the shipped ammunition.
+                    ammoTypes = new[] { new AmmoDef(row.LegacyAmmo, row.LegacyDamage) };
+                }
+                else
+                {
+                    ammoTypes = shipped.Turret(shipped.BuildKinds[slot]).AmmoTypes;
+                }
+
+                // Negative means "unset" here, unlike the counts above: 0 is a real radius - the
+                // single-target gun - so it must stay authorable.
+                float splashRadius = row.SplashRadius >= 0f
+                    ? row.SplashRadius
+                    : shipped.Turret(shipped.BuildKinds[slot]).SplashRadius;
+                defs[slot] = row.ToDef(shipped.BuildKinds[slot], ammoTypes, splashRadius);
             }
 
             return defs;
@@ -299,7 +386,8 @@ namespace Facet.Game
             {
                 if (row == null) continue;
 
-                int slot = SlotFor(shipped.EnemySlot(new ContentId(row.Id)), (int)row.Kind);
+                int slot = SlotFor(new ContentId(row.Id), shipped.EnemySlot(new ContentId(row.Id)),
+                    (int)row.Kind, "Enemies");
                 EnemyDef shippedDef = shipped.Enemy(shipped.EnemyKinds[slot]);
                 float aggroRange = row.AggroRange > 0f ? row.AggroRange : shippedDef.AggroRange;
                 float detectionRange = row.DetectionRange > 0f ? row.DetectionRange : shippedDef.DetectionRange;

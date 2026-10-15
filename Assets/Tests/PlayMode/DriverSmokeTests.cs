@@ -181,8 +181,9 @@ namespace Facet.PlayTests
                     "the committed content asset disagrees with the shipped behaviour for " + kind);
             }
 
-            Assert.AreEqual(ContentDatabase.Default.Turret(BuildKind.Cannon).Damage,
-                driver.Content.Turret(BuildKind.Cannon).Damage, 1e-4f, "shipped cannon damage");
+            Assert.AreEqual(ContentDatabase.Default.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle).Damage,
+                driver.Content.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle).Damage, 1e-4f,
+                "shipped cannon damage");
             Assert.AreEqual(ContentDatabase.Default.Enemy(EnemyKind.Spike).Hp,
                 driver.Content.Enemy(EnemyKind.Spike).Hp, 1e-4f, "shipped spike hp");
 

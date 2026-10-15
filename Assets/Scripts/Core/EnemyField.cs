@@ -43,14 +43,22 @@ namespace Facet.Core
     /// <b>Machines block and are attackable; belts are walked over.</b> An enemy walks a
     /// <see cref="PathField"/>'s flow toward the Core - around machines, not through them - the plain
     /// shortest way unless it weighed the ground at its door and chose to flank the guns' coverage. It stops
-    /// when an attackable machine is within <see cref="EnemyDef.AggroRange"/> and charges one it notices
-    /// within <see cref="EnemyDef.DetectionRange"/>: aggressive targeting, not just obstacle avoidance, so a
-    /// building beside the path is a target rather than scenery. Between two machines in reach, the turret is
-    /// the one it charges - the wave hunts the guns, which is why a bare gun wants a wall between it and the
-    /// lane. When the flow has no direction (the Core is sealed in), it walks straight at the Core and chews
-    /// through whatever blocks the way; a standing enemy is always within reach of the blocker it is pressed
-    /// against, so the siege resolves itself. Belts are walkable and unattackable deliberately: the 1-cost
-    /// cell must not become the cheapest wall.
+    /// when an attackable machine is within <see cref="EnemyDef.AggroRange"/> <em>and in plain view</em> and
+    /// charges one it sees within <see cref="EnemyDef.DetectionRange"/>: aggressive targeting, not just
+    /// obstacle avoidance, so a building beside the path is a target rather than scenery. "Sees" is the one
+    /// thing that keeps that aggression honest - the line from the walker to the machine's cell centre, over
+    /// ground it can cross (<see cref="Sees"/>) - so a gun behind rock is walked round, never ground against.
+    /// Between two machines in reach, the turret is the one it charges - the wave hunts the guns, which is
+    /// why a bare gun wants a wall between it and the lane.
+    ///
+    /// When the flow has no direction (the Core is sealed in behind what the player built), it walks the
+    /// breach field instead (<see cref="PathField.TryBreach"/>): the cheapest way in that walks *through*
+    /// buildings, so the wave goes to the hole rather than pressing at whichever rock happens to lie between
+    /// it and the Core - which is what an enemy that walked straight at the Core used to do, and what made a
+    /// wall plus a boulder a wave-shaped hole in the map. Standing beside the building on that route, it
+    /// chews it down (step 2 does the hitting, and a building it stands beside is edge-adjacent, so always
+    /// in view). Only when the map's own rock has sealed the walker in does it press on as it always did -
+    /// nothing there can be chewed, so there is nothing better to do.
     ///
     /// The Core's rules are untouched: reaching the attack ring stops an enemy and drains
     /// <see cref="CoreState.Hp"/> at its own damage and interval. <b>Walkers keep their distance from each
@@ -63,6 +71,14 @@ namespace Facet.Core
         /// float hair outside the ring, fails the range test every tick, and hovers forever. A thousandth of
         /// a tile is far below anything visible.</summary>
         private const float ReachEpsilon = 1e-3f;
+
+        /// <summary>How close to a cell corner a line has to pass to count as running through it, in units
+        /// of the line's own length: <see cref="Sees"/> asks both cells meeting at a corner it crosses, and
+        /// two crossings that differ by less than this are the same crossing - the one a float cannot tell
+        /// apart. A thousandth of a tile is far below anything the player can see, and far above the noise
+        /// of the arithmetic, so which of the two a walker's exact position lands on never changes a
+        /// decision.</summary>
+        private const float CornerEpsilon = 1e-3f;
 
         private EnemyState[] _enemies;
         private int _count;
@@ -189,44 +205,55 @@ namespace Facet.Core
 
                 // 2. Machines, nearest first: inside the attack reach it stops and hits the machine;
                 // between the reach and the notice range it charges it - leaving its path for the
-                // building, which stops a machine two tiles off the lane from being furniture. The scan
-                // covers both, and the nothing-can-be-closer-than-the-nearest invariant still holds,
-                // because a preferred turret beyond reach falls back to the nearest machine inside it.
-                // The same cooldown covers the Core and every machine, so the damage rate is the
-                // enemy's whatever it hits. A gun is charged before a granary anywhere in reach of its
-                // notice, nearer or not - the turret is what is killing the wave, and a bare gun wants a
-                // wall between it and the lane it covers.
+                // building, which stops a machine two tiles off the lane from being furniture. Both want
+                // the machine in plain view: a target it cannot see across rock is not a target, and
+                // walking at one anyway is how a wave used to end up grinding against a boulder with a
+                // wall behind it. The scan covers both, and the nothing-can-be-closer-than-the-nearest
+                // invariant still holds, because a preferred turret beyond reach falls back to the nearest
+                // machine inside it. The same cooldown covers the Core and every machine, so the damage
+                // rate is the enemy's whatever it hits. A gun is charged before a granary anywhere in
+                // reach of its notice, nearer or not - the turret is what is killing the wave, and a bare
+                // gun wants a wall between it and the lane it covers.
                 float notice = MathF.Max(spec.AggroRange, spec.DetectionRange);
                 if (_machines.TryFindNearest(e.Position, notice, out Int2 target, preferTurrets: true))
                 {
                     float gap = (_grid.CellCenter(target) - e.Position).Magnitude;
+                    bool seen = Sees(e.Position, target);
 
                     // A machine the walker can actually chew outranks one it can only dream of: when the
                     // preferred gun sits beyond reach - behind the wall this posture invites - charging it
                     // would pin the walker against the wall forever, attacking neither. Chew the blocker;
-                    // the scan re-hunts the gun the moment it is gone.
-                    if (gap > spec.AggroRange
-                        && _machines.TryFindNearest(e.Position, spec.AggroRange, out Int2 reachable))
+                    // the scan re-hunts the gun the moment it is gone. "Can chew" is asked of the blocker
+                    // too, so a building behind rock is stepped around rather than pressed against.
+                    if ((gap > spec.AggroRange || !seen)
+                        && _machines.TryFindNearest(e.Position, spec.AggroRange, out Int2 reachable)
+                        && Sees(e.Position, reachable))
                     {
                         target = reachable;
                         gap = (_grid.CellCenter(target) - e.Position).Magnitude;
+                        seen = true;
                     }
 
-                    if (gap <= spec.AggroRange)
+                    if (seen)
                     {
-                        e.Attacking = true;
-                        e.AttackCooldown -= dt;
-                        if (e.AttackCooldown <= 0f)
+                        if (gap <= spec.AggroRange)
                         {
-                            _machines.DamageAt(target, spec.Damage);
-                            e.AttackCooldown += spec.AttackInterval;
+                            e.Attacking = true;
+                            e.AttackCooldown -= dt;
+                            if (e.AttackCooldown <= 0f)
+                            {
+                                _machines.DamageAt(target, spec.Damage);
+                                e.AttackCooldown += spec.AttackInterval;
+                            }
+                            continue;
                         }
+
+                        // A charge, and only ever along a line it can see: the step below never has to
+                        // grind, because a line clear of solid cells is a line it can walk.
+                        e.Attacking = false;
+                        e.Position = Advance(e.Position, _grid.CellCenter(target), spec.Speed * dt);
                         continue;
                     }
-
-                    e.Attacking = false;
-                    e.Position = Advance(e.Position, _grid.CellCenter(target), spec.Speed * dt);
-                    continue;
                 }
 
                 e.Attacking = false;
@@ -234,17 +261,24 @@ namespace Facet.Core
 
                 // 3. The flow field - the one this walker chose at the door - steer at the centre of the
                 // next cell on the way to the Core, and land exactly on it rather than stepping past:
-                // overshooting would oscillate around the centre as it would around the Core's ring.
+                // overshooting would oscillate around the centre as it would around the Core's ring. With
+                // no way along that field, the breach field answers instead: the cheapest route that
+                // carries it through the player's buildings, which is the only way in once the Core is
+                // walled off. Rock is a wall to both, so a walker a map's own ground has sealed in gets no
+                // answer and presses on below.
                 Int2 cell = _grid.CellAt(e.Position);
-                if (_paths.TryDirection(cell, e.AvoidsFire, out Dir dir))
+                bool routed = _paths.TryDirection(cell, e.AvoidsFire, out Dir dir)
+                    || _paths.TryBreach(cell, out dir);
+                if (routed)
                 {
                     e.Position = Advance(e.Position, _grid.CellCenter(cell + dir.Offset()), step);
                     continue;
                 }
 
-                // 4. Sealed out: no way from here, so walk straight at the Core as an enemy always did -
-                // but never into a solid cell. A standing enemy is always within reach of the blocker
-                // (1.6 >= sqrt 2), so step 2 chews it down next tick.
+                // 4. Sealed in by the map itself: no way from here through ground or building, so walk
+                // straight at the Core as an enemy always did - but never into a solid cell. The Core's own
+                // ring is the only thing left to reach for, and a map that draws one is a map that cannot be
+                // walked, which is the designer's call and not the walker's.
                 e.Position = Advance(e.Position, centre, step);
             }
 
@@ -310,6 +344,75 @@ namespace Facet.Core
         /// rule, stated once, in <see cref="TerrainField.Walkable"/>.</summary>
         private bool Open(Int2 cell) => _terrain.Walkable(cell);
 
+        /// <summary>
+        /// Can a walker at <paramref name="from"/> reach what stands in <paramref name="target"/>? The
+        /// straight line from the walker to that cell's centre, cell by cell: the cell the line ends in is
+        /// the machine itself and is not asked about - it is solid by definition - but every other cell the
+        /// line crosses is. So rock, water, the void and a second building all put a target out of view, and
+        /// a walker walks the way round instead of pressing at the corner of something it cannot chew. A
+        /// line that runs exactly through a cell corner asks both cells that meet there, so the corner
+        /// itself is not a way through.
+        ///
+        /// The one rule the machine-hunting half of <see cref="Step"/> reads besides range, and the reason it
+        /// cannot jam: a line with no solid cell on it is a line <see cref="Advance"/> can walk, so a charge
+        /// always takes a step. Deterministic to the float, like everything else here.
+        /// </summary>
+        private bool Sees(Vec2 from, Int2 target)
+        {
+            int cx = _grid.CellAt(from).X;
+            int cy = _grid.CellAt(from).Y;
+            if (cx == target.X && cy == target.Y) return true;
+
+            Vec2 to = _grid.CellCenter(target);
+            float dx = to.X - from.X;
+            float dy = to.Y - from.Y;
+
+            int stepX = dx > 0f ? 1 : -1;
+            int stepY = dy > 0f ? 1 : -1;
+
+            // Where along the line each axis is first crossed, and how far apart the crossings are after
+            // that - in units of the line itself, so the smaller of the two is simply the next cell. An
+            // axis the line never moves on is never crossed.
+            float crossX = dx == 0f ? float.PositiveInfinity : ((dx > 0f ? cx + 1f : cx) - from.X) / dx;
+            float crossY = dy == 0f ? float.PositiveInfinity : ((dy > 0f ? cy + 1f : cy) - from.Y) / dy;
+            float spanX = dx == 0f ? float.PositiveInfinity : 1f / MathF.Abs(dx);
+            float spanY = dy == 0f ? float.PositiveInfinity : 1f / MathF.Abs(dy);
+
+            // A notice range is a couple of tiles, so the cell count is small; the bound is the cells the
+            // line can cross at all, and running out of it means the line ended on a boundary the float
+            // could not resolve - no view, which is the safe answer.
+            int limit = 1 + Math.Abs(target.X - cx) + Math.Abs(target.Y - cy);
+            for (int i = 0; i < limit; i++)
+            {
+                float lead = crossX - crossY;
+                if (lead < -CornerEpsilon)
+                {
+                    cx += stepX;
+                    crossX += spanX;
+                }
+                else if (lead > CornerEpsilon)
+                {
+                    cy += stepY;
+                    crossY += spanY;
+                }
+                else
+                {
+                    // Through the corner: both cells that meet there are under the line.
+                    if (!Open(new Int2(cx + stepX, cy))) return false;
+                    if (!Open(new Int2(cx, cy + stepY))) return false;
+                    cx += stepX;
+                    cy += stepY;
+                    crossX += spanX;
+                    crossY += spanY;
+                }
+
+                if (cx == target.X && cy == target.Y) return true;
+                if (!Open(new Int2(cx, cy))) return false;
+            }
+
+            return false;
+        }
+
         /// <summary>Walk one step from <paramref name="from"/> toward <paramref name="to"/>, landing exactly
         /// on it when the step reaches it - and never into a solid cell: a blocked step slides along one
         /// axis, then the other, and stands still if both are closed. That guard presses a charging enemy
@@ -332,13 +435,35 @@ namespace Facet.Core
         }
         /// <summary>Hits one enemy for what the shot is worth against it: ammunition matching the enemy's
         /// weakness lands its full damage, anything else a quarter. So a turret's damage is what it does to
-        /// the enemy it was built for, not a flat rate against the roster, and <see cref="TurretDef.Ammo"/>
-        /// and <see cref="EnemyDef.Weakness"/> are a real choice rather than a label on the card.</summary>
+        /// the enemy it was built for, not a flat rate against the roster, and the diet table and
+        /// <see cref="EnemyDef.Weakness"/> are a real choice rather than a label on the card.</summary>
         public void ApplyDamage(int id, float baseDamage, ShapeType ammo)
         {
             if (!_slotById.TryGetValue(id, out int slot)) return;
+            ApplyDamageAtSlot(slot, baseDamage, ammo);
+        }
 
-            float damage = baseDamage * (ammo == _enemies[slot].Weakness
+        /// <summary>Hits every enemy within <paramref name="radius"/> of <paramref name="centre"/> for what
+        /// the shell is worth against each of them: a bursting shot pays one item for the whole pack, and
+        /// weakness is answered per enemy caught, not per shell. Walked backwards, because a kill
+        /// reorders the array (RemoveAt swaps the last into the gap) and a forward walk would skip the
+        /// enemy swapped into a slot already visited.</summary>
+        public void ApplyDamageInRadius(Vec2 centre, float radius, float baseDamage, ShapeType ammo)
+        {
+            float radiusSq = radius * radius;
+            for (int i = _count - 1; i >= 0; i--)
+            {
+                Vec2 delta = _enemies[i].Position - centre;
+                if (delta.X * delta.X + delta.Y * delta.Y > radiusSq) continue;
+                ApplyDamageAtSlot(i, baseDamage, ammo);
+            }
+        }
+
+        private void ApplyDamageAtSlot(int slot, float baseDamage, ShapeType ammo)
+        {
+            // Weakness is structural: a shape matches when it IS the enemy's weakness or when its
+            // structure contains every mineral - the composite, which no enemy resists.
+            float damage = baseDamage * (ammo == _enemies[slot].Weakness || _content.Shape(ammo).MatchesAnyWeakness
                 ? Balance.WeaknessDamageMultiplier
                 : Balance.ResistantDamageMultiplier);
 
@@ -347,6 +472,7 @@ namespace Facet.Core
             // Read what the report needs *before* RemoveAt, which reorders the array it would be read
             // from: the kind and the position are gone the moment the enemy is.
             bool killed = _enemies[slot].Hp <= 0f;
+            int id = _enemies[slot].Id;
             EnemyKind kind = _enemies[slot].Kind;
             Vec2 position = _enemies[slot].Position;
 

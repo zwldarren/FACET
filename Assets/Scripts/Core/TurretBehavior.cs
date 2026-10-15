@@ -3,11 +3,13 @@ using System;
 namespace Facet.Core
 {
     /// <summary>
-    /// The twist, in code. Every tick, for every turret: a wrong-shape delivery at any input jams that
-    /// belt cell, regardless of whether the turret wanted to shoot; a right-shape delivery arms it, and
+    /// The twist, in code. Every tick, for every turret: a delivery of anything outside its diet jams that
+    /// belt cell, regardless of whether the turret wanted to shoot; a delivery in the diet arms it, and
     /// the item stays on the belt (so an idle turret banks ammo behind it and its line backs up); and if
-    /// armed, in range and off cooldown it eats the item and fires. Fire rate is min(spec rate, delivered
-    /// rate): damage is a throughput property of the layout, not a purchase.
+    /// armed, in range and off cooldown it eats the item and fires <em>it</em> - which ammunition a shot is
+    /// made of is decided by which belt delivered, and the aim prefers the enemy that ammunition hurts.
+    /// Fire rate is min(spec rate, delivered rate): damage is a throughput property of the layout, not a
+    /// purchase.
     /// </summary>
     internal sealed class TurretBehavior : IMachineBehavior
     {
@@ -17,30 +19,36 @@ namespace Facet.Core
             turret.Cooldown = MathF.Max(0f, turret.Cooldown - ctx.Dt);
 
             Vec2 centre = ctx.Grid.CellCenter(cell);
-            Aim(ref turret, in ctx, centre, spec.Range, spec.Ammo);
 
-            if (MachineDelivery.TryFindWrongDelivery(ctx.Belts, cell, spec.Ammo, out Int2 wrong))
+            if (MachineDelivery.TryFindWrongDelivery(ctx.Belts, cell, spec, out Int2 wrong))
             {
                 ctx.Belts.TryJam(wrong);
                 turret.Armed = false;
+                Aim(ref turret, in ctx, centre, spec.Range, spec.PrimaryAmmo);
                 return;
             }
 
-            bool armed = MachineDelivery.TryFindDelivery(ctx.Belts, cell, spec.Ammo, requireShape: true,
-                out Int2 delivery, out _);
+            bool armed = MachineDelivery.TryFindAmmoDelivery(ctx.Belts, cell, spec,
+                out Int2 delivery, out AmmoDef ammo);
             turret.Armed = armed;
+
+            // Armed: the aim prefers the enemy the waiting ammunition hurts. Unarmed: the gun's signature
+            // ammunition, so an idle barrel still tracks what it was built to shoot.
+            Aim(ref turret, in ctx, centre, spec.Range, armed ? ammo.Shape : spec.PrimaryAmmo);
 
             if (!armed || !turret.HasTarget || turret.Cooldown > 0f) return;
 
             ctx.Belts.TryTakeItem(delivery, out _);
             turret.Cooldown = spec.FireInterval;
             ctx.Telemetry.ShotsFired++;
-            ctx.Projectiles.Spawn(centre + turret.Aim * 0.42f, turret.TargetId, turret.TargetPosition, spec);
-            ctx.Events.ShotFired(cell, spec.Ammo, spec.Damage);
+            ctx.Projectiles.Spawn(centre + turret.Aim * 0.42f, turret.TargetId, turret.TargetPosition,
+                spec, ammo.Shape);
+            ctx.Events.ShotFired(cell, ammo.Shape, ammo.Damage);
         }
 
-        /// <summary>The enemy this turret's ammo is worth the most against - the nearest weak to it, or
-        /// the nearest in range - with the barrel turned toward it. Chosen by the field, not by walking slots.</summary>
+        /// <summary>The enemy this turret's ammunition is worth the most against - the nearest weak to it,
+        /// or the nearest in range - with the barrel turned toward it. Chosen by the field, not by walking
+        /// slots. <see cref="ShapeType.None"/> prefers nobody: the barrel simply tracks the nearest.</summary>
         private static void Aim(ref MachineState turret, in MachineTickContext ctx, Vec2 centre,
             float range, ShapeType ammo)
         {

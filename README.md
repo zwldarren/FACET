@@ -20,7 +20,7 @@ output — so a line is wired by laying belts at it, not by configuring it.
 | Input | Action |
 |---|---|
 | `WASD` / arrows, mouse wheel | pan and zoom the camera |
-| click the build bar, or `1`–`9`, `0` | select a building (`0` is the wall); the same digit or tile again drops the selection |
+| click the build bar, or `1`–`9`, `0` | select a building (`0` is the assembler); the same digit or tile again drops the selection |
 | `Q` / `E` | turn the placement ghost (splitter, converters and the wall have no facing) |
 | `Esc` | drop the selection: the cursor then only **reads** what is under it, which is the state a run opens in |
 | left mouse | place one belt, or land a machine; **drag** to lay a belt run or to aim a machine. With nothing selected, the same click pins whatever is under it and the info card describes *it* |
@@ -57,13 +57,19 @@ The rules a run is played against:
 * **Everything costs circles, and circles are only spendable once belted into the Core.** A drill mines
   one circle per second onto the belt it faces; the line home is a purchase (1 ○ per belt cell), so the
   map's distances are the economy. Removal refunds in full.
-* **The decomposer splits ○ → ◠◠** in 1.5 s — and jams if anything but a circle is fed to it. One outlet
-  caps it at 1/s, which is exactly a cannon's rate; a second outlet lets it run faster.
-* **Square veins open a second chain:** a **cutter** runs □ → ▭▭, and a **mortar** eats only ▭. The
-  mortar cycles half again as long for twice the damage, so it is a choice rather than an upgrade.
-* **The cannon eats only ◠ and the mortar only ▭**, each at most one shot per interval; their real fire
-  rates are `min(1/interval, what their lines deliver)`. Damage is a throughput property of the
-  layout, not a purchase.
+* **The decomposer splits either mineral — ○ → ◠◠ or □ → ▭▭ — in 1.5 s**, the recipe chosen by what is
+  fed to it, and jams on anything already split. One outlet caps it at 1/s, which is exactly a cannon's
+  rate; a second outlet lets it run faster.
+* **The assembler fuses ◠ + ▭ → ◈** in 2 s — the deep end of the ammunition ladder, where the two
+  mineral chains meet. A composite round **matches every weakness**: its structure contains both
+  minerals, so no enemy resists it.
+* **Square veins open a second chain:** the same decomposer runs □ → ▭▭, and a **mortar** eats ▭ and ◈.
+  The mortar cycles half again as long and its shell **bursts over an area** — it answers a pack where
+  the cannon answers a trickle, so it is a choice rather than an upgrade.
+* **The cannon eats ◠ and ◈, the mortar ▭ and ◈** — which ammunition a shot is made of is which belt
+  delivered it, so what a gun fires is a routing decision. Each fires at most one shot per interval;
+  their real fire rates are `min(1/interval, what their lines deliver)`. Damage is a throughput
+  property of the layout, not a purchase.
 * **A wrong-shape delivery jams that segment** and it stays jammed. Right-click clears it, destroying
   that item and keeping the belt.
 * **A belt is transport, not a machine:** it may cross a vein or a wave's doorway, and it never jams
@@ -73,7 +79,12 @@ The rules a run is played against:
 * **Machines are solid and destructible; belts are walkable and are not.** Enemies follow a flow field
   to the Core *around* machines, attack what they walk into, and **charge a turret they notice** from a
   little further out — so a gun belongs three tiles off the lane, and a bare wall beside the road is
-  bait. Walkers keep a body's width apart. Destruction pays no refund.
+  bait. A walker only charges or hits what it can see, so rock between the two is walked round rather
+  than leaned on. Walkers keep a body's width apart. Destruction pays no refund.
+* **A sealed Core is breached at the cheapest hole.** With no way round, a wave follows the route that
+  prices the player's buildings and walks to the shortest crossing, rather than pressing at whichever
+  boulder happens to lie between it and the Core. Rock is still a wall to that route, and so is a block
+  nothing may attack: sealing a lane with walls buys time, never immunity.
 * **The wall (2 ○, 120 hp) is the maze tool**, and it may not stand on a wave's doorway.
 * **The opening clock starts with your first building**, so reading the map and planning the first line
   cost no time at all. `N` calls the wave early either way.

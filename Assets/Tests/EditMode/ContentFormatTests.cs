@@ -33,17 +33,20 @@ namespace Facet.Tests
             Assert.AreEqual("Splitter", ((BuildKind)4).ToString());
             Assert.AreEqual("Cannon", ((BuildKind)5).ToString());
             Assert.AreEqual("Sorter", ((BuildKind)6).ToString());
-            Assert.AreEqual("Cutter", ((BuildKind)7).ToString());
-            Assert.AreEqual("Mortar", ((BuildKind)8).ToString());
-            Assert.AreEqual("Wall", ((BuildKind)9).ToString());
+            Assert.AreEqual("Mortar", ((BuildKind)7).ToString());
+            Assert.AreEqual("Wall", ((BuildKind)8).ToString());
+            Assert.AreEqual("Assembler", ((BuildKind)9).ToString());
 
+            // There was a Cutter at 7 until the two splitters merged into the one decomposer that runs
+            // every recipe; Mortar and Wall moved down a slot. A removal is exactly what the content
+            // asset's id-keyed rows exist for. Additions append: the Assembler took the tail.
             Assert.AreEqual(10, Enum.GetValues(typeof(BuildKind)).Length,
                 "the count is pinned too - a name in the wrong slot is a fail, a name added anywhere " +
                 "is this fail plus the hotkey test");
         }
 
         [Test]
-        public void TileKind_Ordinals_AreTheShippedFormat_RetiredThreeIncluded()
+        public void TileKind_Ordinals_AreTheShippedFormat_RetiredSlotsIncluded()
         {
             Assert.AreEqual("Empty", ((TileKind)0).ToString());
             Assert.AreEqual("Belt", ((TileKind)1).ToString());
@@ -61,9 +64,15 @@ namespace Facet.Tests
             Assert.AreEqual("Splitter", ((TileKind)7).ToString());
             Assert.AreEqual("Turret", ((TileKind)8).ToString());
             Assert.AreEqual("Sorter", ((TileKind)9).ToString());
-            Assert.AreEqual("Cutter", ((TileKind)10).ToString());
+
+            // 10 was Cutter, retired when the two splitters merged - dead on purpose, like 3: re-using it
+            // would make every authored TileKind value stored as 10 mean something else.
+            Assert.IsFalse(Enum.IsDefined(typeof(TileKind), (byte)10),
+                "slot 10 is retired and must never be re-used");
+
             Assert.AreEqual("Mortar", ((TileKind)11).ToString());
             Assert.AreEqual("Wall", ((TileKind)12).ToString());
+            Assert.AreEqual("Assembler", ((TileKind)13).ToString());
             Assert.AreEqual(12, Enum.GetValues(typeof(TileKind)).Length);
         }
 
@@ -78,7 +87,8 @@ namespace Facet.Tests
             Assert.AreEqual("Splitter", ((BehaviorKind)4).ToString());
             Assert.AreEqual("Turret", ((BehaviorKind)5).ToString());
             Assert.AreEqual("Sorter", ((BehaviorKind)6).ToString());
-            Assert.AreEqual(7, Enum.GetValues(typeof(BehaviorKind)).Length);
+            Assert.AreEqual("Assembler", ((BehaviorKind)7).ToString());
+            Assert.AreEqual(8, Enum.GetValues(typeof(BehaviorKind)).Length);
         }
 
         [Test]
@@ -90,7 +100,8 @@ namespace Facet.Tests
             Assert.AreEqual("HalfCircle", ((ShapeType)2).ToString());
             Assert.AreEqual("Square", ((ShapeType)3).ToString());
             Assert.AreEqual("HalfSquare", ((ShapeType)4).ToString());
-            Assert.AreEqual(5, Enum.GetValues(typeof(ShapeType)).Length);
+            Assert.AreEqual("Composite", ((ShapeType)5).ToString());
+            Assert.AreEqual(6, Enum.GetValues(typeof(ShapeType)).Length);
         }
 
         [Test]
@@ -230,8 +241,8 @@ namespace Facet.Tests
             Sim.Place(world, BuildKind.Sorter, new Int2(10, 2), Dir.East);        // filter badge
             Sim.Place(world, BuildKind.Cannon, new Int2(12, 2), Dir.East);        // ammo badge
             Sim.Place(world, BuildKind.Mortar, new Int2(14, 2), Dir.East);
-            Sim.Place(world, BuildKind.Wall, new Int2(16, 2), Dir.East);          // no behaviour
-            Sim.Place(world, BuildKind.Cutter, new Int2(18, 2), Dir.East);
+            Sim.Place(world, BuildKind.Wall, new Int2(16, 2), Dir.East);
+            Sim.Place(world, BuildKind.Assembler, new Int2(18, 2), Dir.East);     // held-input badge
             Sim.Tick(world, 4);
 
             var seen = new HashSet<BuildKind>();
@@ -282,6 +293,7 @@ namespace Facet.Tests
             Sim.Place(world, BuildKind.Cannon, new Int2(12, 2), Dir.East);
             Sim.Place(world, BuildKind.Mortar, new Int2(14, 2), Dir.East);
             Sim.Place(world, BuildKind.Wall, new Int2(16, 2), Dir.East);
+            Sim.Place(world, BuildKind.Assembler, new Int2(18, 2), Dir.East);
             Sim.Tick(world, 4);
 
             foreach (BuildKind kind in content.BuildKinds)
@@ -365,8 +377,15 @@ namespace Facet.Tests
                 if (def == null) continue;
 
                 if (def.Behavior == BehaviorKind.Converter)
-                    Assert.DoesNotThrow(() => shipped.Recipe(def.RecipeId),
-                        def.Name + " names a recipe the table holds");
+                {
+                    if (def.RecipeId.IsNone)
+                        Assert.IsNotEmpty(shipped.Recipes,
+                            def.Name + " names no recipe, so it runs every recipe the table holds - " +
+                            "which needs the table to hold some");
+                    else
+                        Assert.DoesNotThrow(() => shipped.Recipe(def.RecipeId),
+                            def.Name + " names a recipe the table holds");
+                }
 
                 if (def.Behavior == BehaviorKind.Turret)
                     Assert.IsTrue(shipped.IsTurret(def.Build), def.Name + " has a gun definition");

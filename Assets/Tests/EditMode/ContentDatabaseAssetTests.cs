@@ -37,8 +37,8 @@ namespace Facet.Tests
                 Assert.AreEqual(ContentDatabase.Default.Machine(kind).Behavior, table.Machine(kind).Behavior, kind + " behaviour");
             }
 
-            Assert.AreEqual(ContentDatabase.Default.Turret(BuildKind.Cannon).Damage,
-                table.Turret(BuildKind.Cannon).Damage, Sim.Tol);
+            Assert.AreEqual(ContentDatabase.Default.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle).Damage,
+                table.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle).Damage, Sim.Tol);
             Assert.AreEqual(ContentDatabase.Default.Enemy(EnemyKind.Spike).Hp,
                 table.Enemy(EnemyKind.Spike).Hp, Sim.Tol);
             Assert.AreEqual(ContentDatabase.Default.Shape(ShapeType.HalfCircle).Glyph,
@@ -54,15 +54,20 @@ namespace Facet.Tests
             {
                 new ContentDatabaseAsset.TurretRow
                 {
-                    Build = BuildKind.Cannon, Name = "Heavy", Ammo = ShapeType.Circle,
-                    FireInterval = 0.5f, Damage = 9f, Range = 12f, ProjectileSpeed = 20f,
+                    Build = BuildKind.Cannon, Name = "Heavy",
+                    AmmoTypes = new[]
+                    {
+                        new ContentDatabaseAsset.AmmoEntry { Shape = ShapeType.Circle, Damage = 9f },
+                    },
+                    FireInterval = 0.5f, Range = 12f, ProjectileSpeed = 20f,
                 },
             };
 
             ContentDatabase table = _asset.ToCore();
 
-            Assert.AreEqual(9f, table.Turret(BuildKind.Cannon).Damage, Sim.Tol);
-            Assert.AreEqual(ShapeType.Circle, table.Turret(BuildKind.Cannon).Ammo);
+            Assert.AreEqual(9f, table.Turret(BuildKind.Cannon).AmmoFor(ShapeType.Circle).Damage, Sim.Tol);
+            Assert.IsNull(table.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle),
+                "a row that names a diet replaces the whole diet");
 
             // Everything the asset did not mention is still the shipped value.
             Assert.AreEqual(ContentDatabase.Default.Machine(BuildKind.Drill).Cost, table.Machine(BuildKind.Drill).Cost);
@@ -231,15 +236,21 @@ namespace Facet.Tests
 
                 TurretDef gun = shipped.Turret(kind);
                 TurretDef gunBack = ContentDatabaseAsset.TurretRow
-                    .FromDef(def.Id, gun).ToDef(gun.Build);
+                    .FromDef(def.Id, gun).ToDef(gun.Build, gun.AmmoTypes, gun.SplashRadius);
 
                 Assert.AreEqual(def.Id.Value,
                     ContentDatabaseAsset.TurretRow.FromDef(def.Id, gun).Id, kind + " turret row id");
-                Assert.AreEqual(gun.Ammo, gunBack.Ammo, kind + " ammo");
+                Assert.AreEqual(gun.AmmoTypes.Length, gunBack.AmmoTypes.Length, kind + " diet size");
+                for (int a = 0; a < gun.AmmoTypes.Length; a++)
+                {
+                    Assert.AreEqual(gun.AmmoTypes[a].Shape, gunBack.AmmoTypes[a].Shape, kind + " ammo shape " + a);
+                    Assert.AreEqual(gun.AmmoTypes[a].Damage, gunBack.AmmoTypes[a].Damage, Sim.Tol,
+                        kind + " ammo damage " + a);
+                }
                 Assert.AreEqual(gun.FireInterval, gunBack.FireInterval, Sim.Tol, kind + " fire interval");
-                Assert.AreEqual(gun.Damage, gunBack.Damage, Sim.Tol, kind + " damage");
                 Assert.AreEqual(gun.Range, gunBack.Range, Sim.Tol, kind + " range");
                 Assert.AreEqual(gun.ProjectileSpeed, gunBack.ProjectileSpeed, Sim.Tol, kind + " projectile speed");
+                Assert.AreEqual(gun.SplashRadius, gunBack.SplashRadius, Sim.Tol, kind + " splash radius");
             }
 
             foreach (EnemyKind kind in shipped.EnemyKinds)

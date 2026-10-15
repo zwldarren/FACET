@@ -18,16 +18,23 @@ namespace Facet.Core
         /// everything else by the other wired outlets.</summary>
         Sorter = 6,
 
-        /// <summary>The second decomposer: runs the bisect recipe (a square into two half-squares),
-        /// the same behaviour with a different recipe.</summary>
-        Cutter = 7,
-
-        /// <summary>The second gun: eats half-squares, fires slower, hits harder, reaches further.</summary>
-        Mortar = 8,
+        /// <summary>The second gun: eats half-squares, fires slower, hits harder, reaches further, and
+        /// its shell bursts over an area.</summary>
+        Mortar = 7,
 
         /// <summary>Cheap, high-HP and behaviourless: the maze tool the siege mechanic needs. It has no
         /// <see cref="BehaviorKind"/>, so it is placed and forgotten - it just stands and soaks.</summary>
-        Wall = 9,
+        Wall = 8,
+
+        /// <summary>Fuses one half-circle and one half-square into a composite round: the deep end of
+        /// the ammunition ladder, where the two mineral chains meet. Appended after the wall - new kinds
+        /// go last, so the hotkey order of what shipped before never shifts under a player.</summary>
+        Assembler = 9,
+
+        // There was a Cutter between Sorter and Mortar until the two splitters merged: one decomposer
+        // now runs every recipe, chosen by what is fed to it. Removing it shifted Mortar and Wall down a
+        // slot; the content asset keys its rows by id, so only the ordinals pinned in ContentFormatTests
+        // had to move.
     }
 
     /// <summary>Convenience reads over the <b>shipped</b> content table, for code that does not care

@@ -65,5 +65,15 @@ namespace Facet.Core
         /// <summary>The flat slop, in plain steps, added to the flanking budget: a wave does not count
         /// pennies. See <see cref="PathDetourFactor"/>.</summary>
         public const float PathDetourSlack = 2f;
+
+        /// <summary>
+        /// What one cell of a standing building costs the breach field - the route a wave takes when the
+        /// way round is shut and the only way in is through what the player built. A step of open ground
+        /// costs 1, so a thousand is not a detour a wave weighs: the field walks the map's own ground to
+        /// the last step before it names a building, and then names the *cheapest* hole - the short
+        /// crossing, one wall deep rather than four. Which building that turns out to be is a fact about
+        /// the route the field chose, never a comparison of healths.
+        /// </summary>
+        public const int PathBreachWeight = 1000;
     }
 }

@@ -95,8 +95,8 @@ namespace Facet.Game
         {
             Palette.MachineLook look = Colors.Machines;
 
-            // First vertex at 30 degrees puts a flat edge up, matching the ground shape patches; the
-            // cutter shares it (same machine, different recipe), and a procedural override supplies its own.
+            // First vertex at 30 degrees puts a flat edge up, matching the ground shape patches; a
+            // procedural override supplies its own.
             _converterBody = ProcMesh.RegularPolygon(6, look.DecomposerRadius, 30f);
             _turretBody = ProcMesh.RegularPolygon(8, look.TurretRadius);
             _splitterHub = ProcMesh.RegularPolygon(4, look.SplitterHubHalfSize * 1.4143f, 45f);
@@ -130,6 +130,7 @@ namespace Facet.Game
                 {
                     case BehaviorKind.Drill: AppendDrill(_machines[i]); break;
                     case BehaviorKind.Converter: AppendConverter(_machines[i], outlineWidth); break;
+                    case BehaviorKind.Assembler: AppendConverter(_machines[i], outlineWidth); break;
                     case BehaviorKind.Pipe: AppendPipe(_machines[i], outlineWidth); break;
                     case BehaviorKind.Splitter: AppendSplitter(_machines[i], outlineWidth); break;
                     case BehaviorKind.Sorter: AppendSorter(_machines[i], outlineWidth); break;
@@ -183,7 +184,7 @@ namespace Facet.Game
         /// every wired side; no facing chevron, since the outlets are read off the belts as the tick does.
         ///
         /// Both converters share this path: the icon is the snapshot's shape, read by
-        /// <see cref="MachineField"/> out of the recipe, so decomposer and cutter need no line here.</summary>
+        /// <see cref="MachineField"/>, so converters need no line here.</summary>
         private void AppendConverter(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);

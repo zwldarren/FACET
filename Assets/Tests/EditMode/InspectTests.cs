@@ -116,11 +116,11 @@ namespace Facet.Tests
             input.RequestSelect(BuildKind.Drill);
             Assert.IsNull(input.Snapshot().Selected, "and asking again drops it");
 
-            input.RequestSelect(BuildKind.Cutter);
-            input.RequestSelect(BuildKind.Cutter);
+            input.RequestSelect(BuildKind.Mortar);
+            input.RequestSelect(BuildKind.Mortar);
             Assert.IsNull(input.Snapshot().Selected, "for any building, not just the first");
 
-            input.RequestSelect(BuildKind.Cutter);
+            input.RequestSelect(BuildKind.Mortar);
             input.RequestSelect(null);
             Assert.IsNull(input.Snapshot().Selected, "and the card's button clears rather than toggles");
         }

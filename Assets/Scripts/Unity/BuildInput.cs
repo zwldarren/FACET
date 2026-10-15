@@ -30,9 +30,8 @@ namespace Facet.Game
         /// <summary>The key label for a kind's index: digits 1..9, then 0 for the tenth.</summary>
         public static string HotkeyLabel(int index) => ((index + 1) % 10).ToString();
 
-        /// <summary>The hint text for the keys the table actually reaches: "1-4" for a short table, "1-9
-        /// and 0" for the shipped ten. A hyphen, not an en dash: the built player's HUD font has no en
-        /// dash.</summary>
+        /// <summary>The hint text for the keys the table actually reaches: "1-9 and 0" for the shipped
+        /// ten. A hyphen, not an en dash: the built player's HUD font has no en dash.</summary>
         public static string KeyRangeText()
         {
             int count = System.Math.Min(BuildCatalog.Count, BuildKeys.Length);

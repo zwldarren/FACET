@@ -6,13 +6,37 @@ namespace Facet.Tests
 {
     /// <summary>
     /// EditMode tests for the siege rules: machines are solid and destructible, enemies follow the
-    /// flow field around them and stop to chew any attackable machine within reach, a sealed Core is
-    /// chewed through, destruction pays no refund, and a MaxHp 0 definition is untargetable and
-    /// indestructible. Worlds are the standard rigs: <see cref="Sim.NewWorld(int,int)"/> gives the
-    /// Core at (8,4)..(11,7) on a featureless map, so every layout here is this file's own.
+    /// flow field around them and stop to chew any attackable machine within reach <em>and in plain
+    /// view</em>, a sealed Core is chewed through at the cheapest hole the player left, destruction pays
+    /// no refund, and a MaxHp 0 definition is untargetable and indestructible. Worlds are the standard
+    /// rigs: <see cref="Sim.NewWorld(int,int)"/> gives the Core at (8,4)..(11,7) on a featureless map, so
+    /// every layout here is this file's own - bar <see cref="SealedMap"/>, the Core of that same rig under
+    /// a rock ridge with two one-tile gaps, which is the world the breach reads are made in.
     /// </summary>
     public class SiegeTests
     {
+        /// <summary>The rig's two ways through the ridge, and the rock a walker with no way to walk presses
+        /// at - the Core's own column, with both ways in far enough off it to be out of a walker's reach.</summary>
+        private static readonly Int2 WestGap = new Int2(6, 9);
+        private static readonly Int2 EastGap = new Int2(14, 9);
+        private static readonly Int2 RidgeRock = new Int2(10, 9);
+
+        /// <summary>
+        /// A rock ridge across y=9 that only the one-tile gaps at x=6 and x=14 pierce, over the Core
+        /// <see cref="Sim.NewWorld(int,int)"/> gives - (8,4)..(11,7) - with open ground all the way up to
+        /// y=23 to walk down. Plug both gaps and the whole north half is sealed in, with fourteen tiles of
+        /// rock between the walker's column and either way in: exactly what a wave with no route used to walk
+        /// into and stay, pressing at the ridge with nothing to bite.
+        /// </summary>
+        private static MapDefinition SealedMap()
+            => new MapDefinition("sealed", 20, 24, Sim.TestCircles, new ShapePatch[0],
+                new Int2[0], new WaveDefinition[0],
+                TerrainLayout.Rects(20, 24,
+                    new TerrainRect(new Int2(0, 9), 6, 1, TerrainKind.Rock),
+                    new TerrainRect(new Int2(7, 9), 7, 1, TerrainKind.Rock),
+                    new TerrainRect(new Int2(15, 9), 5, 1, TerrainKind.Rock)),
+                coreCell: new Int2(8, 4));
+
         /// <summary>The shipped wall with MaxHp 0: solid but not attackable - the definition-level
         /// opt-out (<see cref="MachineDef.MaxHp"/>). Handed to a world through the custom-table helper
         /// <see cref="CustomContentTests"/> uses, so the test proves the rule and not a private code
@@ -22,6 +46,116 @@ namespace Facet.Tests
             MachineDef wall = ContentDatabase.Default.Machine(BuildKind.Wall);
             return new MachineDef(wall.Id, wall.Build, wall.Tile, wall.Behavior, wall.Cost, wall.Name,
                 wall.Description, wall.RecipeId, wall.Interval, wall.Filter, maxHp: 0f);
+        }
+
+        [Test]
+        public void ASealedWave_WalksToTheBreach_InsteadOfPressingAtRock()
+        {
+            // The bug this file's breach rule exists for: the Core is sealed behind a rock ridge with a
+            // walker's own column stopped by rock, so the plain field has no direction anywhere above the
+            // ridge. Walking straight at the Core - which is all a wave used to do there - presses it into
+            // the rock and leaves it there for the rest of the run. The breach field instead prices the two
+            // plugged gaps and walks the wave to one of them.
+            SimWorld world = new SimWorld(SealedMap(), new SimConfig { CoreMaxHp = 1000000f });
+            Sim.Place(world, BuildKind.Wall, WestGap, Dir.East);
+            Sim.Place(world, BuildKind.Wall, EastGap, Dir.East);
+            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 20.5f));
+
+            Vec2 last = world.Enemies.EnemyAt(0).Position;
+            int still = 0, worstStill = 0;
+            for (int i = 0; i < 30 * 120 && world.Events.CountOf(SimEventKind.CoreDamaged) == 0; i++)
+            {
+                world.Tick(InputCommand.None);
+                EnemyState e = world.Enemies.EnemyAt(0);
+
+                // A walker with nothing left to do stands still; a walker on its way somewhere does not.
+                // Ten seconds of the one is the whole bug, so a single second of it is the failure line.
+                still = e.Attacking || Vec2.Distance(e.Position, last) > 1e-4f ? 0 : still + 1;
+                worstStill = Math.Max(worstStill, still);
+                last = e.Position;
+
+                Assert.AreNotEqual(RidgeRock, world.TileGrid.CellAt(e.Position),
+                    "the rock is solid, however sealed in the wave is");
+            }
+
+            Assert.Less(worstStill, 30, "a sealed-in wave stood still for " + worstStill / 30f + "s");
+            Assert.Greater(world.Events.CountOf(SimEventKind.BuildingDamaged), 0,
+                "it walks to a gap and starts on the wall plugging it");
+
+            Assert.IsTrue(world.Events.TryLast(SimEventKind.BuildingDestroyed, out SimEvent gone));
+            Assert.IsTrue(gone.Cell == WestGap || gone.Cell == EastGap,
+                "what it chewed was one of the plugs, not something else: " + gone.Cell);
+            Assert.Greater(world.Events.CountOf(SimEventKind.CoreDamaged), 0,
+                "and through the hole it walks in and reaches the Core");
+        }
+
+        [Test]
+        public void ABreach_IsNotTakenThroughAWallNothingMayChew()
+        {
+            // The breach field's other half: a building no walker may attack is the map's own rock to it.
+            // Both gaps are plugged - the near one above the Core with the untargetable block, the far one
+            // at the map's edge with a pipe - so a field that priced the untargetable block would name the
+            // near gap and stall the wave against it. It has to be the pipe.
+            var nearGap = new Int2(10, 9);
+            var farGap = new Int2(0, 9);
+            SimWorld world = new SimWorld(
+                new MapDefinition("plugged", 20, 24, Sim.TestCircles, new ShapePatch[0],
+                    new Int2[0], new WaveDefinition[0],
+                    TerrainLayout.Rects(20, 24,
+                        new TerrainRect(new Int2(1, 9), 9, 1, TerrainKind.Rock),
+                        new TerrainRect(new Int2(11, 9), 9, 1, TerrainKind.Rock)),
+                    coreCell: new Int2(8, 4)),
+                new SimConfig { CoreMaxHp = 1000000f },
+                CustomContentTests.Rewrite(machine: UnattackableWall()));
+
+            Sim.Place(world, BuildKind.Wall, nearGap, Dir.East);
+            Sim.Place(world, BuildKind.Pipe, farGap, Dir.East);
+            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 20.5f));
+
+            for (int i = 0; i < 30 * 120 && world.Events.CountOf(SimEventKind.CoreDamaged) == 0; i++)
+                world.Tick(InputCommand.None);
+
+            Assert.IsTrue(world.Events.TryLast(SimEventKind.BuildingDamaged, out SimEvent hit),
+                "the way in is walked to and chewed");
+            Assert.AreEqual(farGap, hit.Cell, "and it is the gap that can be opened");
+            Assert.IsTrue(world.Machines.Has(nearGap), "the block nothing may attack was left alone");
+            Assert.Greater(world.Events.CountOf(SimEventKind.CoreDamaged), 0,
+                "and the far hole lets the wave in");
+        }
+
+        [Test]
+        public void AMachine_BehindRock_IsWalkedAround_NotHitThroughIt()
+        {
+            // Notice range reaches a wall right behind a rock; sight does not. The charge is only ever
+            // along a line the walker can see, so it walks round the rock and hits the wall from beside it
+            // - instead of standing in the rock's column and chewing a wall it cannot reach.
+            SimWorld world = new SimWorld(
+                new MapDefinition("rock in the lane", 20, 12, Sim.TestCircles, new ShapePatch[0],
+                    new Int2[0], new WaveDefinition[0],
+                    TerrainLayout.Rects(20, 12, new TerrainRect(new Int2(10, 9), 1, 1, TerrainKind.Rock)),
+                    coreCell: new Int2(8, 4)),
+                new SimConfig { CoreMaxHp = 1000000f });
+
+            var wall = new Int2(10, 8);
+            Sim.Place(world, BuildKind.Wall, wall, Dir.East);
+            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(10.5f, 10.5f));
+
+            Assert.Greater((new Vec2(10.5f, 10.5f) - new Vec2(10.5f, 8.5f)).Magnitude,
+                world.Content.Enemy(EnemyKind.Spike).AggroRange, "the test's premise: not in reach yet");
+
+            for (int i = 0; i < 30 * 60; i++)
+            {
+                world.Tick(InputCommand.None);
+                if (world.Events.CountOf(SimEventKind.BuildingDamaged) == 0) continue;
+
+                Assert.AreNotEqual(TileKind.Wall, world.TileGrid.Get(new Int2(10, 9)),
+                    "the rock is still there, so the hit did not go through it");
+                Assert.Greater(MathF.Abs(world.Enemies.EnemyAt(0).Position.X - 10.5f), 0.4f,
+                    "and the walker had left the rock's column to get at the wall");
+                return;
+            }
+
+            Assert.Fail("the wall was never reached");
         }
 
         [Test]

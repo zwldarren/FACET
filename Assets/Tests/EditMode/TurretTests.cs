@@ -101,7 +101,7 @@ namespace Facet.Tests
             Assert.AreEqual(0, world.Enemies.AliveCount, "the Spike is down");
             Assert.AreEqual(2, world.ShotsFired,
                 world.Content.Enemy(EnemyKind.Spike).Hp + " hp against " +
-                world.Content.Turret(BuildKind.Cannon).Damage +
+                world.Content.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle).Damage +
                 " dmg is exactly two shots - the ammo bill is readable before the wave starts");
         }
 
@@ -148,6 +148,33 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void Turret_AimsWithTheAmmunitionTheBeltDelivered()
+        {
+            // The same two enemies as the test above, and the opposite answer: a composite round is the
+            // weakness of whatever it hits, so the two are equally good targets and the nearest wins -
+            // where the gun's own half-circles sent the shot at the farther Spike. Which belt delivered
+            // decides the shot and the aim alike.
+            SimWorld world = CannonWorld();
+
+            // Arm the gun with nothing in range, so the item stays on the belt: the aim can then be read on
+            // the tick the targets appear, which is the tick the gun fires.
+            Assert.IsTrue(world.Belts.TrySpawnItem(DeliveryCell, ShapeType.Composite));
+            for (int i = 0; i < 60 && !Sim.ArmedAt(world, Turret); i++) world.Tick(InputCommand.None);
+            Assert.IsTrue(Sim.ArmedAt(world, Turret), "the composite reached the gun's input and waited there");
+
+            int bulwark = world.Enemies.Spawn(EnemyKind.Bulwark, new Vec2(13.5f, 8.5f));
+            world.Enemies.Spawn(EnemyKind.Spike, new Vec2(14.5f, 7.5f));
+
+            world.Tick(InputCommand.None);
+
+            Assert.IsTrue(world.Events.TryLast(SimEventKind.ShotFired, out SimEvent shot),
+                "the armed gun fired the item it was holding");
+            Assert.AreEqual(ShapeType.Composite, shot.Shape, "the shot is made of what the belt delivered");
+            Assert.AreEqual(bulwark, Sim.MachineAt(world, Turret).TargetId,
+                "and it aims at the nearer Bulwark, because a composite hurts it too - no farther target is");
+        }
+
+        [Test]
         public void Turret_StillShootsAResistedEnemy_WhenNothingWeakIsInRange()
         {
             // The preference is not a refusal: with only a Bulwark in range the cannon plinks away at a quarter
@@ -161,7 +188,8 @@ namespace Facet.Tests
             Assert.AreEqual(0, world.Enemies.AliveCount, "the Bulwark is down");
             Assert.AreEqual(8, world.ShotsFired,
                 world.Content.Enemy(EnemyKind.Bulwark).Hp + " hp against a quarter of " +
-                world.Content.Turret(BuildKind.Cannon).Damage + " dmg is exactly eight shots - a held shot is none");
+                world.Content.Turret(BuildKind.Cannon).AmmoFor(ShapeType.HalfCircle).Damage +
+                " dmg is exactly eight shots - a held shot is none");
         }
 
         [Test]
@@ -261,7 +289,7 @@ namespace Facet.Tests
         [Test]
         public void CannonSpec_MatchesTheDesign_AndItEatsOnlyHalves()
         {
-            Assert.AreEqual(ShapeType.HalfCircle, ContentDatabase.Default.Turret(BuildKind.Cannon).Ammo,
+            Assert.AreEqual(ShapeType.HalfCircle, ContentDatabase.Default.Turret(BuildKind.Cannon).PrimaryAmmo,
                 "the cannon eats what the decomposer makes");
             Assert.AreEqual(1f, ContentDatabase.Default.Turret(BuildKind.Cannon).ShotsPerSecond, Sim.Tol,
                 "the doc's 1 shot/s: exactly one belt's worth");
