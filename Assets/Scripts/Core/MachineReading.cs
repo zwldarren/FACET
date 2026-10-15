@@ -258,6 +258,15 @@ namespace Facet.Core
                         return new ReadingNote("holding " + Held(in state) +
                             " - an outlet is full", NoteSeverity.Warn);
 
+                    // Idle, but not empty-handed in the only sense that matters: what is on its way in is
+                    // already decided, so the card can say what the next cut will be instead of "waiting".
+                    if (TryPreviewCut(world, cell, front, out Shape next, out Shape nextStraight,
+                            out Shape nextDisplaced))
+                        return new ReadingNote("will cut " + next.Describe() + " · " +
+                            nextStraight.Describe() + " runs straight on, " + nextDisplaced.Describe() +
+                            " leaves a lane to the " + DirName(MachineFootprint.LaneOf(front)),
+                            NoteSeverity.Neutral);
+
                     return new ReadingNote("idle - waiting for a shape to cut", NoteSeverity.Neutral);
                 }
 
@@ -392,6 +401,42 @@ namespace Facet.Core
                     throw new ArgumentOutOfRangeException(nameof(machine), machine.Behavior,
                         "a new behaviour must say what its card calls its facing");
             }
+        }
+
+        /// <summary>
+        /// What a cutter standing at this cell, facing this way, would do with what is coming: the item on the
+        /// first belt that delivers into it, and the two pieces it becomes, in
+        /// <see cref="CutterBehavior.Pieces"/>' own order - <paramref name="straight"/> running on down the lane
+        /// the belt fed, <paramref name="displaced"/> leaving one lane to
+        /// <see cref="MachineFootprint.LaneOf"/>'s side.
+        ///
+        /// The ghost's and the live card's half of what the tick already knows: the machine cuts whatever it
+        /// is handed, and what it is handed is decided before the click by the belt the player is laying into
+        /// it. Asking the intake walk (<see cref="MachineDelivery.TryFindIncoming"/>) rather than restating
+        /// which belt feeds a cutter is what keeps the answer true of an item that is still travelling, and it
+        /// is the same walk - same tiles, same port order, same diet - the tick will take from a tick later.
+        /// The cutter's own definition is read from the run's table, so a table that narrows the machine's diet
+        /// narrows what the preview promises too.
+        ///
+        /// False when nothing is being delivered, which is the honest answer: there is no cut to describe, and
+        /// a figure drawn anyway would be a promise about an item rather than a read of the map.
+        /// </summary>
+        public static bool TryPreviewCut(SimWorld world, Int2 cell, Dir facing,
+            out Shape arriving, out Shape straight, out Shape displaced)
+        {
+            arriving = Shape.None;
+            straight = Shape.None;
+            displaced = Shape.None;
+
+            MachineDef def = world.Content.Machine(BuildKind.Cutter);
+            if (!MachineDelivery.TryFindIncoming(world.Belts, cell, facing, in def, out _, out Shape item))
+                return false;
+
+            (Shape a, Shape b) = CutterBehavior.Pieces(item, facing);
+            arriving = item;
+            straight = a;
+            displaced = b;
+            return true;
         }
 
         /// <summary>What a placement's facing would mean - the ghost's half of <see cref="FacingNote"/>,

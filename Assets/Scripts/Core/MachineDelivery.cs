@@ -44,6 +44,27 @@ namespace Facet.Core
         /// </summary>
         public static bool TryFindDietDelivery(BeltField belts, Int2 cell, Dir facing, in MachineDef def,
             out Int2 deliveryCell, out Shape shape)
+            => TryFindDelivery(belts, cell, facing, in def, ready: true, out deliveryCell, out shape);
+
+        /// <summary>
+        /// The same walk asking the other half of the question: <b>what is on its way in</b>, ready or not.
+        ///
+        /// The tick may only take a delivery that has reached its exit edge, which is a one-tick window per
+        /// item; a card or a ghost asking "what would this machine do with what is coming" wants the item
+        /// still travelling down the lane, which is what a lane holds almost all of the time. Same tiles, same
+        /// port order, same diet - the readiness gate is the only difference, so the two answers cannot
+        /// disagree about <em>which</em> delivery the machine is about to be handed.
+        ///
+        /// A jammed segment is skipped, unlike <see cref="TryFindDietDelivery"/>'s take: an item that has been
+        /// refused is not on its way in, and a preview of the pieces it would become would be a promise the
+        /// machine has already declined to keep.
+        /// </summary>
+        public static bool TryFindIncoming(BeltField belts, Int2 cell, Dir facing, in MachineDef def,
+            out Int2 deliveryCell, out Shape shape)
+            => TryFindDelivery(belts, cell, facing, in def, ready: false, out deliveryCell, out shape);
+
+        private static bool TryFindDelivery(BeltField belts, Int2 cell, Dir facing, in MachineDef def,
+            bool ready, out Int2 deliveryCell, out Shape shape)
         {
             deliveryCell = default;
             shape = Shape.None;
@@ -54,7 +75,15 @@ namespace Facet.Core
 
                 for (int i = 0; i < Ports.Length; i++)
                 {
-                    if (!TryReadyAt(belts, at, Ports[i], rejectJammed: false, out Int2 neighbour, out BeltState state)) continue;
+                    // The gates are the caller's, and they are the only difference between the two walks: the
+                    // tick may take what has arrived (and takes a jammed item, unsticking the line it was
+                    // refused on), the preview wants what is still travelling (and a refused item is not on
+                    // its way in).
+                    bool delivered = ready
+                        ? TryReadyAt(belts, at, Ports[i], rejectJammed: false, out Int2 neighbour,
+                            out BeltState state)
+                        : TryIncomingAt(belts, at, Ports[i], rejectJammed: true, out neighbour, out state);
+                    if (!delivered) continue;
                     if (!Eats(in def, state.Item)) continue;
 
                     deliveryCell = neighbour;
@@ -241,12 +270,24 @@ namespace Facet.Core
         /// directly.</summary>
         public static bool TryReadyAt(BeltField belts, Int2 cell, Dir side, bool rejectJammed,
             out Int2 neighbour, out BeltState state)
+            => TryIncomingAt(belts, cell, side, rejectJammed, out neighbour, out state) &&
+               state.Progress >= 1f;
+
+        /// <summary>
+        /// The same belt question minus the exit edge: a belt pointing into this machine with an item on it,
+        /// <em>wherever along its cell the item has got to</em>. The one statement of "something is being
+        /// delivered into this cell", which <see cref="TryReadyAt"/> is one gate away from - so a preview that
+        /// wants the item still travelling down the lane asks this rather than re-spelling "a belt pointing in
+        /// with something on it" and drifting from the tick.
+        /// </summary>
+        public static bool TryIncomingAt(BeltField belts, Int2 cell, Dir side, bool rejectJammed,
+            out Int2 neighbour, out BeltState state)
         {
             neighbour = cell + side.Offset();
             if (!belts.TryGet(neighbour, out state)) return false;
             if (state.Direction != side.Opposite()) return false;   // it must point at the machine
             if (rejectJammed && state.Jammed) return false;
-            return !state.Item.IsEmpty && state.Progress >= 1f;
+            return !state.Item.IsEmpty;
         }
 
         /// <summary>

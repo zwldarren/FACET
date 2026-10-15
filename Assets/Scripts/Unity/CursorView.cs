@@ -5,7 +5,8 @@ namespace Facet.Game
 {
     /// <summary>The cursor. With a building selected it is the ghost that shows where the next placement
     /// would land, whether it would be allowed, and what it would be: the belt's chevron, a machine's body
-    /// and facing, a cutter's two tiles and the blade between them, a turret's range ring. Green is buildable, amber
+    /// and facing, a cutter's two tiles and the blade between them, and the two pieces that cutter is about to
+    /// make of the item on its way in, a turret's range ring. Green is buildable, amber
     /// means the stockpile cannot cover it, red
     /// means something is already there (or, for a drill, no shape patch under it) - feedback that makes
     /// dragging a run across an existing build predictable. With nothing selected there is no ghost, because
@@ -14,9 +15,10 @@ namespace Facet.Game
     /// card's subject stays marked while the mouse moves away, so the card and the map cannot disagree.
     ///
     /// Its rebuild reasons are its own - the cursor cell and whether it is worth reading, the selected
-    /// building and facing, validity and affordability, the inspected cell and its contents - plus the gate's
-    /// zoom reason, since the border and the ring are screen-space constants. The stockpile moving also
-    /// dirties it: a cell the player cannot afford turns green the tick a delivery banks.</summary>
+    /// building and facing, validity and affordability, the inspected cell and its contents, the two pieces
+    /// the selected cutter would cut (which change as a different item comes down the lane), the stockpile,
+    /// which dirties it because a cell the player cannot afford turns green the tick a delivery banks, plus
+    /// the gate's zoom reason, since the border and the ring are screen-space constants.</summary>
     [DefaultExecutionOrder(120)]
     public sealed class CursorView : MeshView
     {
@@ -30,9 +32,21 @@ namespace Facet.Game
         private BuildKind? _seenKind;
         private BuildKind? _seenPinnedTurret;
         private Dir _seenDirection;
-        private int _seenCircles = -1;
+        private int _seenShapes = -1;
+
+        /// <summary>The two pieces the selected cutter's ghost is previewing, so a different item coming down
+        /// the lane redraws the ghost while the cursor has not moved.</summary>
+        private Shape _seenStraight = Shape.None;
+        private Shape _seenDisplaced = Shape.None;
+
+        /// <summary>The figures the cutter's ghost previews, at the radius and outline the belt items and the
+        /// machine badges are drawn with - so a previewed half is the very figure that will ride the belt.</summary>
+        private ShapeIconSet _pieceIcons;
 
         protected override Palette.Layer Layer => Colors.CursorLayer;
+
+        protected override void OnInitialized()
+            => _pieceIcons = Colors.ShapeIcons(Colors.Items.Radius, Colors.OutlinePixels);
 
         protected override void Observe(in ViewFrame frame)
         {
@@ -40,12 +54,21 @@ namespace Facet.Game
             Int2 inspected = World.InspectedCell;
             BuildKind? kind = World.SelectedKind;
             Dir direction = World.PlacementDirection;
-            int circles = World.Economy.Circles;
+            int shapes = World.Economy.Shapes;
 
             bool visible = World.TileGrid.InBounds(cell);
             bool readable = visible && World.CanInspect(cell);
             bool valid = kind.HasValue && visible && World.CanPlace(kind.Value, cell, direction);
             bool affordable = kind.HasValue && World.Economy.CanAfford(kind.Value);
+
+            // What the selected cutter would cut of the item on its way in, read here rather than when the ghost
+            // draws: a different item coming down the lane is a reason to redraw a ghost the cursor has not
+            // moved. Only a placement that is legal previews anything - the pieces are what this machine will
+            // make, and a machine that cannot be built makes nothing.
+            Shape straight = Shape.None;
+            Shape displaced = Shape.None;
+            if (kind == BuildKind.Cutter && valid)
+                MachineReading.TryPreviewCut(World, cell, direction, out _, out straight, out displaced);
 
             // What the inspected cell holds, so the marker and ring follow a building placed or removed under the
             // pin rather than describing the tile it used to be.
@@ -56,9 +79,10 @@ namespace Facet.Game
                 pinnedTurret = machine.Build;
 
             if (visible == _seenVisible && cell == _seenCell && valid == _seenValid &&
-                affordable == _seenAffordable && circles == _seenCircles &&
+                affordable == _seenAffordable && shapes == _seenShapes &&
                 kind == _seenKind && direction == _seenDirection &&
                 readable == _seenReadable && inspected == _seenInspected &&
+                straight == _seenStraight && displaced == _seenDisplaced &&
                 pinned == _seenPinned && pinnedTurret == _seenPinnedTurret) return;
 
             _seenCell = cell;
@@ -71,11 +95,23 @@ namespace Facet.Game
             _seenKind = kind;
             _seenPinnedTurret = pinnedTurret;
             _seenDirection = direction;
-            _seenCircles = circles;
+            _seenShapes = shapes;
+            _seenStraight = straight;
+            _seenDisplaced = displaced;
             MarkDirty();
         }
 
         protected override void AppendFrame(in ViewFrame frame)
+        {
+            // The sprite pool is opened and closed around the whole frame: a previewed piece is drawn through
+            // the same AppendIcon the items are, and a mark the palette overrides with a sprite is taken from
+            // this view's own pool.
+            BeginSprites();
+            AppendCursor(in frame);
+            EndSprites();
+        }
+
+        private void AppendCursor(in ViewFrame frame)
         {
             // Nothing selected: no ghost, because the next click builds nothing - instead draw what it would read.
             if (!_seenKind.HasValue)
@@ -149,20 +185,25 @@ namespace Facet.Game
         }
 
         /// <summary>
-        /// The cutter's ghost: the two tiles it will stand on, the blade down the lane the belt runs in, and a
-        /// chevron in each lane saying which way the line runs.
+        /// The cutter's ghost: the two tiles it will stand on, the blade down the lane the belt runs in, a
+        /// chevron in each lane saying which way the line runs, and - when something is on its way in - the two
+        /// pieces of the item it is about to be handed, each drawn on the tile it leaves by.
         ///
         /// This is the whole explanation of a cutter, on the screen before the click rather than in the
         /// manual. The body covers both tiles, so "this machine is two tiles wide across the belt" is
         /// visible; the blade lies along the flow through the lane the belt runs in, so where the cut is made
-        /// is visible; and a chevron in each lane says both lanes leave that way. A player who reads it never
+        /// is visible; a chevron in each lane says both lanes leave that way; and the two pieces answer the
+        /// question the blade cannot - <em>which</em> half ends up in which lane, which is the one thing about
+        /// this machine a player otherwise has to simulate in their head. A player who reads it never
         /// has to guess that the aim is theirs - which is exactly what a cutter that drew nothing but a knife
         /// line across its cell left open, and how a fresh player concludes that a half can only be turned by
         /// a rotator.
         ///
-        /// Deliberately no pieces: a ghost that drew half circles would be drawing an item, and the machine
-        /// cuts whatever it is handed - a square, a mixed round, a quarter. What a lane is actually carrying
-        /// is on the placed machine's own badge, where it is a fact rather than a guess.
+        /// The pieces are a <b>read of the belts in front of the cursor</b>, not a promise about the item: what
+        /// is on its way in is what the lane is carrying this second, and the figures are
+        /// <see cref="MachineReading.TryPreviewCut"/>'s - the tick's own port, intake and cut rules. With
+        /// nothing on its way in, nothing is drawn: the machine cuts whatever it is handed, and there is then
+        /// nothing to hand it.
         /// </summary>
         private void AppendCutterGhost(Int2 cell, Dir facing, Color edge, Color body, float borderThickness)
         {
@@ -196,6 +237,19 @@ namespace Facet.Game
             var ahead = flow * look.ChevronOffset;
             AppendChevron(middle + ahead, facing, look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, edge);
             AppendChevron(laneMiddle + ahead, facing, look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, edge);
+
+            // What it would cut, each piece on the tile it leaves by: the lane the belt fed for the piece that
+            // runs straight on, and the second tile's lane for the one that leaves a lane over.
+            if (!_seenValid ||
+                !MachineReading.TryPreviewCut(World, cell, facing, out _, out Shape straight, out Shape displaced))
+                return;
+
+            Int2 straightCell = cell + facing.Offset();
+            Int2 displacedCell = laneCell + facing.Offset();
+            if (World.TileGrid.InBounds(straightCell))
+                AppendIcon(_pieceIcons, straight, Centre(straightCell), null);
+            if (World.TileGrid.InBounds(displacedCell))
+                AppendIcon(_pieceIcons, displaced, Centre(displacedCell), null);
         }
 
         /// <summary>

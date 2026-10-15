@@ -27,15 +27,61 @@ namespace Facet.Tests
         /// input adapter latches, spelled by <see cref="Gesture"/>.</summary>
         private static InputCommand Click(Int2 cell) => Gesture.Click(cell);
 
+        /// <summary>
+        /// The cut a placement would make, asked before the click and of the item actually on its way in. The
+        /// ghost draws these two pieces and the card says their names, so what is proved here is that the answer
+        /// is the tick's own - the same intake walk and the same cut rule - and that it describes the item still
+        /// travelling, which the tick itself may not take for another twenty-odd ticks.
+        ///
+        /// The lane that matters is the second one: a cutter flowing north cuts left from right, and the left
+        /// half is the piece that keeps the lane the belt fed.
+        /// </summary>
+        [Test]
+        public void TheCutAPlacementWouldMake_IsReadableBeforeTheClick()
+        {
+            SimWorld world = Sim.NewWorld(20, 12);
+            var cutter = new Int2(4, 6);
+            Sim.LayRun(world, new Int2(4, 5), Dir.North, 1);      // into the cutter's fed tile
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 5), Sim.Circle));
+
+            Assert.IsTrue(MachineReading.TryPreviewCut(world, cutter, Dir.North, out Shape arriving,
+                out Shape straight, out Shape displaced), "the belt feeding it is carrying something");
+            Assert.AreEqual(Sim.Circle, arriving, "the item on its way in");
+            Assert.AreEqual(Sim.LeftHalfCircle, straight, "which runs straight on down the lane the belt fed");
+            Assert.AreEqual(Sim.RightHalfCircle, displaced, "and leaves a lane to the east");
+
+            Assert.Less(Sim.ProgressAt(world, new Int2(4, 5)), 1f,
+                "the item is still travelling: the tick could not take it yet, which is why the preview asks");
+        }
+
+        /// <summary>... and with nothing being delivered there is no cut to describe: the ghost draws no
+        /// pieces and the card says the machine is waiting, rather than promising a cut of an item that is not
+        /// there.</summary>
+        [Test]
+        public void APreviewWithNothingOnItsWayIn_SaysNothing()
+        {
+            SimWorld world = Sim.NewWorld(20, 12);
+            Sim.LayRun(world, new Int2(4, 5), Dir.North, 1);      // a belt, but nothing riding it
+            Sim.Place(world, BuildKind.Cutter, new Int2(4, 6), Dir.North);
+            Sim.LayRun(world, new Int2(4, 7), Dir.North, 1);      // one lane wired, so the card is past "no outlet"
+
+            Assert.IsFalse(MachineReading.TryPreviewCut(world, new Int2(4, 6), Dir.North, out _, out _, out _),
+                "no item, no preview");
+
+            Assert.IsTrue(world.Machines.TryGetSnapshot(new Int2(4, 6), out MachineSnapshot snapshot));
+            StringAssert.Contains("idle", MachineReading.LiveNote(world, new Int2(4, 6), in snapshot).Text,
+                "and the card falls back to saying so");
+        }
+
         [Test]
         public void ACommandWithNoSelection_PlacesNothing()
         {
             // The click that reads a building is the same press that used to build one. With nothing
             // selected it must do neither: no drill on the patch under the cursor, no run behind it, no
-            // circles spent.
+            // shapes spent.
             SimWorld world = Sim.NewWorld(16, 10);
             world.Terrain.SetOre(Ore, Quad.Circle);
-            int circles = world.Economy.Circles;
+            int shapes = world.Economy.Shapes;
 
             world.Tick(Click(Ore));
             world.Tick(Gesture.Aim(new Int2(6, 3)));
@@ -45,7 +91,7 @@ namespace Facet.Tests
             Assert.IsFalse(world.Belts.Has(Ore), "and no belt on the press cell");
             Assert.IsFalse(world.Belts.Has(new Int2(4, 3)), "and no run out of it");
             Assert.IsFalse(world.Belts.Has(new Int2(6, 3)), "all the way to where the drag ended");
-            Assert.AreEqual(circles, world.Economy.Circles, "nothing was paid for");
+            Assert.AreEqual(shapes, world.Economy.Shapes, "nothing was paid for");
         }
 
         [Test]
