@@ -65,12 +65,14 @@ the whole set is enumerable at build time.
 
 Three operators act on that space:
 
-* **The cutter** splits one item along the line its facing selects. Facing north or south cuts across (top
+* **The cutter** splits one item along the cut line its facing selects - the blade runs across the facing
+  arrow, not along it. Facing north or south cuts across (top
   piece and bottom piece); facing east or west cuts down the middle (left and right). Both pieces leave at
   once, one per outlet - the facing side takes the piece on that side, the side opposite takes the other - and
   each outlet keeps its own buffer, so one blocked side never costs the other piece. Cutting a quarter yields
   the quarter plus nothing, and that is why "an item can be cut at most twice" is a corollary rather than a
-  rule.
+  rule. The cut line itself is drawn - across the placement ghost and across every placed cutter - so which
+  two pieces a machine is aimed at is on the screen, not in this manual.
 * **The rotator** turns an item a quarter clockwise, always clockwise: counter-clockwise is three of them in
   series, which is a logistics puzzle rather than a second machine. A half turn is *not* the identity - it
   gives the complement piece on the same cut line - so the rotator is also the orientation fix: the briefing

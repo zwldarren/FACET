@@ -258,14 +258,26 @@ namespace Facet.Core
                && (_grid.Get(cell).IsBuilding() || _terrain.HasOre(cell) || _map.SpawnIndexOf(cell) >= 0
                    || _terrain.KindAt(cell).IsObstacle());
 
-        /// <summary>Apply the input state that changes no rule: which building is selected, and which tile
-        /// the player is reading. One method because it is one rule - the pointer's state follows the player in
-        /// every state, paused and over included, while everything <see cref="Apply"/> does to the world waits
-        /// for a playing tick.</summary>
+        /// <summary>Apply the input state that changes no rule: which building is selected, which tile
+        /// the player is reading, and which way the ghost faces. One method because it is one rule - the
+        /// pointer's state follows the player in every state, paused and over included, while everything
+        /// <see cref="Apply"/> does to the world waits for a playing tick.
+        ///
+        /// The ghost's facing is pointer state too, not a world change: Q/E is how a cutter's cut line
+        /// and a rotator's outlet are aimed, and re-aiming a line is exactly what a paused player is
+        /// doing. It rode the playing branch once and a player who paused to plan could not turn the
+        /// ghost at all - the ghost showed a facing no key could then change.
+        ///
+        /// A sorter's filter rides here rather than on <see cref="Apply"/> for the same reason, though it
+        /// is the one member that does rewrite machine state: the picker is a card click, not a gesture,
+        /// so it must never be readable as a press on the map, and a player re-routing a line while the
+        /// run is held expects the setting to stick rather than be swallowed by the pause.</summary>
         public void ApplySelection(InputCommand cmd)
         {
             Select(cmd.Selected);
             if (cmd.InspectPressed) Inspect(cmd.CursorCell);
+            if (cmd.RotateSteps != 0) GhostDirection = Rotate(GhostDirection, cmd.RotateSteps);
+            if (cmd.FilterSet) SetFilter(cmd.FilterCell, cmd.SetFilter);
         }
 
         public void Apply(InputCommand cmd)
@@ -275,12 +287,6 @@ namespace Facet.Core
             // would lay a belt run instead of placing the drill. The ghost shows what the release will
             // build.
             ApplySelection(cmd);
-
-            // A sorter's filter is a setting, not a gesture: it lands before anything else so a click on
-            // the picker cannot also be read as a press on the map.
-            if (cmd.FilterSet) SetFilter(cmd.FilterCell, cmd.SetFilter);
-
-            if (cmd.RotateSteps != 0) GhostDirection = Rotate(GhostDirection, cmd.RotateSteps);
 
             if (cmd.RemoveHeld)
             {

@@ -549,12 +549,13 @@ namespace Facet.Game
             title.Set("HOW TO PLAY", _palette.HudAccent);
 
             HudText body = Label(root, "body", 11f, FontStyle.Normal, TextAnchor.UpperLeft, wrap: true);
-            HudUi.TopLeft(body.Rect, 14f * _scale, 38f * _scale, rect.width - 28f * _scale, 92f * _scale);
+            HudUi.TopLeft(body.Rect, 14f * _scale, 38f * _scale, rect.width - 28f * _scale, 110f * _scale);
             body.Set(
                 "1. Mine circle ore and carry it back to the Core using conveyor belts.\n" +
                 "2. Ore can only be spent after it reaches the Core.\n" +
-                "3. A jammed segment stops its line - right-click that segment to clear it.\n" +
-                "4. Match the round to the wave's demand figure - anything else deals a quarter.",
+                "3. The cutter cuts across its facing: Q/E turns it - north/south cuts top/bottom halves.\n" +
+                "4. A jammed segment stops its line - right-click that segment to clear it.\n" +
+                "5. Feed a turret (0) the round the demand figure shows - anything else deals a quarter.",
                 _palette.HudText);
 
             panel.Root.gameObject.SetActive(ShowTutorial);
@@ -608,7 +609,7 @@ namespace Facet.Game
 
             panel.Restart = HudUi.Button(root, "restart", rect.width - 24f * _scale, 26f * _scale,
                 "R  restart  run", FontSize(13f), _palette.HudText, PressRestart);
-            HudUi.TopLeft(panel.Restart.Root, 12f * _scale, 140f * _scale, rect.width - 24f * _scale, 26f * _scale);
+            HudUi.TopLeft(panel.Restart.Root, 12f * _scale, 154f * _scale, rect.width - 24f * _scale, 26f * _scale);
 
             panel.Close = HudUi.Button(root, "close", 22f * _scale, 22f * _scale, "×", FontSize(13f),
                 _palette.HudText, () => SetHelpOpen(false));
@@ -1691,6 +1692,7 @@ namespace Facet.Game
             yield return BuildInput.KeyRangeText() + " or click builds";
             yield return "the same one again drops it";
             yield return "Q / E turn  ·  drag lays belts";
+            yield return "a cutter cuts across its facing";
             yield return "RMB deletes, or clears a jam";
             yield return "Esc reads  ·  C goes to the Core";
             yield return "N the wave  ·  Space  ·  R restart";
@@ -1874,13 +1876,14 @@ namespace Facet.Game
                 }
 
                 // The facing is the ghost's, and Q and E move it: the one line on the build card that
-                // answers to the keyboard rather than to the catalogue.
+                // answers to the keyboard rather than to the catalogue. A cutter's line names the cut
+                // instead of the arrow - "cuts top from bottom" flipping to "cuts left from right" as
+                // the ghost turns is the lesson, watched live where the turn buttons sit.
                 int facing = (int)_world.PlacementDirection;
                 if (facing != _infoFacing)
                 {
                     _infoFacing = facing;
-                    _info.Facing.Set("facing " + MachineReading.DirName(_world.PlacementDirection),
-                        _palette.MachineIdle);
+                    _info.Facing.Set(GhostFacing(kind), _palette.MachineIdle);
                 }
 
                 return;
@@ -1936,8 +1939,18 @@ namespace Facet.Game
             // map: the key is Escape, the button is the same door.
             _info.Inspect.Root.gameObject.SetActive(_world.SelectedKind.HasValue);
 
-            _info.Facing.Set("facing " + MachineReading.DirName(_world.PlacementDirection),
-                _palette.MachineIdle);
+            _info.Facing.Set(GhostFacing(kind), _palette.MachineIdle);
+        }
+
+        /// <summary>The build card's facing line, for the placement the card is describing: what that
+        /// kind's facing would mean when placed now, read from the same note the built card prints - a
+        /// cutter says which cut it is aimed at, everything else says the side it faces.</summary>
+        private string GhostFacing(BuildKind? kind)
+        {
+            if (!kind.HasValue) return string.Empty;
+
+            return MachineReading.GhostFacingNote(_world.Content.Machine(kind.Value),
+                _world.PlacementDirection);
         }
 
         /// <summary>The card with nothing selected: what the player read, not what they are about to build.

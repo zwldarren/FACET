@@ -488,8 +488,9 @@ namespace Facet.Core
         /// or the nearest in range at all when nothing weak is there. A weakness match is worth four times the
         /// damage, so a turret prefers the enemy it was built for - but it never holds fire while something it
         /// can still scratch is in range, because a resisted shot is some damage and a held one is none. Ties
-        /// go to the lower slot, so which of two equidistant enemies it picks is a function of the map state,
-        /// not the caller. False when nothing is in range, in which case the outputs are unusable.</summary>
+        /// go to whichever the fixed scan reaches last, so which of two equidistant enemies it picks is a
+        /// function of the map state, not the caller. False when nothing is in range, in which case the outputs
+        /// are unusable.</summary>
         public bool TryFindPreferred(Vec2 centre, float range, Shape ammo, out int id, out Vec2 position)
         {
             float bestSq = range * range;

@@ -71,7 +71,7 @@ MonoBehaviour:
     Behavior: 8
     Cost: 15
     Name: Cutter
-    Description: "splits one shape along the line it faces \xB7 a piece per outlet"
+    Description: "splits one shape in two \xB7 the cut runs across the facing: north/south cuts top/bottom"
     Interval: 1.5
     Filter:
       Mode: 0

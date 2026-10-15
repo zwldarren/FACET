@@ -525,10 +525,13 @@ namespace Facet.Core
 
                 // The first operator, and the one the campaign teaches first: 1.5 s per pair, both pieces
                 // out at once, one per outlet. A quarter in yields the quarter plus nothing, so cutting
-                // twice is a corollary rather than a rule.
+                // twice is a corollary rather than a rule. The description says "across" on purpose - the
+                // cut line runs against the facing, and "along the line it faces" read as the cut
+                // following the arrow, which is the one aim a new player then never tries.
                 new MachineDef(new ContentId("cutter"), BuildKind.Cutter, TileKind.Cutter,
                     BehaviorKind.Cutter, cost: 15, name: "Cutter",
-                    description: "splits one shape along the line it faces · a piece per outlet",
+                    description: "splits one shape in two · the cut runs across the facing: " +
+                                 "north/south cuts top/bottom",
                     interval: 1.5f, maxHp: 60f),
 
                 // Well under a belt's one second per item, so the rotator never throttles a line: the

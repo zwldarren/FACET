@@ -5,7 +5,8 @@ namespace Facet.Game
 {
     /// <summary>The cursor. With a building selected it is the ghost that shows where the next placement
     /// would land, whether it would be allowed, and what it would be: the belt's chevron, a machine's body
-    /// and facing, a turret's range ring. Green is buildable, amber means the stockpile cannot cover it, red
+    /// and facing, a cutter's cut line across the cell, a turret's range ring. Green is buildable, amber
+    /// means the stockpile cannot cover it, red
     /// means something is already there (or, for a drill, no shape patch under it) - feedback that makes
     /// dragging a run across an existing build predictable. With nothing selected there is no ghost, because
     /// nothing is being built: the cursor reads. The tile under the pointer carries a border - the accent over
@@ -126,8 +127,20 @@ namespace Facet.Game
                     new Vector2(x + 1f - bodyInset, y + 1f - bodyInset), new Vector2(x + bodyInset, y + 1f - bodyInset), body);
 
                 if (HasFacing(kind))
+                {
+                    // The cutter's blade goes down first, under its own chevron: the cut line runs
+                    // across the cell perpendicular to the facing, so a ghost aiming north reads "top
+                    // and bottom pieces", not "a thing that points north". Without it the facing arrow
+                    // is the cut's only readout, and which two pieces a placement will yield is a guess.
+                    if (World.Content.Machine(kind).Behavior == BehaviorKind.Cutter)
+                    {
+                        (Vector2 cutFrom, Vector2 cutTo) = CutLineAcross(_seenCell, _seenDirection);
+                        AppendLane(cutFrom, cutTo, t * 0.5f, edge);
+                    }
+
                     AppendChevron(new Vector2(x + 0.5f, y + 0.5f), _seenDirection,
                         look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, edge);
+                }
             }
 
             if (World.Content.IsTurret(kind))

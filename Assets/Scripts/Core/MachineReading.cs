@@ -108,7 +108,13 @@ namespace Facet.Core
                            "does full damage, anything else " + ResistShare();
 
                 case BehaviorKind.Cutter:
-                    return "splits one shape along the line it faces · each piece leaves by its own side";
+                    // "Across", not "along": the cut line runs perpendicular to the facing, and the
+                    // shipped wording once said "along the line it faces" - which reads as the cut
+                    // following the arrow, and taught exactly the wrong aim. The line names the case a
+                    // player needs and has not seen: the default east/west placement is the one they
+                    // already know.
+                    return "splits one shape in two · the cut runs across the facing: " +
+                           "north/south cuts top/bottom";
 
                 case BehaviorKind.Rotator:
                     return "turns a shape a quarter clockwise · the orientation fix";
@@ -147,7 +153,7 @@ namespace Facet.Core
                         : string.Empty;
 
                 case BehaviorKind.Cutter:
-                    return def.Interval.ToString("0.##") + " s per split · holds " +
+                    return def.Interval.ToString("0.##") + " s per split · both pieces leave at once · holds " +
                            CutterBehavior.SlotBuffer + " a side";
 
                 case BehaviorKind.Rotator:
@@ -344,11 +350,8 @@ namespace Facet.Core
                     return machine.Filter.Describe() + " leaves " + DirName(machine.Direction);
 
                 case BehaviorKind.Cutter:
-                {
-                    bool vertical = machine.Direction == Dir.East || machine.Direction == Dir.West;
-                    return (vertical ? "cuts left from right" : "cuts top from bottom") +
+                    return CutNote(machine.Direction) +
                            " - the front piece leaves " + DirName(machine.Direction);
-                }
 
                 case BehaviorKind.None:      // a belt: its facing is where it carries
                 case BehaviorKind.Drill:
@@ -363,6 +366,32 @@ namespace Facet.Core
                         "a new behaviour must say what its card calls its facing");
             }
         }
+
+        /// <summary>What a placement's facing would mean - the ghost's half of <see cref="FacingNote"/>,
+        /// asked before the machine exists. The build card prints it beside the rotate buttons, so a
+        /// player pressing Q/E watches the answer to "what will this cut" flip between the two cuts
+        /// rather than having to know that the arrow names the outlet and not the blade.
+        ///
+        /// Deliberately the short forms: the line is a one-line label the turn buttons sit beside, so
+        /// every answer here stays within roughly twenty characters - the long forms, and the piece-leaves-
+        /// where semantics, live on <see cref="FacingNote"/> and <see cref="LiveNote"/>'s cards, which have
+        /// the room.</summary>
+        public static string GhostFacingNote(in MachineDef def, Dir direction)
+        {
+            if (def.Behavior == BehaviorKind.Cutter) return CutNote(direction);
+            if (def.Behavior == BehaviorKind.None && def.Tile != TileKind.Belt)
+                return "a wall has no facing";
+
+            return def.UsesFacing ? "facing " + DirName(direction) : "ports read off belts";
+        }
+
+        /// <summary>The two cuts a cutter can be aimed at, said the one way both cards print it: which
+        /// pair of pieces the facing selects. The facing side takes the piece on that side - which piece
+        /// leaves where is the sentence <see cref="FacingNote"/> appends.</summary>
+        private static string CutNote(Dir direction)
+            => direction == Dir.East || direction == Dir.West
+                ? "cuts left from right"
+                : "cuts top from bottom";
 
         /// <summary>The sides a machine's belts wire it to: a belt pointing in is an input and a belt
         /// pointing away is an output, both masks straight off <see cref="MachineSnapshot"/>.</summary>

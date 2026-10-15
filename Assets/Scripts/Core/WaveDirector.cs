@@ -237,10 +237,12 @@ namespace Facet.Core
             for (int i = 0; i < _memoNumber.Length; i++)
                 if (_memoNumber[i] == number && _memoWave[i] != null) return _memoWave[i];
 
-            // The generator is asked by the *run's* wave number, not by how many waves it has produced: a map
-            // that scripts its opening and hands over to the generator keeps climbing the budget curve and the
-            // depth bands from where its own table left off, instead of dropping back to a first wave's worth
-            // of pressure. For a map that authors nothing the two numbers are the same.
+            // The generator is asked by the *run's* wave number, not by how many waves it has produced, and
+            // it is told where the table handed over: a map that scripts its opening keeps climbing the
+            // budget curve and the depth bands from where its own table left off - the finale's budget is
+            // the generated curve's base and its deepest demand the band's floor - instead of dropping back
+            // to a first wave's worth of pressure and shallows. For a map that authors nothing the two
+            // numbers agree and the from-scratch curve applies.
             WaveDefinition wave = Generator().Wave(number);
             _memoNumber[number % _memoNumber.Length] = number;
             _memoWave[number % _memoNumber.Length] = wave;
@@ -419,8 +421,49 @@ namespace Facet.Core
         }
 
         /// <summary>The generator for this map, built once. The pool is the closure of the map's own
-        /// minerals under its own unlocked operators, so every demand it can draw is buildable here.</summary>
+        /// minerals under its own unlocked operators, so every demand it can draw is buildable here; the
+        /// three handover numbers are read off the authored table itself, so the generator never keeps a
+        /// copy of the waves it sits behind.</summary>
         private WaveGenerator Generator()
-            => _generator ?? (_generator = new WaveGenerator(_seed, _map.Pool(), _map.SpawnPoints.Length));
+        {
+            if (_generator != null) return _generator;
+
+            ShapePool pool = _map.Pool();
+            _generator = new WaveGenerator(_seed, pool, _map.SpawnPoints.Length,
+                Table.Length, AuthoredEndBudget(), AuthoredEndDepth(pool));
+            return _generator;
+        }
+
+        /// <summary>The budget the authored table's last wave spends, in the generator's own cost units -
+        /// the point its curve hands over at, so the wave after the table carries the pressure the table
+        /// ended on. 0 with no table, which is the generator's from-scratch curve's own business.</summary>
+        private float AuthoredEndBudget()
+        {
+            if (Table.Length == 0) return 0f;
+
+            WaveDefinition last = Table[Table.Length - 1];
+            float budget = 0f;
+            for (int g = 0; g < last.Groups.Length; g++)
+                budget += last.Groups[g].Count * (last.Groups[g].Kind == EnemyKind.Runner
+                    ? WaveGenerator.RunnerCost
+                    : WaveGenerator.TankCost);
+
+            return budget;
+        }
+
+        /// <summary>The deepest operator depth the authored table ever demanded - the floor of the
+        /// generated stretch's depth band, so the generator never asks for shallower shapes than the
+        /// table itself taught. 0 with no table.</summary>
+        private int AuthoredEndDepth(ShapePool pool)
+        {
+            if (Table.Length == 0) return 0;
+
+            int deepest = 0;
+            for (int w = 0; w < Table.Length; w++)
+                for (int g = 0; g < Table[w].Groups.Length; g++)
+                    deepest = Math.Max(deepest, Math.Max(0, pool.Depth(Table[w].Groups[g].Weakness)));
+
+            return deepest;
+        }
     }
 }

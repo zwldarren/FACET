@@ -78,6 +78,46 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void TheGhost_TurnsWhilePaused_SoAStoppedPlayerCanStillAimTheCut()
+        {
+            // Q/E is how a cutter's cut line is aimed, and re-aiming a line is what a paused player is
+            // doing - so the ghost's facing turns with the paused branch, exactly as the selection does.
+            // It rode the playing branch once, and a player who paused to plan faced a ghost no key
+            // could turn: level 1's top half-circle ask, met with a cut that would not aim.
+            SimWorld world = Sim.Rig();
+
+            world.Paused = true;
+            world.Tick(new InputCommand(cursorCell: new Int2(0, 0), selected: BuildKind.Cutter,
+                rotateSteps: 1));
+
+            Assert.AreEqual(Dir.South, world.PlacementDirection,
+                "one clockwise step from the default east, taken while paused");
+            Assert.AreEqual(0, world.TickCount, "and the world itself still did not advance");
+        }
+
+        [Test]
+        public void TheSortersFilter_ChangesWhilePaused_LikeTheRestOfThePointerState()
+        {
+            // The picker's click is a card click, not a gesture, so the paused branch applies it with the
+            // selection and the ghost's facing rather than swallowing it - a player re-routing a line
+            // while the run is held expects the setting to stick, and the card keeps promising the click
+            // works ("click a quadrant to change it"). The shipped sorter routes for circles, so the test
+            // asks for squares: a filter the machine did not already carry.
+            SimWorld world = Sim.NewEnduringWorld();
+            Int2 cell = new Int2(2, 2);
+            Sim.Place(world, BuildKind.Sorter, cell, Dir.East);
+
+            world.Paused = true;
+            world.Tick(new InputCommand(filterSet: true, setFilter: ShapeFilter.Has(Quad.Square),
+                filterCell: cell));
+
+            MachineState sorter = Sim.MachineAt(world, cell);
+            Assert.AreEqual(FilterMode.Mineral, sorter.Filter.Mode, "the picker's click stuck while paused");
+            Assert.AreEqual(Quad.Square, sorter.Filter.Mineral, "and it now routes for squares");
+            Assert.AreEqual(0, world.TickCount, "and the world itself still did not advance");
+        }
+
+        [Test]
         public void RestartRequested_RebuildsTheRun_OnTheNextTick()
         {
             // The HUD's restart button cannot reach into the middle of a run any more than its start-wave

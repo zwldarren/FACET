@@ -136,10 +136,18 @@ namespace Facet.Core
 
         /// <summary>Centre of a spawn point in world units, where enemies are created. The index is
         /// resolved by <see cref="ResolveSpawn"/> like every other reader, so the entry tile is the one the
-        /// marker lights and the info card names.</summary>
+        /// marker lights and the info card names.
+        ///
+        /// Bad data - a table that named a negative door, or a map with no doors at all - reads as the
+        /// first door rather than an out-of-range crash: <see cref="MapValidation"/> already names the map
+        /// that wrote it, and a wave walking in from the wrong door is visible, where a thrown index on a
+        /// spawn tick is a dead run.</summary>
         public Vec2 SpawnCenter(int index)
         {
-            Int2 cell = SpawnPoints[ResolveSpawn(index)];
+            if (SpawnPoints.Length == 0) return new Vec2(0.5f, 0.5f);
+
+            int resolved = ResolveSpawn(index);
+            Int2 cell = SpawnPoints[resolved < 0 ? 0 : resolved];
             return new Vec2(cell.X + 0.5f, cell.Y + 0.5f);
         }
 

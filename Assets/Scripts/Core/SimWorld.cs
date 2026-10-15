@@ -145,9 +145,10 @@ namespace Facet.Core
                 // and clicking the button in the same breath must not start a wave on resume.
                 _waveRequested = false;
 
-                // Selection and the inspect pin, though, are not world changes - the HUD's build bar
-                // keeps responding while the run is held, and a paused player can read their own base.
-                // They come through the same command as a number key.
+                // Selection, the inspect pin, the ghost's facing and the sorter's filter are not world
+                // changes - the HUD's build bar keeps responding while the run is held, and a paused
+                // player can read their own base and re-aim a line. They come through the same command
+                // as a number key.
                 _build.ApplySelection(cmd);
                 return;
             }

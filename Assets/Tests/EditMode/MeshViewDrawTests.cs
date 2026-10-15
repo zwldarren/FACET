@@ -181,6 +181,31 @@ namespace Facet.Tests
             }
         }
 
+        [Test]
+        public void APlacedCutter_DrawsItsCutLine_WhereARotatorDrawsNone()
+        {
+            // The cut line is a placed cutter's one facing readout - the outlets are read off the belts,
+            // so without the line nothing on the machine says which two pieces it is making, and a line
+            // of cutters all reads as the same machine whatever way each is aimed. A rotator in the same
+            // empty state draws the same body with no line, so the mesh difference is the line alone.
+            int cutter = OperatorVertices(BuildKind.Cutter, Dir.North);
+            int rotator = OperatorVertices(BuildKind.Rotator, Dir.North);
+
+            Assert.Greater(cutter, rotator, "the cutter's blade is geometry its fellow operator lacks");
+        }
+
+        [Test]
+        public void TheCutterGhost_DrawsItsCutLine_WhereADrillGhostDrawsNone()
+        {
+            // The ghost is where the aim is chosen, so the blade is drawn there too: a ghost faced north
+            // reads "top and bottom pieces" before the click rather than after. A drill's ghost shows
+            // the same body, border and facing chevron with no line, so the mesh difference is the line.
+            int cutter = GhostVertices(BuildKind.Cutter);
+            int drill = GhostVertices(BuildKind.Drill);
+
+            Assert.Greater(cutter, drill, "the ghost's blade is geometry a drill's ghost lacks");
+        }
+
         /// <summary>A map with rock in it, so a real view has something to put in the mesh.</summary>
         private static SimWorld RockyWorld()
             => new SimWorld(new MapDefinition("rocky", 8, 4, 0,
@@ -197,6 +222,57 @@ namespace Facet.Tests
             Mesh mesh = go.GetComponent<MeshFilter>().sharedMesh;
             Assert.IsNotNull(mesh, go.name + " drew no mesh");
             return mesh;
+        }
+
+        /// <summary>The machine view's mesh size for one operator placed alone on bare ground: no belts
+        /// wired, so no stubs, and an empty chamber, so no badge - the two operators differ by the cut
+        /// line and nothing else. Drawn by hand the way the preview draws it.</summary>
+        private int OperatorVertices(BuildKind kind, Dir facing)
+        {
+            SimWorld world = Sim.NewWorld(8, 4);
+            Sim.Place(world, kind, new Int2(1, 1), facing);
+
+            var go = new GameObject("Machines");
+            try
+            {
+                MachineRenderer view = go.AddComponent<MachineRenderer>();
+                view.Initialize(world, _clock, _palette);
+                view.Draw(_clock.Frame);
+
+                MeshFilter filter = go.GetComponent<MeshFilter>();
+                Assert.IsNotNull(filter, "the machine view draws through a mesh filter");
+                Assert.IsNotNull(filter.sharedMesh, "and built its mesh without a frame arriving");
+                return filter.sharedMesh.vertexCount;
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        /// <summary>The cursor view's mesh size with the given kind selected and the cursor on bare
+        /// ground - the ghost's own geometry, nothing pinned and no turret ring.</summary>
+        private int GhostVertices(BuildKind kind)
+        {
+            SimWorld world = Sim.NewWorld(8, 4);
+            world.Tick(new InputCommand(selected: kind));
+
+            var go = new GameObject("Cursor");
+            try
+            {
+                CursorView view = go.AddComponent<CursorView>();
+                view.Initialize(world, _clock, _palette);
+                view.Draw(_clock.Frame);
+
+                MeshFilter filter = go.GetComponent<MeshFilter>();
+                Assert.IsNotNull(filter, "the cursor view draws through a mesh filter");
+                Assert.IsNotNull(filter.sharedMesh, "and built its mesh without a frame arriving");
+                return filter.sharedMesh.vertexCount;
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
         }
 
         /// <summary>A view whose rebuilds can be counted, so the gate is exercised through the same

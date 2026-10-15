@@ -210,6 +210,23 @@ namespace Facet.Game
             AppendQuad(from - right, from + right, to + right, to - right, color);
         }
 
+        /// <summary>
+        /// The two ends of a cutter's cut line across <paramref name="cell"/>, drawn through the cell's
+        /// centre <b>perpendicular to the facing</b>: a cutter faced north or south cuts across (the top
+        /// piece and the bottom one), so its blade runs east-west; faced east or west it cuts down the
+        /// middle and the blade runs north-south. The one geometry the ghost and the placed machine both
+        /// draw, so the aim a player watches on the cursor is the aim the built cutter keeps.
+        /// </summary>
+        protected static (Vector2 from, Vector2 to) CutLineAcross(Int2 cell, Dir facing)
+        {
+            float centreX = cell.X + 0.5f;
+            float centreY = cell.Y + 0.5f;
+
+            return facing == Dir.East || facing == Dir.West
+                ? (new Vector2(centreX, cell.Y), new Vector2(centreX, cell.Y + 1f))
+                : (new Vector2(cell.X, centreY), new Vector2(cell.X + 1f, centreY));
+        }
+
         /// <summary>One filled chevron pointing along <paramref name="direction"/>, at
         /// <paramref name="back"/> behind and <paramref name="length"/> ahead of the centre. Right-hand
         /// point first, tip last, so the winding stays counter-clockwise for all four directions.</summary>

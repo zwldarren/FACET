@@ -85,11 +85,37 @@ namespace Facet.Core
         private readonly int _spawnPoints;
         private readonly ShapePool _pool;
 
+        /// <summary>How many of the run's leading waves are the map's authored table, which this
+        /// generator never answers. 0 for a map generated from wave 1 - the curve and the depth bands
+        /// are then entirely this class's own shallow-first opening.</summary>
+        private readonly int _authoredWaves;
+
+        /// <summary>The budget the authored table's last wave spent: where the generated stretch's curve
+        /// hands over. Without it the wave after the table's finale is a <see cref="BudgetCurve"/> first
+        /// wave's worth - on the campaign's third map that was a quarter of the exam the player had just
+        /// fought, and the deep line they had just built sat idle for eight waves.</summary>
+        private readonly float _authoredEndBudget;
+
+        /// <summary>The deepest operator depth the authored table demanded: the floor of the generated
+        /// stretch's depth band, so the generator keeps asking for at least the depth the table taught
+        /// last rather than falling back below it.</summary>
+        private readonly int _authoredEndDepth;
+
         public WaveGenerator(int seed, ShapePool pool, int spawnPoints)
+            : this(seed, pool, spawnPoints, 0, 0f, 0) { }
+
+        /// <summary>The handover constructor, for a map that scripts an opening and then generates: the
+        /// table's length, the budget its last wave spent and the deepest depth it demanded. The director
+        /// reads all three off its own table, so the generator needs no copy of the waves themselves.</summary>
+        public WaveGenerator(int seed, ShapePool pool, int spawnPoints, int authoredWaves,
+            float authoredEndBudget, int authoredEndDepth)
         {
             _seed = seed;
             _pool = pool ?? throw new ArgumentNullException(nameof(pool));
             _spawnPoints = Math.Max(1, spawnPoints);
+            _authoredWaves = Math.Max(0, authoredWaves);
+            _authoredEndBudget = MathF.Max(0f, authoredEndBudget);
+            _authoredEndDepth = Math.Max(0, authoredEndDepth);
         }
 
         public ShapePool Pool => _pool;
@@ -108,8 +134,21 @@ namespace Facet.Core
             var groups = new List<SpawnGroup>();
             var used = new List<Shape>();
 
-            int cap = DepthCap(n);
-            int floor = DepthFloor(cap);
+            int cap, floor;
+            if (_authoredWaves > 0 && n > _authoredWaves)
+            {
+                // The generated stretch behind an authored table: the band starts at the depth the
+                // table's own finale demanded and reaches everything the map can build. The exam asks
+                // for the deep end the player was just tested on - a band that fell back to a fresh
+                // opening's shallows left the deep line they had just built idle for waves.
+                cap = _pool.MaxDepth;
+                floor = Math.Min(Math.Max(1, _authoredEndDepth), cap);
+            }
+            else
+            {
+                cap = DepthCap(n);
+                floor = DepthFloor(cap);
+            }
 
             while (budget >= RunnerCost)
             {
@@ -194,9 +233,12 @@ namespace Facet.Core
         public static float BudgetCurve(int number)
             => BaseBudget * MathF.Pow(Growth, Math.Max(1, number) - 1);
 
-        /// <summary>The deepest operator step a wave may demand. The first two waves stay shallow on
-        /// purpose - halves and quarters are what the opening's three machines can make - and the band
-        /// widens with the run, up to whatever this map's operators and minerals allow. A map that can only
+        /// <summary>The deepest operator step a wave may demand - the from-scratch path, for a map
+        /// generated from wave 1. The first two waves stay shallow on purpose - halves and quarters are
+        /// what the opening's three machines can make - and the band widens with the run, up to whatever
+        /// this map's operators and minerals allow. A map with an authored opening does not come through
+        /// here once the table ends: its generated stretch hands over at the finale, both in budget and
+        /// in depth band (see <see cref="BudgetFor"/> and <see cref="Wave"/>). A map that can only
         /// mine has nothing past depth 0, and 0 is what it answers here.</summary>
         public int DepthCap(int number)
         {
@@ -219,8 +261,17 @@ namespace Facet.Core
 
         private float BudgetFor(int number, ref Rng rng)
         {
+            // Past an authored table the curve hands over at the table's finale: its budget is the new
+            // base and growth carries on from there, so the wave after the exam is exam-sized rather
+            // than a first wave's worth. (Floored at the from-scratch opening so a table whose finale
+            // somehow spends nothing still generates a wave.) A map generated from wave 1 keeps the
+            // from-scratch curve untouched.
+            float curve = _authoredWaves > 0 && number > _authoredWaves
+                ? MathF.Max(_authoredEndBudget, BaseBudget) * MathF.Pow(Growth, number - _authoredWaves - 1)
+                : BudgetCurve(number);
+
             float jitter = 1f + (rng.Unit() * 2f - 1f) * Jitter;
-            return BudgetCurve(number) * jitter;
+            return curve * jitter;
         }
 
         /// <summary>

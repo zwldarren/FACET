@@ -290,6 +290,34 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void TheGeneratedStretch_ContinuesTheAuthoredFinale_RatherThanDroppingBack()
+        {
+            // A map that scripts its opening hands the clock a generator that must pick up where the table
+            // left off: the finale's budget is the generated curve's base, and the depth band never falls
+            // below the deepest demand the table itself made. Without the handover the wave after the
+            // finale was a quarter of the exam the player had just fought - and the deep line they built
+            // for it sat idle through the first generated waves.
+            ShapePool pool = FullPool();
+            var generator = new WaveGenerator(11, pool, 1, authoredWaves: 3, authoredEndBudget: 47f,
+                authoredEndDepth: 2);
+
+            WaveDefinition wave = generator.Wave(4);
+            float spent = Spend(wave);
+
+            Assert.GreaterOrEqual(spent, 47f * (1f - WaveGenerator.Jitter) - WaveGenerator.TankCost,
+                "wave 4 carries at least the finale's pressure, not a first wave's worth");
+            Assert.LessOrEqual(spent, 47f * (1f + WaveGenerator.Jitter) + WaveGenerator.TankCost,
+                "and the curve has grown from the finale, not past its own jitter");
+
+            foreach (SpawnGroup group in wave.Groups)
+            {
+                Assert.IsTrue(pool.CanProduce(group.Weakness), "every demand is still buildable");
+                Assert.GreaterOrEqual(pool.Depth(group.Weakness), 2,
+                    "the band never asks for less depth than the table's finale taught");
+            }
+        }
+
+        [Test]
         public void ADeepWaveNumber_IsCapped_AndAnsweredAtOnce()
         {
             // Two properties in one, and the second is why the ceiling is not merely a balance number: a wave

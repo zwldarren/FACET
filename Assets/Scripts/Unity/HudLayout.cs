@@ -39,7 +39,7 @@ namespace Facet.Game
         /// stays two clicks from a misfire. It is a transient overlay - it covers the map while open the
         /// way a toast does, and the camera reserves no strip for it.</summary>
         public const float HelpWidth = 210f;
-        public const float HelpHeight = 178f;
+        public const float HelpHeight = 192f;
 
         public const float InfoWidth = 392f;
         public const float InfoHeight = 134f;
@@ -57,8 +57,9 @@ namespace Facet.Game
         /// <summary>The gap the info card floats above the bar with.</summary>
         public const float InfoGap = 8f;
 
-        /// <summary>Room for the tutorial's heading and its four lines.</summary>
-        public const float TutorialHeight = 134f;
+        /// <summary>Room for the tutorial's heading and its five lines - the cutter and turret lines are
+        /// the ones that can wrap on a narrow window, and the room is here so that wrap costs nothing.</summary>
+        public const float TutorialHeight = 168f;
 
         /// <summary>The gap the tutorial sits below the status card with. Deliberately the same 8 the
         /// info card floats above the bar with: those two are the HUD's only cards that hang off another

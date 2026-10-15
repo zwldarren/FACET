@@ -190,6 +190,12 @@ namespace Facet.Game
         /// empty), plus a stub on every wired side; no facing chevron, since the outlets are read off the
         /// belts as the tick does.
         ///
+        /// The cutter is the one operator that draws its facing anyway, as the cut line across its cell:
+        /// the line is perpendicular to the stored direction and says which two pieces the machine is
+        /// making - the thing the outlets cannot say, and the whole difference between a line running
+        /// top halves and one running left halves. It sits over the body and under the badge, so the
+        /// chamber's piece still reads.
+        ///
         /// All three operators share this path - cutter, rotator and stacker - because they are one
         /// archetype: a machine with a chamber and the belts around it. The badge is the snapshot's, read by
         /// <see cref="MachineField"/> through <see cref="MachineReading.Badge"/>, so a new operator needs no
@@ -211,6 +217,12 @@ namespace Facet.Game
                 AppendPolygon(BodyOf(style, _operatorBody), centre,
                     Damaged(FillOf(style, machine.Behavior), machine),
                     OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
+            }
+
+            if (machine.Behavior == BehaviorKind.Cutter)
+            {
+                (Vector2 cutFrom, Vector2 cutTo) = CutLineAcross(machine.Cell, machine.Direction);
+                AppendLane(cutFrom, cutTo, outlineWidth * 0.5f, Colors.Outline);
             }
 
             AppendIcon(_carriedIcons, machine.Shape, centre, null);
