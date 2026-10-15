@@ -3,10 +3,17 @@
 The names this codebase uses for its concepts, so a suggestion, a test name and a comment say the
 same thing. Architecture *vocabulary* (module, interface, seam, depth, leverage, locality) is the
 shared design language and lives outside this file; this file is the project's own domain.
-Mechanics in full are in [README.md](README.md); this is only the naming.
+The project introduction is in [README.md](README.md); this is only the naming.
 
 ## The economy of things
 
+- **Currency** (`Shape.IsFull`, `CoreSinkSystem`, `MapDefinition.CurrencyMineral`) - the run's money, and it is
+  **a complete shape**: all four quadrants filled, whatever mineral fills them. A full circle banks one and a
+  full square banks one, because the rule reads *completeness* rather than identity - which is what lets a map
+  with no circle anywhere on it still have an economy. Anything less than complete delivered into the Core is
+  destroyed, so the Core is the mint and the overflow drain at once. `CurrencyMineral` is not the rule but the
+  **mark**: the mineral the HUD draws the coin as and spells it in, derived from the map's own first vein,
+  because a mark needs a colour and a sentence needs a noun.
 - **Content table** (`ContentDatabase`) - the one table of what exists: machines, guns, enemies, costs.
   Enum ordinals into it are the save format; rows are keyed by `Id`. Shapes are deliberately *not* rows:
   the item space is the algebra's (see **Shape**), fixed by the encoding rather than by content, so a
@@ -33,6 +40,14 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
 - **Jam** - a belt cell whose item a machine *refused*: the wrong shape for its **diet**. Latched, because a
   refusal is a decision - the item waits for the right-click that clears it. A **blocked** segment is the
   other way a line stops, and is *derived* rather than latched, because its cure is to finish the line.
+- **Stall** (`MachineState.StallTicks`, `MachineField.CountStalled`) - a machine that has eaten its item and
+  cannot pass it on: the cutter with a full lane, the sorter whose outlet never has room, the pipe landing on a
+  busy belt, the stacker whose finished round has nowhere to go. The third way a line stops, and the only one
+  no belt can report - the machine *would* take what is behind it and it refused nothing, so nothing upstream
+  is jammed or blocked and the line simply queues. Counted in ticks and cleared the tick anything moves, so
+  "stopped" is a question about now; a second of it and the **status card** says how many and the **locator**
+  marks where. Deliberately not counted: a stacker waiting for a piece that fits (a design - see **Stack**),
+  and a drill's wait for its own landing belt (that one is a **blocked** segment or nothing).
 
 ## Shapes
 
@@ -68,9 +83,10 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
 - **Stack / disjoint union** (`Shape.Stacked`) - merging two items whose filled quadrants do not overlap;
   overlapping is illegal in the algebra and a *stall* at the machine, never a jam, because the item that
   cannot be merged is one the player spent a chain building.
-- **Depth** (`ShapePool.Depth`) - how many operator steps an item is from a mined mineral. It is the
-  game's progression currency: the wave generator's deeper demands come with the tougher archetype, so
-  "harder" is a property of the algebra rather than of a stat table.
+- **Depth** (`ShapePool.Depth`) - how many operator steps an item is from a mined mineral. It is how the
+  game's progression is measured - not its money, which is **Currency** above: the wave generator's deeper
+  demands come with the tougher archetype, so "harder" is a property of the algebra rather than of a stat
+  table.
 - **Producible pool** (`ShapePool`) - the closure of a map's minerals under the operators it has unlocked:
   every item a player on that map can actually build, and the only set the generator may draw a demand
   from. A map with no stacker is never briefed a mixed round, because no line on it could make one.
@@ -129,7 +145,8 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   which is right for a camera bound and wrong for a question about a tile, because the ground below the
   status card is free and a walker there needs no arrow.
 - **Arrow / mark** - what the locator puts on the edge of that open screen. A chevron is something that
-  moves and is coming (an enemy cluster); a mark is a place to go (a jammed segment, the Core). Sizes are
+  moves and is coming (an enemy cluster); a mark is a place to go (a stopped line - a jammed segment, a blocked
+  one or a **stall**ed machine - or the Core). Sizes are
   screen pixels rather than tiles, because an arrow is a mark on the window and the window is what zooms.
 - **Step back** (`EdgeTowards`) - an arrow that would land under a card is slid in along its own sight line
   until it clears the card. The sight line is what the arrow means, so it is the one thing the arrow never
@@ -153,7 +170,9 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
 
 - **MachineReading** - the one module that says what a machine *means* to the player: the
   catalogue's words and numbers, the live card sentence, the facing note, the ports line, the
-  badge shape and the work fraction. Strings and severity, never colour or layout - colour is the
+  badge shape, the work fraction and the **cut preview** (`TryPreviewCut` - the two pieces a placement would
+  make of the item on its way in, which the ghost draws and the card names). Strings and severity, never
+  colour or layout - colour is the
   `Palette`'s question and layout is the HUD's. The HUD formats what this returns; the EditMode
   tests cross the same interface, so "what the card claims" and "what the table says" cannot drift.
 - **Catalogue line / stats** (`Blurb`, `Stats`) - the build bar and inspect-card sentences about a
@@ -173,7 +192,7 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   0..1 fraction the view animates. Both dispatched on behaviour; both throw on one they have no answer for.
 - **Universal chamber** (`TurretBehavior`, `TurretDef`) - the one gun's rule: it eats any non-empty shape,
   one round per shot, and the *round* decides the damage - full against the enemy whose weakness it is, a
-  quarter against anything else. There is no diet table and no splash, so what a shot is worth is a shape
+  half against anything else. There is no diet table and no splash, so what a shot is worth is a shape
   property of the round and a layout property of the line that delivered it. The chamber **holds one round
   and loads it as soon as a belt delivers one**, with or without a target: loading is the line's half of the
   gun and firing is the target's, so the badge always says what the line is feeding it, and an empty chamber
@@ -277,7 +296,7 @@ Mechanics in full are in [README.md](README.md); this is only the naming.
   happened" is actually "I stopped seeing".
 - **Twist** - the game's one designed tension, and the rework re-cut it: the defence line and the production
   line are the same line, because a gun fires only what the factory fed it - and now *what shape* it fed it,
-  since a round that is not the demand does a quarter damage. The pressure therefore stays on the factory
+  since a round that is not the demand does a half damage. The pressure therefore stays on the factory
   side: the answer to a packed wave is a longer, better-shaped line, not a bigger purchase.
 - **Jam** (`BeltState.Jammed`) - a belt segment blocked by a delivery its machine refuses, cleared by a
   right-click. In the shipped table nothing refuses anything (every diet is "any shape"), so the shipped
