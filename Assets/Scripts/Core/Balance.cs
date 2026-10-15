@@ -36,8 +36,10 @@ namespace Facet.Core
         /// <summary>Shots matching an enemy's weakness deal their full listed damage.</summary>
         public const float WeaknessDamageMultiplier = 1f;
 
-        /// <summary>Shots that do not match the enemy's weakness deal reduced damage.</summary>
-        public const float ResistantDamageMultiplier = 0.25f;
+        /// <summary>Damage a round does to an enemy whose weakness it is <em>not</em>: half. Full damage is
+        /// what the briefing's own shape is worth, a half is what any other line buys - so the demand is a
+        /// real decision without the wrong round being a wasted one.</summary>
+        public const float ResistantDamageMultiplier = 0.5f;
 
         /// <summary>
         /// The extra cost of walking one cell under a standing turret's fire, in the flow field's own

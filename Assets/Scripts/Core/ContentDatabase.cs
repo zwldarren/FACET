@@ -239,9 +239,9 @@ namespace Facet.Core
         /// <summary>
         /// The operator this machine <em>is</em>, and therefore the one a map must have unlocked before it
         /// can be built: the cutter, the rotator and the stacker <b>are</b> their operators, so the unlock
-        /// ladder (§7) needs no separate table of "which machine does this map allow" - the campaign hands
-        /// over Cutter on map 1, Rotator on map 2 and Stacker on map 3, and the build bar follows.
-        /// Everything else is scaffolding that needs no unlocking.
+        /// ladder (§7) needs no separate table of "which machine does this map allow" - a map names the
+        /// operators it hands over and the build bar follows. Everything else is scaffolding that needs no
+        /// unlocking.
         ///
         /// Computed once from the behaviour, like the diet: a definition is replaced rather than mutated, so
         /// a property that re-ran a switch on every placement check would be the one field of this type not
@@ -300,7 +300,7 @@ namespace Facet.Core
     ///
     /// There is no diet here any more. The chamber is universal - it eats any non-empty shape, one round
     /// per shot - so a turret's <em>damage</em> is not a property of the gun but of what the factory fed
-    /// it: a round matching the target's weakness lands full damage, anything else a quarter. That is the
+    /// it: a round matching the target's weakness lands full damage, anything else a half. That is the
     /// whole reason the gun has no ammo table and the answer to "which shape is good" lives in the wave
     /// briefing instead.</summary>
     public sealed class TurretDef
@@ -567,9 +567,10 @@ namespace Facet.Core
                     description: "ports read off the belts around it · in/out by their direction",
                     interval: 0f, maxHp: 40f),
 
-                // Ships filtering for circles, which the money line wants: face the Core and the full
-                // circles bank while the ammo shapes carry on. Priced under a turret so the routing piece
-                // is the cheap half of "keep money and ammo apart".
+                // Ships filtering for circles: face the Core and anything carrying a circle quadrant can be
+                // sent one way while the rest carries on. Priced under a turret so the routing piece is the
+                // cheap half of "keep one line and another apart". The currency is a complete shape, which
+                // this filter language cannot name - a sorter splits by mineral, not by completeness.
                 new MachineDef(new ContentId("sorter"), BuildKind.Sorter, TileKind.Sorter,
                     BehaviorKind.Sorter, cost: 12, name: "Sorter",
                     description: "routes by shape · what its filter matches leaves by the side it faces",
@@ -603,7 +604,8 @@ namespace Facet.Core
             var turrets = new[]
             {
                 // 4 damage at 1 shot/s and 7 tiles: two matched shots bring a Runner down, and a resisted
-                // shot barely marks it - so the gun's real rate is what its lines deliver.
+                // shot takes two of its six health rather than one and a half - so the gun's real rate is
+                // what its lines deliver, but the wrong round is half a fight rather than a wasted one.
                 new TurretDef(BuildKind.Turret, "Turret", damage: 4f, fireInterval: 1f, range: 7f,
                     projectileSpeed: 14f),
             };
@@ -619,8 +621,8 @@ namespace Facet.Core
                     aggroRange: 1.6f, detectionRange: 2.5f),
 
                 // Slow, heavy, and the archetype a deep demand comes with: ten health to the Runner's
-                // six, so it takes three matched shots where the Runner takes two - and ten resisted
-                // ones, where the Runner folds after six. It walks at two-thirds the speed and hits the
+                // six, so it takes three matched shots where the Runner takes two - and five resisted
+                // ones, where the Runner folds after three. It walks at two-thirds the speed and hits the
                 // Core for ten. It notices defences further out than a Runner (3.2 against 2.5), so what
                 // stands between it and the Core has to hurt it, not just be in the way.
                 new EnemyDef(new ContentId("tank"), EnemyKind.Tank, "Tank",

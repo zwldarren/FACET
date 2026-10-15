@@ -54,7 +54,7 @@ namespace Facet.Core
         DuplicateOre = 14,
 
         /// <summary>A wave group naming no weakness shape, so no round can ever match it and the wave is
-        /// only killable at a quarter damage.</summary>
+        /// only killable at a half damage.</summary>
         GroupWithoutDemand = 15,
 
         /// <summary>A wave group whose weakness shape this map's minerals and unlocked operators cannot

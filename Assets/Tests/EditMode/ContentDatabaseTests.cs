@@ -41,10 +41,11 @@ namespace Facet.Tests
         [Test]
         public void TheShippedSorter_SendsAnythingWithACircleInIt_TheWayItFaces()
         {
-            // The shipped filter is the money rule - "anything with a circle in it" - which is what an
-            // opening wants: face the Core and every circle-bearing item banks while the rest carries on
-            // down the line. One rule covers fifty mixed items, which is why the filter is a mineral
-            // predicate rather than a list of exact shapes.
+            // The shipped filter is one mineral predicate - "anything with a circle in it" - which is what a
+            // routing piece wants: face one way and every circle-bearing item goes there while the rest
+            // carries on down the line. One rule covers fifty mixed items, which is why the filter is a
+            // mineral predicate rather than a list of exact shapes. It is deliberately not the currency rule:
+            // money is a <em>complete</em> shape, and completeness is not one of the filter's modes.
             MachineDef sorter = Content.Machine(BuildKind.Sorter);
 
             Assert.AreEqual(BehaviorKind.Sorter, sorter.Behavior);
@@ -197,9 +198,10 @@ namespace Facet.Tests
             Assert.AreEqual(14f, turret.ProjectileSpeed, Sim.Tol);
 
             // There is no ammo table to read a damage out of: what a shot is worth is the round against the
-            // target's demand, and both multipliers live in Balance.
+            // target's demand, and both multipliers live in Balance - full for the briefing's own shape, half
+            // for anything else.
             Assert.AreEqual(1f, Balance.WeaknessDamageMultiplier, Sim.Tol);
-            Assert.AreEqual(0.25f, Balance.ResistantDamageMultiplier, Sim.Tol);
+            Assert.AreEqual(0.5f, Balance.ResistantDamageMultiplier, Sim.Tol);
             Assert.AreEqual(turret.Damage * Balance.WeaknessDamageMultiplier, turret.Damage, Sim.Tol);
 
             EnemyDef runner = Content.Enemy(EnemyKind.Runner);

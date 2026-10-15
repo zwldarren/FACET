@@ -15,7 +15,7 @@ What is wrong in a map file is silent in a run, and every rule below is one of t
     ground under it plain - the entry is simply ignored, like the duplicate above;
   * an entry outside the map, or a terrain array that does not describe it;
   * a wave group naming no weakness shape. Every group is weak to one exact item - the demand the player
-    has to build a line for - and a group without one can only ever be shot at a quarter damage, which is
+    has to build a line for - and a group without one can only ever be shot at a half damage, which is
     a wave nobody can beat rather than a hard one;
   * a map with no wave rows and no generator: nothing will ever arrive, so it can be neither won nor lost;
   * a map that hands its waves to the generator while no vein names a mineral: the generator roots its
@@ -184,7 +184,7 @@ def check(path):
             if not quadrants or not any(quadrants):
                 problems.append(f'wave {number}\'s group {index} names no weakness shape: every group is '
                                 f'weak to one exact item, and a group without one can only ever be shot at '
-                                f'a quarter damage')
+                                f'a half damage')
 
     # A missing GeneratedWaves line is the field's own default, 0 - and an authored row counts as a wave
     # however many groups it holds, exactly as MapValidation's NoWaves rule reads it.

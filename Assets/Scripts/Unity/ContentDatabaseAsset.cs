@@ -119,7 +119,7 @@ namespace Facet.Game
             public BuildKind Build = BuildKind.Turret;
             public string Name = "Turret";
             [Tooltip("Damage one shot does to an enemy whose weakness it matches. A shot fired at anything " +
-                "else does a quarter of it. 0 keeps the shipped value.")]
+                "else does a half of it. 0 keeps the shipped value.")]
             public float Damage;
             [Tooltip("Seconds between shots. 0 keeps the shipped value.")]
             public float FireInterval;

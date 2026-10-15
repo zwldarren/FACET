@@ -12,8 +12,9 @@ namespace Facet.Core
         public Shape Ammo;
 
         /// <summary>The gun's base damage, before the weakness roll. What the shot does is
-        /// <c>Damage * (Ammo == the target's weakness ? 1 : 0.25)</c>, applied where the target is known -
-        /// see <see cref="EnemyField.ApplyDamage"/>.</summary>
+        /// <c>Damage * (Ammo == the target's weakness ? Balance.WeaknessDamageMultiplier :
+        /// Balance.ResistantDamageMultiplier)</c>, applied where the target is known - see
+        /// <see cref="EnemyField.ApplyDamage"/>.</summary>
         public float Damage;
         public float Speed;
 

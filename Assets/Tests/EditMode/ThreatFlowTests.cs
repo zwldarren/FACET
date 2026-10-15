@@ -32,7 +32,7 @@ namespace Facet.Tests
 
         private static SimWorld EnduringWorld(params TerrainRect[] rects)
             => new SimWorld(
-                new MapDefinition("threat", W, H, Sim.TestCircles, new ShapePatch[0],
+                new MapDefinition("threat", W, H, Sim.TestShapes, new ShapePatch[0],
                     new[] { new Int2(2, 7) }, new WaveDefinition[0],
                     rects.Length > 0 ? TerrainLayout.Rects(W, H, rects) : null),
                 new SimConfig { CoreMaxHp = 1000000f });
@@ -111,8 +111,8 @@ namespace Facet.Tests
             PlaceGuns(world);
             Sim.LayRun(world, new Int2(9, 7), Dir.East, 1);
 
-            // A Tank, because the crossing must survive the fire it walks through: six health against a
-            // quarter of the turret's four damage is six rounds, and a saturated belt fires one a second -
+            // A Tank, because the crossing must survive the fire it walks through: ten health against a
+            // half of the turret's four damage is five rounds, and a saturated belt fires one a second -
             // which would fell it before it arrived. The supply here is one round every two seconds, so the
             // walk is what is being measured and not the gun's rate: it walks the swept length, reaches the
             // nearest gun, and chews it while it fires.

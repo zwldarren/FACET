@@ -16,7 +16,7 @@ namespace Facet.Core
     ///
     /// Nothing jams here under the shipped diet, because there is nothing a belt can deliver that the
     /// chamber refuses: the rework moved the punishment for the wrong shape from the belt to the damage
-    /// roll, where it belongs - a resisted round does a quarter damage, and the answer to a mismatched
+    /// roll, where it belongs - a resisted round does a half damage, and the answer to a mismatched
     /// line is to build the shape the briefing asked for, not to clear a jam. That claim is the content
     /// table's, not this file's: a custom table that narrows the chamber's diet jams the wrong delivery
     /// at the door, by the one intake rule every machine shares - and the gun stands down rather than

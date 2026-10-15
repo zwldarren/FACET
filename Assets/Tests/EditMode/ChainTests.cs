@@ -8,13 +8,13 @@ namespace Facet.Tests
     /// EditMode tests for the second mineral's chain and for the rule that replaced the ammo table: a
     /// round's <em>identity</em> against the group's demand. A square vein, the same cutter that splits a
     /// circle, and the one universal turret - so what this file pins is that the operator set is
-    /// mineral-agnostic (one cutter, one sorter, any shape) and that damage is a quarter unless the round
+    /// mineral-agnostic (one cutter, one sorter, any shape) and that damage is a half unless the round
     /// <em>is</em> the item the wave asked for.
     ///
     /// The chain that used to run here ended in a mortar firing half-squares at a Bulwark that only a
     /// half-circle could hurt; both guns and both weaknesses are gone, so those tests are rewritten around
     /// the replacement rule rather than deleted: the 6-hp Runner costs two matched rounds, the tank's ten
-    /// cost three, and a mismatched round is a quarter of that in both cases.
+    /// cost three, and a mismatched round is a half of that in both cases.
     ///
     /// Worlds use the 20x12 test map, unkillable so a Core breach cannot end a measurement mid-run.
     /// </summary>
@@ -54,7 +54,7 @@ namespace Facet.Tests
         {
             // Mine a square, cut it, belt the piece, fire: the whole chain, headless. The tank's ten
             // health against four matched damage is three rounds - where the same round against an enemy
-            // demanding something else would be a quarter of that, and the belt's one-per-second ceiling
+            // demanding something else would be a half of that, and the belt's one-per-second ceiling
             // is what makes the difference between holding a wave and watching the Core fall.
             SimWorld world = SecondChain();
             Assert.Greater(world.Enemies.Spawn(EnemyKind.Tank, new Vec2(13.5f, 10.5f), Demand), 0);
@@ -164,8 +164,8 @@ namespace Facet.Tests
         {
             // The chain and the router together: one input line carrying both minerals, the items matching
             // the filter leaving by the side the sorter faces, the rest carrying on down the line. The
-            // shipped filter is "anything with a circle in it", which is the money rule - a square-bearing
-            // item is not money, so it takes the other outlet.
+            // shipped filter is "anything with a circle in it" - a mineral predicate, not the currency rule,
+            // which is completeness and cannot be named here - so a square-bearing item takes the other outlet.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             var hub = new Int2(4, 5);
 
@@ -175,7 +175,7 @@ namespace Facet.Tests
             Sim.LayRun(world, new Int2(4, 6), Dir.North, 2);        // (4,6) (4,7): everything else
 
             Assert.AreEqual(ShapeFilter.Has(Quad.Circle), world.Content.Machine(BuildKind.Sorter).Filter,
-                "the shipped sorter routes for the money shape");
+                "the shipped sorter routes by the circle mineral");
 
             Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(4, 4), Sim.Square));
             Sim.Tick(world, 120);
@@ -196,7 +196,7 @@ namespace Facet.Tests
             // The rule the old composite broke. A shape's structure "containing both minerals" used to make
             // it match every weakness, which made one deep round the answer to the whole roster. Weakness is
             // exact identity now: the composite is worth full damage against an enemy that demands the
-            // composite and a quarter against anything else, however much of both minerals it carries.
+            // composite and a half against anything else, however much of both minerals it carries.
             SimWorld world = Sim.NewEnduringWorld(20, 12);
             int asksForIt = world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 8.5f), Sim.Composite);
             int asksForOther = world.Enemies.Spawn(EnemyKind.Runner, new Vec2(10.5f, 9.5f), Sim.TopHalfCircle);
@@ -211,19 +211,19 @@ namespace Facet.Tests
             float hp = world.Content.Enemy(EnemyKind.Runner).Hp;
             Assert.AreEqual(hp - 3f, world.Enemies.EnemyAt(0).Hp, Sim.Tol,
                 "the enemy that demanded the composite takes the full 3");
-            Assert.AreEqual(hp - 0.75f, world.Enemies.EnemyAt(1).Hp, Sim.Tol,
-                "and the one that demanded a half-circle takes a quarter, both minerals or not");
+            Assert.AreEqual(hp - 1.5f, world.Enemies.EnemyAt(1).Hp, Sim.Tol,
+                "and the one that demanded a half-circle takes a half, both minerals or not");
         }
 
         [Test]
-        public void TheSameSixHealth_CostsTwoMatchedRounds_OrSixResistedOnes()
+        public void TheSameSixHealth_CostsTwoMatchedRounds_OrThreeResistedOnes()
         {
             // The price rule at one gun, as the number a player feels: 6 hp against the shipped 4 damage is
-            // two rounds when the round is what the group asked for, and six when it is not - six seconds of
-            // one belt's supply against two, at a fire rate the belt already caps.
+            // two rounds when the round is what the group asked for, and three when it is not - three seconds
+            // of one belt's supply against two, at a fire rate the belt already caps.
             Assert.AreEqual(2, RoundsToKill(Sim.TopHalfCircle, Sim.TopHalfCircle), "a matched round");
-            Assert.AreEqual(6, RoundsToKill(Sim.Square, Sim.TopHalfCircle),
-                "a resisted round lands a quarter of 4, so the same enemy takes six of them");
+            Assert.AreEqual(3, RoundsToKill(Sim.Square, Sim.TopHalfCircle),
+                "a resisted round lands a half of 4, so the same enemy takes three of them");
         }
 
         /// <summary>

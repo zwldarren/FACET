@@ -5,7 +5,7 @@ namespace Facet.Tests
 {
     /// <summary>
     /// EditMode tests for the one gun and its universal chamber: it fires only what a belt physically
-    /// delivers to it, it eats <em>any</em> non-empty shape, and a round is worth four times as much
+    /// delivers to it, it eats <em>any</em> non-empty shape, and a round is worth twice as much
     /// against an enemy whose demand it <em>is</em>. The world is 20x12 (Core at (8,4)-(11,7)) with an
     /// effectively immortal Core, so a turret test measures firing and never drifts into the run ending.
     /// The turret sits at (10,10); targets walk to the Core and stop, keeping a target in range.
@@ -122,7 +122,7 @@ namespace Facet.Tests
 
         /// <summary>
         /// The weakness rule, on the field directly rather than through a turret: a round that IS the
-        /// target's demand lands full damage, anything else a quarter of it. Read off the HP rather than the
+        /// target's demand lands full damage, anything else half of it. Read off the HP rather than the
         /// event stream so a change to either multiplier shows up as the number it is.
         /// </summary>
         [Test]
@@ -142,8 +142,8 @@ namespace Facet.Tests
 
             resistant.Enemies.ApplyDamage(resistantId, 3f, Sim.Square);
 
-            Assert.AreEqual(startingHp - 0.75f, resistant.Enemies.EnemyAt(0).Hp,
-                Sim.Tol, "a round that is not the demand is resisted, so the same 3 damage lands a quarter");
+            Assert.AreEqual(startingHp - 1.5f, resistant.Enemies.EnemyAt(0).Hp,
+                Sim.Tol, "a round that is not the demand is resisted, so the same 3 damage lands a half");
 
             // And "is", not "contains": the item that carries both minerals used to match every weakness.
             SimWorld structural = Sim.NewEnduringWorld(W, H);
@@ -152,7 +152,7 @@ namespace Facet.Tests
             structural.Enemies.ApplyDamage(structuralId, 3f, Sim.Composite);
 
             Assert.IsTrue(Sim.Composite.Contains(Quad.Circle), "the composite does carry a circle quadrant");
-            Assert.AreEqual(startingHp - 0.75f, structural.Enemies.EnemyAt(0).Hp, Sim.Tol,
+            Assert.AreEqual(startingHp - 1.5f, structural.Enemies.EnemyAt(0).Hp, Sim.Tol,
                 "and still does not match: a demand is an exact item, not a mineral it happens to contain");
         }
 
@@ -160,7 +160,7 @@ namespace Facet.Tests
         public void Turret_PrefersTheEnemyItsRoundHurts()
         {
             // A Tank closer than the Runner the round is for, both in range: the gun aims at the Runner,
-            // because a matched shot lands four times what a resisted one does. Both spawn far enough off the
+            // because a matched shot lands twice what a resisted one does. Both spawn far enough off the
             // turret's lane that neither charges the gun (3.6 and 5.0 tiles against a notice of 3.2 and 2.5),
             // and the aim is read after one tick.
             SimWorld world = TurretWorld();
@@ -207,7 +207,7 @@ namespace Facet.Tests
         public void Turret_StillShootsAResistedEnemy_WhenNothingWeakIsInRange()
         {
             // The preference is not a refusal: with only a mismatched target in range the gun plinks away at
-            // a quarter damage, and ten resisted rounds still bring ten health down. Its walk to the Core
+            // half damage, and five resisted rounds still bring ten health down. Its walk to the Core
             // passes 3+ tiles from the gun, inside the 7-tile range the whole way - a held shot is none, and
             // holding fire while something it can still scratch is in range would be strictly worse.
             SimWorld world = TurretWorld();
@@ -216,10 +216,10 @@ namespace Facet.Tests
             TopUp(world, Demand, 400, DeliveryCell);
 
             Assert.AreEqual(0, world.Enemies.AliveCount, "the Tank is down");
-            Assert.AreEqual(10, world.ShotsFired,
-                world.Content.Enemy(EnemyKind.Tank).Hp + " hp against a quarter of " +
+            Assert.AreEqual(5, world.ShotsFired,
+                world.Content.Enemy(EnemyKind.Tank).Hp + " hp against a half of " +
                 world.Content.Turret(BuildKind.Turret).Damage +
-                " is exactly ten shots - a held shot is none");
+                " is exactly five shots - a held shot is none");
         }
 
         [Test]
@@ -235,7 +235,7 @@ namespace Facet.Tests
 
             Assert.AreEqual(0, world.Belts.JamCount, "a circle is not a wrong-shape delivery any more");
             Assert.AreEqual(0, world.Enemies.AliveCount, "the circle round still brings it down");
-            Assert.AreEqual(6, world.ShotsFired, "at a quarter of the damage, six times over");
+            Assert.AreEqual(3, world.ShotsFired, "at a half of the damage, three times over");
         }
 
         [Test]
@@ -326,7 +326,7 @@ namespace Facet.Tests
 
             Assert.Greater(world.ShotsFired, 0);
 
-            // The Runner is weak to a square, so a circle round is resisted and it takes six of them; once it
+            // The Runner is weak to a square, so a circle round is resisted and it takes three of them; once it
             // is down there is nothing to shoot at and the next delivery stays in the chamber.
             Sim.Tick(world, 120);
             Assert.AreEqual(0, world.Enemies.AliveCount, "the resisted round still brought it down");

@@ -139,7 +139,7 @@ namespace Facet.Core
         /// stands. Sync is a no-op when nothing changed.
         ///
         /// <paramref name="weakness"/> must not be <see cref="Shape.None"/>: under exact-identity damage an
-        /// enemy nothing matches takes a quarter damage from every round and can never be killed
+        /// enemy nothing matches takes a half damage from every round and can never be killed
         /// efficiently - a silent trap rather than a loud one. Every shipped path is safe (the generator
         /// never draws an empty demand, and <see cref="MapValidation"/> names an authored group that names
         /// none); this note is here because a new call site that forgets the argument gets
@@ -444,7 +444,7 @@ namespace Facet.Core
             return from;
         }
         /// <summary>Hits one enemy for what the shot is worth against it: a round matching the enemy's
-        /// weakness lands its full damage, anything else a quarter. So a gun's damage is what the round it
+        /// weakness lands its full damage, anything else a half. So a gun's damage is what the round it
         /// was fed does to the enemy it was aimed at, and the briefing's demand shape is a real decision
         /// rather than a label on the card.</summary>
         public void ApplyDamage(int id, float baseDamage, Shape ammo)
@@ -485,7 +485,7 @@ namespace Facet.Core
         public EnemyState EnemyAt(int index) => _enemies[index];
 
         /// <summary>The enemy a turret fed <paramref name="ammo"/> should shoot: the nearest one weak to it,
-        /// or the nearest in range at all when nothing weak is there. A weakness match is worth four times the
+        /// or the nearest in range at all when nothing weak is there. A weakness match is worth twice the
         /// damage, so a turret prefers the enemy it was built for - but it never holds fire while something it
         /// can still scratch is in range, because a resisted shot is some damage and a held one is none. Ties
         /// go to whichever the fixed scan reaches last, so which of two equidistant enemies it picks is a
