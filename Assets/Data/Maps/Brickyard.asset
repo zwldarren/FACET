@@ -92,10 +92,10 @@ MonoBehaviour:
       FirstDelay: 2
       Interval: 2.4
       Weakness:
-        NW: 1
+        NW: 2
         NE: 0
         SE: 0
-        SW: 1
+        SW: 2
     - Kind: 0
       Count: 6
       SpawnPoint: 0
@@ -103,8 +103,8 @@ MonoBehaviour:
       Interval: 1.8
       Weakness:
         NW: 0
-        NE: 1
-        SE: 1
+        NE: 2
+        SE: 2
         SW: 0
     - Kind: 0
       Count: 4
@@ -112,10 +112,10 @@ MonoBehaviour:
       FirstDelay: 40
       Interval: 2
       Weakness:
-        NW: 1
+        NW: 2
         NE: 0
         SE: 0
-        SW: 1
+        SW: 2
   - Intermission: 90
     Groups:
     - Kind: 0
@@ -124,8 +124,8 @@ MonoBehaviour:
       FirstDelay: 0
       Interval: 1.8
       Weakness:
-        NW: 1
-        NE: 1
+        NW: 2
+        NE: 2
         SE: 0
         SW: 0
     - Kind: 0
@@ -136,8 +136,8 @@ MonoBehaviour:
       Weakness:
         NW: 0
         NE: 0
-        SE: 1
-        SW: 1
+        SE: 2
+        SW: 2
   - Intermission: 90
     Groups:
     - Kind: 0
@@ -146,7 +146,7 @@ MonoBehaviour:
       FirstDelay: 0
       Interval: 1.5
       Weakness:
-        NW: 1
+        NW: 2
         NE: 0
         SE: 0
         SW: 0
@@ -158,7 +158,7 @@ MonoBehaviour:
       Weakness:
         NW: 0
         NE: 0
-        SE: 1
+        SE: 2
         SW: 0
   Unlocked: 3
   Seed: 0
