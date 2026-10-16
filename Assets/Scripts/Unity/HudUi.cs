@@ -172,7 +172,11 @@ namespace Facet.Game
             button.Fill.Image.raycastTarget = true;
             button.Label = Text(root, name + ".label", labelSize, FontStyle.Bold,
                 TextAnchor.MiddleCenter, wrap: false);
-            Stretch(button.Label.Rect, 4f, 4f, 4f, 4f);
+            // Inset by 4 on every side, so the label's middle is the button's middle. Not Stretch: its
+            // fourth number is a height, and a 4-tall strip hung off the top edge centred every label there.
+            StretchFull(button.Label.Rect);
+            button.Label.Rect.offsetMin = new Vector2(4f, 4f);
+            button.Label.Rect.offsetMax = new Vector2(-4f, -4f);
             button.Border = Frame(root, name + ".frame", Color.white, 1f);
             button.Label.Set(label, labelColour);
             button.Pressed = pressed;
