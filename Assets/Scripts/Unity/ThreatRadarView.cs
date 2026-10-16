@@ -83,6 +83,17 @@ namespace Facet.Game
             MarkDirty();
         }
 
+        /// <summary>Say whether the HUD's "how to play" card is up this frame. The player can hide or show it
+        /// at any time, so the driver relays it every frame rather than only on a map change; the arrows
+        /// give the strip back the moment the card goes. Cheap to call every frame - a compare and a flag.</summary>
+        public void SetTutorialUp(bool up)
+        {
+            if (_tutorialUp == up) return;
+
+            _tutorialUp = up;
+            MarkDirty();
+        }
+
         /// <summary>The camera moved, the wave moved, the zoom moved: any of the three moves an arrow, so this
         /// view rebuilds every frame like the enemies it points at.</summary>
         protected override void Observe(in ViewFrame frame) => MarkDirty();

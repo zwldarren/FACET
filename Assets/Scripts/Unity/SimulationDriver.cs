@@ -183,6 +183,14 @@ namespace Facet.Game
             // not know about is a place an enemy can stand unseen. One frame of lag, like the pointer's.
             if (_radar != null && _hud != null) _radar.SetInfoGrown(_hud.InfoGrown);
 
+            // The "how to play" card is the player's to hide and bring back (its button, or T), so the strip
+            // it wears is relayed the same way: the rig's pan bound and the locator's arrows follow the card.
+            if (_hud != null)
+            {
+                if (_rig != null) _rig.SetTutorialUp(_hud.TutorialUp);
+                if (_radar != null) _radar.SetTutorialUp(_hud.TutorialUp);
+            }
+
             // N means "go on" in every run state there is: start the next wave mid-map, carry on to the
             // next map once won, and - the campaign spent - keep going on the last map, endless (§7). The
             // world drops a post-run start-wave request, so this is the only reader here - and the
