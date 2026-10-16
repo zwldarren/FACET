@@ -397,6 +397,26 @@ namespace Facet.Game
 
             [Tooltip("Weakness-icon radius. Roughly half the body, so it reads as a label, not a second enemy.")]
             public float WeaknessRadius = 0.20f;
+            [Header("Enemy health bars")]
+            [Tooltip("Health-bar width in screen pixels.")]
+            [Min(1f)]
+            public float HealthBarWidthPixels = 20f;
+
+            [Tooltip("Health-bar height in screen pixels.")]
+            [Min(1f)]
+            public float HealthBarHeightPixels = 4f;
+
+            [Tooltip("Gap above the enemy body in screen pixels.")]
+            [Min(0f)]
+            public float HealthBarGapPixels = 3f;
+
+            [Tooltip("Health-bar border thickness in screen pixels.")]
+            [Min(0f)]
+            public float HealthBarBorderPixels = 1f;
+
+            public Color HealthBarBackground = new Color(0.12f, 0.14f, 0.18f, 1f);
+            public Color HealthBarFill = new Color(0.29f, 0.79f, 0.45f, 1f);
+            public Color HealthBarBorder = new Color(0.05f, 0.06f, 0.08f, 1f);
 
             [Tooltip("The spawn-point frame sits this far inside its cell, so it never touches the grid lines.")]
             public float SpawnFrameInset = 0.10f;

@@ -34,11 +34,10 @@ namespace Facet.Game
         private readonly int[] _flashUntilTick = new int[MaxFlashes];
         private int _flashCursor;
 
-        /// <summary>Bodies indexed by side count minus three: [0]=3 sides (dead-ish) .. [3]=6 sides (full health).</summary>
-        private readonly Vector2[][] _bodies = new Vector2[4][];
+        private Vector2[] _body;
 
-        /// <summary>Each kind's override look, resolved once and indexed by (int)EnemyKind: an unticked
-        /// style draws the health polygon, a ticked one replaces it, per kind.</summary>
+        /// <summary>Each kind's override look, resolved once and indexed by (int)EnemyKind.
+        /// Disabled overrides use the default hexagonal body.</summary>
         private VisualStyle[] _styles;
         private Vector2[][] _points;
 
@@ -52,11 +51,7 @@ namespace Facet.Game
 
         protected override void OnInitialized()
         {
-            // First vertex at 90 degrees puts a triangle's missing side at the bottom, so a damaged enemy
-            // reads as worn down from below; a 6-sided body points up, distinct from a 4-sided one.
-            for (int sides = 3; sides <= 6; sides++)
-                _bodies[sides - 3] = ProcMesh.RegularPolygon(sides, Colors.Enemies.BodyRadius, 90f);
-
+            _body = ProcMesh.RegularPolygon(6, Colors.Enemies.BodyRadius, 90f);
             // One style per kind, not one for the field: the Tank's override must not leak onto the Runner.
             var kinds = (EnemyKind[])Enum.GetValues(typeof(EnemyKind));
             _styles = new VisualStyle[kinds.Length];
@@ -114,9 +109,61 @@ namespace Facet.Game
 
             AppendSpawnMarkers();
             AppendKillBursts();
+            // Draw health bars after all enemy bodies and effects.
+            for (int i = 0; i < _enemies.Count; i++)
+            {
+                EnemySnapshot enemy = _enemies[i];
+                Vec2 p = Vec2.Lerp(enemy.PreviousPosition, enemy.Position, frame.Alpha);
+                AppendHealthBar(enemy, new Vector2(p.X, p.Y));
+            }
             EndSprites();
         }
 
+
+        private void AppendHealthBar(in EnemySnapshot enemy, Vector2 at)
+        {
+            Palette.EnemyLook look = Colors.Enemies;
+            float pixel = WorldPerPixel;
+
+            float width = Mathf.Max(1f, look.HealthBarWidthPixels) * pixel;
+            float height = Mathf.Max(1f, look.HealthBarHeightPixels) * pixel;
+            float gap = Mathf.Max(0f, look.HealthBarGapPixels) * pixel;
+            float border = Mathf.Clamp(
+                look.HealthBarBorderPixels * pixel,
+                0f,
+                Mathf.Min(width, height) * 0.25f);
+
+            float left = at.x - width * 0.5f;
+            float bottom = at.y
+                + Mathf.Max(look.BodyRadius, look.WeaknessRadius)
+                + OutlineWidth
+                + gap;
+
+            // Outer border.
+            AppendRect(left, bottom, left + width, bottom + height,
+                look.HealthBarBorder);
+
+            float innerLeft = left + border;
+            float innerBottom = bottom + border;
+            float innerWidth = width - border * 2f;
+            float innerHeight = height - border * 2f;
+
+            // Empty track.
+            AppendRect(
+                innerLeft, innerBottom,
+                innerLeft + innerWidth, innerBottom + innerHeight,
+                look.HealthBarBackground);
+
+            // Remaining health, filled from left to right.
+            float health = Mathf.Clamp01(enemy.HealthFraction);
+            if (health > 0f)
+            {
+                AppendRect(
+                    innerLeft, innerBottom,
+                    innerLeft + innerWidth * health, innerBottom + innerHeight,
+                    look.HealthBarFill);
+            }
+        }
         /// <summary>Read the tick's event stream and note which enemies a shot landed on. The simulation
         /// already decided what happened, so there is no health comparison or edge detection here, and a
         /// dropped event costs one frame of flash.</summary>
@@ -203,11 +250,10 @@ namespace Facet.Game
                 return;
             }
 
-            // A just-hit body goes white-hot for a few ticks, so a landed shot is seen, not inferred from
-            // the shrinking polygon.
+            // Briefly flash the body when a shot lands.
             Color body = IsFlashing(enemy.Id) ? Colors.Enemies.HitFlash : Colors.EnemyColor(enemy.Kind);
-            int sides = Mathf.Clamp(3 + Mathf.RoundToInt(3f * enemy.HealthFraction), 3, 6);
-            AppendPolygon(_bodies[sides - 3], at, body, outline, outlineWidth);
+            // Health is shown by the bar; the body keeps its full-health shape.
+            AppendPolygon(_body, at, body, outline, outlineWidth);
         }
 
         /// <summary>The wave entry points, each a hollow frame at one alpha this frame: steady and faint
