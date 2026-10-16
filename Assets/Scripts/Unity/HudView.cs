@@ -398,6 +398,12 @@ namespace Facet.Game
 
         private void BuildPanels()
         {
+            // Fresh tabs are built at 0x0 and only positioned once uGUI's text measurement lands - which
+            // only happens while _tabsMeasured is false. A rebuild that left it true (the fullscreen
+            // resize path) would strand every tab unpositioned, their Overflow labels superimposed in
+            // one unreadable pile. A new hierarchy always re-measures.
+            _tabsMeasured = false;
+
             _status = BuildStatus();
             _tutorial = BuildTutorial();
             _controls = BuildControls();
