@@ -39,9 +39,6 @@ namespace Facet.Game
         [Tooltip("Build the terrain / machine / belt / item / enemy / shot / core / cursor / HUD views at runtime.")]
         [SerializeField] private bool autoCreateViews = true;
 
-        /// <summary>Hard cap on catch-up ticks per frame, so a long hitch cannot spiral.</summary>
-        private const int MaxTicksPerFrame = 5;
-
         /// <summary>The simulation being played - one run, replaced when the campaign moves on.</summary>
         public SimWorld World { get; private set; }
 
@@ -71,9 +68,12 @@ namespace Facet.Game
         /// <summary>The frame every view is drawing right now. The driver is the only writer.</summary>
         public FrameClock Frames { get; private set; }
 
+        /// <summary>The speed gear and the tick backlog. Owned by the driver, not the world, so the gear
+        /// survives a map change or a restart and the simulation never sees it.</summary>
+        public TickClock Clock { get; } = new TickClock();
+
         private BuildInput _input;
         private Camera _camera;
-        private float _accumulator;
 
         /// <summary>Every mesh view, gathered as built rather than looked up by name so a view added
         /// later cannot be forgotten when a map change points them at the new world.</summary>
@@ -168,6 +168,11 @@ namespace Facet.Game
                 Debug.Log("FACET: " + (World.Paused ? "paused" : "resumed") + " at tick " + World.TickCount, this);
             }
 
+            // [ and ] change gear. The gear only changes how many ticks this host feeds per frame.
+            int gearSteps = _input.ConsumeGearSteps();
+            for (; gearSteps > 0; gearSteps--) Clock.Up();
+            for (; gearSteps < 0; gearSteps++) Clock.Down();
+
             // Sample the devices once, then hand the same latched command to every tick this frame, so a
             // click between two ticks applies once, not once per catch-up tick. The HUD has first claim on
             // the mouse, so pressing a panel button cannot also drop a belt under it.
@@ -195,21 +200,15 @@ namespace Facet.Game
             // cannot sample the tile itself, and reading is not building.
             if (_hud != null) _hud.SetCursor(CursorCell);
 
-            _accumulator += Time.deltaTime;
-
-            int ticks = 0;
-            while (_accumulator >= SimConfig.TickDt && ticks < MaxTicksPerFrame)
+            // The gear scales the real time poured in, never TickDt: at 3x a frame runs three times the
+            // ticks, each the same 30 Hz step, so a run is the same tick sequence at every gear.
+            int ticks = Clock.Advance(Time.deltaTime, SimConfig.TickDt);
+            for (int i = 0; i < ticks; i++)
             {
-                _accumulator -= SimConfig.TickDt;
-
                 World.Tick(cmd);
                 _input.ConsumeOneShots();
                 cmd = _input.Snapshot();
-                ticks++;
             }
-
-            // Drop the leftover backlog rather than trying to catch up forever.
-            if (ticks >= MaxTicksPerFrame) _accumulator = 0f;
 
             // Recorded as it happens rather than on a keypress, so the count is right whatever got the
             // player here; idempotent, so polling every frame is the honest way to read an unreported edge.
@@ -217,7 +216,7 @@ namespace Facet.Game
 
             Alpha = World.Paused || World.Status != GameStatus.Playing
                 ? 1f
-                : Mathf.Clamp01(_accumulator / SimConfig.TickDt);
+                : Clock.Alpha(SimConfig.TickDt);
 
             // Publish the frame views draw in, written once after the tick loop and the WorldPerPixel
             // refresh, so every view reads the same value.
@@ -247,7 +246,7 @@ namespace Facet.Game
 
             // The frame the views are about to draw must describe the new world: no leftover tick backlog,
             // no cursor on a tile that may not exist.
-            _accumulator = 0f;
+            Clock.ResetBacklog();
             Alpha = 1f;
             CursorCell = new Int2(-1, -1);
             Frames.Frame = new ViewFrame(1f, WorldPerPixel, CursorCell);
@@ -261,7 +260,7 @@ namespace Facet.Game
             if (_radar != null) _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
             if (_hud != null)
                 _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,
-                    _input.RequestFilter);
+                    _input.RequestFilter, Clock);
 
             Debug.Log("FACET: loaded map " + (Campaign.MapIndex + 1) + " of " + Campaign.MapCount +
                 " - " + World.Map.Name + (World.Map.GeneratedWaves < 0 ? " (endless)" : string.Empty), this);
@@ -336,7 +335,7 @@ namespace Facet.Game
 
             _hud = AddView<HudView>("Hud");
             _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,
-                _input.RequestFilter);
+                _input.RequestFilter, Clock);
 
             _rig = _camera.GetComponent<CameraRig>();
             if (_rig == null) _rig = _camera.gameObject.AddComponent<CameraRig>();

@@ -26,20 +26,20 @@ namespace Facet.Game
         /// it: §5 previews both), the two diagnostic lines and the start-wave button.</summary>
         public const float StatusHeight = 218f;
 
-        /// <summary>The controls cluster collapsed: the pause and help buttons, a small cluster in the
-        /// screen's top-right corner. The keyboard list lives behind the help button instead of costing
+        /// <summary>The controls cluster collapsed: the pause, speed-gear and help buttons, a small cluster
+        /// in the screen's top-right corner (three 34-unit buttons, two 6-unit gaps). The keyboard list lives behind the help button instead of costing
         /// a corner of the screen all run.</summary>
-        public const float ControlsWidth = 74f;
+        public const float ControlsWidth = 114f;
         public const float ControlsHeight = 34f;
 
-        /// <summary>The gap between the cluster's two buttons.</summary>
+        /// <summary>The gap between the cluster's buttons.</summary>
         public const float ControlGap = 6f;
 
         /// <summary>The help card the help button opens: the keyboard and the restart button, which
         /// stays two clicks from a misfire. It is a transient overlay - it covers the map while open the
         /// way a toast does, and the camera reserves no strip for it.</summary>
         public const float HelpWidth = 210f;
-        public const float HelpHeight = 192f;
+        public const float HelpHeight = 207f;
 
         public const float InfoWidth = 392f;
         public const float InfoHeight = 134f;

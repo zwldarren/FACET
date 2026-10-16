@@ -17,7 +17,7 @@ namespace Facet.Game
     /// The player's whole operating surface: a status card top-left (the map and its wave, the Core's
     /// health and the wave's clock as two bars, the wave's bill of materials as chips, and two diagnostic
     /// lines), the stockpile floating beside it as a shape and a number with no panel of its own, a
-    /// controls cluster top-right (pause and help, with the keyboard and restart behind the help card), a
+    /// controls cluster top-right (pause, speed gear and help, with the keyboard and restart behind the help card), a
     /// clickable build bar along the bottom, and an info card above it describing whichever building is
     /// hovered, selected - or, with nothing selected, read (see <see cref="RefreshInspect"/>).
     ///
@@ -141,6 +141,7 @@ namespace Facet.Game
         private int _statusTick = -1;
         private int _statusSeen = -1;
         private bool _statusPaused;
+        private int _statusGear;
 
         private int _bannerTick = -1;
         private int _bannerSeen = -1;
@@ -159,6 +160,12 @@ namespace Facet.Game
 
         private bool _controlsDirty = true;
         private bool _controlsPaused;
+        private int _controlsGear = -1;
+        private bool _controlsBehind;
+
+        /// <summary>The driver's speed gear, read for the gear button's word and cycled by its press.
+        /// Null in a scene (or a test) with no driver: the button then stays at 1x and does nothing.</summary>
+        private TickClock _clock;
 
         private bool _infoBuildShown;
         private BuildKind? _infoKind;
@@ -280,9 +287,10 @@ namespace Facet.Game
         /// sorter's picker draw without them, they just cannot be clicked.</summary>
         public void Initialize(SimWorld world, Palette palette, CampaignState campaign = null,
             Action<BuildKind?> selectKind = null, Action<int> rotate = null, MapCatalog catalog = null,
-            Action<Int2, ShapeFilter> setFilter = null)
+            Action<Int2, ShapeFilter> setFilter = null, TickClock clock = null)
         {
             _world = world;
+            if (clock != null) _clock = clock;
             _palette = palette;
             _campaign = campaign;
             _catalog = catalog;
@@ -621,6 +629,11 @@ namespace Facet.Game
                 _world.Paused ? ">" : "II", FontSize(15f), _palette.HudText, PressPause);
             HudUi.TopLeft(panel.Pause.Root, 0f, 0f, side, side);
 
+            panel.Gear = HudUi.Button(panel.Root, "gear", side, side, GearWord(), FontSize(12f), _palette.HudText,
+                PressGear);
+            HudUi.TopLeft(panel.Gear.Root, (HudLayout.ControlsHeight + HudLayout.ControlGap) * _scale, 0f,
+                side, side);
+
             panel.Help = HudUi.Button(panel.Root, "help", side, side, "?", FontSize(15f), _palette.HudText,
                 () => SetHelpOpen(!_helpOpen));
             HudUi.TopLeft(panel.Help.Root, (HudLayout.ControlsWidth - HudLayout.ControlsHeight) * _scale, 0f,
@@ -653,7 +666,8 @@ namespace Facet.Game
 
             panel.Restart = HudUi.Button(root, "restart", rect.width - 24f * _scale, 26f * _scale,
                 "R  restart  run", FontSize(13f), _palette.HudText, PressRestart);
-            HudUi.TopLeft(panel.Restart.Root, 12f * _scale, 154f * _scale, rect.width - 24f * _scale, 26f * _scale);
+            // Under the last key line, so a line added to KeyLines pushes the button down with it.
+            HudUi.TopLeft(panel.Restart.Root, 12f * _scale, (y + 5f) * _scale, rect.width - 24f * _scale, 26f * _scale);
 
             panel.Close = HudUi.Button(root, "close", 22f * _scale, 22f * _scale, "×", FontSize(13f),
                 _palette.HudText, () => SetHelpOpen(false));
@@ -1292,13 +1306,15 @@ namespace Facet.Game
             if (!_statusDirty &&
                 _statusTick == _world.TickCount &&
                 _statusSeen == (int)_world.Status &&
-                _statusPaused == _world.Paused)
+                _statusPaused == _world.Paused &&
+                _statusGear == GearNow)
                 return;
 
             _statusDirty = false;
             _statusTick = _world.TickCount;
             _statusSeen = (int)_world.Status;
             _statusPaused = _world.Paused;
+            _statusGear = GearNow;
 
             _world.Machines.CountTurrets(out int total, out int armed);
             bool starved = armed < total;
@@ -1788,7 +1804,7 @@ namespace Facet.Game
 
                 case WavePhase.Intermission:
                     return "next wave in " + Mathf.CeilToInt(waves.IntermissionRemaining) + "s"
-                        + (_world.Paused ? string.Empty : "   ·   N starts it now");
+                        + (_world.Paused ? string.Empty : "   ·   N starts it now") + SpeedNote();
 
                 case WavePhase.Running:
                 {
@@ -1797,7 +1813,7 @@ namespace Facet.Game
                     WaveDefinition current = waves.Definition(waves.CurrentWave);
                     int left = _world.Enemies.AliveCount + waves.PendingInWave;
                     return left + " of " + (current != null ? current.Total : left) + " enemies left in this wave"
-                        + (_world.Paused ? "   ·   paused" : string.Empty);
+                        + (_world.Paused ? "   ·   paused" : string.Empty) + SpeedNote();
                 }
 
                 default:
@@ -1816,11 +1832,18 @@ namespace Facet.Game
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.hKey.wasPressedThisFrame) SetHelpOpen(!_helpOpen);
 
-            if (!_controlsDirty && _controlsPaused == _world.Paused) return;
+            int gear = _clock != null ? _clock.Gear : 1;
+            bool behind = _clock != null && _clock.FallingBehind && !_world.Paused;
+            if (!_controlsDirty && _controlsPaused == _world.Paused && _controlsGear == gear &&
+                _controlsBehind == behind) return;
             _controlsDirty = false;
             _controlsPaused = _world.Paused;
+            _controlsGear = gear;
+            _controlsBehind = behind;
 
             _controls.Pause.Label.Set(_world.Paused ? ">" : "II");
+            // The gear's word; amber when this browser cannot keep up with it, so 3x never quietly means 2x.
+            _controls.Gear.Label.Set(GearWord(), behind ? _palette.HudWarn : _palette.HudText);
         }
 
         private void SetHelpOpen(bool open)
@@ -1848,6 +1871,7 @@ namespace Facet.Game
             yield return "RMB deletes, or clears a jam";
             yield return "Esc reads  ·  C goes to the Core";
             yield return "N the wave  ·  Space  ·  R restart";
+            yield return "[ / ] speed 1x - 3x";
         }
 
         // ------------------------------------------------------------------ build bar
@@ -2982,6 +3006,7 @@ namespace Facet.Game
         private void UpdateButtons()
         {
             Dress(_controls.Pause, ButtonFill);
+            Dress(_controls.Gear, ButtonFill);
             Dress(_controls.Help, ButtonFill);
             Dress(_help.Close, ButtonFill);
             Dress(_help.Restart, ButtonFill);
@@ -3028,6 +3053,22 @@ namespace Facet.Game
         {
             if (_world != null) _world.Paused = !_world.Paused;
         }
+
+        private void PressGear() => _clock?.Cycle();
+
+        /// <summary>The active gear, or 1 with no driver's clock.</summary>
+        private int GearNow => _clock != null ? _clock.Gear : 1;
+
+        /// <summary>The wave line's tail naming the gear and its keys, so the status card says how to speed up
+        /// the wait it is describing. Empty while paused: a stopped run has no pace to talk about.</summary>
+        private string SpeedNote()
+        {
+            if (_world.Paused) return string.Empty;
+            return GearNow > 1 ? "   ·   " + GearWord() + "  [ ] speed" : "   ·   ] speeds up";
+        }
+
+        /// <summary>The gear button's word: "1x", "2x" or "3x".</summary>
+        private string GearWord() => _clock != null ? _clock.Label : "1x";
 
         private void PressRestart()
         {
@@ -3144,6 +3185,7 @@ namespace Facet.Game
         {
             public RectTransform Root;
             public HudButton Pause;
+            public HudButton Gear;
             public HudButton Help;
         }
 
