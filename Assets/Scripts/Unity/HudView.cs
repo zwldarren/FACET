@@ -213,6 +213,10 @@ namespace Facet.Game
         private bool _tooltipDirty = true;
         private int _tooltipTick = -1;
         private int _tooltipRows;
+
+        /// <summary>Did the last fill find anything to say about <see cref="_tooltipCell"/>? False for plain
+        /// ground. Read on every frame, refilled only when the cell, the tick or the HUD changes.</summary>
+        private bool _tooltipFilled;
         private float _tooltipWidth;
         private float _tooltipHeight;
 
@@ -2817,8 +2821,12 @@ namespace Facet.Game
                     _tooltipDirty = false;
                     _tooltipCell = _cursor;
                     _tooltipTick = _world.TickCount;
-                    show = FillTooltip(_cursor);
+                    _tooltipFilled = FillTooltip(_cursor);
                 }
+
+                // The cell's answer is kept with the cell: on the frames between two ticks nothing is
+                // refilled, and plain ground must stay silent there too rather than show the last card's words.
+                show = _tooltipFilled;
             }
 
             if (!show)
