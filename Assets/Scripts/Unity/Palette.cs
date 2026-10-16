@@ -450,10 +450,7 @@ namespace Facet.Game
             [Tooltip("The preview quad is near-solid: 'this door opens next' has to survive being glanced at.")]
             public float SpawnPreviewAlpha = 0.9f;
 
-            [Tooltip("Hit flash: how many ticks an enemy stays white-hot after a shot lands. Long " +
-                "enough to see, short enough that a stream of hits reads as a stream.")]
-            public int HitFlashTicks = 4;
-            [Tooltip("Hit flash: the colour an enemy's body is replaced with while it flashes.")]
+            [Tooltip("Kill burst: the colour the ring wears as it expands and fades.")]
             public Color HitFlash = new Color(1f, 1f, 1f, 1f);
 
             [Tooltip("Kill burst: how many ticks the ring is drawn for after a kill.")]

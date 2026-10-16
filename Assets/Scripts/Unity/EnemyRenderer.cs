@@ -10,29 +10,23 @@ namespace Facet.Game
     /// enemies always move. Positions interpolate between the last two ticks with the frame's Alpha, so
     /// a wave walks smoothly at any frame rate.
     ///
-    /// Two art rules land here: "colour says which side it is on, polygon count says how damaged it is"
-    /// - the body is a 3..6-sided polygon losing a side per health chunk, with the four bodies cached -
-    /// and every enemy wears the round its own group demands as a quadrant figure in the mineral colours,
-    /// so what the briefing asked for and what the walker wants are the same picture.
+    /// Two art rules land here: "colour says which side it is on, the bar above says how damaged it is"
+    /// - the body is one fixed hexagon wearing its kind's colour for the whole fight, and the health bar
+    /// hanging over it is the only place damage reads - and every enemy wears the round its own group
+    /// demands as a quadrant figure in the mineral colours, so what the briefing asked for and what the
+    /// walker wants are the same picture.
     ///
     /// The body and weakness figure may each be overridden from the Palette's <see cref="Palette.Visuals"/>:
-    /// a body override replaces the health-shaped polygon for that kind, and the figure follows the same
+    /// a body override replaces the hexagonal body for that kind, and the figure follows the same
     /// per-mineral override the belt items use, so the two keep reading as one item.
     ///
-    /// It is also the first consumer of the simulation's event stream: a shot flashes the enemy it hit,
-    /// and a kill leaves an expanding ring. Both come off <see cref="SimWorld.Events"/> - the simulation
+    /// It is also a consumer of the simulation's event stream: a kill leaves an expanding ring. Events
+    /// come off <see cref="SimWorld.Events"/> - the simulation
     /// says what happened, the view decides what it looks like - so no reaction can change the fight.</summary>
     [DefaultExecutionOrder(112)]
     public sealed class EnemyRenderer : MeshView
     {
         private readonly List<EnemySnapshot> _enemies = new List<EnemySnapshot>();
-
-        /// <summary>Enemies hit in the last few ticks, as a fixed ring of (id, expiry tick), so a wave
-        /// of hits costs no allocation and never needs pruning.</summary>
-        private const int MaxFlashes = 32;
-        private readonly int[] _flashId = new int[MaxFlashes];
-        private readonly int[] _flashUntilTick = new int[MaxFlashes];
-        private int _flashCursor;
 
         private Vector2[] _body;
 
@@ -70,16 +64,10 @@ namespace Facet.Game
             _nextWaveSpawns = new bool[World.Map.SpawnPoints.Length];
         }
 
-        /// <summary>A new map has its own entry points and enemies: the old map's sized markers and the
-        /// hit flashes pointing at gone enemies both have to go.</summary>
+        /// <summary>A new map has its own entry points: the old map's sized markers have to go.</summary>
         protected override void OnWorldRebound()
         {
             _nextWaveSpawns = new bool[World.Map.SpawnPoints.Length];
-            for (int i = 0; i < _flashId.Length; i++)
-            {
-                _flashId[i] = 0;
-                _flashUntilTick[i] = 0;
-            }
         }
 
         /// <summary>Enemies are always moving, so this view rebuilds every frame.</summary>
@@ -87,8 +75,6 @@ namespace Facet.Game
 
         protected override void AppendFrame(in ViewFrame frame)
         {
-            SampleHits();
-
             World.Enemies.GetEnemies(_enemies);
             float outlineWidth = OutlineWidth;
             BeginSprites();
@@ -164,38 +150,8 @@ namespace Facet.Game
                     look.HealthBarFill);
             }
         }
-        /// <summary>Read the tick's event stream and note which enemies a shot landed on. The simulation
-        /// already decided what happened, so there is no health comparison or edge detection here, and a
-        /// dropped event costs one frame of flash.</summary>
-        private void SampleHits()
-        {
-            SimEventBuffer events = World.Events;
-            int until = World.TickCount + Colors.Enemies.HitFlashTicks;
-
-            for (int i = 0; i < events.Count; i++)
-            {
-                SimEvent e = events[i];
-                if (e.Kind != SimEventKind.EnemyDamaged) continue;
-
-                _flashId[_flashCursor] = e.EnemyId;
-                _flashUntilTick[_flashCursor] = until;
-                _flashCursor = (_flashCursor + 1) % MaxFlashes;
-            }
-        }
-
-        /// <summary>Is this enemy inside its flash window? The window's passing expires a slot without
-        /// anyone sweeping the ring.</summary>
-        private bool IsFlashing(int id)
-        {
-            int now = World.TickCount;
-            for (int i = 0; i < MaxFlashes; i++)
-                if (_flashId[i] == id && _flashUntilTick[i] > now) return true;
-
-            return false;
-        }
-
-        /// <summary>An expanding, fading ring where each enemy recently died - the view's answer to the
-        /// simulation's "killed here", hung off the event stream rather than a tracked health edge.</summary>
+        /// <summary>Read the tick's event stream for kills - the expanding ring is the view's answer to
+        /// the simulation's "killed here", hung off the stream rather than a tracked health edge.</summary>
         private void AppendKillBursts()
         {
             SimEventBuffer events = World.Events;
@@ -232,7 +188,8 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>The body: the health-shaped polygon unless this kind's override replaces it.</summary>
+        /// <summary>The body: a fixed hexagon in the kind's own colour, unless this kind's override
+        /// replaces it. Damage never touches the colour - the bar above is where health reads.</summary>
         private void AppendEnemyBody(in EnemySnapshot enemy, Vector2 at, Color outline, float outlineWidth)
         {
             VisualStyle style = _styles[(int)enemy.Kind];
@@ -250,10 +207,7 @@ namespace Facet.Game
                 return;
             }
 
-            // Briefly flash the body when a shot lands.
-            Color body = IsFlashing(enemy.Id) ? Colors.Enemies.HitFlash : Colors.EnemyColor(enemy.Kind);
-            // Health is shown by the bar; the body keeps its full-health shape.
-            AppendPolygon(_body, at, body, outline, outlineWidth);
+            AppendPolygon(_body, at, Colors.EnemyColor(enemy.Kind), outline, outlineWidth);
         }
 
         /// <summary>The wave entry points, each a hollow frame at one alpha this frame: steady and faint
