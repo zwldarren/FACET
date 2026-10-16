@@ -6,6 +6,8 @@
 # Builds/ is git-ignored (it is an artefact and it is 13 MB), so this script mirrors the build into
 # docs/ and lets the repository carry that instead. docs/ is a generated mirror - never edit it,
 # every run replaces it wholesale so a file the build stopped emitting cannot linger and be served.
+# The one exception is version snapshots (Tools/snapshot-pages.sh): frozen builds under their own
+# subfolder - docs/ root stays the latest, a snapshot keeps a past build playable at its own URL.
 #
 # Usage:  bash Tools/publish-pages.sh [--no-build]
 #
@@ -41,8 +43,34 @@ fi
 # ---------------------------------------------------------------- mirror
 # Replaced wholesale: a stale file is the one failure mode of a mirror that costs nothing to avoid,
 # and `cp -R` alone would leave behind whatever a renamed build output used to be called.
+#
+# Version snapshots are directories under docs/ carrying a .snapshot marker (written by
+# Tools/snapshot-pages.sh). The clear below takes them with everything else, so each one is
+# re-materialized from the last commit first - the mirror stays wholesale-replaceable and a
+# committed snapshot survives every publish. A snapshot taken but not yet committed has no
+# protection: snapshot, commit, then publish.
+snapshot_names="$(git -C "$PROJECT_ROOT" ls-tree --name-only HEAD:docs 2>/dev/null || true)"
+preserved=""
+for name in $snapshot_names; do
+    if git -C "$PROJECT_ROOT" cat-file -e "HEAD:docs/$name/.snapshot" 2>/dev/null; then
+        preserved="$preserved $name"
+    fi
+done
+for name in $preserved; do
+    if [ -e "$BUILD_DIR/$name" ]; then
+        echo "error: snapshot '$name' collides with a directory the build itself emits - rename it." >&2
+        exit 1
+    fi
+done
+
 rm -rf "$PUBLISH_DIR"
 mkdir -p "$PUBLISH_DIR"
+# git archive of a tree streams the tree's contents, not the directory itself, so each snapshot is
+# extracted into a directory of its own name.
+for name in $preserved; do
+    mkdir -p "$PUBLISH_DIR/$name"
+    git -C "$PROJECT_ROOT" archive "HEAD:docs/$name" | tar -x -C "$PUBLISH_DIR/$name"
+done
 cp -R "$BUILD_DIR/." "$PUBLISH_DIR/"
 
 # Pages runs Jekyll over what it serves, and Jekyll drops files it reads as its own - anything under
