@@ -194,6 +194,11 @@ namespace Facet.Game
 
         private bool _tutorialUp;
 
+        /// <summary>The player's own say over the "how to play" card: null until they press its hide button
+        /// or <c>T</c>, after which their choice holds for the rest of the session - across restarts and map
+        /// changes - instead of the campaign's first-map default. See <see cref="ShowTutorial"/>.</summary>
+        private bool? _tutorialChoice;
+
         /// <summary>The tile under the pointer, pushed by the driver each frame: the cursor tooltip's
         /// one input. (-1,-1) is the driver's own "no cursor" answer and hides the tooltip.</summary>
         private Int2 _cursor = new Int2(-1, -1);
@@ -259,8 +264,14 @@ namespace Facet.Game
 
         /// <summary>Is the "how to play" card up? The one predicate the card's claim on the pointer, the
         /// toast's clearance and the driver's camera rig all read, so no two pieces of the frame can disagree
-        /// about whether the card is there.</summary>
-        private bool ShowTutorial => _campaign != null && _campaign.IsFirstMap;
+        /// about whether the card is there. Up by default on the campaign's first map; once the player has
+        /// hidden or shown it themselves, their choice wins on every map.</summary>
+        private bool ShowTutorial => _campaign != null && (_tutorialChoice ?? _campaign.IsFirstMap);
+
+        /// <summary>Is the "how to play" card on screen this frame? The driver relays it to the camera rig
+        /// and the locator, whose bounds give up the strip the card wears - the way it relays
+        /// <see cref="InfoGrown"/>.</summary>
+        public bool TutorialUp => ShowTutorial;
 
         /// <summary>
         /// The coin this run is paid in, as a mark: the <em>complete</em> shape of the map's own mineral.
@@ -584,23 +595,36 @@ namespace Facet.Game
             HudUi.TopLeft(stripe.Rect, 0f, 0f, 3f * _scale, rect.height);
 
             HudText title = Label(root, "title", 17f, FontStyle.Bold, TextAnchor.UpperLeft);
-            HudUi.TopLeft(title.Rect, 14f * _scale, 10f * _scale, rect.width - 28f * _scale, 24f * _scale);
+            HudUi.TopLeft(title.Rect, 14f * _scale, 10f * _scale, rect.width - 100f * _scale, 24f * _scale);
             title.Set("HOW TO PLAY", _palette.HudAccent);
 
-            // The card's one job is being read, and eleven design units was a size that had to be leaned
-            // into. The type is the size of the room this card is given (HudLayout.TutorialHeight), so the
-            // two numbers move together and the last line never runs off the bottom.
+            // The player's way out: the card is a first-map default, not a rule, and the key on the button
+            // is the way back once it is gone (the help card names it too).
+            panel.Hide = HudUi.Button(root, "hide", 70f * _scale, 22f * _scale, "hide  (T)", FontSize(11f),
+                _palette.HudText, () => SetTutorialShown(false));
+            HudUi.TopRight(panel.Hide.Root, 10f * _scale, 9f * _scale, 70f * _scale, 22f * _scale);
+
+            // The card's one job is being read. Each step is one plain instruction with no hand-made line
+            // breaks - wrapping is the text's job, and breaks written for one width are ragged at every other.
+            // Seven lines at this size fill well under the body's room (HudLayout.TutorialHeight less the
+            // footer), so the last step never runs off the bottom. Only what the first map unlocks is named:
+            // the stacker is not on it.
             HudText body = Label(root, "body", 13f, FontStyle.Normal, TextAnchor.UpperLeft, wrap: true);
-            HudUi.TopLeft(body.Rect, 14f * _scale, 42f * _scale, rect.width - 28f * _scale, 158f * _scale);
+            HudUi.TopLeft(body.Rect, 14f * _scale, 40f * _scale, rect.width - 28f * _scale, 134f * _scale);
             body.Set(
-                "1. Mine ore and carry it back to the Core on belts.\n" +
-                "2. A complete shape - all four quadrants - is spendable once it reaches the Core.\n" +
-                "3. A cutter forks a belt: what comes in its back runs straight on out its front, and the\n" +
-                "   other half leaves a lane over. Q/E turns the whole fork, blade and all.\n" +
-                "4. A line that goes nowhere backs up and stops its machine: lay one more belt, or put a\n" +
-                "   Sink (X) on the end to eat what nothing wants. A jammed red segment takes a right-click.\n" +
-                "5. Feed a turret (0) the round the demand figure shows - anything else deals a half.",
+                "1. Put a Drill (2) on ore and drag Belts (1) to the Core.\n" +
+                "2. Each full shape that reaches the Core earns 1 coin.\n" +
+                "3. Each wave is weak to the shape shown next to it above.\n" +
+                "4. Make that shape: a Cutter (3) splits it in half, a Rotator (4) turns a piece. " +
+                "Press Q/E to turn a machine before you place it.\n" +
+                "5. Belt that shape into a Turret (0). The exact shape does full damage, anything else half.",
                 _palette.HudText);
+
+            HudText footer = Label(root, "footer", 11f, FontStyle.Normal, TextAnchor.UpperLeft, wrap: true);
+            HudUi.TopLeft(footer.Rect, 14f * _scale, rect.height - 28f * _scale, rect.width - 28f * _scale,
+                20f * _scale);
+            footer.Set("Line stuck? Right-click the red belt, or end a spare lane in a Sink (X).",
+                _palette.MachineIdle);
 
             panel.Root.gameObject.SetActive(ShowTutorial);
             return panel;
@@ -1809,12 +1833,14 @@ namespace Facet.Game
         // ------------------------------------------------------------------ controls card
 
         /// <summary>The controls cluster's one moving part is the pause button's word; the help card is
-        /// opened and closed by its button and by <c>H</c>, which the HUD reads itself - a view concern, the
-        /// way the camera rig owns <c>C</c>. Nothing here is simulation state.</summary>
+        /// opened and closed by its button and by <c>H</c>, and the "how to play" card by its hide button and
+        /// by <c>T</c>, both read by the HUD itself - a view concern, the way the camera rig owns <c>C</c>.
+        /// Nothing here is simulation state.</summary>
         private void UpdateControls()
         {
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.hKey.wasPressedThisFrame) SetHelpOpen(!_helpOpen);
+            if (keyboard != null && keyboard.tKey.wasPressedThisFrame) SetTutorialShown(!ShowTutorial);
 
             if (!_controlsDirty && _controlsPaused == _world.Paused) return;
             _controlsDirty = false;
@@ -1830,6 +1856,11 @@ namespace Facet.Game
             _help.Root.gameObject.SetActive(open);
         }
 
+        /// <summary>Record the player's choice for the "how to play" card. The card itself follows on this
+        /// frame's <see cref="UpdateTutorial"/>, and the rig and locator on the driver's next relay of
+        /// <see cref="TutorialUp"/>.</summary>
+        private void SetTutorialShown(bool shown) => _tutorialChoice = shown;
+
         /// <summary>The tile under the pointer, pushed by the driver every frame - the tooltip reads
         /// what the click would read, and the driver is the one place that already knows the answer.</summary>
         public void SetCursor(Int2 cell) => _cursor = cell;
@@ -1844,7 +1875,7 @@ namespace Facet.Game
             yield return BuildInput.KeyRangeText() + " or click builds";
             yield return "the same one again drops it";
             yield return "Q / E turn  ·  drag lays belts";
-            yield return "a cutter forks a belt: Q/E turns it";
+            yield return "T how to play  ·  H this card";
             yield return "RMB deletes, or clears a jam";
             yield return "Esc reads  ·  C goes to the Core";
             yield return "N the wave  ·  Space  ·  R restart";
@@ -2985,6 +3016,7 @@ namespace Facet.Game
             Dress(_controls.Help, ButtonFill);
             Dress(_help.Close, ButtonFill);
             Dress(_help.Restart, ButtonFill);
+            if (_tutorial.Root.gameObject.activeSelf) Dress(_tutorial.Hide, ButtonFill);
             Dress(_info.TurnLeft, ButtonFill);
             Dress(_info.TurnRight, ButtonFill);
             if (_info.Inspect.Root.gameObject.activeSelf) Dress(_info.Inspect, ButtonFill);
@@ -3213,6 +3245,7 @@ namespace Facet.Game
         private sealed class TutorialPanel
         {
             public RectTransform Root;
+            public HudButton Hide;
         }
 
         private sealed class BarPanel

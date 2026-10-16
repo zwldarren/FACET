@@ -149,6 +149,11 @@ namespace Facet.Game
             return Mathf.Clamp(notches, -3f, 3f);
         }
 
+        /// <summary>Say whether the HUD's "how to play" card is up. The player can hide or show it mid-map, so
+        /// the driver relays it every frame; the pan bound follows on the next smoothing step, which clamps
+        /// against it anew.</summary>
+        public void SetTutorialUp(bool up) => _tutorialUp = up;
+
         /// <summary>The pan bound for a given zoom; the rule is <see cref="PanLimits"/>. The rig only hands it the
         /// screen, the zoom and <see cref="edgeSlackScreens"/>.</summary>
         private Vector3 Clamp(Vector3 position, float zoom)
