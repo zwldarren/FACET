@@ -43,6 +43,7 @@ namespace Facet.Game
         }
 
         private bool _pauseToggleRequested;
+        private int _gearSteps;
         private bool _startWaveRequested;
         private bool _restartRequested;
         private bool _primaryReleased;
@@ -74,6 +75,15 @@ namespace Facet.Game
         {
             bool value = _pauseToggleRequested;
             _pauseToggleRequested = false;
+            return value;
+        }
+
+        /// <summary>Net gear change asked for since the last call: +1 per ], -1 per [. Cleared by the call.
+        /// Read by the driver, which owns the gear; the world never sees it.</summary>
+        public int ConsumeGearSteps()
+        {
+            int value = _gearSteps;
+            _gearSteps = 0;
             return value;
         }
 
@@ -118,6 +128,10 @@ namespace Facet.Game
                 if (keyboard.pKey.wasPressedThisFrame) _pauseToggleRequested = true;
                 if (keyboard.nKey.wasPressedThisFrame) _startWaveRequested = true;
                 if (keyboard.rKey.wasPressedThisFrame) _restartRequested = true;
+
+                // [ and ] step the speed gear down and up.
+                if (keyboard.leftBracketKey.wasPressedThisFrame) _gearSteps--;
+                if (keyboard.rightBracketKey.wasPressedThisFrame) _gearSteps++;
             }
 
             var mouse = Mouse.current;
