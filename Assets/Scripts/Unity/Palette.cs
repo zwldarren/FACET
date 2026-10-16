@@ -56,6 +56,10 @@ namespace Facet.Game
         [Tooltip("Belt direction chevron. Reads as 'this way'.")]
         public Color BeltArrow = new Color(0.427f, 0.455f, 0.502f, 1f);
 
+        [Tooltip("The rails framing a belt bed on both sides - darker than the bed, so a run reads as a track " +
+            "with an inside and an edge, the way a conveyor does, and a turn reads as one curved piece.")]
+        public Color BeltRail = new Color(0.545f, 0.573f, 0.620f, 1f);
+
         [Tooltip("A jammed belt segment - the twist's failure state, so it has to shout.")]
         public Color Jam = new Color(0.878f, 0.263f, 0.263f, 1f);
 
@@ -299,6 +303,19 @@ namespace Facet.Game
             public float ChevronBack = 0.12f;
             [Tooltip("Direction chevron: half the base width.")]
             public float ChevronHalfWidth = 0.18f;
+
+            [Tooltip("Rail thickness in tiles: the darker edge drawn outside the bed on both sides. 0 draws no " +
+                "rails.")]
+            public float RailWidth = 0.045f;
+
+            [Tooltip("How many segments the outer arc of a turning belt is drawn with. A turn is a quarter " +
+                "circle rather than a square elbow; 1 draws the old square corner's chamfer.")]
+            public int CornerSegments = 6;
+
+            [Tooltip("How fast the chevrons slide along the belt, as a multiple of the belt's own speed: 1 keeps " +
+                "them moving with the items riding it. 0 holds them still at the cell centre. They stop while the " +
+                "game is paused or over, and on a jammed segment.")]
+            public float ChevronScroll = 1f;
         }
 
         [Serializable]

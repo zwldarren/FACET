@@ -13,8 +13,17 @@ namespace Facet.Core
         /// <summary>Shape riding this cell, or nothing.</summary>
         public Shape Item;
 
-        /// <summary>0 at the cell's entry edge, 1 at its exit edge. Sits at 1 while queued.</summary>
+        /// <summary>0 at the cell's entry edge, 1 at its exit edge. Sits at 1 while queued. The path between
+        /// is an L through the cell centre: the first half runs along <see cref="Entry"/>, the second along
+        /// <see cref="Direction"/>, so a straight cell (the two equal) is the straight line it always was.</summary>
         public float Progress;
+
+        /// <summary>Which way the item was travelling when it came onto this cell - the side it came in
+        /// through is <c>Entry.Opposite()</c>. Set by every way an item arrives: a hand-off from the belt
+        /// behind (that belt's <see cref="Direction"/>), a machine's delivery (the side it pushes out of),
+        /// or a bare spawn (this cell's own <see cref="Direction"/>, i.e. straight through). Meaningless on
+        /// an empty cell.</summary>
+        public Dir Entry;
 
         /// <summary>Where the item was at the end of the previous tick, for view interpolation.</summary>
         public Vec2 PreviousWorldPosition;
@@ -246,9 +255,17 @@ namespace Facet.Core
             return true;
         }
 
-        /// <summary>Drop an item onto an empty, unjammed belt cell. Drills use this; so do the tests,
-        /// which is why it is not gated behind anything.</summary>
+        /// <summary>Drop an item onto an empty, unjammed belt cell, entering straight along the cell's own
+        /// direction. The tests use this, which is why it is not gated behind anything; a machine that
+        /// knows which side it delivers from uses the overload that says so.</summary>
         public bool TrySpawnItem(Int2 cell, Shape shape)
+            => Has(cell) && TrySpawnItem(cell, shape, _state[_grid.Index(cell)].Direction);
+
+        /// <summary>Drop an item onto an empty, unjammed belt cell as if it had arrived travelling
+        /// <paramref name="entry"/>: it starts on the edge it came in through and rides through the centre
+        /// to the cell's exit, so a machine beside a belt that turns delivers into the turn rather than
+        /// onto the far edge. Drills, operators and pipes deliver through this.</summary>
+        public bool TrySpawnItem(Int2 cell, Shape shape, Dir entry)
         {
             if (shape.IsEmpty || !Has(cell)) return false;
 
@@ -257,7 +274,8 @@ namespace Facet.Core
 
             _state[i].Item = shape;
             _state[i].Progress = 0f;
-            _state[i].PreviousWorldPosition = WorldPositionOf(cell, 0f, _state[i].Direction);
+            _state[i].Entry = entry;
+            _state[i].PreviousWorldPosition = WorldPositionOf(cell, 0f, entry, _state[i].Direction);
             return true;
         }
 
@@ -306,7 +324,7 @@ namespace Facet.Core
             for (int i = 0; i < _state.Length; i++)
             {
                 if (!_state[i].HasItem) continue;
-                _state[i].PreviousWorldPosition = WorldPositionOf(_grid.CellOf(i), _state[i].Progress, _state[i].Direction);
+                _state[i].PreviousWorldPosition = PositionOf(i);
             }
         }
 
@@ -354,6 +372,9 @@ namespace Facet.Core
                 _claimed[n] = true;
                 _state[n].Item = _state[i].Item;
                 _state[n].Progress = 0f;
+                // It came in travelling the way the cell behind points, whichever way this cell points -
+                // so it starts on the shared edge, where the cell behind left it, and turns at the centre.
+                _state[n].Entry = _state[i].Direction;
                 _state[n].PreviousWorldPosition = _state[i].PreviousWorldPosition;
 
                 _state[i].Item = Shape.None;
@@ -470,17 +491,36 @@ namespace Facet.Core
                 {
                     Shape = s.Item,
                     PreviousPosition = s.PreviousWorldPosition,
-                    Position = WorldPositionOf(cell, s.Progress, s.Direction),
+                    Position = WorldPositionOf(cell, s.Progress, s.Entry, s.Direction),
                 });
             }
         }
 
-        /// <summary>World position of an item at a given progress. Progress 0 sits half a tile before the
-        /// cell centre and 1 half a tile past it, so progress 1 of one cell and progress 0 of its successor
-        /// are the same point - a hand-off never visibly jumps.</summary>
-        private Vec2 WorldPositionOf(Int2 cell, float progress, Dir direction)
+        /// <summary>Where the item on cell <paramref name="index"/> is now.</summary>
+        private Vec2 PositionOf(int index)
         {
-            return _grid.CellCenter(cell) + direction.ToVec() * (progress - 0.5f);
+            ref readonly BeltState s = ref _state[index];
+            return WorldPositionOf(_grid.CellOf(index), s.Progress, s.Entry, s.Direction);
+        }
+
+        /// <summary>
+        /// World position of an item at a given progress along its cell's L. Progress 0 sits on the edge it
+        /// came in through (half a tile behind the centre along <paramref name="entry"/>), 0.5 on the centre,
+        /// and 1 on the exit edge (half a tile past the centre along <paramref name="exit"/>). Progress 1 of
+        /// one cell and progress 0 of its successor are therefore the same point whichever way either cell
+        /// turns - a hand-off never visibly jumps - and the path is one tile long either way, so a turn costs
+        /// no throughput. With <paramref name="entry"/> equal to <paramref name="exit"/> this is the straight
+        /// line a belt has always drawn.
+        ///
+        /// Public so a view (or a test) that wants "where would an item be" asks the one statement the tick
+        /// uses rather than re-deriving it.
+        /// </summary>
+        public Vec2 WorldPositionOf(Int2 cell, float progress, Dir entry, Dir exit)
+        {
+            Vec2 centre = _grid.CellCenter(cell);
+            return progress < 0.5f
+                ? centre + entry.ToVec() * (progress - 0.5f)
+                : centre + exit.ToVec() * (progress - 0.5f);
         }
     }
 }

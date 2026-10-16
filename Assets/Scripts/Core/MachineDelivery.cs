@@ -154,15 +154,24 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// An outlet: a belt on this side pointing *away* from the machine. Whether it has room is
+        /// An outlet: a belt on this side that does not point back at the machine - the same statement as
+        /// "not an input" (<see cref="TryIncomingAt"/>), so the two sets stay disjoint and no belt is both.
+        /// The belt takes the delivery in from the machine-facing edge and sends it out along its own
+        /// direction, turning inside the one cell if it has to - which is what lets a machine with a single
+        /// free cell beside rock, water or a wall still get its product out. Whether it has room is
         /// <see cref="BeltField.TrySpawnItem"/>'s question, asked again per push.
         ///
         /// Ports are read off the belts rather than stored on the machine, so a stacker's two outlets are
         /// the same kind of thing as a splitter's four: re-pointing one belt re-wires the machine, and a
-        /// machine with no belt pointing away waits instead of pushing into a dead end.
+        /// machine with no outlet belt waits instead of pushing into a dead end.
         /// </summary>
         public static bool IsOutput(BeltField belts, Int2 cell, Dir side)
-            => belts.TryGet(cell + side.Offset(), out BeltState belt) && belt.Direction == side;
+            => belts.TryGet(cell + side.Offset(), out BeltState belt) && IsOutletDirection(belt.Direction, side);
+
+        /// <summary>The outlet rule on its own: a belt on <paramref name="side"/> of a machine pointing
+        /// <paramref name="beltDirection"/> carries the machine's product unless it points straight back in.
+        /// One statement, read by the push, the port masks and the drill alike.</summary>
+        public static bool IsOutletDirection(Dir beltDirection, Dir side) => beltDirection != side.Opposite();
 
         /// <summary>
         /// Push <paramref name="shape"/> out through the first outlet with room, starting at the
@@ -199,11 +208,11 @@ namespace Facet.Core
         /// <summary>
         /// Push one item out through exactly one named side. The cutter's rule: each piece of a cut leaves
         /// by the front of its own tile - the one the belt fed, and the one a lane over - so the machine does
-        /// not choose an outlet per item, the piece does. False when there is no belt pointing away there, or
+        /// not choose an outlet per item, the piece does. False when there is no outlet belt there, or
         /// no room on it; the caller keeps the piece buffered and tries again next tick.
         /// </summary>
         public static bool TryPushOutSide(BeltField belts, Int2 cell, Dir side, Shape shape)
-            => !shape.IsEmpty && IsOutput(belts, cell, side) && belts.TrySpawnItem(cell + side.Offset(), shape);
+            => !shape.IsEmpty && IsOutput(belts, cell, side) && belts.TrySpawnItem(cell + side.Offset(), shape, side);
 
         /// <summary>
         /// Take the first ready item delivered into <paramref name="cell"/> off its belt, in the fixed
@@ -214,7 +223,7 @@ namespace Facet.Core
         ///
         /// The intake mirror of <see cref="TryPushOut"/>, and the one rule for every machine that picks
         /// up and holds what it takes (the splitter hub and the sorter), put here so "an outlet is a
-        /// belt pointing away" and "an intake is a belt pointing in" cannot drift apart.
+        /// belt not pointing in" and "an intake is a belt pointing in" cannot drift apart.
         ///
         /// A jammed belt is skipped: these machines carry what they take to another side, so taking a
         /// jammed item would move it past the segment the player is meant to clear and hide the mistake.
@@ -296,8 +305,8 @@ namespace Facet.Core
         /// <paramref name="inMask"/>: every side a belt points at the machine from - the sides it can be
         /// fed on, which is what makes a stub pointing inward read as an input.
         ///
-        /// <paramref name="outMask"/>: every side a belt points away on, when the machine's kind has an
-        /// output there. A drill's facing <em>is</em> its output (exactly one); a cutter's is the side it
+        /// <paramref name="outMask"/>: every side with an outlet belt on it (<see cref="IsOutletDirection"/>:
+        /// anything not pointing back in), when the machine's kind has an output there. A drill's facing <em>is</em> its output (exactly one); a cutter's is the side it
         /// faces, on each of the two tiles it stands on (the two pieces of its cut leave by the front of
         /// one tile each); a rotator's is the side it faces; a stacker, splitter and sorter read their
         /// outlets off the belts around them (every side wired that way); a pipe (lands two cells ahead) and
@@ -324,7 +333,7 @@ namespace Facet.Core
                 if (!belts.TryGet(cell + side.Offset(), out BeltState belt)) continue;
 
                 if (belt.Direction == side.Opposite()) inMask = inMask.With(side);
-                else if (belt.Direction == side && HasOutputOn(behavior, machine.Direction, side))
+                else if (IsOutletDirection(belt.Direction, side) && HasOutputOn(behavior, machine.Direction, side))
                     outMask = outMask.With(side);
             }
         }

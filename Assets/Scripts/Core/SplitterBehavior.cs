@@ -2,7 +2,7 @@ namespace Facet.Core
 {
     /// <summary>
     /// The balancer: one hub whose four ports are read off the belts around it every tick - a belt
-    /// pointing in is an input, one pointing away an output. It holds one item and pushes it round-robin
+    /// pointing in is an input, any other an output. It holds one item and pushes it round-robin
     /// across the outputs, skipping full or jammed ones: balanced distribution by default, backpressure
     /// (not loss) when every outlet is blocked.
     /// </summary>

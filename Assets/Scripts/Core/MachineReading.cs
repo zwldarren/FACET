@@ -211,7 +211,7 @@ namespace Facet.Core
         /// <summary>The one "this machine has nowhere to push" sentence. Five behaviours can wait on a
         /// wired outlet, and the wording is one sentence said here, not five copies waiting to drift.</summary>
         private static ReadingNote NoOutlet()
-            => new ReadingNote("no outlet - lay a belt pointing away from it", NoteSeverity.Warn);
+            => new ReadingNote("no outlet - lay a belt beside it that does not point into it", NoteSeverity.Warn);
 
         /// <summary>
         /// What this building is doing right now, dispatched on its behaviour. The geometry a sentence
@@ -229,11 +229,13 @@ namespace Facet.Core
                 {
                     Int2 onto = DrillLanding(cell, machine.Direction);
                     Quad mineral = world.Terrain.OreAt(cell);
-                    return world.TileGrid.Get(onto).Takes()
+                    // The drill pushes through the same outlet rule as every machine (its out mask): a belt
+                    // in front that does not point back into it, whichever way it then runs.
+                    return !machine.OutMask.IsEmpty
                         ? new ReadingNote("mining " + Shape.MineralName(mineral) + " onto " + onto,
                             NoteSeverity.Neutral)
-                        : new ReadingNote("nothing to push onto at " + onto + " - lay a belt facing it",
-                            NoteSeverity.Warn);
+                        : new ReadingNote("nothing to push onto at " + onto +
+                            " - lay a belt there that does not point into it", NoteSeverity.Warn);
                 }
 
                 case BehaviorKind.Cutter:
@@ -468,10 +470,10 @@ namespace Facet.Core
                 : "top from bottom";
 
         /// <summary>The sides a machine's belts wire it to: a belt pointing in is an input and a belt
-        /// pointing away is an output, both masks straight off <see cref="MachineSnapshot"/>.</summary>
+        /// not pointing in is an output, both masks straight off <see cref="MachineSnapshot"/>.</summary>
         public static string Ports(in MachineSnapshot machine)
             => machine.InMask.IsEmpty && machine.OutMask.IsEmpty
-                ? "no belts wired - a belt pointing in feeds it, one pointing away empties it"
+                ? "no belts wired - a belt pointing in feeds it, any other belt beside it empties it"
                 : "in " + Dirs(machine.InMask) + "  ·  out " + Dirs(machine.OutMask);
 
         // ---------------------------------------------------------------- the badge and the spin

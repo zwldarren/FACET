@@ -22,6 +22,7 @@ MonoBehaviour:
   CursorEdgePixels: 5
   Belt: {r: 0.804, g: 0.82, b: 0.847, a: 1}
   BeltArrow: {r: 0.427, g: 0.455, b: 0.502, a: 1}
+  BeltRail: {r: 0.545, g: 0.573, b: 0.62, a: 1}
   Jam: {r: 0.878, g: 0.263, b: 0.263, a: 1}
   ShapePatchBed: {r: 0.902, g: 0.898, b: 0.871, a: 1}
   MachineBody: {r: 0.361, g: 0.408, b: 0.482, a: 1}

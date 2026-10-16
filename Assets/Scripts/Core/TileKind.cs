@@ -40,7 +40,7 @@ namespace Facet.Core
         Pipe = 6,
 
         /// <summary>One hub whose ports are read off the belts around it: a belt pointing in is an
-        /// input, a belt pointing away is an output, so 1-in-3-out, 3-in-1-out and 2-in-2-out are
+        /// input, any other belt beside it is an output, so 1-in-3-out, 3-in-1-out and 2-in-2-out are
         /// the same building on different streets.</summary>
         Splitter = 7,
 

@@ -42,7 +42,9 @@ namespace Facet.Core
             // Land on the belt two cells ahead. No belt or no room: the item waits at the far end - and that
             // wait is a stoppage the belts behind it cannot report, because the pipe is a machine holding an
             // item rather than a segment with nowhere to put one.
-            bool landed = ctx.Belts.TrySpawnItem(MachineReading.PipeLanding(cell, pipe.Direction), pipe.Carried);
+            // It lands travelling the way the pipe faces, so a landing belt that turns carries it round.
+            bool landed = ctx.Belts.TrySpawnItem(MachineReading.PipeLanding(cell, pipe.Direction), pipe.Carried,
+                pipe.Direction);
             if (landed) pipe.Carried = Shape.None;
 
             MachineClock.Waiting(ref pipe, waiting: !landed);
