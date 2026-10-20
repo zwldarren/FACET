@@ -37,6 +37,10 @@ namespace Facet.Game
         /// <summary>Scratch barrel points, reused so a per-machine-per-frame array is not allocated.</summary>
         private readonly Vector2[] _barrel = new Vector2[4];
 
+        /// <summary>Scratch for the drill's four frame bars, written and read in the same call - the one
+        /// layout the visible frame and its shadow share.</summary>
+        private readonly Rect[] _frameBars = new Rect[4];
+
         /// <summary>The shipped silhouettes, cached; a procedural override supplies its own points.</summary>
         private Vector2[] _operatorBody;
         private Vector2[] _turretBody;
@@ -54,12 +58,20 @@ namespace Facet.Game
         private Vector2[] _sinkBody;
         private Vector2[] _sinkHole;
 
+        /// <summary>The cutter's body, one per facing: the fork lies along its flow, so the four facings
+        /// are four shapes rather than one rotated - which is what lets every body be rounded once, at
+        /// start-up, instead of per machine per frame.</summary>
+        private Vector2[][] _cutterBodies;
+
         private ShapeIconSet _carriedIcons;
         private ShapeIconSet _roundIcons;
         private ShapeIconSet _pipeIcons;
         private ShapeIconSet _sorterIcons;
 
         protected override Palette.Layer Layer => Colors.MachineLayer;
+
+        /// <summary>Machines are things standing on the ground, so each one drops a shadow behind it.</summary>
+        protected override bool CastsShadows => true;
 
         /// <summary>The player's authored look for one building, or null when none is authored - the
         /// normal case, since the override block is purely additive. Callers read through
@@ -102,24 +114,42 @@ namespace Facet.Game
         {
             Palette.MachineLook look = Colors.Machines;
 
+            // Every body is the same silhouette with its points taken off: one corner radius across the
+            // whole family is what makes a board of them read as cast parts rather than cut paper.
+            float corner = look.CornerRadius;
+
             // First vertex at 30 degrees puts a flat edge up, matching the ground ore marks; a
             // procedural override supplies its own. The three operators share this chambered body - what
             // tells a cutter from a rotator on screen is its badge and its role colour, exactly as a
             // second gun is the first one's octagon in a darker body colour.
-            _operatorBody = ProcMesh.RegularPolygon(6, look.OperatorRadius, 30f);
-            _turretBody = ProcMesh.RegularPolygon(8, look.TurretRadius);
-            _splitterHub = ProcMesh.RegularPolygon(4, look.SplitterHubHalfSize * 1.4143f, 45f);
+            _operatorBody = ProcMesh.Rounded(ProcMesh.RegularPolygon(6, look.OperatorRadius, 30f), corner);
+            _turretBody = ProcMesh.Rounded(ProcMesh.RegularPolygon(8, look.TurretRadius), corner);
+            _splitterHub = ProcMesh.Rounded(
+                ProcMesh.RegularPolygon(4, look.SplitterHubHalfSize * 1.4143f, 45f), corner);
 
             // The sorter's triangle: first vertex at angle 0 points east, rotated to the machine's direction.
-            _sorterBody = ProcMesh.RegularPolygon(3, look.SorterRadius);
+            // A little less rounding than the blocks get: the apex is the machine's facing readout, and a
+            // point that has been taken right off stops pointing.
+            _sorterBody = ProcMesh.Rounded(ProcMesh.RegularPolygon(3, look.SorterRadius), corner * 0.75f);
 
             // The wall's block: a square inset from the cell edge, so neighbours still show the grid line.
-            _wallBody = ProcMesh.RegularPolygon(4, (0.5f - look.WallInset) * 1.4143f, 45f);
+            _wallBody = ProcMesh.Rounded(
+                ProcMesh.RegularPolygon(4, (0.5f - look.WallInset) * 1.4143f, 45f), corner);
 
             // The sink: the same kind of block with a pit cut in it. Both are a square, because both are a
             // building with no machinery on top - what tells them apart is the hole, not the outline.
-            _sinkBody = ProcMesh.RegularPolygon(4, (0.5f - look.SinkInset) * 1.4143f, 45f);
-            _sinkHole = ProcMesh.RegularPolygon(4, look.SinkHoleHalfSize * 1.4143f, 45f);
+            _sinkBody = ProcMesh.Rounded(
+                ProcMesh.RegularPolygon(4, (0.5f - look.SinkInset) * 1.4143f, 45f), corner);
+            _sinkHole = ProcMesh.Rounded(
+                ProcMesh.RegularPolygon(4, look.SinkHoleHalfSize * 1.4143f, 45f), corner * 0.6f);
+
+            // The cutter's fork lies along its flow, so its four facings are four shapes rather than one
+            // turned: cached here, which is what lets a per-frame view append a rounded body that was
+            // built once.
+            _cutterBodies = new Vector2[4][];
+            for (int facing = 0; facing < _cutterBodies.Length; facing++)
+                _cutterBodies[facing] = ProcMesh.Rounded(
+                    CutterBodyFigure((Dir)facing, look.OperatorRadius), corner);
 
             // The badges follow the item overrides, so a re-skinned mineral reads the same everywhere.
             // (Decomposer* are the chamber's two radii; the field names keep their old spelling because
@@ -172,28 +202,27 @@ namespace Facet.Game
         {
             var centre = CellCentre(machine.Cell);
             VisualStyle style = Over(machine.Build);
+            Palette.MachineLook look = Colors.Machines;
 
             if (IsSprite(style))
             {
+                // A sprite replaces the body's mark, not its footprint: the frame is what stands on the
+                // ground, so the shipped frame is what drops the shadow under an authored one.
+                AppendFrameShadow(machine.Cell, look, style.Offset);
                 DrawSprite(style, centre, Damaged(Color.white, machine));
                 AppendChevron(machine.Cell, machine.Direction, FillOf(style, machine.Behavior));
                 return;
             }
 
-            float x = machine.Cell.X;
-            float y = machine.Cell.Y;
+            var origin = new Vector2(machine.Cell.X, machine.Cell.Y);
             Color body = Damaged(FillOf(style, machine.Behavior), machine);
 
-            Palette.MachineLook look = Colors.Machines;
-            float lo = look.FrameInset;
-            float hiInner = 1f - look.FrameInset - look.FrameThickness;
-            float hi = 1f - look.FrameInset;
-            float thickness = look.FrameThickness;
+            AppendFrameShadow(machine.Cell, look, Vector2.zero);
 
-            AppendRect(x + lo, y + lo, x + hi, y + lo + thickness, body);                    // bottom
-            AppendRect(x + lo, y + hiInner, x + hi, y + hi, body);                            // top
-            AppendRect(x + lo, y + lo + thickness, x + lo + thickness, y + hiInner, body);    // left
-            AppendRect(x + hi - thickness, y + lo + thickness, x + hi, y + hiInner, body);    // right
+            FrameBars(origin, look, _frameBars);
+            for (int i = 0; i < _frameBars.Length; i++)
+                AppendRect(_frameBars[i].xMin, _frameBars[i].yMin, _frameBars[i].xMax, _frameBars[i].yMax,
+                    body);
 
             AppendChevron(machine.Cell, machine.Direction, body);
         }
@@ -217,11 +246,12 @@ namespace Facet.Game
 
             if (IsSprite(style))
             {
+                AppendShadow(_operatorBody, centre + style.Offset);
                 DrawSprite(style, centre, Damaged(Color.white, machine));
             }
             else
             {
-                AppendPolygon(BodyOf(style, _operatorBody), centre,
+                AppendBody(BodyOf(style, _operatorBody), centre,
                     Damaged(FillOf(style, machine.Behavior), machine),
                     OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
             }
@@ -265,7 +295,8 @@ namespace Facet.Game
             if (IsSprite(style))
             {
                 // An authored body replaces the machine's mark; where it stands is still the pair of tiles the
-                // blade and the badges are drawn against.
+                // blade and the badges are drawn against, and the fork is still what it stands on.
+                AppendShadow(CutterBodyFor(flow), centre + style.Offset);
                 DrawSprite(style, centre, Damaged(Color.white, machine));
             }
             else
@@ -274,9 +305,9 @@ namespace Facet.Game
                 // the second lane keeps its blade, stub and badge; the shipped look is the fork itself.
                 Vector2[] points = Overridden(style)
                     ? BodyOf(style, _operatorBody)
-                    : CutterBodyFigure(flow, look.OperatorRadius);
+                    : CutterBodyFor(flow);
 
-                AppendPolygon(points, centre, body, OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
+                AppendBody(points, centre, body, OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
             }
 
             // The blade: the item's own centre line, along the flow, where the cut is made.
@@ -329,6 +360,12 @@ namespace Facet.Game
 
             if (IsSprite(style))
             {
+                // The tubes are the machine's footprint; a sprite body still rides on them, so they are
+                // what its shadow is made of.
+                AppendShadowLane(entry + right * look.PipeRailOffset, landing + right * look.PipeRailOffset,
+                    look.PipeRailWidth);
+                AppendShadowLane(entry - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
+                    look.PipeRailWidth);
                 DrawSprite(style, centre, Damaged(Color.white, machine));
             }
             else
@@ -337,6 +374,13 @@ namespace Facet.Game
                     look.PipeRailWidth, body);
                 AppendLane(entry - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
                     look.PipeRailWidth, body);
+
+                // The two rails, and not the collars: a collar crosses both rails, and two translucent
+                // silhouettes laid over each other read as a darker patch than either.
+                AppendShadowLane(entry + right * look.PipeRailOffset, landing + right * look.PipeRailOffset,
+                    look.PipeRailWidth);
+                AppendShadowLane(entry - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
+                    look.PipeRailWidth);
 
                 float ct = look.PipeCollarThickness;
                 float cw = look.PipeCollarHalfWidth;
@@ -360,11 +404,12 @@ namespace Facet.Game
 
             if (IsSprite(style))
             {
+                AppendShadow(_splitterHub, centre + style.Offset);
                 DrawSprite(style, centre, Damaged(Color.white, machine));
             }
             else
             {
-                AppendPolygon(BodyOf(style, _splitterHub), centre,
+                AppendBody(BodyOf(style, _splitterHub), centre,
                     Damaged(FillOf(style, machine.Behavior), machine),
                     OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
             }
@@ -393,6 +438,9 @@ namespace Facet.Game
 
             if (IsSprite(style))
             {
+                // The triangle is the machine's facing readout, so a sprite body still stands on it.
+                AppendShadow(Rotated(_sorterBody, ScratchFor(ref _sorterRotated, _sorterBody.Length),
+                    FacingAngle(machine.Direction)), centre + style.Offset);
                 DrawSprite(style, centre, Damaged(Color.white, machine));
             }
             else
@@ -414,6 +462,15 @@ namespace Facet.Game
         private void AppendRotatedPolygon(Vector2[] points, Vector2[] scratch, Vector2 centre,
             float angleDegrees, Color fill, Color outline, float width)
         {
+            AppendBody(Rotated(points, scratch, angleDegrees), centre, fill, outline, width);
+        }
+
+        /// <summary>The same turn, for a caller that wants the turned points rather than a drawn body - a
+        /// sprite-overridden sorter still stands on the shipped triangle, so its shadow is that figure
+        /// turned. Trig is computed once per body, never once per vertex; the returned array is the caller's
+        /// scratch and lives only until the next turn.</summary>
+        private static Vector2[] Rotated(Vector2[] points, Vector2[] scratch, float angleDegrees)
+        {
             float radians = angleDegrees * Mathf.Deg2Rad;
             float cos = Mathf.Cos(radians);
             float sin = Mathf.Sin(radians);
@@ -424,7 +481,55 @@ namespace Facet.Game
                 scratch[i] = new Vector2(p.x * cos - p.y * sin, p.x * sin + p.y * cos);
             }
 
-            AppendPolygon(scratch, centre, fill, outline, width);
+            return scratch;
+        }
+
+        /// <summary>The cutter's shipped fork for one facing. The cache holds one body per cardinal, and a
+        /// direction it does not hold - a diagonal, if <see cref="Dir"/> ever grows one - falls back to the
+        /// operator body rather than throwing inside the per-frame draw.</summary>
+        private Vector2[] CutterBodyFor(Dir flow)
+        {
+            int index = (int)flow;
+            Debug.Assert(index >= 0 && index < _cutterBodies.Length, "a cutter facing is not a cardinal");
+            return index >= 0 && index < _cutterBodies.Length ? _cutterBodies[index] : _operatorBody;
+        }
+
+        /// <summary>One machine body: the shadow it drops, then its fill and outline. Every body in this
+        /// view comes through here, so no machine can end up the only one standing on nothing.</summary>
+        private void AppendBody(IReadOnlyList<Vector2> points, Vector2 centre, Color fill, Color outline,
+            float width)
+        {
+            AppendShadow(points, centre);
+            AppendPolygon(points, centre, fill, outline, width);
+        }
+
+        /// <summary>The drill frame's shadow: the same four bars the visible frame is drawn from, which meet
+        /// at their ends rather than overlapping, so the translucent pass never blends a bar with itself. The
+        /// offset is a sprite body's own displacement, so an authored frame's shadow stays under it.</summary>
+        private void AppendFrameShadow(Int2 cell, Palette.MachineLook look, Vector2 offset)
+        {
+            FrameBars(new Vector2(cell.X + offset.x, cell.Y + offset.y), look, _frameBars);
+            for (int i = 0; i < _frameBars.Length; i++)
+                AppendShadowRect(_frameBars[i].xMin, _frameBars[i].yMin, _frameBars[i].xMax, _frameBars[i].yMax);
+        }
+
+        /// <summary>The drill frame's four bars, in tile coordinates: the one layout the visible frame and
+        /// its shadow are both read from, so an edit to the frame cannot leave the shadow behind. Filled into
+        /// the caller's array because this runs once per drill per frame.</summary>
+        private static void FrameBars(Vector2 origin, Palette.MachineLook look, Rect[] into)
+        {
+            float lo = look.FrameInset;
+            float hiInner = 1f - look.FrameInset - look.FrameThickness;
+            float hi = 1f - look.FrameInset;
+            float thickness = look.FrameThickness;
+
+            float across = 1f - 2f * lo;
+            float along = hiInner - lo - thickness;
+
+            into[0] = new Rect(origin.x + lo, origin.y + lo, across, thickness);                  // bottom
+            into[1] = new Rect(origin.x + lo, origin.y + hiInner, across, thickness);             // top
+            into[2] = new Rect(origin.x + lo, origin.y + lo + thickness, thickness, along);       // left
+            into[3] = new Rect(origin.x + hi - thickness, origin.y + lo + thickness, thickness, along); // right
         }
 
         /// <summary>The rotation scratch, grown to fit whatever body it is handed - an override's
@@ -506,11 +611,14 @@ namespace Facet.Game
 
             if (IsSprite(style))
             {
+                // The octagon is what stands on the ground; the barrel is the aiming readout and casts
+                // nothing, exactly as it does on the mesh path.
+                AppendShadow(_turretBody, centre + style.Offset);
                 DrawSprite(style, centre, Damaged(Color.white, machine));
             }
             else
             {
-                AppendPolygon(BodyOf(style, _turretBody), centre, body, OutlineOf(style),
+                AppendBody(BodyOf(style, _turretBody), centre, body, OutlineOf(style),
                     BodyOutlineWidth(style, outlineWidth));
             }
 
@@ -566,11 +674,12 @@ namespace Facet.Game
 
             if (IsSprite(style))
             {
+                AppendShadow(_wallBody, centre + style.Offset);
                 DrawSprite(style, centre, Damaged(Color.white, machine));
                 return;
             }
 
-            AppendPolygon(BodyOf(style, _wallBody), centre,
+            AppendBody(BodyOf(style, _wallBody), centre,
                 Damaged(FillOf(style, machine.Behavior), machine),
                 OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
         }
@@ -595,11 +704,12 @@ namespace Facet.Game
 
             if (IsSprite(style))
             {
+                AppendShadow(_sinkBody, centre + style.Offset);
                 DrawSprite(style, centre, Damaged(Color.white, machine));
             }
             else
             {
-                AppendPolygon(BodyOf(style, _sinkBody), centre,
+                AppendBody(BodyOf(style, _sinkBody), centre,
                     Damaged(FillOf(style, machine.Behavior), machine),
                     OutlineOf(style), BodyOutlineWidth(style, outlineWidth));
             }

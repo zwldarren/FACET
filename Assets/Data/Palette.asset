@@ -13,34 +13,39 @@ MonoBehaviour:
   m_Name: Palette
   m_EditorClassIdentifier: FACET.Game::Facet.Game.Palette
   ViewMaterial: {fileID: 2100000, guid: d1e414ddfd7d4cecbac0b80c85cf89e0, type: 2}
-  Background: {r: 0.878, g: 0.886, b: 0.902, a: 1}
-  Platform: {r: 0.965, g: 0.969, b: 0.976, a: 1}
-  GridLine: {r: 0.055, g: 0.07, b: 0.094, a: 0.09}
+  Background: {r: 0.098, g: 0.1098, b: 0.1255, a: 1}
+  Platform: {r: 0.949, g: 0.9373, b: 0.9059, a: 1}
+  GridLine: {r: 0.1059, g: 0.1216, b: 0.1412, a: 0.06}
   GridLinePixels: 1
-  Outline: {r: 0.157, g: 0.176, b: 0.216, a: 1}
+  Outline: {r: 0.1059, g: 0.1216, b: 0.1412, a: 1}
   OutlinePixels: 2
   CursorEdgePixels: 5
-  Belt: {r: 0.804, g: 0.82, b: 0.847, a: 1}
-  BeltArrow: {r: 0.427, g: 0.455, b: 0.502, a: 1}
-  BeltRail: {r: 0.545, g: 0.573, b: 0.62, a: 1}
-  Jam: {r: 0.878, g: 0.263, b: 0.263, a: 1}
-  ShapePatchBed: {r: 0.902, g: 0.898, b: 0.871, a: 1}
-  MachineBody: {r: 0.361, g: 0.408, b: 0.482, a: 1}
-  TurretBody: {r: 0.239, g: 0.278, b: 0.345, a: 1}
-  MachineIdle: {r: 0.749, g: 0.776, b: 0.816, a: 1}
-  RangeRing: {r: 0.243, g: 0.353, b: 0.549, a: 0.5}
-  RunnerBody: {r: 0.867, g: 0.286, b: 0.247, a: 1}
-  TankBody: {r: 0.545, g: 0.173, b: 0.192, a: 1}
-  SpawnMarker: {r: 0.851, g: 0.29, b: 0.259, a: 1}
-  CircleMineral: {r: 1, g: 0.78, b: 0.28, a: 1}
-  SquareMineral: {r: 0.941, g: 0.376, b: 0.678, a: 1}
-  Core: {r: 0.976, g: 0.98, b: 0.988, a: 1}
-  CoreDamage: {r: 0.878, g: 0.263, b: 0.263, a: 1}
-  CursorOk: {r: 0.192, g: 0.706, b: 0.376, a: 1}
-  CursorBlocked: {r: 0.851, g: 0.239, b: 0.239, a: 1}
-  CursorNoFunds: {r: 0.945, g: 0.651, b: 0.253, a: 1}
-  HudPanel: {r: 0.055, g: 0.071, b: 0.098, a: 0.94}
-  HudText: {r: 0.933, g: 0.949, b: 0.969, a: 1}
-  HudAccent: {r: 0.353, g: 0.722, b: 1, a: 1}
-  HudWarn: {r: 0.945, g: 0.451, b: 0.353, a: 1}
-  HudGood: {r: 0.29, g: 0.788, b: 0.451, a: 1}
+  Shadow: {r: 0.1059, g: 0.1216, b: 0.1412, a: 0.16}
+  ShadowOffsetPixels: {x: 3.5, y: -4}
+  ShadowSpread: 1.75
+  Belt: {r: 0.7843, g: 0.7608, b: 0.7059, a: 1}
+  BeltArrow: {r: 0.4196, g: 0.4, b: 0.349, a: 1}
+  BeltRail: {r: 0.5608, g: 0.5412, b: 0.4902, a: 1}
+  Jam: {r: 0.7647, g: 0.2275, b: 0.1569, a: 1}
+  ShapePatchBed: {r: 0.9059, g: 0.8824, b: 0.8275, a: 1}
+  Rock: {r: 0.5451, g: 0.5412, b: 0.5098, a: 1}
+  Water: {r: 0.498, g: 0.6392, b: 0.6588, a: 1}
+  MachineBody: {r: 0.2941, g: 0.3255, b: 0.3647, a: 1}
+  TurretBody: {r: 0.2039, g: 0.2314, b: 0.2667, a: 1}
+  MachineIdle: {r: 0.7765, g: 0.7922, b: 0.8157, a: 1}
+  RangeRing: {r: 0.2353, g: 0.4314, b: 0.6039, a: 0.45}
+  RunnerBody: {r: 0.7843, g: 0.2627, b: 0.1843, a: 1}
+  TankBody: {r: 0.4941, g: 0.1647, b: 0.1333, a: 1}
+  SpawnMarker: {r: 0.8196, g: 0.2902, b: 0.2, a: 1}
+  CircleMineral: {r: 0.8784, g: 0.6275, b: 0.2196, a: 1}
+  SquareMineral: {r: 0.7804, g: 0.3333, b: 0.5176, a: 1}
+  Core: {r: 0.9843, g: 0.9804, b: 0.9608, a: 1}
+  CoreDamage: {r: 0.8196, g: 0.2706, b: 0.1843, a: 1}
+  CursorOk: {r: 0.1843, g: 0.549, b: 0.3529, a: 1}
+  CursorBlocked: {r: 0.7647, g: 0.2275, b: 0.1569, a: 1}
+  CursorNoFunds: {r: 0.7882, g: 0.5412, b: 0.1804, a: 1}
+  HudPanel: {r: 0.051, g: 0.0667, b: 0.0824, a: 0.93}
+  HudText: {r: 0.9373, g: 0.9216, b: 0.8902, a: 1}
+  HudAccent: {r: 0.4353, g: 0.6588, b: 0.8235, a: 1}
+  HudWarn: {r: 0.8863, g: 0.4078, b: 0.298, a: 1}
+  HudGood: {r: 0.3412, g: 0.6549, b: 0.4471, a: 1}

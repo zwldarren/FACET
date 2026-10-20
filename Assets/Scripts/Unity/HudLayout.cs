@@ -39,7 +39,28 @@ namespace Facet.Game
         /// stays two clicks from a misfire. It is a transient overlay - it covers the map while open the
         /// way a toast does, and the camera reserves no strip for it.</summary>
         public const float HelpWidth = 210f;
-        public const float HelpHeight = 207f;
+
+        /// <summary>The help card's inner geometry, in design units. One place the HUD's card and the
+        /// shell's copy of it both read from, so the line step, the inset and the card's own height cannot
+        /// drift apart when a line is added or the step is retuned.</summary>
+        public const float HelpInset = 12f;
+        public const float HelpHeaderTop = 9f;
+        public const float HelpLineTop = 29f;
+        public const float HelpLineStep = 15f;
+        public const float HelpLineHeight = 14f;
+        public const float HelpLineSize = 11f;
+
+        /// <summary>The restart button's gap under the last key line, its height, and the card's foot
+        /// below it.</summary>
+        public const float HelpButtonGap = 5f;
+        public const float HelpButtonHeight = 26f;
+        public const float HelpFoot = 12f;
+
+        /// <summary>How tall the help card is for a list of <paramref name="lines"/> pairs: the last
+        /// line, the restart button under it, and the foot. Derived rather than written down, so a tenth
+        /// line pushes the button down and the card grows with it.</summary>
+        public static float HelpHeightFor(int lines)
+            => HelpLineTop + lines * HelpLineStep + HelpButtonGap + HelpButtonHeight + HelpFoot;
 
         public const float InfoWidth = 392f;
         public const float InfoHeight = 134f;
@@ -98,10 +119,11 @@ namespace Facet.Game
 
         /// <summary>The help card the help button opens, hung off the same corner as the cluster, just
         /// below it. Deliberately not in <see cref="Panels"/> and not in <see cref="Insets"/>: it is
-        /// transient the way a toast is, a panel the player opens and closes over the map.</summary>
-        public static Rect Help(float screenWidth, float s)
+        /// transient the way a toast is, a panel the player opens and closes over the map. Its height is
+        /// <see cref="HelpHeightFor"/>, so it follows the list it prints.</summary>
+        public static Rect Help(float screenWidth, float s, int lines)
             => new Rect(screenWidth - (Margin + HelpWidth) * s,
-                (Margin + ControlsHeight + ControlGap) * s, HelpWidth * s, HelpHeight * s);
+                (Margin + ControlsHeight + ControlGap) * s, HelpWidth * s, HelpHeightFor(lines) * s);
 
         /// <summary>The tutorial card: directly under the status card, its width, on the campaign's
         /// first map only. Anchored to the card, like the stockpile readout, because it explains that

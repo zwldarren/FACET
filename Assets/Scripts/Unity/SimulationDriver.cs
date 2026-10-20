@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Facet.Core;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 namespace Facet.Game
 {
@@ -31,8 +32,9 @@ namespace Facet.Game
         [SerializeField] private MapSet campaign = null;
 
         [Header("Progress")]
-        [Tooltip("Which map of the campaign to start on. The rest of the campaign follows it: clear a map, " +
-            "press N, and the next one is built without reloading the scene.")]
+        [Tooltip("Which map of the campaign to start on, when the scene wants a specific one. Left at 0, " +
+            "the campaign opens on its frontier - the first map the saved progress has not cleared, and " +
+            "the first map alone on a fresh profile.")]
         [SerializeField] private int startMapIndex = 0;
 
         [Header("Views")]
@@ -90,6 +92,15 @@ namespace Facet.Game
         /// for a driver that never built any).</summary>
         private HudView _hud;
 
+        /// <summary>The shell: the level list, the in-run menu, and the title screen the menu leads to.
+        /// Null for a driver that built no views; it asks the driver for every transition rather than
+        /// touching the world itself.</summary>
+        private ShellView _shell;
+
+        /// <summary>The cleared count last written to the store. The world reports its win every frame
+        /// after it is won, so the write has to be an edge rather than a level.</summary>
+        private int _writtenCleared;
+
         private void Awake()
         {
             // Tile coordinates ARE world coordinates: the views build in tile space and the cursor turns
@@ -118,7 +129,11 @@ namespace Facet.Game
                 return;
             }
 
-            Campaign = new CampaignState(Catalog.Count, startMapIndex);
+            // Progress outlives the session: the store's cleared count is what the level list is built
+            // from, and the campaign opens on its frontier unless the inspector names a map.
+            int cleared = CampaignProgress.Read();
+            Campaign = new CampaignState(Catalog.Count, StartIndexFromProgress(cleared), cleared);
+            _writtenCleared = cleared;
             Content = content != null ? content.ToCore() : ContentDatabase.Default;
             World = NewWorld(Catalog.At(Campaign.MapIndex));
             ReportMapProblems(World.Map);
@@ -161,6 +176,24 @@ namespace Facet.Game
             }
 
             UpdateWorldPerPixel();
+
+            // The shell owns the screen while it stands: the devices are the menu's, the run is held and
+            // nothing ticks behind it - a menu that let the factory run would spend the player's time, and
+            // a key aimed at it must not also reach the run. The held frame still describes the world, so
+            // the views keep drawing it under the shell's own backdrop.
+            if (_shell != null && _shell.Open)
+            {
+                Frames.Frame = new ViewFrame(1f, WorldPerPixel, CursorCell);
+                return;
+            }
+
+            // M opens the in-run menu. Read here rather than in the shell, because the driver is what
+            // holds the run, and read before the devices are sampled so the press cannot also build.
+            if (_shell != null && Keyboard.current != null && Keyboard.current.mKey.wasPressedThisFrame)
+            {
+                OpenMenu();
+                return;
+            }
 
             if (_input.ConsumePauseToggle())
             {
@@ -222,6 +255,10 @@ namespace Facet.Game
             // player here; idempotent, so polling every frame is the honest way to read an unreported edge.
             if (World.Status == GameStatus.Won) Campaign.MarkCleared();
 
+            // A clear is the one moment progress grows, so it is the one moment the store is written -
+            // not every frame the won world keeps saying so.
+            PersistProgress();
+
             Alpha = World.Paused || World.Status != GameStatus.Playing
                 ? 1f
                 : Clock.Alpha(SimConfig.TickDt);
@@ -237,6 +274,68 @@ namespace Facet.Game
                 ? (2f * _camera.orthographicSize) / Screen.height
                 : 0.02f;
         }
+
+        /// <summary>Which map the campaign opens on: the inspector's own answer when it names one, and the
+        /// saved progress' frontier otherwise. The frontier is the first map not yet cleared, clamped to the
+        /// campaign - a store can outlive an edit to the map set, and a map that no longer exists is not an
+        /// index to open on.</summary>
+        private int StartIndexFromProgress(int cleared)
+            => startMapIndex > 0 ? startMapIndex : Mathf.Min(cleared, Catalog.Count - 1);
+
+        /// <summary>Write the campaign's cleared count through to the store when it has grown. Idempotent
+        /// and edge-triggered: the world reports a win every frame, and a flush per frame would be a
+        /// per-frame hitch for a count that can only change on the frame it changed.</summary>
+        private void PersistProgress()
+        {
+            int cleared = Campaign.ClearedCount;
+            if (cleared == _writtenCleared) return;
+
+            CampaignProgress.Write(cleared);
+            _writtenCleared = cleared;
+        }
+
+        /// <summary>Open the in-run menu over the run the player is in. The shell draws over it and the
+        /// driver holds it, so nothing the menu reads can also be a key the run answers.</summary>
+        private void OpenMenu()
+        {
+            _shell.ShowLevels(true);
+            SetRunHeld(true);
+        }
+
+        /// <summary>Hold the run behind the shell, or hand it back. The HUD and the camera rig read the
+        /// keyboard in their own updates, so stopping the driver's frame is not enough on its own: both are
+        /// stood down while the shell stands, and neither is destroyed by it.</summary>
+        private void SetRunHeld(bool held)
+        {
+            if (_hud != null) _hud.enabled = !held;
+            if (_rig != null) _rig.enabled = !held;
+        }
+
+        /// <summary>The shell's "play" door: open the map it asked for as a fresh run. A run is one run, so
+        /// a map is always built again - the world behind a menu is never carried past it. Endless is the
+        /// same map with its wave table unbounded, which is the only thing the flag changes.</summary>
+        private void PlayMap(int index, bool endless)
+        {
+            SetRunHeld(false);
+            _shell.Close();
+
+            Campaign.StartMap(index);
+            if (endless) LoadMap(Catalog.At(Campaign.MapIndex).WithEndless());
+            else LoadMap();
+
+            PersistProgress();
+        }
+
+        /// <summary>The in-run menu's back door: the run behind it carries on exactly where it was held.</summary>
+        private void ResumeRun()
+        {
+            _shell.Close();
+            SetRunHeld(false);
+        }
+
+        /// <summary>The in-run menu's far door: leave the run for the title. The run behind stays built but
+        /// held - picking a map from there builds that map's own world, so nothing is carried across.</summary>
+        private void ReturnToTitle() => _shell.ShowTitle();
 
         /// <summary>Swap in the map the campaign is now on, without reloading the scene.
         ///
@@ -348,6 +447,11 @@ namespace Facet.Game
             _rig = _camera.GetComponent<CameraRig>();
             if (_rig == null) _rig = _camera.gameObject.AddComponent<CameraRig>();
             _rig.Initialize(World.TileGrid, World.Core.Center, Campaign.IsFirstMap);
+
+            // The shell last: it draws over the run and asks the driver for every transition, so it is
+            // handed the doors only once the HUD and the rig it will hold while it is open exist.
+            _shell = AddView<ShellView>("Shell");
+            _shell.Initialize(palette, Catalog, Campaign, PlayMap, ResumeRun, ReturnToTitle);
         }
 
         private T AddView<T>(string viewName) where T : Component

@@ -15,10 +15,11 @@ namespace Facet.Game
     /// (a zoom past tolerance, a gone mesh). The first rebuild happens on the first frame with a real
     /// zoom, so a view never synthesizes a frame of its own.
     ///
-    /// One <see cref="MeshView"/> is one GameObject with one mesh - the shape the PlayMode tests pin. A
-    /// Sprite override adds a small pooled SpriteRenderer behind that mesh, so the default look touches
-    /// no extra GameObject. The mesh is made and freed with its view, and lives as long as the object
-    /// that draws it, so a view held across a scene reload still has geometry to draw into.
+    /// One <see cref="MeshView"/> is one GameObject with one mesh - the shape the PlayMode tests pin. Two
+    /// optional passes hang off it as children, each made only when a view asks for one: a Sprite override's
+    /// pooled SpriteRenderers, and the cast shadows of a view whose bodies stand on the ground. The mesh is
+    /// made and freed with its view, and lives as long as the object that draws it, so a view held across a
+    /// scene reload still has geometry to draw into.
     /// </summary>
     /// <para>
     /// The class executes in the editor so its mesh frees when the object holding it goes while no game
@@ -57,6 +58,19 @@ namespace Facet.Game
         private Transform _spriteRoot;
         private int _spritesUsed;
 
+        /// <summary>The cast-shadow pass: a second mesh on a child object, holding only the silhouettes the
+        /// view says cast one. Filled in <see cref="Rebuild"/> alongside the visible mesh, and empty on a
+        /// view that casts nothing.</summary>
+        private readonly List<Vector3> _shadowVertices = new List<Vector3>();
+        private readonly List<Color> _shadowColors = new List<Color>();
+        private readonly List<int> _shadowTriangles = new List<int>();
+        private Mesh _shadowMesh;
+        private GameObject _shadowObject;
+
+        /// <summary>How far behind its view's mesh the shadow pass sits, in world z. Just far enough that the
+        /// two swap draw order without the shadow drifting off its body at any zoom.</summary>
+        private const float ShadowDepth = 0.002f;
+
         /// <summary>Sprites sit this far behind the mesh, so its functional overlays draw on top of an
         /// overridden body; small enough never to read as parallax at any zoom.</summary>
         private const float SpriteDepthOffset = 0.001f;
@@ -70,6 +84,18 @@ namespace Facet.Game
 
         /// <summary>Where this view draws: its z-plane and its sorting order within it.</summary>
         protected abstract Palette.Layer Layer { get; }
+
+        /// <summary>
+        /// Whether this view's solid bodies cast a shadow - the default pass that makes the map read as
+        /// things standing on a surface rather than as a diagram printed on one.
+        ///
+        /// A view says yes when everything it draws is a body: the machines, the walkers, the Core. It says
+        /// no when it draws the surface itself (the grid, the terrain, the belts under everything), a state
+        /// readout rather than a body (health bars, markers, shots, the ghost), or a screen-space mark (the
+        /// locator) - a shadow of a health bar would be a shadow of a label, and a shadow of the ground is
+        /// just a darker map.
+        /// </summary>
+        protected virtual bool CastsShadows => false;
 
         /// <summary>Size of one screen pixel in world units at the current resolution and zoom.</summary>
         protected float WorldPerPixel => _frames != null ? _frames.Frame.WorldPerPixel : 0f;
@@ -89,6 +115,7 @@ namespace Facet.Game
             _meshFlags = MeshFlagsFor(gameObject);
             _mesh = NewMesh();
             AttachRenderer(Layer, palette.ResolveViewMaterial());
+            if (CastsShadows) AttachShadowPass(palette.ResolveViewMaterial());
 
             OnInitialized();
             _dirty = true;
@@ -124,12 +151,28 @@ namespace Facet.Game
             return _mesh;
         }
 
+        /// <summary>The shadow pass's mesh, made again if it is gone - the same rule as
+        /// <see cref="AcquireMesh"/>, and the same filter to re-point.</summary>
+        private Mesh AcquireShadowMesh()
+        {
+            if (_shadowMesh != null) return _shadowMesh;
+
+            _shadowMesh = new Mesh { name = _meshName + " Shadow", hideFlags = _meshFlags };
+
+            var filter = _shadowObject != null ? _shadowObject.GetComponent<MeshFilter>() : null;
+            if (filter != null) filter.sharedMesh = _shadowMesh;
+
+            return _shadowMesh;
+        }
+
         /// <summary>Free the mesh with the view. A <c>DontSave</c> mesh is nobody else's to destroy, and a
         /// view that rebuilds its meshes would otherwise leak one per object.</summary>
         private void OnDestroy()
         {
             if ((_meshFlags & HideFlags.DontSave) != 0 && _mesh != null) DestroyImmediate(_mesh);
+            if ((_meshFlags & HideFlags.DontSave) != 0 && _shadowMesh != null) DestroyImmediate(_shadowMesh);
             _mesh = null;
+            _shadowMesh = null;
         }
 
         /// <summary>Attach the MeshFilter + MeshRenderer pair this view draws through, configured for
@@ -149,6 +192,41 @@ namespace Facet.Game
             renderer.sortingOrder = layer.SortingOrder;
 
             gameObject.transform.position = new Vector3(0f, 0f, layer.Z);
+        }
+
+        /// <summary>
+        /// The shadow pass: a child object with its own mesh and renderer, on the view's own sorting order
+        /// but <see cref="ShadowDepth"/> further from the camera, so every triangle it holds lands before
+        /// every triangle the view draws and a body always covers its own shadow.
+        ///
+        /// Its own mesh rather than the view's, because a view's mesh is not all body: health bars, spawn
+        /// markers and kill bursts ride in the same mesh as the walkers, and the ground under a belt is in
+        /// the belt's. The shadow is the silhouettes a view appends into this pass and nothing else.
+        /// </summary>
+        private void AttachShadowPass(Material material)
+        {
+            if (_shadowObject != null) return;
+
+            // A rebuild can reach here after the pass was destroyed under a running script: the mesh is
+            // kept if it survived, so only the object is rebuilt around it.
+            if (_shadowMesh == null)
+                _shadowMesh = new Mesh { name = _meshName + " Shadow", hideFlags = _meshFlags };
+
+            _shadowObject = new GameObject("Shadow");
+            _shadowObject.hideFlags = _meshFlags;
+            _shadowObject.transform.SetParent(transform, false);
+            _shadowObject.transform.localPosition = new Vector3(0f, 0f, ShadowDepth);
+
+            var filter = _shadowObject.AddComponent<MeshFilter>();
+            filter.sharedMesh = _shadowMesh;
+
+            var renderer = _shadowObject.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = LightProbeUsage.Off;
+            renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            renderer.sortingOrder = Layer.SortingOrder;
         }
 
         /// <summary>One-time setup a view needs beyond the mesh. The world and palette are ready.
@@ -243,6 +321,80 @@ namespace Facet.Game
             AppendPolygon(_chevron, Vector2.zero, color, color, 0f);
         }
 
+        /// <summary>The ground drop of a body, in world units at the current zoom.</summary>
+        private Vector2 ShadowDrop => Colors.ShadowOffsetPixels * WorldPerPixel;
+
+        /// <summary>The shadow's outer pass: the same silhouette further out and fainter. Two silhouettes
+        /// are what make a shadow read as light falling off rather than as a second outline - the near one
+        /// carries the darkness under the body's edge, the far one the fade past it.</summary>
+        private Color SoftShadow
+        {
+            get
+            {
+                Color soft = Colors.Shadow;
+                soft.a *= 0.45f;
+                return soft;
+            }
+        }
+
+        private void AppendShadowSilhouette(IReadOnlyList<Vector2> points, Vector2 offset, Vector2 drop,
+            Color colour)
+            => ProcMesh.AppendPolygonFill(_shadowVertices, _shadowColors, _shadowTriangles, points,
+                offset + drop, colour);
+
+        /// <summary>
+        /// The shadow a body casts: its own silhouette, filled with the palette's shadow colour and dropped
+        /// by the palette's offset. Call it once per solid body, immediately before that body is drawn.
+        ///
+        /// One shadow per body, and the body's dominant mass rather than each of its parts: the pass is
+        /// translucent, so two silhouettes of one machine laid over each other would blend twice as dark
+        /// where they cross. A turret's barrel is its aiming readout, not its mass - the octagon is what
+        /// stands on the ground.
+        /// </summary>
+        protected void AppendShadow(IReadOnlyList<Vector2> points, Vector2 offset)
+        {
+            if (!CastsShadows) return;
+            AppendShadowSilhouette(points, offset, ShadowDrop, Colors.Shadow);
+            AppendShadowSilhouette(points, offset, ShadowDrop * Colors.ShadowSpread, SoftShadow);
+        }
+
+        /// <summary>The shadow of a rectangular part - a drill's frame bar, a wall's inset block.</summary>
+        protected void AppendShadowRect(float minX, float minY, float maxX, float maxY)
+        {
+            if (!CastsShadows) return;
+            AppendShadowRectPass(minX, minY, maxX, maxY, ShadowDrop, Colors.Shadow);
+            AppendShadowRectPass(minX, minY, maxX, maxY, ShadowDrop * Colors.ShadowSpread, SoftShadow);
+        }
+
+        private void AppendShadowRectPass(float minX, float minY, float maxX, float maxY, Vector2 drop,
+            Color colour)
+            => ProcMesh.AppendQuad(_shadowVertices, _shadowColors, _shadowTriangles,
+                new Vector2(minX, minY) + drop, new Vector2(maxX, minY) + drop,
+                new Vector2(maxX, maxY) + drop, new Vector2(minX, maxY) + drop, colour);
+
+        /// <summary>The shadow of a lane - one rail of a pipe, whose body is lines rather than a block.</summary>
+        protected void AppendShadowLane(Vector2 from, Vector2 to, float halfWidth)
+        {
+            if (!CastsShadows) return;
+
+            Vector2 delta = to - from;
+            if (delta.sqrMagnitude <= 1e-12f) return;
+
+            AppendShadowLanePass(from, to, halfWidth, ShadowDrop, Colors.Shadow);
+            AppendShadowLanePass(from, to, halfWidth, ShadowDrop * Colors.ShadowSpread, SoftShadow);
+        }
+
+        private void AppendShadowLanePass(Vector2 from, Vector2 to, float halfWidth, Vector2 drop, Color colour)
+        {
+            Vector2 delta = to - from;
+            var right = new Vector2(-delta.y, delta.x).normalized * halfWidth;
+            Vector2 a = from + drop;
+            Vector2 b = to + drop;
+            // Counter-clockwise, the order AppendQuad's fill fan is built for.
+            ProcMesh.AppendQuad(_shadowVertices, _shadowColors, _shadowTriangles,
+                a - right, b - right, b + right, a + right, colour);
+        }
+
         /// <summary>Draw one frame. The rebuild gate: ask the view for a rebuild, then add the two
         /// shared reasons - the zoom moved the pixel size past tolerance (keeping screen-space constants
         /// true), and the mesh is gone. An invalid frame is skipped rather than drawn at zero zoom.
@@ -256,10 +408,12 @@ namespace Facet.Game
             if (frame.WorldPerPixel <= 0f) return;
 
             Observe(in frame);
-            if (_dirty || ZoomMoved(frame.WorldPerPixel) || _mesh == null) Rebuild(in frame);
+            if (_dirty || ZoomMoved(frame.WorldPerPixel) || _mesh == null ||
+                (CastsShadows && (_shadowMesh == null || _shadowObject == null))) Rebuild(in frame);
         }
 
-        /// <summary>One rebuild: empty buffers, the view's geometry, one mesh holding it.</summary>
+        /// <summary>One rebuild: empty buffers, the view's geometry, one mesh holding it - and, on a view
+        /// that casts shadows, the second mesh holding the silhouettes it said cast one.</summary>
         private void Rebuild(in ViewFrame frame)
         {
             _dirty = false;
@@ -269,9 +423,25 @@ namespace Facet.Game
             _colors.Clear();
             _triangles.Clear();
 
+            bool shadows = CastsShadows;
+            if (shadows)
+            {
+                // A gone pass is rebuilt rather than drawn around: the object is what carries the mesh,
+                // and a silhouette with nowhere to go would leave a body standing on nothing.
+                if (_shadowObject == null) AttachShadowPass(_palette.ResolveViewMaterial());
+
+                _shadowVertices.Clear();
+                _shadowColors.Clear();
+                _shadowTriangles.Clear();
+            }
+
             Mesh mesh = AcquireMesh();
             AppendFrame(in frame);
             ProcMesh.Finish(_vertices, _colors, _triangles, _meshName, mesh);
+
+            if (shadows)
+                ProcMesh.Finish(_shadowVertices, _shadowColors, _shadowTriangles, _meshName + " Shadow",
+                    AcquireShadowMesh());
         }
 
         /// <summary>Unity's own call, for the frames it drives: whatever the clock holds. A play-mode

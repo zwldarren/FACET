@@ -678,30 +678,39 @@ namespace Facet.Game
 
         /// <summary>The help card: the keyboard, one pair of ideas per line, and the restart button - here
         /// rather than on the cluster because a misplaced click must never restart the run, and opening a card
-        /// first guarantees deliberateness. It overlays the map while open, the way a toast does.</summary>
+        /// first guarantees deliberateness. It overlays the map while open, the way a toast does. Its
+        /// geometry is <see cref="HudLayout"/>'s, which the shell's copy of this card reads too.</summary>
         private HelpPanel BuildHelp()
         {
-            Rect rect = HudLayout.Help(Screen.width, _scale);
+            string[] lines = KeyLines();
+            Rect rect = HudLayout.Help(Screen.width, _scale, lines.Length);
             var panel = new HelpPanel { Root = BuildCard("help", rect, PlaceCorner.TopRight) };
             RectTransform root = panel.Root;
 
-            HudText header = Label(root, "header", 11f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(header.Rect, 12f * _scale, 9f * _scale, rect.width - 60f * _scale, 14f * _scale);
+            HudText header = Label(root, "header", HudLayout.HelpLineSize, FontStyle.Normal,
+                TextAnchor.UpperLeft);
+            HudUi.TopLeft(header.Rect, HudLayout.HelpInset * _scale, HudLayout.HelpHeaderTop * _scale,
+                rect.width - 60f * _scale, HudLayout.HelpLineHeight * _scale);
             header.Set("CONTROLS", _palette.HudAccent);
 
-            float y = 29f;
-            foreach (string key in KeyLines())
+            float y = HudLayout.HelpLineTop;
+            foreach (string key in lines)
             {
-                HudText line = Label(root, "key" + y, 11f, FontStyle.Normal, TextAnchor.UpperLeft);
-                HudUi.TopLeft(line.Rect, 12f * _scale, y * _scale, rect.width - 24f * _scale, 14f * _scale);
+                HudText line = Label(root, "key" + y, HudLayout.HelpLineSize, FontStyle.Normal,
+                    TextAnchor.UpperLeft);
+                HudUi.TopLeft(line.Rect, HudLayout.HelpInset * _scale, y * _scale,
+                    rect.width - 2f * HudLayout.HelpInset * _scale, HudLayout.HelpLineHeight * _scale);
                 line.Set(key, _palette.MachineIdle);
-                y += 15f;
+                y += HudLayout.HelpLineStep;
             }
 
-            panel.Restart = HudUi.Button(root, "restart", rect.width - 24f * _scale, 26f * _scale,
-                "R  restart  run", FontSize(13f), _palette.HudText, PressRestart);
+            panel.Restart = HudUi.Button(root, "restart", rect.width - 2f * HudLayout.HelpInset * _scale,
+                HudLayout.HelpButtonHeight * _scale, "R  restart  run", FontSize(13f), _palette.HudText,
+                PressRestart);
             // Under the last key line, so a line added to KeyLines pushes the button down with it.
-            HudUi.TopLeft(panel.Restart.Root, 12f * _scale, (y + 5f) * _scale, rect.width - 24f * _scale, 26f * _scale);
+            HudUi.TopLeft(panel.Restart.Root, HudLayout.HelpInset * _scale,
+                (y + HudLayout.HelpButtonGap) * _scale, rect.width - 2f * HudLayout.HelpInset * _scale,
+                HudLayout.HelpButtonHeight * _scale);
 
             panel.Close = HudUi.Button(root, "close", 22f * _scale, 22f * _scale, "×", FontSize(13f),
                 _palette.HudText, () => SetHelpOpen(false));
@@ -1902,17 +1911,20 @@ namespace Facet.Game
         /// single right-aligned sentence across the build bar's header, and a narrow screen clips the start of
         /// its own sentence first. Every line prints whole at the smallest scale, and none uses a character a
         /// built player's font might lack.</summary>
-        private static IEnumerable<string> KeyLines()
+        internal static string[] KeyLines()
         {
-            yield return "WASD / arrows pan  ·  wheel zooms";
-            yield return BuildInput.KeyRangeText() + " or click builds";
-            yield return "the same one again drops it";
-            yield return "Q / E turn  ·  drag lays belts";
-            yield return "T how to play  ·  H this card";
-            yield return "RMB deletes, or clears a jam";
-            yield return "Esc reads  ·  C goes to the Core";
-            yield return "N the wave  ·  Space  ·  R restart";
-            yield return "[ / ] speed 1x - 3x";
+            return new[]
+            {
+                "WASD / arrows pan  ·  wheel zooms",
+                BuildInput.KeyRangeText() + " or click builds",
+                "the same one again drops it",
+                "Q / E turn  ·  drag lays belts",
+                "T how to play  ·  H this card",
+                "RMB deletes, or clears a jam",
+                "Esc reads  ·  C goes to the Core",
+                "N the wave  ·  Space  ·  R restart",
+                "[ / ] speed 1x - 3x",
+            };
         }
 
         // ------------------------------------------------------------------ build bar

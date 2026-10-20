@@ -118,6 +118,95 @@ namespace Facet.Game
             return pts;
         }
 
+        /// <summary>
+        /// The same polygon with its corners rounded off, so a body reads as a moulded part rather than a
+        /// cut-out. Each corner is replaced by an arc tangent to the two edges that meet there, so the
+        /// silhouette keeps the polygon's own straight edges and loses only its points - which is the whole
+        /// difference between a board of hexagons and a board of coins.
+        ///
+        /// The arc starts and ends r / tan(θ/2) in from the corner along each edge, where θ is the angle
+        /// <em>inside</em> it; that tangent length is capped at half of the shorter edge, so two rounded
+        /// corners on a short edge cannot cross and a triangle stays a triangle. The result is convex and
+        /// keeps the polygon's winding, so <see cref="AppendPolygon"/> takes it unchanged - but the winding
+        /// it keeps is counter-clockwise, which is what every ProcMesh polygon is and what this helper
+        /// assumes: the bisector points into the figure and the arc sweeps by the exterior angle in the
+        /// positive direction, both of which a clockwise input would turn inside out. A radius of zero (or
+        /// a degenerate corner) leaves the polygon as it was, which is what an author who dialled the
+        /// rounding out gets.
+        /// </summary>
+        public static Vector2[] Rounded(IReadOnlyList<Vector2> points, float radius, int segmentsPerCorner = 3)
+        {
+            int n = points != null ? points.Count : 0;
+            var rounded = new List<Vector2>(n > 0 ? n * (Mathf.Max(1, segmentsPerCorner) + 1) : 0);
+            if (n < 3) return rounded.ToArray();
+
+            if (segmentsPerCorner < 1) segmentsPerCorner = 1;
+            if (radius <= 0f)
+            {
+                for (int i = 0; i < n; i++) rounded.Add(points[i]);
+                return rounded.ToArray();
+            }
+
+            for (int i = 0; i < n; i++)
+            {
+                Vector2 here = points[i];
+                Vector2 toPrevious = points[(i + n - 1) % n] - here;
+                Vector2 toNext = points[(i + 1) % n] - here;
+
+                float previousLength = toPrevious.magnitude;
+                float nextLength = toNext.magnitude;
+                if (previousLength <= CornerEpsilon || nextLength <= CornerEpsilon)
+                {
+                    rounded.Add(here);
+                    continue;
+                }
+
+                Vector2 before = toPrevious / previousLength;
+                Vector2 after = toNext / nextLength;
+
+                // The angle inside the corner. The polygon is convex, so it is between 0 and 180 degrees,
+                // and its bisector points into the figure - which is where the arc's centre is.
+                float inside = Mathf.Acos(Mathf.Clamp(Vector2.Dot(before, after), -1f, 1f));
+                float tangent = Mathf.Tan(inside * 0.5f);
+                Vector2 bisector = (before + after).normalized;
+                if (tangent <= CornerEpsilon || bisector.sqrMagnitude <= CornerEpsilon)
+                {
+                    rounded.Add(here);
+                    continue;
+                }
+
+                // How far in from the corner the arc starts, and the radius that still fits when the edge
+                // is too short for the one asked for.
+                float cut = radius / tangent;
+                float longest = Mathf.Min(previousLength, nextLength) * 0.5f;
+                float arcRadius = radius;
+                if (cut > longest)
+                {
+                    cut = longest;
+                    arcRadius = cut * tangent;
+                }
+
+                Vector2 centre = here + bisector * (arcRadius / Mathf.Sin(inside * 0.5f));
+                Vector2 start = here + before * cut;
+
+                // Walking the polygon counter-clockwise, the arc turns by the corner's exterior angle.
+                float from = Mathf.Atan2(start.y - centre.y, start.x - centre.x);
+                float sweep = Mathf.PI - inside;
+
+                for (int s = 0; s <= segmentsPerCorner; s++)
+                {
+                    float a = from + sweep * s / segmentsPerCorner;
+                    rounded.Add(new Vector2(centre.x + Mathf.Cos(a) * arcRadius,
+                        centre.y + Mathf.Sin(a) * arcRadius));
+                }
+            }
+
+            return rounded.ToArray();
+        }
+
+        /// <summary>A point this close to another is the same corner, so a rounding step leaves it alone.</summary>
+        private const float CornerEpsilon = 1e-5f;
+
         /// <summary>Drop one polygon into shared vertex/colour/index buffers, optionally displaced by
         /// <paramref name="offset"/> - what lets a renderer pack every belt or item into a single mesh instead of one
         /// GameObject per object. The outline is one quad per edge rather than a scaled polygon, so its width stays
@@ -171,11 +260,15 @@ namespace Facet.Game
 
         /// <summary>The outline half on its own: one quad per edge, grown outward, so its width is a constant
         /// number of pixels however many sides the shape has. Appended after every fill of the figure it belongs
-        /// to - see <see cref="AppendPolygonFill"/>.</summary>
+        /// to - see <see cref="AppendPolygonFill"/>.
+        ///
+        /// Each band runs a little past both ends of its edge, because two bands meeting at a corner leave a
+        /// notch between them exactly where the corner is - invisible on a right angle at one pixel, a hairy
+        /// white speck once a body's corners are rounded and there are a dozen joins to leave one at.</summary>
         public static void AppendPolygonOutline(List<Vector3> verts, List<Color> colors, List<int> tris,
             IReadOnlyList<Vector2> points, Vector2 offset, Color outline, float outlineWidth)
             => AppendOutline(verts, colors, tris, points, offset, outline, outlineWidth, outlineWidth,
-                verticalSeam: false, horizontalSeam: false);
+                verticalSeam: false, horizontalSeam: false, grow: outlineWidth);
 
         /// <summary>
         /// The outline of one <em>quadrant</em> of a figure, with the width split between the figure's rim and
@@ -198,16 +291,19 @@ namespace Facet.Game
             IReadOnlyList<Vector2> points, Vector2 offset, Color outline, float rimWidth, float seamWidth,
             bool verticalSeam, bool horizontalSeam)
             => AppendOutline(verts, colors, tris, points, offset, outline, rimWidth, seamWidth,
-                verticalSeam, horizontalSeam);
+                verticalSeam, horizontalSeam, grow: 0f);
 
         /// <summary>How close to an axis a point has to be to count as lying on it. Quadrant polygons put their
         /// radial edges exactly on x == 0 and y == 0; float noise from the arc's angles is far below this.</summary>
         private const float SeamEpsilon = 1e-4f;
 
-        /// <summary>The one outline loop: one outward quad per edge, at the rim's width or the seam's.</summary>
+        /// <summary>The one outline loop: one outward quad per edge, at the rim's width or the seam's.
+        /// <paramref name="grow"/> is how far each band runs past the ends of its own edge; the item figures
+        /// pass zero, because their bands share a figure and a band reaching past a seam would cross the
+        /// neighbour's half of it.</summary>
         private static void AppendOutline(List<Vector3> verts, List<Color> colors, List<int> tris,
             IReadOnlyList<Vector2> points, Vector2 offset, Color outline, float rimWidth, float seamWidth,
-            bool verticalSeam, bool horizontalSeam)
+            bool verticalSeam, bool horizontalSeam, float grow)
         {
             int n = points.Count;
             if (n < 3) return;
@@ -233,11 +329,17 @@ namespace Facet.Game
                 // Outward normal of a CCW polygon edge.
                 var nrm = new Vector2(d.y, -d.x).normalized * width;
 
+                // A band that stops at its own corners leaves a notch at every join: half the edge at
+                // most, so a short edge's band cannot reach across its neighbour's.
+                Vector2 along = d.normalized * Mathf.Min(grow, d.magnitude * 0.5f);
+                Vector2 from = a - along;
+                Vector2 to = b + along;
+
                 int i0 = verts.Count;
-                verts.Add(a + offset);
-                verts.Add(b + offset);
-                verts.Add(b + nrm + offset);
-                verts.Add(a + nrm + offset);
+                verts.Add(from + offset);
+                verts.Add(to + offset);
+                verts.Add(to + nrm + offset);
+                verts.Add(from + nrm + offset);
                 colors.Add(outline);
                 colors.Add(outline);
                 colors.Add(outline);

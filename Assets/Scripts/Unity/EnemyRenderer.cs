@@ -43,6 +43,10 @@ namespace Facet.Game
 
         protected override Palette.Layer Layer => Colors.EnemyLayer;
 
+        /// <summary>A walker is a body standing on the ground, so it drops a shadow. Its health bar and its
+        /// weakness figure are readouts drawn in the same mesh, and neither is a thing that stands.</summary>
+        protected override bool CastsShadows => true;
+
         protected override void OnInitialized()
         {
             _body = ProcMesh.RegularPolygon(6, Colors.Enemies.BodyRadius, 90f);
@@ -196,17 +200,22 @@ namespace Facet.Game
 
             if (style.Override && style.Source == VisualSource.Sprite)
             {
+                // A sprite replaces the body's mark, not its footprint: the shipped hexagon is what the
+                // walker stands on, so it is what drops the shadow under an authored body.
+                AppendShadow(_body, at + style.Offset);
                 DrawSprite(style, at, Color.white);
                 return;
             }
 
             if (style.Override)
             {
+                AppendShadow(_points[(int)enemy.Kind], at + style.Offset);
                 AppendPolygon(_points[(int)enemy.Kind], at + style.Offset, style.Fill, style.Outline,
                     OutlineWidthFor(style));
                 return;
             }
 
+            AppendShadow(_body, at);
             AppendPolygon(_body, at, Colors.EnemyColor(enemy.Kind), outline, outlineWidth);
         }
 

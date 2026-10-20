@@ -19,19 +19,19 @@ namespace Facet.Game
     public sealed class Palette : ScriptableObject
     {
         [Tooltip("Everything outside the map: the void behind the world.")]
-        public Color Background = new Color(0.878f, 0.886f, 0.902f, 1f);
+        public Color Background = new Color(0.098f, 0.1098f, 0.1255f, 1f);
 
         [Tooltip("The map itself: the ground every buildable tile sits on.")]
-        public Color Platform = new Color(0.965f, 0.969f, 0.976f, 1f);
+        public Color Platform = new Color(0.949f, 0.9373f, 0.9059f, 1f);
 
         [Tooltip("Tile grid lines, drawn faintly on the ground.")]
-        public Color GridLine = new Color(0.055f, 0.070f, 0.094f, 0.09f);
+        public Color GridLine = new Color(0.1059f, 0.1216f, 0.1412f, 0.06f);
 
         [Tooltip("Tile grid line thickness in screen pixels.")]
         public float GridLinePixels = 1f;
 
         [Tooltip("Outline used by every polygon. Dark on purpose: it is what separates one part from another.")]
-        public Color Outline = new Color(0.157f, 0.176f, 0.216f, 1f);
+        public Color Outline = new Color(0.1059f, 0.1216f, 0.1412f, 1f);
 
         [Tooltip("Outline thickness in screen pixels (design doc: 2 px).")]
         public float OutlinePixels = 2f;
@@ -50,18 +50,34 @@ namespace Facet.Game
         [Tooltip("Cursor ghost border thickness in screen pixels.")]
         public float CursorEdgePixels = 5f;
 
+        [Header("Cast shadows")]
+        [Tooltip("What a solid body's shadow is made of: the body's own silhouette, filled with this and laid " +
+            "on the ground behind it. Dark and translucent rather than black - it has to darken whatever is " +
+            "under it (paper ground, rock, a belt bed) without becoming a second shape of its own.")]
+        public Color Shadow = new Color(0.1059f, 0.1216f, 0.1412f, 0.16f);
+
+        [Tooltip("How far a cast shadow falls from its body, in screen pixels: +x is right, +y is up. Down " +
+            "and to the right is light from the upper left, which is the one direction this game's light has " +
+            "- everywhere, and always the same, because a light that moved would have to shade the sides.")]
+        public Vector2 ShadowOffsetPixels = new Vector2(3.5f, -4f);
+
+        [Tooltip("How far the shadow's soft outer pass falls, as a multiple of the offset. Two silhouettes - " +
+            "one on the body and one this much further out at under half the strength - read as a shadow with " +
+            "an edge rather than a rim, and cost no texture and no blur.")]
+        public float ShadowSpread = 1.75f;
+
         [Tooltip("Belt bed.")]
-        public Color Belt = new Color(0.804f, 0.820f, 0.847f, 1f);
+        public Color Belt = new Color(0.7843f, 0.7608f, 0.7059f, 1f);
 
         [Tooltip("Belt direction chevron. Reads as 'this way'.")]
-        public Color BeltArrow = new Color(0.427f, 0.455f, 0.502f, 1f);
+        public Color BeltArrow = new Color(0.4196f, 0.4f, 0.349f, 1f);
 
         [Tooltip("The rails framing a belt bed on both sides - darker than the bed, so a run reads as a track " +
             "with an inside and an edge, the way a conveyor does, and a turn reads as one curved piece.")]
-        public Color BeltRail = new Color(0.545f, 0.573f, 0.620f, 1f);
+        public Color BeltRail = new Color(0.5608f, 0.5412f, 0.4902f, 1f);
 
         [Tooltip("A jammed belt segment - the twist's failure state, so it has to shout.")]
-        public Color Jam = new Color(0.878f, 0.263f, 0.263f, 1f);
+        public Color Jam = new Color(0.7647f, 0.2275f, 0.1569f, 1f);
 
         [Tooltip("A belt segment whose item has nowhere to go: the line ends in the air. Amber rather " +
             "than the jam red because the cure is different - extend the line or put something that eats " +
@@ -70,81 +86,81 @@ namespace Facet.Game
         public Color BeltBlocked = new Color(0.945f, 0.651f, 0.253f, 1f);
 
         [Tooltip("The bed of an ore patch in the ground. The mark itself is drawn in its mineral's colour.")]
-        public Color ShapePatchBed = new Color(0.902f, 0.898f, 0.871f, 1f);
+        public Color ShapePatchBed = new Color(0.9059f, 0.8824f, 0.8275f, 1f);
 
         [Tooltip("Map-authored rock: the ground a wave has to walk around. Dark and inert, so it reads " +
             "as the map rather than as something the player built - the wall they buy is drawn as a " +
             "machine, in the machines' colour.")]
-        public Color Rock = new Color(0.290f, 0.318f, 0.365f, 1f);
+        public Color Rock = new Color(0.5451f, 0.5412f, 0.5098f, 1f);
 
         [Tooltip("Map-authored water: the other impassable ground. Deliberately a paler, greyer blue than " +
             "anything an item wears - the ground must never be mistaken for something riding a belt.")]
-        public Color Water = new Color(0.478f, 0.663f, 0.796f, 1f);
+        public Color Water = new Color(0.498f, 0.6392f, 0.6588f, 1f);
 
         [Tooltip("Machine bodies: every building that is not a turret.")]
-        public Color MachineBody = new Color(0.361f, 0.408f, 0.482f, 1f);
+        public Color MachineBody = new Color(0.2941f, 0.3255f, 0.3647f, 1f);
 
         [Tooltip("Turret bodies, one shade darker than the other machines.")]
-        public Color TurretBody = new Color(0.239f, 0.278f, 0.345f, 1f);
+        public Color TurretBody = new Color(0.2039f, 0.2314f, 0.2667f, 1f);
 
         [Tooltip("A machine icon with nothing to work on: a turret's empty chamber, an idle operator.")]
-        public Color MachineIdle = new Color(0.749f, 0.776f, 0.816f, 1f);
+        public Color MachineIdle = new Color(0.7765f, 0.7922f, 0.8157f, 1f);
 
         [Tooltip("Range ring drawn around the turret being placed.")]
-        public Color RangeRing = new Color(0.243f, 0.353f, 0.549f, 0.5f);
+        public Color RangeRing = new Color(0.2353f, 0.4314f, 0.6039f, 0.45f);
 
         [Tooltip("Runner: fast and light. Its weakness is a wave's demand, not this colour's business.")]
-        public Color RunnerBody = new Color(0.867f, 0.286f, 0.247f, 1f);
+        public Color RunnerBody = new Color(0.7843f, 0.2627f, 0.1843f, 1f);
 
         [Tooltip("Tank: slow and heavy. A darker brick red than the Runner - colour says which side it " +
             "is on, so the second archetype stays in the enemy family rather than wearing a mineral's " +
             "warm colour.")]
-        public Color TankBody = new Color(0.545f, 0.173f, 0.192f, 1f);
+        public Color TankBody = new Color(0.4941f, 0.1647f, 0.1333f, 1f);
 
         [Tooltip("Wave entry points: brighter while the next wave is counting down.")]
-        public Color SpawnMarker = new Color(0.851f, 0.290f, 0.259f, 1f);
+        public Color SpawnMarker = new Color(0.8196f, 0.2902f, 0.2f, 1f);
 
         [Tooltip("Circle mineral: one of the two minerals, and - on a map whose veins are circles - the " +
             "colour of its money. The currency itself is a complete shape, circle or square, so this is a " +
             "mineral's colour rather than the bank's: it is what every circle quadrant wears, wherever it " +
             "is drawn.")]
-        public Color CircleMineral = new Color(1f, 0.780f, 0.280f, 1f);
+        public Color CircleMineral = new Color(0.8784f, 0.6275f, 0.2196f, 1f);
 
         [Tooltip("Square mineral: the second chain's food, mined from square patches and the colour every " +
             "square quadrant wears. Warm like the circle, so the two minerals read as 'mined' rather than " +
             "as one mineral and one of its products.")]
-        public Color SquareMineral = new Color(0.941f, 0.376f, 0.678f, 1f);
+        public Color SquareMineral = new Color(0.7804f, 0.3333f, 0.5176f, 1f);
 
         [Tooltip("The defended Core.")]
-        public Color Core = new Color(0.976f, 0.980f, 0.988f, 1f);
+        public Color Core = new Color(0.9843f, 0.9804f, 0.9608f, 1f);
 
         [Tooltip("What the Core tints toward as it takes damage.")]
-        public Color CoreDamage = new Color(0.878f, 0.263f, 0.263f, 1f);
+        public Color CoreDamage = new Color(0.8196f, 0.2706f, 0.1843f, 1f);
 
         [Tooltip("Ghost preview where the cursor may build.")]
-        public Color CursorOk = new Color(0.192f, 0.706f, 0.376f, 1f);
+        public Color CursorOk = new Color(0.1843f, 0.549f, 0.3529f, 1f);
 
         [Tooltip("Ghost preview where it may not.")]
-        public Color CursorBlocked = new Color(0.851f, 0.239f, 0.239f, 1f);
+        public Color CursorBlocked = new Color(0.7647f, 0.2275f, 0.1569f, 1f);
 
         [Tooltip("Ghost preview where the build is legal but the stockpile cannot cover it.")]
-        public Color CursorNoFunds = new Color(0.945f, 0.651f, 0.253f, 1f);
+        public Color CursorNoFunds = new Color(0.7882f, 0.5412f, 0.1804f, 1f);
 
         [Tooltip("HUD panel behind the readouts. Near-opaque on purpose: at 0.82 the map's own shapes and " +
             "grid lines showed through the cards, which is a busy background for small type on a dark fill.")]
-        public Color HudPanel = new Color(0.055f, 0.071f, 0.098f, 0.94f);
+        public Color HudPanel = new Color(0.051f, 0.0667f, 0.0824f, 0.93f);
 
         [Tooltip("HUD body text.")]
-        public Color HudText = new Color(0.933f, 0.949f, 0.969f, 1f);
+        public Color HudText = new Color(0.9373f, 0.9216f, 0.8902f, 1f);
 
         [Tooltip("HUD emphasis: the selected building, the wave number.")]
-        public Color HudAccent = new Color(0.353f, 0.722f, 1f, 1f);
+        public Color HudAccent = new Color(0.4353f, 0.6588f, 0.8235f, 1f);
 
         [Tooltip("HUD warning: a jam, a leaking Core, a lost run.")]
-        public Color HudWarn = new Color(0.945f, 0.451f, 0.353f, 1f);
+        public Color HudWarn = new Color(0.8863f, 0.4078f, 0.298f, 1f);
 
         [Tooltip("HUD good news: turrets armed, a held wave.")]
-        public Color HudGood = new Color(0.290f, 0.788f, 0.451f, 1f);
+        public Color HudGood = new Color(0.3412f, 0.6549f, 0.4471f, 1f);
 
         [Header("Material")]
         [Tooltip("The one material every view draws with: unlit, multiplying the meshes' vertex " +
@@ -338,6 +354,11 @@ namespace Facet.Game
         [Serializable]
         public sealed class MachineLook
         {
+            [Tooltip("Corner radius of every machine body, in tiles. A body is a silhouette with its points " +
+                "taken off, so a board of them reads as cast parts rather than as cut paper - and the same " +
+                "radius on every machine is what makes them one family.")]
+            public float CornerRadius = 0.06f;
+
             [Tooltip("Drill frame: inset from the tile edge, in tiles. The drill is a frame, not a block, " +
                 "so the shape patch icon underneath stays visible.")]
             public float FrameInset = 0.04f;
@@ -471,6 +492,10 @@ namespace Facet.Game
             public float Inset = 0.08f;
             [Tooltip("Side of the emblem, in tiles. It is the block's identity, not a wall.")]
             public float EmblemTiles = 1.4f;
+            [Tooltip("Corner radius of the block, in tiles. The Core is the one object on the map that is " +
+                "big enough for a millimetre of rounding to read at the default zoom, and it is the one the " +
+                "eye should stop on.")]
+            public float CornerRadius = 0.12f;
         }
 
         [Serializable]

@@ -61,6 +61,66 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void CampaignState_CarriesSavedProgressIn_WithoutDerivingItFromTheMap()
+        {
+            // A store can say three maps are cleared while the player replays the first one: the count is
+            // progress, the index is where they are, and neither follows from the other.
+            var campaign = new CampaignState(6, 3, 3);
+
+            Assert.AreEqual(3, campaign.ClearedCount);
+            Assert.AreEqual(3, campaign.MapIndex);
+
+            campaign.StartMap(0);
+            Assert.AreEqual(0, campaign.MapIndex, "a cleared map can be gone back to");
+            Assert.AreEqual(3, campaign.ClearedCount, "and replaying it does not un-clear the campaign");
+
+            // The driver polls MarkCleared every frame a world is won, so a replay that is won again is the
+            // case that matters: ClearedCount must not fall back to one.
+            campaign.MarkCleared();
+            Assert.AreEqual(3, campaign.ClearedCount, "winning the replay still reads three, not one");
+
+            campaign.StartMap(99);
+            Assert.AreEqual(5, campaign.MapIndex, "a stale row lands on the last map, not off the end");
+        }
+
+        [Test]
+        public void ANegativeIndexOrCount_IsClampedToTheBottom()
+        {
+            // Both values arrive from outside the process - a stored count and a UI row - so the low side
+            // of the clamp is pinned as well as the high side.
+            var campaign = new CampaignState(6, -3, -1);
+
+            Assert.AreEqual(0, campaign.MapIndex);
+            Assert.AreEqual(0, campaign.ClearedCount);
+
+            campaign.StartMap(-7);
+            Assert.AreEqual(0, campaign.MapIndex, "a stale row cannot ask below the first map");
+        }
+
+        [Test]
+        public void AFinishedCampaign_StaysFinished_WhenItsLastMapIsPlayedAgain()
+        {
+            var allCleared = new CampaignState(3, 2, 3);
+
+            allCleared.StartMap(2);
+            allCleared.MarkCleared();
+
+            Assert.AreEqual(3, allCleared.ClearedCount, "the campaign stays fully cleared");
+            Assert.AreEqual(2, allCleared.MapIndex, "and its last map stays the one being played");
+        }
+
+        [Test]
+        public void ASavedCountPastTheEndOfAShorterCampaign_IsClamped()
+        {
+            // A count outlives an edit to the map set: a campaign cut from six maps to two must not claim
+            // six cleared, or the level list would call every row CLEARED and still offer nothing to play.
+            var campaign = new CampaignState(2, 1, 99);
+
+            Assert.AreEqual(2, campaign.ClearedCount);
+            Assert.AreEqual(2, campaign.MapCount);
+        }
+
+        [Test]
         public void WaveSpawnIndices_WrapOntoTheMapsEntryPoints()
         {
             // A wave table names its door by position in the map's spawn list, and the index wraps so a

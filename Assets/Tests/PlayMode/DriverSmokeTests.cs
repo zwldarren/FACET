@@ -32,10 +32,21 @@ namespace Facet.PlayTests
         private GameObject _cameraObject;
         private GameObject _driverObject;
         private MapSet _campaign;
+        private int _progressBefore;
+        private bool _progressKeyExisted;
+        private bool _progressSnapshotted;
 
         [SetUp]
         public void CreateScene()
         {
+            // The player's progress is snapshotted and forgotten first, before any fixture work that can
+            // throw: TearDown runs even when SetUp fails, and on default fields it would Forget() rather
+            // than restore - costing the developer their real progress, the loss this isolation prevents.
+            _progressKeyExisted = PlayerPrefs.HasKey(CampaignProgress.Key);
+            _progressBefore = CampaignProgress.Read();
+            CampaignProgress.Forget();
+            _progressSnapshotted = true;
+
             _cameraObject = new GameObject("Main Camera");
             _cameraObject.tag = "MainCamera";
             Camera camera = _cameraObject.AddComponent<Camera>();
@@ -58,6 +69,9 @@ namespace Facet.PlayTests
             serialized.ApplyModifiedPropertiesWithoutUndo();
 #endif
 
+            // The driver opens the campaign on its saved progress' frontier, so a machine that has played
+            // the shipped maps must not decide which map the suite starts on (the store is forgotten at
+            // the top of CreateScene and put back in TearDown).
             _driverObject.SetActive(true);
         }
 
@@ -74,6 +88,13 @@ namespace Facet.PlayTests
                         if (map != null) Object.Destroy(map);
 
                 Object.Destroy(_campaign);
+            }
+
+            if (_progressSnapshotted)
+            {
+                _progressSnapshotted = false;
+                if (_progressKeyExisted) CampaignProgress.Write(_progressBefore);
+                else CampaignProgress.Forget();
             }
         }
 
@@ -207,12 +228,37 @@ namespace Facet.PlayTests
             var driver = _driverObject.GetComponent<SimulationDriver>();
             Assert.IsNotNull(driver.World, "the driver owns a simulation");
 
-            foreach (string view in new[] { "Grid", "Terrain", "Ore", "Belts", "Core", "Machines", "Items", "Enemies", "Shots", "Cursor", "ThreatRadar", "Hud" })
+            foreach (string view in new[] { "Grid", "Terrain", "Ore", "Belts", "Core", "Machines", "Items", "Enemies", "Shots", "Cursor", "ThreatRadar", "Hud", "Shell" })
                 Assert.IsNotNull(_driverObject.transform.Find(view), "the driver did not build the " + view + " view");
 
             int ticks = driver.World.TickCount;
             yield return new WaitForSeconds(0.4f);
             Assert.Greater(driver.World.TickCount, ticks, "the fixed 30 Hz clock keeps running across frames");
+        }
+
+        [UnityTest]
+        public IEnumerator TheShell_HoldsTheRun_WhileItStands()
+        {
+            yield return null;   // let Awake and the first Update run
+
+            var driver = _driverObject.GetComponent<SimulationDriver>();
+            var shell = _driverObject.GetComponentInChildren<ShellView>(true);
+            Assert.IsNotNull(shell, "the driver builds the shell");
+
+            // Opened the way the driver's own M key opens it, only without the input device: the shell is
+            // the state the driver holds the run on.
+            shell.ShowLevels(true);
+            yield return null;
+
+            int heldTicks = driver.World.TickCount;
+            yield return new WaitForSeconds(0.2f);
+            Assert.AreEqual(heldTicks, driver.World.TickCount, "the run does not tick behind the shell");
+            Assert.IsTrue(shell.Open, "and the shell is still the one on screen");
+
+            shell.Close();
+            yield return null;
+            yield return new WaitForSeconds(0.2f);
+            Assert.Greater(driver.World.TickCount, heldTicks, "and it ticks again once the shell is gone");
         }
 
         [UnityTest]

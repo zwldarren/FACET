@@ -25,6 +25,10 @@ namespace Facet.Game
 
         protected override Palette.Layer Layer => Colors.CoreLayer;
 
+        /// <summary>The Core is the largest solid thing on the map, and the one the eye has to find: it
+        /// drops a shadow like every other body.</summary>
+        protected override bool CastsShadows => true;
+
         protected override void OnInitialized()
         {
             _core = Colors.Visuals.Core;
@@ -32,13 +36,13 @@ namespace Facet.Game
             // Counter-clockwise, which ProcMesh requires of every polygon.
             float size = CoreState.Size;
             float inset = Colors.CoreBlock.Inset;
-            _block = new[]
+            _block = ProcMesh.Rounded(new[]
             {
                 new Vector2(inset, inset),
                 new Vector2(size - inset, inset),
                 new Vector2(size - inset, size - inset),
                 new Vector2(inset, size - inset),
-            };
+            }, Colors.CoreBlock.CornerRadius);
 
             float emblemTiles = Colors.CoreBlock.EmblemTiles;
             float min = size * 0.5f - emblemTiles * 0.5f;
@@ -80,6 +84,9 @@ namespace Facet.Game
             {
                 var centre = new Vector2(core.Cell.X + CoreState.Size * 0.5f, core.Cell.Y + CoreState.Size * 0.5f);
                 Color tint = Color.Lerp(Colors.CoreDamage, Color.white, core.HealthFraction);
+                // A sprite replaces the block's mark, not its footprint: the shipped block is what stands
+                // on the ground, so it is what drops the shadow under an authored body.
+                AppendShadow(_block, origin + _core.Offset);
                 DrawSprite(_core, centre, tint);
                 EndSprites();
                 return;
@@ -94,6 +101,7 @@ namespace Facet.Game
             Color fill = Color.Lerp(Colors.CoreDamage, healthy, core.HealthFraction);
             Color emblem = Color.Lerp(Colors.CoreDamage, Colors.Outline, core.HealthFraction);
 
+            AppendShadow(_block, origin);
             AppendPolygon(_block, origin, fill, outline, outlineWidth);
 
             // No outline of its own: it sits inside the block, where a second outline would read as a seam.
