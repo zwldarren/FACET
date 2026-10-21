@@ -339,6 +339,25 @@ namespace Facet.Game
         /// honest guess.</summary>
         public int BarTiles => _bar != null ? _bar.Tiles.Count : HudLayout.BarTiles;
 
+        /// <summary>
+        /// The operators this map hands over that the map before it did not (#19). The campaign's first map is
+        /// taught by the "how to play" card; a later map that adds a machine says what it is for on the same card,
+        /// retitled, so a new operator is never dropped into the build bar without a word.
+        /// </summary>
+        private Operators NewOperators
+        {
+            get
+            {
+                if (_campaign == null || _campaign.IsFirstMap || _world == null) return Operators.None;
+                MapDefinition previous = _catalog != null && _campaign.MapIndex > 0
+                    ? _catalog.At(_campaign.MapIndex - 1)
+                    : null;
+                return previous == null ? Operators.None : MachineReading.NewOperators(_world.Map, previous);
+            }
+        }
+
+        private bool HasIntroduction => NewOperators != Operators.None;
+
         /// <summary>Is the "how to play" card up? Up by default on the campaign's first map - unless that map
         /// brings a lesson, whose task list owns this corner for as long as it is being taught. Once the lesson
         /// has had its moment the reference card comes back, so the five general rules are the last thing the
@@ -352,7 +371,10 @@ namespace Facet.Game
                 if (_campaign == null) return false;
                 if (_tutorialChoice.HasValue) return _tutorialChoice.Value;
 
-                return _campaign.IsFirstMap && (!HasTutorial || LessonHandedOver);
+                // A later map that hands over a machine opens with the card up too, saying what the machine is
+                // for (#19) - unless it brings a lesson of its own, which then owns the corner the same way.
+                return (_campaign.IsFirstMap && (!HasTutorial || LessonHandedOver)) ||
+                       (HasIntroduction && (!HasTutorial || LessonHandedOver));
             }
         }
 
@@ -445,6 +467,9 @@ namespace Facet.Game
             _palette = palette;
             _campaign = campaign;
             _catalog = catalog;
+            // A map that hands over a new machine opens with its card up even if the player hid "how to play"
+            // earlier: that choice was about a card they had read, and this one is new (#19).
+            if (HasIntroduction) _tutorialChoice = null;
             if (selectKind != null) _selectKind = selectKind;
             if (rotate != null) _rotate = rotate;
             if (setFilter != null) _setFilter = setFilter;
@@ -465,6 +490,7 @@ namespace Facet.Game
             // The hierarchy stands; a map change is a rebinding. Every dirty flag goes up, so the
             // next update pass redraws the cards against the new world rather than trusting what the
             // old one had said.
+            FillTutorial(_tutorial);
             MarkEverythingDirty();
         }
 
@@ -814,10 +840,9 @@ namespace Facet.Game
             const float w = HudLayout.StatusWidth;
             const float inner = w - CardInset * 2f;
 
-            HudText title = Label(root, "title", HudType.Body, FontStyle.Bold, TextAnchor.MiddleLeft,
+            panel.Title = Label(root, "title", HudType.Body, FontStyle.Bold, TextAnchor.MiddleLeft,
                 tracked: true);
-            At(title.Rect, CardInset, 4f, 250f, 22f);
-            title.Set("HOW TO PLAY", _palette.HudText);
+            At(panel.Title.Rect, CardInset, 4f, 250f, 22f);
 
             // The player's way out: the card is a first-map default, not a rule, and the key on the button
             // is the way back once it is gone (the help card names it too).
@@ -829,20 +854,13 @@ namespace Facet.Game
             At(rule.Rect, CardInset, 27f, inner, 1f);
 
             // Five steps, one line each: the numerals are the one accent, because they are the lesson's
-            // rhythm rather than decoration. Rich text is on for this one label only.
-            HudText body = Label(root, "body", HudType.Micro, FontStyle.Normal, TextAnchor.UpperLeft,
+            // rhythm rather than decoration. Rich text is on for this one label only. What the five lines say
+            // depends on the map (see FillTutorial).
+            panel.Body = Label(root, "body", HudType.Micro, FontStyle.Normal, TextAnchor.UpperLeft,
                 wrap: false, rich: true);
-            At(body.Rect, CardInset, 30f, inner, 66f);
+            At(panel.Body.Rect, CardInset, 30f, inner, 66f);
 
-            string accent = "#" + ColorUtility.ToHtmlStringRGB(_palette.HudAccent);
-            body.Set(
-                "<color=" + accent + ">1</color>  Drill (2) on ore, then drag Belt (1) to the Core.\n" +
-                "<color=" + accent + ">2</color>  A full shape banked earns one coin.\n" +
-                "<color=" + accent + ">3</color>  Each wave is weak to the shape printed above it.\n" +
-                "<color=" + accent + ">4</color>  Cutter (3) splits, Rotator (4) turns  ·  Q/E turns a ghost.\n" +
-                "<color=" + accent + ">5</color>  Belt it to a Turret (0): the exact shape does full damage.",
-                HudInk.Blend(_palette.HudText, _palette.HudPanel, 0.18f));
-
+            FillTutorial(panel);
             panel.Root.gameObject.SetActive(ShowTutorial);
             return panel;
         }
@@ -897,6 +915,74 @@ namespace Facet.Game
 
             panel.Root.gameObject.SetActive(false);
             return panel;
+        }
+
+        /// <summary>
+        /// The card's five lines for the map being played: "how to play" on the campaign's first map, and on a
+        /// later map that hands over a machine, what that machine is for and how to use it (#19). Re-said on every
+        /// map change, because the card is built once and kept. Five lines of Micro type, one numeral each, no
+        /// wrapping - the card's own rhythm - so every line here stays inside the card's inner width.
+        /// </summary>
+        private void FillTutorial(TutorialPanel panel)
+        {
+            if (panel == null || panel.Title == null) return;
+
+            string accent = "#" + ColorUtility.ToHtmlStringRGB(_palette.HudAccent);
+            Color ink = HudInk.Blend(_palette.HudText, _palette.HudPanel, 0.18f);
+
+            Operators fresh = NewOperators;
+            string[] lines;
+            if (fresh == Operators.None)
+            {
+                panel.Title.Set("HOW TO PLAY", _palette.HudText);
+                lines = new[]
+                {
+                    "Drill (2) on ore, then drag Belt (1) to the Core.",
+                    "A full shape banked earns one coin.",
+                    "Each wave is weak to the shape printed above it.",
+                    "Cutter (3) splits, Rotator (4) turns  \u00B7  Q/E turns a ghost.",
+                    "Belt it to a Turret (0): the exact shape does full damage.",
+                };
+            }
+            else if ((fresh & Operators.Stacker) != 0)
+            {
+                // The map that first asks for a mixed round: what the machine is for, then the recipe.
+                panel.Title.Set("NEW: STACKER (" + HotkeyFor(Operators.Stacker) + ")", _palette.HudText);
+                lines = new[]
+                {
+                    MachineReading.Introduction(Operators.Stacker),
+                    "Mine both ores, and cut a half of each with a Cutter (" + HotkeyFor(Operators.Cutter) + ").",
+                    "Belt the two halves into two sides of the Stacker.",
+                    "Halves on the same side never join - it waits for the other.",
+                    "A two-colour figure above is a round only it can make.",
+                };
+            }
+            else
+            {
+                panel.Title.Set("NEW ON THIS MAP", _palette.HudText);
+                var list = new List<string>();
+                foreach (Operators op in new[] { Operators.Cutter, Operators.Rotator })
+                    if ((fresh & op) != 0)
+                        list.Add(MachineReading.Introduction(op) + " (" + HotkeyFor(op) + ")");
+                lines = list.ToArray();
+            }
+
+            var body = new StringBuilder();
+            for (int i = 0; i < lines.Length && i < 5; i++)
+            {
+                if (i > 0) body.Append('\n');
+                body.Append("<color=").Append(accent).Append('>').Append(i + 1).Append("</color>  ").Append(lines[i]);
+            }
+
+            panel.Body.Set(body.ToString(), ink);
+        }
+
+        private static string HotkeyFor(Operators op)
+        {
+            BuildKind kind = op == Operators.Cutter ? BuildKind.Cutter
+                : op == Operators.Rotator ? BuildKind.Rotator
+                : BuildKind.Stacker;
+            return BuildInput.HotkeyLabel((int)kind);
         }
 
         /// <summary>The controls cluster: wave, pause, gear, menu and help, five small controls in the
@@ -1955,8 +2041,19 @@ namespace Facet.Game
 
             string production = ProductionLine(jams, blocked, stalled, starved, total);
             bool productionNews = production != null;
+            Color productionColour = productionNews ? ProductionColour(jams, blocked, stalled, starved) : _palette.HudText;
+
+            // A quiet line is the briefing's to use: when the wave being counted to asks for a mixed round, say
+            // under its chips why the figure is two colours and which machine makes it (#19). A stopped line
+            // still wins the slot - fixing a jam comes before building the next round.
+            if (!productionNews && (production = MixedDemandNote()) != null)
+            {
+                productionNews = true;
+                productionColour = _palette.HudAccent;
+            }
+
             _status.Production.Show(productionNews);
-            if (productionNews) _status.Production.Set(production, ProductionColour(jams, blocked, stalled, starved));
+            if (productionNews) _status.Production.Set(production, productionColour);
 
             string threat = ThreatWarning(in outOfView);
             bool threatNews = threat != null;
@@ -2129,6 +2226,25 @@ namespace Facet.Game
                     !LayoutChips(_status.ChipsAfter, _status.AfterLabel, afterLabel, _afterEntries, ChipsAfterTop, withNames: false))
                     HideChips();
             }
+        }
+
+        /// <summary>The demand note for the first mixed round the next wave briefs, or null - see
+        /// <see cref="MachineReading.DemandNote"/>. Only while the run is live: a finished run has no wave to
+        /// build for.</summary>
+        private string MixedDemandNote()
+        {
+            if (_world.Status != GameStatus.Playing) return null;
+
+            WaveDefinition next = _world.Waves.NextWaveDefinition;
+            if (next == null) return null;
+
+            for (int g = 0; g < next.Groups.Length; g++)
+            {
+                string note = MachineReading.DemandNote(next.Groups[g].Weakness);
+                if (note != null) return note;
+            }
+
+            return null;
         }
 
         /// <summary>One wave's groups as chip entries, reused per frame so a briefing change allocates
@@ -3869,6 +3985,8 @@ namespace Facet.Game
         {
             public RectTransform Root;
             public HudButton Hide;
+            public HudText Title;
+            public HudText Body;
         }
 
         /// <summary>The lesson's card: a heading, the position in the list, the lines themselves as one

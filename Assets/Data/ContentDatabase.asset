@@ -123,8 +123,8 @@ MonoBehaviour:
     Behavior: 10
     Cost: 25
     Name: Stacker
-    Description: "unions two shapes that do not overlap \xB7 an overlapping pair
-      waits"
+    Description: "joins two pieces that do not overlap into one mixed round \xB7
+      an overlapping pair waits"
     Interval: 2
     Filter:
       Mode: 0

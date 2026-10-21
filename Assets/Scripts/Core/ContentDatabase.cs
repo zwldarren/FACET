@@ -553,7 +553,7 @@ namespace Facet.Core
                 // mixed rounds, and the reason a two-mineral line is a commitment.
                 new MachineDef(new ContentId("stacker"), BuildKind.Stacker, TileKind.Stacker,
                     BehaviorKind.Stacker, cost: 25, name: "Stacker",
-                    description: "unions two shapes that do not overlap · an overlapping pair waits",
+                    description: "joins two pieces that do not overlap into one mixed round · an overlapping pair waits",
                     interval: 2f, maxHp: 60f),
 
                 // Well under a belt's one second per item, so a pipe never throttles the line it carries.
