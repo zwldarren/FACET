@@ -22,10 +22,13 @@ namespace Facet.Core
 
             // Still holding: every outlet it may use is full or jammed. That is a stoppage the belts behind
             // it cannot see - the hub takes nothing, so nothing upstream is ever "blocked" - which is why it
-            // is counted here.
+            // is counted here. Counted, though, only when there is no outlet at all: an outlet that is full
+            // is backpressure, and what has actually stopped is further down the line - a jam, a dead end,
+            // or a consumer that is simply full (a loaded gun, and this whole line with it).
             if (!splitter.Carried.IsEmpty)
             {
-                MachineClock.Waiting(ref splitter, waiting: true);
+                MachineClock.Waiting(ref splitter,
+                    waiting: !MachineDelivery.HasOutlet(ctx.Belts, cell, DirMask.All));
                 return;
             }
 

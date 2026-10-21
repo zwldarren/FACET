@@ -15,11 +15,14 @@ namespace Facet.Game
     /// periphery. The HUD's threat line reports the same summary the arrows were made from, so the two are
     /// one answer in two registers rather than two rules that can drift.
     ///
-    /// Two shapes carry the grammar: a <b>chevron</b> is something moving and coming at you, a <b>mark</b>
-    /// is a place to go. Colours are the game's existing ones - an enemy's body colour, the jam's red, the
-    /// Core's pale - so an arrow needs no legend. Everything is measured in screen pixels, multiplying a
-    /// palette number by <see cref="MeshView.WorldPerPixel"/>, so an arrow is not a speck at the wide zoom
-    /// or a blob at the close one.
+    /// One shape carries each kind of news: a <b>chevron</b> is something moving and coming at you, a
+    /// <b>mark</b> is a place to go. The two marks are told apart by their fill, because both are the same
+    /// four corners: a stopped line's is hollow, in the amber a blocked segment wears, and the Core's is
+    /// filled in its own pale. Colours are the game's existing ones - an enemy's body colour, the stop's
+    /// amber, the Core's pale - so an arrow needs no legend, and red means a wave and nothing else.
+    /// Everything is measured in screen pixels, multiplying a palette number by
+    /// <see cref="MeshView.WorldPerPixel"/>, so an arrow is not a speck at the wide zoom or a blob at the
+    /// close one.
     ///
     /// Like every other view it reads the simulation and never writes to it; its only extra input is the
     /// camera, which the driver hands it with the map, since the driver owns the rig.
@@ -35,9 +38,10 @@ namespace Facet.Game
         /// there, and it is on a tile you cannot see"); the card's line is where the two are told apart.</summary>
         private readonly List<Int2> _blocked = new List<Int2>();
 
-        /// <summary>Machines holding a piece their outlets will not take - the third way a line stops, and the
-        /// third mark on the same list: the machine has eaten its item, so nothing upstream of it is ever
-        /// "blocked" and the stoppage has no other way of showing.</summary>
+        /// <summary>Machines holding a piece with no outlet to hand it on to - the third way a line stops, and
+        /// the third mark on the same list: the machine has eaten its item, so nothing upstream of it is ever
+        /// "blocked" and the stoppage has no other way of showing. A full outlet is not here: that is a loaded
+        /// line, and it stops nothing.</summary>
         private readonly List<Int2> _stalled = new List<Int2>();
 
         /// <summary>Marker scratch, sized to the palette's cap: the arrows are folded into it and drawn
@@ -139,7 +143,9 @@ namespace Facet.Game
         /// than a threat.
         ///
         /// An enemy cluster wears its nearest member's colour and shouts when any of them is hitting
-        /// something; anything merely far away fades.</summary>
+        /// something; anything merely far away fades. A stop is never drawn in that colour, however loud it
+        /// gets: red is the player's shorthand for "the wave", and a red mark on the edge of a quiet map
+        /// sends them looking for something that is not there.</summary>
         private void AppendMarker(in ThreatRadar.Marker marker, Palette.RadarLook look, float pixel, int tick)
         {
             Color colour;
@@ -155,8 +161,12 @@ namespace Facet.Game
                     return;
 
                 case ThreatRadar.Subject.Jam:
-                    AppendMark(marker.At, look.JamMarkerHalfPixels * pixel,
-                        WithAlpha(Colors.Jam, Fade(marker.Distance, look)), 0f);
+                    // A stopped line is a place to go and not a body, so it is a hole with an edge rather
+                    // than a dot - and amber, the colour a blocked segment wears on the bed, rather than
+                    // the jam's red. The bed itself is where the three ways a line stops are told apart;
+                    // the mark only has to say "somewhere out there, on this bearing".
+                    AppendStopMark(marker.At, look.StopMarkHalfPixels * pixel,
+                        WithAlpha(Colors.BeltBlocked, Fade(marker.Distance, look)), look.StopMarkPixels * pixel);
                     return;
 
                 case ThreatRadar.Subject.Core:
@@ -211,8 +221,28 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>A four-sided mark - a jam, a pip, the Core - standing on a corner, from a radius and an
-        /// optional outline. Wound counter-clockwise: east, north, west, south.</summary>
+        /// <summary>
+        /// A stopped line's mark: the same four corners as <see cref="AppendMark"/>, with nothing inside
+        /// them - a place on the edge of the screen rather than a thing standing on it, which is what a
+        /// filled dot in a mark's size reads as once the eye has been taught that red is the wave. The
+        /// stroke grows outward from those corners, so the diamond the player sees is
+        /// <see cref="Palette.RadarLook.StopMarkHalfPixels"/> plus the stroke across.
+        ///
+        /// Wound counter-clockwise - east, north, west, south - the order
+        /// <see cref="ProcMesh.AppendPolygonOutline"/> needs to grow the band outward.
+        /// </summary>
+        private void AppendStopMark(Vector2 at, float radius, Color colour, float stroke)
+        {
+            _mark[0] = at + Vector2.right * radius;
+            _mark[1] = at + Vector2.up * radius;
+            _mark[2] = at - Vector2.right * radius;
+            _mark[3] = at - Vector2.up * radius;
+            AppendPolygonOutline(_mark, Vector2.zero, colour, stroke);
+        }
+
+        /// <summary>A filled four-sided mark - a pip, the Core - standing on a corner, from a radius and an
+        /// optional outline. Wound counter-clockwise: east, north, west, south. The stop's mark is the
+        /// hollow one (<see cref="AppendStopMark"/>), because a filled dot is a body.</summary>
         private void AppendMark(Vector2 at, float radius, Color colour, float outlineWidth)
         {
             _mark[0] = at + Vector2.right * radius;

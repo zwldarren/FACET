@@ -44,10 +44,13 @@ namespace Facet.Core
 
                 // Turned, and waiting only for room. It leaves on the tick its turn completes when the outlet
                 // is free; when it is not, this is where the machine waits, and the item is not turned again.
+                // A full outlet is backpressure and not a stoppage; a facing with no outlet belt on it is the
+                // one wait that will never end by itself, and it is what gets counted.
                 bool pushed = MachineDelivery.TryPushOutSide(ctx.Belts, cell, rotator.Direction, rotator.Carried);
                 if (pushed) rotator.Carried = Shape.None;
 
-                MachineClock.Waiting(ref rotator, waiting: !pushed);
+                MachineClock.Waiting(ref rotator,
+                    !pushed && !MachineDelivery.IsOutput(ctx.Belts, cell, rotator.Direction));
                 return;
             }
 

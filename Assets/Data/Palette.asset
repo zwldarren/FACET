@@ -44,8 +44,9 @@ MonoBehaviour:
   CursorOk: {r: 0.1843, g: 0.549, b: 0.3529, a: 1}
   CursorBlocked: {r: 0.7647, g: 0.2275, b: 0.1569, a: 1}
   CursorNoFunds: {r: 0.7882, g: 0.5412, b: 0.1804, a: 1}
-  HudPanel: {r: 0.051, g: 0.0667, b: 0.0824, a: 0.93}
-  HudText: {r: 0.9373, g: 0.9216, b: 0.8902, a: 1}
-  HudAccent: {r: 0.4353, g: 0.6588, b: 0.8235, a: 1}
-  HudWarn: {r: 0.8863, g: 0.4078, b: 0.298, a: 1}
-  HudGood: {r: 0.3412, g: 0.6549, b: 0.4471, a: 1}
+  HudPanel: {r: 0.054, g: 0.058, b: 0.065, a: 0.965}
+  HudText: {r: 0.9569, g: 0.9451, b: 0.9216, a: 1}
+  HudAccent: {r: 0.4863, g: 0.7412, b: 0.9098, a: 1}
+  HudShadow: {r: 0.03, g: 0.035, b: 0.04, a: 0.42}
+  HudWarn: {r: 0.9333, g: 0.4431, b: 0.3216, a: 1}
+  HudGood: {r: 0.4863, g: 0.7412, b: 0.9098, a: 1}

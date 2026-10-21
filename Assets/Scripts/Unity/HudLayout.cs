@@ -6,31 +6,40 @@ namespace Facet.Game
     /// Where the HUD's pieces sit, as pure geometry in screen pixels: the cards and the bar the view
     /// draws, the stockpile readout beside the status card, and the strips of the screen they own.
     ///
-    /// A table rather than fields on <see cref="HudView"/> because two views need the same answer: the
-    /// HUD draws the pieces, and the camera rig must not leave a tile hidden behind one. Panel sizes
-    /// are unscaled and multiplied by <see cref="Scale"/> - the same scale the HUD's fonts use - so the
-    /// layout keeps the same fraction of the screen at every resolution.
+    /// The budget is the point of this table. At 720p the screen is 1152 x 720 design units and the four
+    /// persistent pieces - status, tutorial, build bar, info - must spend no more than 22 % of it with the
+    /// tutorial up. The old table spent 48 %: two 470-wide cards down the left edge, a full-width 126-unit
+    /// bar, and a 392-wide info card floating over it. Here the left column is one 360-wide rail, the bar
+    /// is a centred 880 x 56 strip, and the info card is 300 x 126; the four together are 179,240 of the
+    /// 829,440 units, 21.6 %. A table rather than fields on <see cref="HudView"/> because two views need
+    /// the same answer: the HUD draws the pieces, and the camera rig must not leave a tile hidden behind
+    /// one. Panel sizes are unscaled and multiplied by <see cref="Scale"/> - the same scale the HUD's
+    /// fonts use - so the layout keeps the same fraction of the screen at every resolution.
     /// </summary>
     public static class HudLayout
     {
         /// <summary>Gap between a panel and the screen edge.</summary>
         public const float Margin = 12f;
 
-        // Unscaled panel sizes. The status card is the largest by a distance, which is why the left
-        // and top strips are measured from it (see Insets).
-        public const float StatusWidth = 470f;
+        // Unscaled panel sizes. The status rail is the tallest card, which is why the left and top
+        // strips are measured from it (see Insets).
+        public const float StatusWidth = 360f;
 
-        /// <summary>The card after the quieting: the event feed and the always-on diagnostic sentences
+        /// <summary>The rail after the quieting: the event feed and the always-on diagnostic sentences
         /// are gone - a line that only ever says "all clear" trains the player to stop reading it -
         /// leaving a wave news line, two rows of the bill of materials (the wave coming and the one after
-        /// it: §5 previews both), the two diagnostic lines and the start-wave button.</summary>
-        public const float StatusHeight = 218f;
+        /// it: §5 previews both), the two diagnostic lines and the seed.</summary>
+        public const float StatusHeight = 148f;
 
-        /// <summary>The controls cluster collapsed: the pause, speed-gear and help buttons, a small cluster
-        /// in the screen's top-right corner (three 34-unit buttons, two 6-unit gaps). The keyboard list lives behind the help button instead of costing
-        /// a corner of the screen all run.</summary>
-        public const float ControlsWidth = 114f;
+        /// <summary>The controls cluster collapsed: the wave, pause, speed-gear and help buttons, a small
+        /// cluster in the screen's top-right corner (two 54/34-unit buttons and two 34s, three 6-unit
+        /// gaps). The keyboard list lives behind the help button instead of costing a corner of the screen
+        /// all run; the wave button lives here so the status rail does not owe it a row.</summary>
+        public const float ControlsWidth = 174f;
         public const float ControlsHeight = 34f;
+
+        /// <summary>The wave button is wider than the square ones: it carries a word, not a glyph.</summary>
+        public const float WaveButtonWidth = 54f;
 
         /// <summary>The gap between the cluster's buttons.</summary>
         public const float ControlGap = 6f;
@@ -38,22 +47,23 @@ namespace Facet.Game
         /// <summary>The help card the help button opens: the keyboard and the restart button, which
         /// stays two clicks from a misfire. It is a transient overlay - it covers the map while open the
         /// way a toast does, and the camera reserves no strip for it.</summary>
-        public const float HelpWidth = 210f;
+        public const float HelpWidth = 250f;
 
         /// <summary>The help card's inner geometry, in design units. One place the HUD's card and the
         /// shell's copy of it both read from, so the line step, the inset and the card's own height cannot
-        /// drift apart when a line is added or the step is retuned.</summary>
-        public const float HelpInset = 12f;
+        /// drift apart when a line is added or the step is retuned. Wide enough for the label-size lines:
+        /// the card is reference material, and reference material that has to be squinted at is not read.</summary>
+        public const float HelpInset = 14f;
         public const float HelpHeaderTop = 9f;
-        public const float HelpLineTop = 29f;
+        public const float HelpLineTop = 30f;
         public const float HelpLineStep = 15f;
         public const float HelpLineHeight = 14f;
-        public const float HelpLineSize = 11f;
+        public const float HelpLineSize = HudType.Label;
 
         /// <summary>The restart button's gap under the last key line, its height, and the card's foot
         /// below it.</summary>
-        public const float HelpButtonGap = 5f;
-        public const float HelpButtonHeight = 26f;
+        public const float HelpButtonGap = 8f;
+        public const float HelpButtonHeight = 24f;
         public const float HelpFoot = 12f;
 
         /// <summary>How tall the help card is for a list of <paramref name="lines"/> pairs: the last
@@ -62,8 +72,12 @@ namespace Facet.Game
         public static float HelpHeightFor(int lines)
             => HelpLineTop + lines * HelpLineStep + HelpButtonGap + HelpButtonHeight + HelpFoot;
 
-        public const float InfoWidth = 392f;
-        public const float InfoHeight = 134f;
+        /// <summary>The info card's base size: a header, a three-line blurb, one stats row and the facing
+        /// row with its three buttons, and room for the six inspect rows. The blurb's box is three lines
+        /// because the catalogue's sentences are three lines at this width - the card used to assume two and
+        /// a long one (the cutter's) printed through the stats row.</summary>
+        public const float InfoWidth = 300f;
+        public const float InfoHeight = 138f;
 
         /// <summary>
         /// How much taller the info card is while a sorter's filter picker is on it: the quadrant canvas,
@@ -71,17 +85,25 @@ namespace Facet.Game
         /// is bottom-anchored, so it grows upward and the picker takes the band directly under the header -
         /// the machine's setting is the first thing to read, before its ports and its health.
         /// </summary>
-        public const float InfoPickHeight = 62f;
+        public const float InfoPickHeight = 66f;
 
-        public const float BarHeight = 126f;
+        /// <summary>The build bar: a centred strip, not a full-width shelf. 880 wide is enough for the
+        /// whole table at 720p on one row - eleven 73-unit keys - so the bar is a keyboard rather than a
+        /// two-level catalogue, and the map stays visible either side of it. 52 tall holds the 40-unit key
+        /// and its 6-unit air; the four units it gives back pay for the info card's third blurb line, so the
+        /// pair stays inside the 22 % the layout may spend.</summary>
+        public const float BarWidth = 880f;
+        public const float BarHeight = 52f;
 
         /// <summary>The gap the info card floats above the bar with.</summary>
         public const float InfoGap = 8f;
 
-        /// <summary>Room for the tutorial's heading and its five lines, at a text size an eye can read
-        /// without leaning in: the cutter and turret lines are the ones that wrap on a narrow window, and
-        /// the room is here so that wrap costs nothing.</summary>
-        public const float TutorialHeight = 208f;
+        /// <summary>Room for the tutorial's heading and its five steps at the micro size: five 11-unit
+        /// lines under a 24-unit header, with the air the card needs to not look clipped at the bottom.
+        /// The "stuck?" tip the card used to carry is the help card's business now - one list of keys in
+        /// one place. The card is the same width as the status rail and hangs off it, so the left column
+        /// reads as one piece.</summary>
+        public const float TutorialHeight = 108f;
 
         /// <summary>The gap the tutorial sits below the status card with. Deliberately the same 8 the
         /// info card floats above the bar with: those two are the HUD's only cards that hang off another
@@ -93,16 +115,17 @@ namespace Facet.Game
         public const float StockpileGap = 10f;
 
         /// <summary>Room for a five-digit stockpile and its shape; the readout grows rightwards from the
-        /// status card, and this is the room it may grow within.</summary>
-        public const float StockpileWidth = 210f;
+        /// status card, and this is the room it may grow within. The seed moved to the status card's footer,
+        /// so the pill is only as wide as a bank has to be.</summary>
+        public const float StockpileWidth = 124f;
 
-        /// <summary>Tall enough to hold the largest type, and to centre the readout on the status card's
+        /// <summary>Tall enough to hold the display size, and to centre the readout on the status card's
         /// title line - the two are read as one row.</summary>
         public const float StockpileHeight = 44f;
 
         /// <summary>The gap a toast floats below the top cards with: inside the map area, clear of every
         /// panel, where a player who just clicked is already looking.</summary>
-        public const float ToastGap = 16f;
+        public const float ToastGap = 12f;
 
         /// <summary>How much bigger than a 720p screen everything is drawn.</summary>
         public static float Scale(float screenHeight) => Mathf.Clamp(screenHeight / 720f, 0.8f, 2.2f);
@@ -110,9 +133,9 @@ namespace Facet.Game
         public static Rect Status(float s)
             => new Rect(Margin * s, Margin * s, StatusWidth * s, StatusHeight * s);
 
-        /// <summary>The controls cluster: pause and help, hung off the screen's top-right corner. The
-        /// keyboard list lives in <see cref="Help"/> behind the help button - reference material is
-        /// worth a click, not a corner of the screen.</summary>
+        /// <summary>The controls cluster: wave, pause, gear and help, hung off the screen's top-right
+        /// corner. The keyboard list lives in <see cref="Help"/> behind the help button - reference
+        /// material is worth a click, not a corner of the screen.</summary>
         public static Rect Controls(float screenWidth, float s)
             => new Rect(screenWidth - (Margin + ControlsWidth) * s, Margin * s,
                 ControlsWidth * s, ControlsHeight * s);
@@ -152,20 +175,30 @@ namespace Facet.Game
             return new Rect(left, Margin * s, width, StockpileHeight * s);
         }
 
+        /// <summary>The build bar: a centred strip, narrower than the screen on purpose. A full-width
+        /// shelf spent 17 % of the frame on its own; the same tiles fit in a strip the eye reads as a
+        /// control, with the map visible either side of it.</summary>
         public static Rect Bar(float screenWidth, float screenHeight, float s)
-            => new Rect(Margin * s, screenHeight - (Margin + BarHeight) * s,
-                screenWidth - 2f * Margin * s, BarHeight * s);
+        {
+            float width = Mathf.Min(BarWidth * s, screenWidth - 2f * Margin * s);
+            return new Rect((screenWidth - width) * 0.5f,
+                screenHeight - (Margin + BarHeight) * s, width, BarHeight * s);
+        }
 
-        /// <summary>
-        /// The info card floating above the bar, bottom-anchored so a taller card grows upward.
+        /// <summary>The info card floating above the bar, bottom-anchored so a taller card grows upward.
+        /// It hangs off the screen's right edge rather than the bar's, because the bar is centred now and
+        /// a card aligned to its right corner would float in the middle of the frame.
         /// <paramref name="pickerUp"/> is the sorter picker's band: the one thing on the card that a
         /// reader of the panels cannot see from the card's place, which is why it is a parameter rather
-        /// than a number the reader guesses.
-        /// </summary>
-        public static Rect Info(Rect bar, float s, bool pickerUp = false)
-            => new Rect(bar.xMax - InfoWidth * s,
-                bar.y - (InfoGap + InfoHeight + (pickerUp ? InfoPickHeight : 0f)) * s,
-                InfoWidth * s, (InfoHeight + (pickerUp ? InfoPickHeight : 0f)) * s);
+        /// than a number the reader guesses.</summary>
+        public static Rect Info(float screenWidth, float screenHeight, float s, bool pickerUp = false)
+        {
+            Rect bar = Bar(screenWidth, screenHeight, s);
+            float height = InfoHeight + (pickerUp ? InfoPickHeight : 0f);
+
+            return new Rect(screenWidth - (Margin + InfoWidth) * s,
+                bar.y - (InfoGap + height) * s, InfoWidth * s, height * s);
+        }
 
         /// <summary>A toast: centred just under the top cards, sized to its own text by the view. It
         /// overlays the map on purpose - news about a click arrives where the player who clicked is
@@ -199,9 +232,8 @@ namespace Facet.Game
             into[n++] = Status(s);
             if (tutorialUp) into[n++] = Tutorial(s);
             into[n++] = Controls(screenWidth, s);
-            Rect bar = Bar(screenWidth, screenHeight, s);
-            into[n++] = bar;
-            into[n++] = Info(bar, s, pickerUp);
+            into[n++] = Bar(screenWidth, screenHeight, s);
+            into[n++] = Info(screenWidth, screenHeight, s, pickerUp);
             return n;
         }
 

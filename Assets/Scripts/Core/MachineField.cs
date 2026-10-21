@@ -109,22 +109,29 @@ namespace Facet.Core
         public int Swallowed;
 
         /// <summary>
-        /// How many ticks in a row this machine has held something its outlets would not take: the cutter
-        /// with a full lane, the sorter waiting on the side it faces, the pipe whose landing belt is busy,
-        /// the rotator turned and waiting for room, the stacker with a finished round and nowhere to put it.
-        /// Reset the tick anything moves.
+        /// How many ticks in a row this machine has held something it has <b>nowhere</b> to pass on: the
+        /// cutter with a lane that was never wired, the sorter whose routed side has no belt, the pipe whose
+        /// landing cell is not a belt, the stacker with no outlet at all. Reset the tick it has somewhere to
+        /// put the piece.
         ///
         /// It is the one way a line stops that nothing else on the HUD names. A <b>jam</b> is a machine's
         /// refusal and a <b>blocked</b> segment is an item with nowhere to go at all, but a machine holding a
-        /// piece an outlet merely would not take is neither: the belts behind it are not blocked (the machine
+        /// piece it can never hand on is neither: the belts behind it are not blocked (the machine
         /// <em>would</em> take them) and nothing was refused. Without this counter the line stands still and
         /// the screen says nothing at all - which is what it is here to end.
         ///
-        /// Two waits are deliberately <em>not</em> counted, so that the number stays one piece of news: a
+        /// <b>A full outlet is deliberately not counted.</b> That is backpressure - every machine in a loaded
+        /// line holds a piece - so counting it turns "my factory is full and the gun is loaded" into "3
+        /// machines stalled", a false alarm the player cannot act on. The belt behind a full outlet is jammed
+        /// or blocked if anything is really wrong, and both are counted on their own; a full outlet with
+        /// neither is simply a consumer that is full (a loaded gun, most of the time), which is not news.
+        ///
+        /// Three waits are deliberately <em>not</em> counted, so that the number stays one piece of news: a
         /// drill's (its wait is its own one-second clock, not an outlet, and a lane that has genuinely
-        /// dead-ended behind it is already <see cref="BeltField.BlockedCount"/>), and a stacker waiting for a
+        /// dead-ended behind it is already <see cref="BeltField.BlockedCount"/>), a stacker waiting for a
         /// piece that fits (a design, not a stoppage - the item it cannot merge is one the player spent a
-        /// chain building). A turret's wait for a target is <see cref="Armed"/>'s other state, "starved".
+        /// chain building), and a turret's wait for a target, which is <see cref="Armed"/>'s other state,
+        /// "starved".
         /// </summary>
         public int StallTicks;
     }
@@ -502,13 +509,14 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// How long a machine has to have been waiting on an outlet before the HUD calls it stopped: one
-        /// second at the fixed tick rate. Long enough that a full lane the line is about to drain is not
-        /// news, short enough that a factory standing still says so while the player is still looking at it.
+        /// How long a machine has to have had no outlet for the piece it holds before the HUD calls it
+        /// stopped: one second at the fixed tick rate. Long enough that the tick a lane is laid on - or a
+        /// machine rebuilt - is not news, short enough that a factory standing still says so while the player
+        /// is still looking at it.
         /// </summary>
         public static readonly int StallTicks = (int)SimConfig.TickRate;
 
-        /// <summary>How many machines have been holding something they cannot pass on for at least
+        /// <summary>How many machines have been holding a piece with no outlet to hand it to for at least
         /// <see cref="StallTicks"/> - <see cref="MachineState.StallTicks"/>'s "how many", and the number the
         /// HUD's production line says out loud. Machines, not tiles: a cutter standing on two is one.</summary>
         public void CountStalled(out int stalled)

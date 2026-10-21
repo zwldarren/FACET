@@ -148,19 +148,26 @@ namespace Facet.Game
 
         [Tooltip("HUD panel behind the readouts. Near-opaque on purpose: at 0.82 the map's own shapes and " +
             "grid lines showed through the cards, which is a busy background for small type on a dark fill.")]
-        public Color HudPanel = new Color(0.051f, 0.0667f, 0.0824f, 0.93f);
+        public Color HudPanel = new Color(0.054f, 0.058f, 0.065f, 0.965f);
 
-        [Tooltip("HUD body text.")]
-        public Color HudText = new Color(0.9373f, 0.9216f, 0.8902f, 1f);
+        [Tooltip("HUD body text: the paper end of the five-level ink ramp (see HudInk).")]
+        public Color HudText = new Color(0.9569f, 0.9451f, 0.9216f, 1f);
 
-        [Tooltip("HUD emphasis: the selected building, the wave number.")]
-        public Color HudAccent = new Color(0.4353f, 0.6588f, 0.8235f, 1f);
+        [Tooltip("HUD focus: the selected building, the active tab, the wave number, good news. One hue " +
+            "carries every 'this is the live thing' meaning; role identity is words, not colour.")]
+        public Color HudAccent = new Color(0.4863f, 0.7412f, 0.9098f, 1f);
 
-        [Tooltip("HUD warning: a jam, a leaking Core, a lost run.")]
-        public Color HudWarn = new Color(0.8863f, 0.4078f, 0.298f, 1f);
+        [Tooltip("What a HUD card casts on the map: the same down-and-right ink as the world's own " +
+            "shadows, softened into a band. A card is an object on the same table as the machines, so it " +
+            "takes the same light; the card sits on the pale map, where a hard edge would read as a cutout.")]
+        public Color HudShadow = new Color(0.03f, 0.035f, 0.04f, 0.42f);
 
-        [Tooltip("HUD good news: turrets armed, a held wave.")]
-        public Color HudGood = new Color(0.3412f, 0.6549f, 0.4471f, 1f);
+        [Tooltip("HUD warning: a jam, a leaking Core, a lost run, an unaffordable cost.")]
+        public Color HudWarn = new Color(0.9333f, 0.4431f, 0.3216f, 1f);
+
+        [Tooltip("Kept as an alias of HudAccent for assets authored before the HUD's palette was cut to " +
+            "six hues: good news is the focus hue, not a seventh colour.")]
+        public Color HudGood = new Color(0.4863f, 0.7412f, 0.9098f, 1f);
 
         [Header("Material")]
         [Tooltip("The one material every view draws with: unlit, multiplying the meshes' vertex " +
@@ -590,10 +597,15 @@ namespace Facet.Game
             public float DangerThicknessPixels = 10f;
             public float DangerAlpha = 0.3f;
 
-            [Tooltip("A jam marker: the square's half size in pixels. A jam is the one thing off-screen the " +
-                "player can fix with a single click, so it is marked in the red a jammed segment wears on the " +
-                "belt itself.")]
-            public float JamMarkerHalfPixels = 8f;
+            [Tooltip("A stopped line's mark: the diamond's half size in pixels. A stop is the one thing " +
+                "off-screen the player can fix with a single click - or a single belt - so it is marked in " +
+                "the amber a blocked segment wears, hollow, and never in the wave's red: a red dot on the " +
+                "edge of a map with no enemies on it reads as an enemy that is not there.")]
+            public float StopMarkHalfPixels = 8f;
+
+            [Tooltip("The stroke that hollow mark is drawn with, in pixels. It grows outward from the " +
+                "diamond's edge, so the mark's overall size is the half size plus this.")]
+            public float StopMarkPixels = 2.5f;
         }
     }
 }

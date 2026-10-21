@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
@@ -10,29 +12,41 @@ namespace Facet.Game
     /// The handful of uGUI pieces the HUD is built from, and the builders that make them.
     ///
     /// Every widget is constructed in code - no prefabs, no scene authoring: a panel is an Image, a
-    /// label is a Text, a button is an Image that answers the pointer. What the builders add over raw
-    /// uGUI is the discipline the IMGUI view kept: every widget remembers what it is showing through
-    /// the graphic it drives, so an update that changes nothing writes nothing and the canvas never
-    /// rebuilds for a frame the HUD stood still in.
+    /// label is a TextMeshProUGUI, a button is an Image that answers the pointer. What the builders add
+    /// over raw uGUI is the discipline the IMGUI view kept: every widget remembers what it is showing
+    /// through the graphic it drives, so an update that changes nothing writes nothing and the canvas
+    /// never rebuilds for a frame the HUD stood still in.
+    ///
+    /// The type itself is <see cref="HudType"/>'s one four-step scale and <see cref="HudInk"/>'s five
+    /// levels; this class only places and drives. TMP replaced the engine's Arial because an asset font
+    /// can carry the tracking the HUD asks for and because "no LegacyRuntime in the player" is a build
+    /// fact, not a preference - see the HUD's issue.
     ///
     /// The geometry helpers speak in screen pixels measured from one named corner, the language
     /// <see cref="HudLayout"/> lays the panels out in - the view converts, this class only places.
     /// </summary>
     public static class HudUi
     {
-        /// <summary>The one font every label uses: the engine's own, so the HUD ships no asset, and one
-        /// place to swap in a licensed face later.</summary>
-        private static Font _font;
+        /// <summary>The one font every label uses: TMP's own Liberation Sans asset, imported with the
+        /// TextMesh Pro essentials under <c>Assets/TextMesh Pro</c>. One place to swap in a licensed face
+        /// later, and the reason no built player carries <c>LegacyRuntime.ttf</c>.</summary>
+        private static TMP_FontAsset _font;
 
         /// <summary>The one white sprite every panel and border tints: a texture per colour would be a
         /// hundred textures differing only by a multiply.</summary>
         private static Sprite _pixel;
 
-        public static Font BuiltinFont
+        public static TMP_FontAsset Font
         {
             get
             {
-                if (_font == null) _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                if (_font == null)
+                {
+                    _font = TMP_Settings.defaultFontAsset;
+                    if (_font == null)
+                        _font = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+                }
+
                 return _font;
             }
         }
@@ -57,8 +71,207 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>Free the shared sprite and texture, called on the HUD's teardown so an Editor's
-        /// scene reloads do not leak a texture a play; whatever builds again recreates both from nothing.</summary>
+        /// <summary>The rounded-rectangle sprites, keyed by radius and stroke: every card, tile, button
+        /// and keycap is one of these nine-sliced. Generated once per size rather than shipped, so the HUD
+        /// has no art dependency and one corner language at every scale.</summary>
+        private static readonly Dictionary<int, Sprite> _shapes = new Dictionary<int, Sprite>();
+
+        /// <summary>How many texture pixels stand for one design pixel. The corners are shaded from a
+        /// signed distance field, and three texels per point is what keeps an 8-point arc from stepping.</summary>
+        private const int Supersample = 3;
+
+        /// <summary>
+        /// A rounded rectangle as a nine-sliced sprite: a filled one when <paramref name="stroke"/> is 0,
+        /// otherwise a ring of that stroke hugging the outer edge. The corners carry the radius in design
+        /// pixels; the middle is one texel of flat colour that stretches to whatever the rect asks for, which
+        /// is what lets one 24-pixel sprite skin a 880-pixel bar and a 20-pixel button alike.
+        /// </summary>
+        public static Sprite Shape(float radius, float stroke = 0f)
+        {
+            int r = Mathf.Max(1, Mathf.RoundToInt(radius));
+            int s = Mathf.Max(0, Mathf.RoundToInt(stroke));
+            int key = r * 16 + s;
+            if (_shapes.TryGetValue(key, out Sprite cached) && cached != null) return cached;
+
+            int corner = (r + 1) * Supersample;          // the arc plus one texel of straight run
+            int size = corner * 2 + Supersample;         // and one texel of middle to stretch
+            float half = size * 0.5f - Supersample;      // a texel of margin for the anti-aliased edge
+            float strokeTex = s * Supersample;
+
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "FACET/HudShape" + key,
+                hideFlags = HideFlags.DontSave,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                float py = y + 0.5f - size * 0.5f;
+                for (int x = 0; x < size; x++)
+                {
+                    float px = x + 0.5f - size * 0.5f;
+                    float distance = RoundedBoxDistance(px, py, half, half, r * Supersample);
+
+                    // Both bands are one pixel wide: the coverage is the signed distance measured against
+                    // the nearer edge, which is the cheapest anti-alias a generated sprite can get.
+                    float coverage = strokeTex <= 0f
+                        ? Mathf.Clamp01(0.5f - distance)
+                        : Mathf.Clamp01(0.5f - Mathf.Max(distance, -strokeTex - distance));
+
+                    pixels[y * size + x] = new Color32(255, 255, 255,
+                        (byte)Mathf.RoundToInt(coverage * 255f));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false);
+
+            var border = new Vector4(corner, corner, corner, corner);
+            Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f),
+                100f * Supersample, 0, SpriteMeshType.FullRect, border);
+            sprite.name = "FACET/HudShapeSprite" + key;
+
+            _shapes[key] = sprite;
+            return sprite;
+        }
+
+        /// <summary>The signed distance to a rounded box of half-extents <paramref name="b"/>, negative
+        /// inside: the one formula both the fill and the ring are shaded from. Public for the one test that
+        /// holds the shapes to the radii it asks for.</summary>
+        public static float RoundedBoxDistance(float x, float y, float bx, float by, float radius)
+        {
+            float qx = Mathf.Abs(x) - (bx - radius);
+            float qy = Mathf.Abs(y) - (by - radius);
+            float outside = new Vector2(Mathf.Max(qx, 0f), Mathf.Max(qy, 0f)).magnitude;
+            return outside + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
+        }
+
+        /// <summary>A filled surface with a radius: the card, the row, the tile, the keycap.</summary>
+        public static HudBox Round(RectTransform parent, string name, Color colour, float radius)
+        {
+            HudBox box = Box(parent, name, colour);
+            box.Image.sprite = Shape(radius);
+            box.Image.type = Image.Type.Sliced;
+            return box;
+        }
+
+        /// <summary>The soft sprites behind <see cref="Shadow"/>, keyed by the radius they wrap and the
+        /// band they fade over.</summary>
+        private static readonly Dictionary<int, Sprite> _shadows = new Dictionary<int, Sprite>();
+
+        /// <summary>How far a card's shadow falls, in screen pixels - the same down-and-right the world's
+        /// cast shadows take, because the light is one light (see <see cref="Palette.ShadowOffsetPixels"/>).</summary>
+        private const float ShadowOffsetX = 2.5f;
+        private const float ShadowOffsetY = -3.5f;
+
+        /// <summary>How wide the shadow's soft band is, in screen pixels.</summary>
+        public const float ShadowBlur = 7f;
+
+        /// <summary>
+        /// A card's cast shadow: the card's own rounded silhouette, its edge softened over
+        /// <see cref="ShadowBlur"/> pixels, laid under the card and nudged down and right. The image is the
+        /// card grown by the blur on every side and the silhouette inside it is the card's own, so the band
+        /// that shows is exactly the part of the shadow the card does not cover.
+        ///
+        /// Screen pixels, like the world's shadows: a shadow that scaled with the HUD's 0.8-to-2.2 would be a
+        /// smear on a large screen and a hairline on a small one. The cards sit on the pale map, where a
+        /// hard opaque edge would read as a cutout; the band is what makes them sit on it.
+        /// </summary>
+        public static HudBox Shadow(RectTransform parent, string name, float radius, Color colour)
+        {
+            RectTransform rt = Node(parent, name);
+            rt.SetAsFirstSibling();
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(-ShadowBlur + ShadowOffsetX, -ShadowBlur + ShadowOffsetY);
+            rt.offsetMax = new Vector2(ShadowBlur + ShadowOffsetX, ShadowBlur + ShadowOffsetY);
+
+            var image = rt.gameObject.AddComponent<Image>();
+            image.sprite = ShadowShape(radius);
+            image.type = Image.Type.Sliced;
+            image.color = colour;
+            image.raycastTarget = false;
+            return new HudBox(image);
+        }
+
+        /// <summary>The soft silhouette a shadow is drawn from: opaque within the card, falling to nothing
+        /// over the band outside it. The corners are the card's, so a rounded card casts a rounded shadow.</summary>
+        private static Sprite ShadowShape(float radius)
+        {
+            int r = Mathf.Max(1, Mathf.RoundToInt(radius));
+            int b = Mathf.RoundToInt(ShadowBlur);
+            int key = r * 64 + b;
+            if (_shadows.TryGetValue(key, out Sprite cached) && cached != null) return cached;
+
+            int corner = (r + b + 1) * Supersample;
+            int size = corner * 2 + Supersample;
+            float half = size * 0.5f - Supersample;
+            float inside = half - b * Supersample;
+            float radiusTex = r * Supersample;
+            float band = b * Supersample;
+
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "FACET/HudShadow" + key,
+                hideFlags = HideFlags.DontSave,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+            };
+
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                float py = y + 0.5f - size * 0.5f;
+                for (int x = 0; x < size; x++)
+                {
+                    float px = x + 0.5f - size * 0.5f;
+                    float distance = RoundedBoxDistance(px, py, inside, inside,
+                        Mathf.Min(radiusTex, inside));
+
+                    // Smoothstep rather than the linear ramp the fills use: a shadow's edge is soft, and a
+                    // linear falloff reads as a second, darker border around the card.
+                    float t = Mathf.Clamp01(distance / band);
+                    float coverage = 1f - t * t * (3f - 2f * t);
+
+                    pixels[y * size + x] = new Color32(255, 255, 255,
+                        (byte)Mathf.RoundToInt(coverage * 255f));
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false);
+
+            var border = new Vector4(corner, corner, corner, corner);
+            Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, size, size), new Vector2(0.5f, 0.5f),
+                100f * Supersample, 0, SpriteMeshType.FullRect, border);
+            sprite.name = "FACET/HudShadowSprite" + key;
+
+            _shadows[key] = sprite;
+            return sprite;
+        }
+
+        /// <summary>The milled edge around a surface, as a ring rather than four square bars: one image,
+        /// one write, and the corners of a card no longer read as cut paper.</summary>
+        public static HudBorder Border(RectTransform parent, string name, Color colour, float radius,
+            float stroke = 1f)
+        {
+            RectTransform rt = Node(parent, name);
+            StretchFull(rt);
+
+            var image = rt.gameObject.AddComponent<Image>();
+            image.sprite = Shape(radius, stroke);
+            image.type = Image.Type.Sliced;
+            image.color = colour;
+            image.raycastTarget = false;
+            return new HudBorder(image);
+        }
+
+        /// <summary>Free the shared sprites and textures, called on the HUD's teardown so an Editor's
+        /// scene reloads do not leak a texture a play; whatever builds again recreates them from nothing.
+        /// The font is an imported asset owned by the project, not ours to destroy.</summary>
         public static void ReleaseShared()
         {
             if (_pixel != null)
@@ -67,8 +280,22 @@ namespace Facet.Game
                 UnityEngine.Object.Destroy(_pixel);
                 _pixel = null;
             }
-            // The builtin font is the engine's, not ours to destroy.
+
+            FreeSprites(_shapes);
+            FreeSprites(_shadows);
             _font = null;
+        }
+
+        private static void FreeSprites(Dictionary<int, Sprite> sprites)
+        {
+            foreach (Sprite sprite in sprites.Values)
+            {
+                if (sprite == null) continue;
+                UnityEngine.Object.Destroy(sprite.texture);
+                UnityEngine.Object.Destroy(sprite);
+            }
+
+            sprites.Clear();
         }
 
         // ------------------------------------------------------------------ building
@@ -92,23 +319,58 @@ namespace Facet.Game
             return new HudBox(image);
         }
 
-        /// <summary>A label. The colour arrives per update, the way <see cref="HudText.Set(string, Color)"/>
-        /// takes it; the style arguments are the ones the IMGUI view named per style.</summary>
-        public static HudText Text(RectTransform parent, string name, int fontSize, FontStyle style,
-            TextAnchor anchor, bool wrap)
+        /// <summary>A label at one of <see cref="HudType"/>'s four sizes. The colour arrives per update,
+        /// the way <see cref="HudText.Set(string, Color)"/> takes it; the style arguments are the ones the
+        /// IMGUI view named per style, and the tracking is the scale's one rule rather than a per-label
+        /// decision.</summary>
+        public static HudText Text(RectTransform parent, string name, float fontSize, FontStyle style,
+            TextAnchor anchor, bool wrap, bool tracked = false, bool rich = false)
         {
             RectTransform rt = Node(parent, name);
-            var text = rt.gameObject.AddComponent<Text>();
-            text.font = BuiltinFont;
-            text.fontSize = Mathf.Max(8, fontSize);
-            text.fontStyle = style;
-            text.alignment = anchor;
+            var text = rt.gameObject.AddComponent<TextMeshProUGUI>();
+            if (Font != null) text.font = Font;
+            text.text = string.Empty;
+            text.fontSize = Mathf.Max(8f, fontSize);
+            text.fontStyle = ToTmp(style);
+            text.alignment = ToTmp(anchor);
+            text.textWrappingMode = wrap ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
+            text.overflowMode = TextOverflowModes.Overflow;
             text.color = Color.white;
-            text.horizontalOverflow = wrap ? HorizontalWrapMode.Wrap : HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-            text.supportRichText = false;
+            // Tracking is the labels' rule, not the prose's: +8 % on a six-word button is air, +8 % on
+            // a sentence is a line that no longer fits the card it was written for.
+            text.characterSpacing = tracked ? HudType.Tracking : 0f;
+            text.richText = rich;
             text.raycastTarget = false;
+            text.enableAutoSizing = false;
             return new HudText(text);
+        }
+
+        private static FontStyles ToTmp(FontStyle style)
+        {
+            switch (style)
+            {
+                case FontStyle.Bold: return FontStyles.Bold;
+                case FontStyle.Italic: return FontStyles.Italic;
+                case FontStyle.BoldAndItalic: return FontStyles.Bold | FontStyles.Italic;
+                default: return FontStyles.Normal;
+            }
+        }
+
+        private static TextAlignmentOptions ToTmp(TextAnchor anchor)
+        {
+            switch (anchor)
+            {
+                case TextAnchor.UpperLeft: return TextAlignmentOptions.TopLeft;
+                case TextAnchor.UpperCenter: return TextAlignmentOptions.Top;
+                case TextAnchor.UpperRight: return TextAlignmentOptions.TopRight;
+                case TextAnchor.MiddleLeft: return TextAlignmentOptions.Left;
+                case TextAnchor.MiddleCenter: return TextAlignmentOptions.Center;
+                case TextAnchor.MiddleRight: return TextAlignmentOptions.Right;
+                case TextAnchor.LowerLeft: return TextAlignmentOptions.BottomLeft;
+                case TextAnchor.LowerCenter: return TextAlignmentOptions.Bottom;
+                case TextAnchor.LowerRight: return TextAlignmentOptions.BottomRight;
+                default: return TextAlignmentOptions.TopLeft;
+            }
         }
 
         /// <summary>A shape as a picture: the texture <see cref="HudIcons"/> rasterised, the shape's
@@ -124,60 +386,25 @@ namespace Facet.Game
             return raw;
         }
 
-        /// <summary>A border drawn as four thin edges around whatever rectangle it is given, so the
-        /// panels do not bleed into the map. The frame stretches over its parent, so the edges read the
-        /// parent's size whatever it is, and a parent resized after the fact keeps its border.</summary>
-        public static HudFrame Frame(RectTransform parent, string name, Color colour, float thickness)
-        {
-            RectTransform root = Node(parent, name);
-            root.anchorMin = Vector2.zero;
-            root.anchorMax = Vector2.one;
-            root.offsetMin = Vector2.zero;
-            root.offsetMax = Vector2.zero;
-
-            return new HudFrame(root,
-                Edge(root, name + ".top", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f)),
-                Edge(root, name + ".bottom", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f)),
-                Edge(root, name + ".left", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f)),
-                Edge(root, name + ".right", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f)),
-                colour, thickness);
-        }
-
-        private static Image Edge(RectTransform root, string name, Vector2 anchorMin, Vector2 anchorMax,
-            Vector2 pivot)
-        {
-            RectTransform rt = Node(root, name);
-            rt.anchorMin = anchorMin;
-            rt.anchorMax = anchorMax;
-            rt.pivot = pivot;
-            rt.anchoredPosition = Vector2.zero;
-            rt.sizeDelta = Vector2.zero;
-
-            var image = rt.gameObject.AddComponent<Image>();
-            image.sprite = Pixel;
-            image.raycastTarget = false;
-            return image;
-        }
-
         /// <summary>A button: a filled, bordered rectangle that answers the pointer. It fires on the
         /// press - what made the IMGUI bar feel immediate - through uGUI's EventSystem, and reports its
         /// own hover so the view can dress it without an event.</summary>
         public static HudButton Button(RectTransform parent, string name, float width, float height,
-            string label, int labelSize, Color labelColour, Action pressed)
+            string label, float labelSize, Color labelColour, Action pressed)
         {
             RectTransform root = Node(parent, name);
             var button = root.gameObject.AddComponent<HudButton>();
-            button.Fill = Box(root, name + ".back", Color.white);
+            button.Fill = Round(root, name + ".back", Color.white, 6f);
             StretchFull(button.Fill.Rect);
             button.Fill.Image.raycastTarget = true;
             button.Label = Text(root, name + ".label", labelSize, FontStyle.Bold,
-                TextAnchor.MiddleCenter, wrap: false);
+                TextAnchor.MiddleCenter, wrap: false, tracked: true);
             // Inset by 4 on every side, so the label's middle is the button's middle. Not Stretch: its
             // fourth number is a height, and a 4-tall strip hung off the top edge centred every label there.
             StretchFull(button.Label.Rect);
             button.Label.Rect.offsetMin = new Vector2(4f, 4f);
             button.Label.Rect.offsetMax = new Vector2(-4f, -4f);
-            button.Border = Frame(root, name + ".frame", Color.white, 1f);
+            button.Border = Border(root, name + ".frame", Color.white, 6f, 1f);
             button.Label.Set(label, labelColour);
             button.Pressed = pressed;
             return button;
@@ -186,7 +413,7 @@ namespace Facet.Game
         /// <summary>A bar's fill: a rectangle whose width is the fraction, read at a glance where a
         /// number has to be read twice. Hidden at zero, because an empty bar says the same thing.</summary>
         public static HudBar BarFill(RectTransform parent, string name, float left, float bottom,
-            float width, float height)
+            float width, float height, float radius = 0f)
         {
             RectTransform rt = Node(parent, name);
             rt.anchorMin = Vector2.zero;
@@ -196,7 +423,8 @@ namespace Facet.Game
             rt.sizeDelta = new Vector2(width, height);
 
             var image = rt.gameObject.AddComponent<Image>();
-            image.sprite = Pixel;
+            image.sprite = radius > 0f ? Shape(radius) : Pixel;
+            image.type = radius > 0f ? Image.Type.Sliced : Image.Type.Simple;
             image.raycastTarget = false;
             return new HudBar(rt, image, width);
         }
@@ -299,12 +527,12 @@ namespace Facet.Game
     }
 
     /// <summary>A label that writes only what changed. The comparison is a string equality on a short
-    /// line - cheaper than the vertex rebuild a changed Text pays for, and free when nothing changed.</summary>
+    /// line - cheaper than the vertex rebuild a changed label pays for, and free when nothing changed.</summary>
     public sealed class HudText
     {
-        public readonly Text Text;
+        public readonly TMP_Text Text;
 
-        public HudText(Text text) => Text = text;
+        public HudText(TMP_Text text) => Text = text;
 
         public RectTransform Rect => Text.rectTransform;
 
@@ -337,49 +565,26 @@ namespace Facet.Game
         }
     }
 
-    /// <summary>The thin border around a panel or a tile, as four edge images the thickness and colour
-    /// of the moment - a selected tile's border is wider than a hovered one's, and a bar being chewed on
-    /// pulses in the warning colour. Both changes are writes only when they happen.</summary>
-    public sealed class HudFrame
+    /// <summary>The milled edge around a surface: one sliced ring image whose colour is the whole of the
+    /// state a border has to carry. Replaces four edge bars, which is why the cards and buttons can be
+    /// rounded without their outlines staying square.</summary>
+    public sealed class HudBorder
     {
-        private readonly RectTransform _root;
-        private readonly Image _top;
-        private readonly Image _bottom;
-        private readonly Image _left;
-        private readonly Image _right;
-        private float _thickness = -1f;
+        public readonly Image Image;
 
-        public HudFrame(RectTransform root, Image top, Image bottom, Image left, Image right, Color colour,
-            float thickness)
+        public HudBorder(Image image) => Image = image;
+
+        public RectTransform Rect => Image.rectTransform;
+
+        public void Show(bool on)
         {
-            _root = root;
-            _top = top; _bottom = bottom; _left = left; _right = right;
-            Set(colour, thickness);
+            if (Image.gameObject.activeSelf != on) Image.gameObject.SetActive(on);
         }
-
-        public RectTransform Rect => _root;
-
-        public void Show(bool on) => _root.gameObject.SetActive(on);
 
         public void Set(Color colour)
         {
-            if (_top.color == colour) return;
-            _top.color = colour;
-            _bottom.color = colour;
-            _left.color = colour;
-            _right.color = colour;
-        }
-
-        public void Set(Color colour, float thickness)
-        {
-            Set(colour);
-            if (Mathf.Approximately(_thickness, thickness)) return;
-            _thickness = thickness;
-
-            _top.rectTransform.sizeDelta = new Vector2(0f, thickness);
-            _bottom.rectTransform.sizeDelta = new Vector2(0f, thickness);
-            _left.rectTransform.sizeDelta = new Vector2(thickness, 0f);
-            _right.rectTransform.sizeDelta = new Vector2(thickness, 0f);
+            if (Image.color == colour) return;
+            Image.color = colour;
         }
     }
 
@@ -425,7 +630,7 @@ namespace Facet.Game
         /// <summary>The box the button is drawn from and the words on it - dressed by the view.</summary>
         public HudBox Fill;
         public HudText Label;
-        public HudFrame Border;
+        public HudBorder Border;
 
         /// <summary>Fired on the press. The HUD hands it the same latch the keyboard uses, so a click
         /// can never say something a key press would not.</summary>

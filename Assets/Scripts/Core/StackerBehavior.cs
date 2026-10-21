@@ -42,10 +42,13 @@ namespace Facet.Core
             }
 
             // The last union has not left yet: the one wait on this machine that is a stoppage rather than a
-            // design. Holding a single piece for a second one is the other case, and is not counted.
+            // design. Holding a single piece for a second one is the other case, and is not counted. A full
+            // outlet is not counted either - that is a line loaded as far as it goes, and the stop it stands
+            // behind is reported by whatever is actually stuck (or by nothing, when the gun is only loaded).
             if (stacker.OutputCount > 0)
             {
-                MachineClock.Waiting(ref stacker, waiting: true);
+                MachineClock.Waiting(ref stacker,
+                    waiting: !MachineDelivery.HasOutlet(ctx.Belts, cell, DirMask.All));
                 return;
             }
 

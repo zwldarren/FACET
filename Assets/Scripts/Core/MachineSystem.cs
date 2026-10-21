@@ -105,10 +105,17 @@ namespace Facet.Core
         }
 
         /// <summary>
-        /// The one book-keeping every machine that holds something has to answer the same way: did it fail to
-        /// pass that something on this tick? <see cref="MachineState.StallTicks"/> counts the run, and every
-        /// caller reports on every tick - a machine that waited and no longer does reads as zero, not as a
-        /// decaying average, because "is this stopped" is a question about now.
+        /// The one book-keeping every machine that holds something has to answer the same way: does it have a
+        /// piece it can never hand on? <see cref="MachineState.StallTicks"/> counts the run, and every caller
+        /// reports on every tick - a machine that waited and no longer does reads as zero, not as a decaying
+        /// average, because "is this stopped" is a question about now.
+        ///
+        /// <b>Never waiting on a full outlet, only on a missing one.</b> A full outlet is backpressure: the
+        /// line behind it queues, and that queue is either already reported (the belt is jammed or blocked) or
+        /// is what a factory that is loaded ahead of the next wave looks like - a gun with a round in the
+        /// chamber takes nothing more, and nothing at all is wrong. Counting that was what made a healthy
+        /// loaded line read as "3 machines stalled", so each behaviour passes the narrower question: is there
+        /// an outlet for this piece at all?
         ///
         /// Said once here because the alternatives drift: a behaviour that increments only at its own
         /// give-up point counts seconds where the HUD counts ticks, and one that forgets to clear leaves a

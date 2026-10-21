@@ -14,12 +14,13 @@ using FilterMode = Facet.Core.FilterMode;
 namespace Facet.Game
 {
     /// <summary>
-    /// The player's whole operating surface: a status card top-left (the map and its wave, the Core's
+    /// The player's whole operating surface: a status rail top-left (the map and its wave, the Core's
     /// health and the wave's clock as two bars, the wave's bill of materials as chips, and two diagnostic
-    /// lines), the stockpile floating beside it as a shape and a number with no panel of its own, a
-    /// controls cluster top-right (pause, speed gear and help, with the keyboard and restart behind the help card), a
-    /// clickable build bar along the bottom, and an info card above it describing whichever building is
-    /// hovered, selected - or, with nothing selected, read (see <see cref="RefreshInspect"/>).
+    /// lines), the stockpile floating beside it as a shape, a number and the run's seed with no panel of its
+    /// own, a controls cluster top-right (the wave, pause, speed gear and help, with the keyboard and restart
+    /// behind the help card), a clickable build bar centred along the bottom, and an info card above it
+    /// describing whichever building is hovered, selected - or, with nothing selected, read (see
+    /// <see cref="RefreshInspect"/>).
     ///
     /// The card reports, in the order the questions come: is my bank holding, how long do I have, what is
     /// coming, can my defence stop it, and where am I not looking. The last is <see cref="ThreatRadar"/>'s
@@ -28,11 +29,16 @@ namespace Facet.Game
     /// and becomes a toast under the top cards; the stockpile's number turns amber while the selected
     /// building cannot be afforded and flashes warning-coloured while the toast is live.
     ///
-    /// The build bar is the point of this view: every building is a real button carrying its hotkey, name,
-    /// role and cost, and a tile is tinted when unaffordable, outlined when selected and highlighted under
-    /// the pointer. Clicking one selects it exactly the way a number key does (through the input latch, so
-    /// "the press decides what is built" is untouched), which is what lets the game be played without
-    /// memorising the keyboard.
+    /// The build bar is the point of this view: every building is a real button carrying its hotkey, name
+    /// and cost on one row, and a tile is tinted when unaffordable, outlined when selected and highlighted
+    /// under the pointer. There is no role tab above it - eleven kinds do not need seven shelves - and the
+    /// roles survive as the info card's metadata. Clicking a tile selects it exactly the way a number key
+    /// does (through the input latch, so "the press decides what is built" is untouched), which is what lets
+    /// the game be played without memorising the keyboard.
+    ///
+    /// The whole surface is budgeted: see <see cref="HudLayout"/> for the 22 % the four permanent panels may
+    /// spend, <see cref="HudType"/> for the one four-step scale, and <see cref="HudInk"/> for the five ink
+    /// levels and the three semantic hues the panels are actually allowed to use.
     ///
     /// Drawn with uGUI on purpose - no prefabs, no scene authoring - over <see cref="HudUi"/>'s widgets,
     /// with the pieces where <see cref="HudLayout"/>'s table says, through the same scale the fonts use.
@@ -96,21 +102,12 @@ namespace Facet.Game
         private HelpPanel _help;
         private BarPanel _bar;
 
-        /// <summary>Have the tabs' words been measured yet? They are laid out again every frame until uGUI
-        /// has answered, which it does within the first frame or two.</summary>
-        private bool _tabsMeasured;
-
-        /// <summary>The selection the bar's open tab was last brought into line with, so a tab the player
-        /// opened by hand survives the frames that follow.</summary>
-        private BuildKind? _seenSelected;
         private InfoPanel _info;
         private StockpilePanel _stockpile;
         private ToastPanel _toast;
         private BannerPanel _banner;
         private TutorialPanel _tutorial;
         private TooltipPanel _tooltip;
-
-        private Rect _stockpileRect;
 
         private float _scale = -1f;
         private int _screenWidth = -1;
@@ -162,6 +159,7 @@ namespace Facet.Game
         private bool _controlsPaused;
         private int _controlsGear = -1;
         private bool _controlsBehind;
+        private bool _controlsCanWave;
 
         /// <summary>The driver's speed gear, read for the gear button's word and cycled by its press.
         /// Null in a scene (or a test) with no driver: the button then stays at 1x and does nothing.</summary>
@@ -402,12 +400,6 @@ namespace Facet.Game
 
         private void BuildPanels()
         {
-            // Fresh tabs are built at 0x0 and only positioned once uGUI's text measurement lands - which
-            // only happens while _tabsMeasured is false. A rebuild that left it true (the fullscreen
-            // resize path) would strand every tab unpositioned, their Overflow labels superimposed in
-            // one unreadable pile. A new hierarchy always re-measures.
-            _tabsMeasured = false;
-
             _status = BuildStatus();
             _tutorial = BuildTutorial();
             _controls = BuildControls();
@@ -459,117 +451,146 @@ namespace Facet.Game
 
         // ------------------------------------------------------------------ the panels' geometry
 
-        /// <summary>A card: the panel backdrop in the palette's panel colour, with the thin edge that keeps a
-        /// dark card from bleeding into the map.</summary>
+        /// <summary>A card: a rounded ink surface with a milled edge, no stripe and no square corners. The
+        /// edge is the quietest level of the ramp - a card is a surface, not an outline - and the radius is
+        /// the same 10 design units on every card, so the HUD reads as one set of objects. The shadow is the
+        /// world's own light continued onto the HUD: a card is an object on the map's table, not a hole cut
+        /// out of it.</summary>
         private RectTransform BuildCard(string name, Rect rect, PlaceCorner corner)
         {
             RectTransform root = HudUi.Node(_canvasRoot, name);
             Place(root, rect, corner);
 
-            HudBox back = HudUi.Box(root, name + ".back", _palette.HudPanel);
+            HudUi.Shadow(root, name + ".shadow", HudRadius, _palette.HudShadow);
+            HudBox back = HudUi.Round(root, name + ".back", _palette.HudPanel, HudRadius);
             HudUi.StretchFull(back.Rect);
-            HudUi.Frame(root, name + ".frame", PanelBorder(), 1f * _scale);
+            HudUi.Border(root, name + ".frame", HudInk.Edge(_palette), HudRadius, 1f);
             return root;
         }
 
-        private Color PanelBorder()
-            => new Color(_palette.HudText.r, _palette.HudText.g, _palette.HudText.b, 0.12f);
+        /// <summary>The one corner radius the cards share, in design units.</summary>
+        private const float HudRadius = 10f;
 
-        private Color ButtonFill => Blend(_palette.HudPanel, _palette.HudText, 0.09f);
+        /// <summary>The smaller radius the bar's tiles and buttons share.</summary>
+        private const float ControlRadius = 6f;
 
-        /// <summary>A design-unit font size through the current scale: the fonts stay crisp because the scale
-        /// is in the point size, and the layout keeps the same fraction of the screen because everything else
-        /// goes through the same number.</summary>
-        private int FontSize(float design) => Mathf.Max(8, Mathf.RoundToInt(design * _scale));
+        /// <summary>The card's inner margin, in design units: one value for every card so their text
+        /// starts on the same vertical line whether the card is 300 or 880 wide.</summary>
+        private const float CardInset = 14f;
 
-        private HudText Label(RectTransform parent, string name, float design, FontStyle style,
-            TextAnchor anchor, bool wrap = false)
-            => HudUi.Text(parent, name, FontSize(design), style, anchor, wrap);
+        private Color PanelBorder() => HudInk.Edge(_palette);
 
-        /// <summary>A card's accent stripe: full height whatever the card's own is, because the info card can
-        /// grow while a sorter's picker is on it and a stripe built at the base height would stop short of the
-        /// card it is drawn on. Placed by its own insets rather than through the corner helpers, which set
-        /// coincident anchors: this one stretches down the card's height, and an inset is the one way to say
-        /// "the card's full height, whatever that turns out to be" without also having to reason about where
-        /// the pivot sits on a stretched axis.</summary>
-        private void Stripe(HudBox stripe, float width)
+        private Color ButtonFill => HudInk.Raised(_palette);
+
+        /// <summary>A design-unit font size through the current scale. Rounded up rather than down: at
+        /// 960x600 the scale is 0.83, and rounding 10 down to 8 is the difference between a micro line and
+        /// a squint. The fonts stay crisp because the scale is in the point size.</summary>
+        private int FontSize(float design) => Mathf.Max(8, Mathf.CeilToInt(design * _scale));
+
+        /// <summary>Let a dynamic sentence drop below its step rather than run past the card: the map's
+        /// name, a wave's count and a locator sentence all vary in length, and a step is a design decision
+        /// while an overrun is a defect. It shrinks no further than <paramref name="minDesign"/>.</summary>
+        private void AutoFit(HudText text, float minDesign)
         {
-            stripe.Rect.anchorMin = Vector2.zero;
-            stripe.Rect.anchorMax = Vector2.up;
-            stripe.Rect.offsetMin = Vector2.zero;
-            stripe.Rect.offsetMax = new Vector2(width, 0f);
+            text.Text.enableAutoSizing = true;
+            text.Text.fontSizeMin = FontSize(minDesign);
+            text.Text.fontSizeMax = text.Text.fontSize;
         }
 
+        private HudText Label(RectTransform parent, string name, float design, FontStyle style,
+            TextAnchor anchor, bool wrap = false, bool tracked = false, bool rich = false)
+            => HudUi.Text(parent, name, FontSize(design), style, anchor, wrap, tracked, rich);
+
+        /// <summary>
+        /// The left rail, read top to bottom in the order the questions come: whose run this is, how much
+        /// Core is left, how long the clock has, what the next two waves are made of, and - only when the
+        /// answer is bad - what is stuck and what is out of view.
+        ///
+        /// The hierarchy is carried by weight and ink, not by colour: the map's name and the numbers are
+        /// paper, the words that label them are faint, and the one thing that changes colour is the number
+        /// with something to say (a hit, a jam, an enemy off screen). No stripe down the side, no role hue.
+        /// </summary>
         private StatusPanel BuildStatus()
         {
             Rect rect = HudLayout.Status(_scale);
             var panel = new StatusPanel { Root = BuildCard("status", rect, PlaceCorner.TopLeft) };
             RectTransform root = panel.Root;
 
-            panel.Stripe = HudUi.Box(root, "stripe", _palette.HudAccent);
-            Stripe(panel.Stripe, 3f * _scale);
+            const float w = HudLayout.StatusWidth;
+            const float inner = w - CardInset * 2f;
 
-            panel.Title = Label(root, "title", 15f, FontStyle.Bold, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.Title.Rect, 14f * _scale, 10f * _scale, rect.width - 28f * _scale, 22f * _scale);
+            // Identity on the left, the wave on the right: one line, two ends, so neither crowds the other
+            // when a map is called something long.
+            panel.Title = Label(root, "title", HudType.Body, FontStyle.Bold, TextAnchor.MiddleLeft,
+                tracked: true);
+            At(panel.Title.Rect, CardInset, 4f, inner - 96f, 22f);
+            AutoFit(panel.Title, HudType.Micro);
 
-            // The stockpile lives in the resource band beside the card, not as a line here: it is the
-            // economy's one number and the thing a refusal is about, too important to be a card's third line.
-            HudBox healthBack = HudUi.Box(root, "health.back", _palette.HudPanel);
-            HudUi.TopLeft(healthBack.Rect, 14f * _scale, 38f * _scale, rect.width - 28f * _scale, 16f * _scale);
-            panel.Health = HudUi.BarFill(healthBack.Rect, "fill", 0f, 0f, rect.width - 28f * _scale, 16f * _scale);
-            panel.HealthFrame = HudUi.Frame(healthBack.Rect, "frame", _palette.HudText, 1f * _scale);
-            panel.HealthLabel = Label(healthBack.Rect, "label", 11f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.HealthLabel.Rect, 6f * _scale, -1f * _scale, rect.width - 28f * _scale, 16f * _scale);
-            panel.HealthDamage = Label(healthBack.Rect, "damage", 11f, FontStyle.Normal, TextAnchor.UpperRight);
-            HudUi.TopLeft(panel.HealthDamage.Rect, 0f, -1f * _scale, rect.width - 34f * _scale, 16f * _scale);
-            panel.HealthDamage.Show(false);
+            panel.WaveTag = Label(root, "waveTag", HudType.Micro, FontStyle.Bold, TextAnchor.MiddleRight,
+                tracked: true);
+            AtRight(panel.WaveTag.Rect, CardInset, 8f, 130f, 14f);
 
-            HudBox clockBack = HudUi.Box(root, "clock.back", Blend(_palette.HudPanel, _palette.HudText, 0.14f));
-            HudUi.TopLeft(clockBack.Rect, 14f * _scale, 60f * _scale, rect.width - 28f * _scale, 6f * _scale);
-            panel.Clock = HudUi.BarFill(clockBack.Rect, "fill", 0f, 0f, rect.width - 28f * _scale, 6f * _scale);
-            HudUi.Frame(clockBack.Rect, "frame", Blend(_palette.HudText, _palette.HudPanel, 0.5f), 1f * _scale);
+            // The Core: a caption, the number at the far end, and a metre under both. The number is the one
+            // thing on this card allowed to turn warning-coloured, so a hit is read where the eye already is.
+            panel.CoreCap = Label(root, "coreCap", HudType.Micro, FontStyle.Bold, TextAnchor.MiddleLeft,
+                tracked: true);
+            At(panel.CoreCap.Rect, CardInset, 29f, 60f, 12f);
+            panel.CoreCap.Set("CORE", HudInk.Faint(_palette));
 
-            panel.News = Label(root, "news", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.News.Rect, 14f * _scale, 72f * _scale, rect.width - 28f * _scale, 19f * _scale);
+            panel.HealthValue = Label(root, "coreValue", HudType.Micro, FontStyle.Bold,
+                TextAnchor.MiddleRight);
+            AtRight(panel.HealthValue.Rect, CardInset, 29f, 220f, 12f);
 
-            // The bill of materials as chips, in two rows: the wave the clock is counting to and the one
-            // after it, because "what do I need" is asked about both while there is still time to build for
-            // the second. Each chip is the count, the archetype and the round its group demands, drawn as a
-            // quadrant figure - the character the old content table spelled a weakness with is not in every
-            // font a player has.
-            // Derived from the two rows' own constants rather than repeating their numbers, so moving a row
-            // moves its label with it - the placement below and LayoutChips read the same two values.
-            panel.NextLabel = Label(root, "waveNext", 11f, FontStyle.Bold, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.NextLabel.Rect, 14f * _scale, (ChipsTop + 4f) * _scale, 80f * _scale,
-                15f * _scale);
-            panel.AfterLabel = Label(root, "waveAfter", 11f, FontStyle.Bold, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.AfterLabel.Rect, 14f * _scale, (ChipsAfterTop + 4f) * _scale, 80f * _scale,
-                15f * _scale);
+            panel.HealthTrack = HudUi.Round(root, "health.back", HudInk.Raised(_palette), 3f);
+            At(panel.HealthTrack.Rect, CardInset, 43f, inner, 7f);
+            panel.Health = HudUi.BarFill(panel.HealthTrack.Rect, "fill", 0f, 0f, inner * _scale,
+                7f * _scale, 3f);
+
+            HudBox clockBack = HudUi.Round(root, "clock.back", HudInk.Raised(_palette), 2f);
+            At(clockBack.Rect, CardInset, 53f, inner, 3f);
+            panel.Clock = HudUi.BarFill(clockBack.Rect, "fill", 0f, 0f, inner * _scale, 3f * _scale, 2f);
+
+            panel.Rule = HudUi.Box(root, "rule", HudInk.Rule(_palette));
+            At(panel.Rule.Rect, CardInset, 62f, inner, 1f);
+
+            panel.News = Label(root, "news", HudType.Label, FontStyle.Normal, TextAnchor.MiddleLeft);
+            At(panel.News.Rect, CardInset, 66f, inner, 16f);
+            AutoFit(panel.News, 9f);
+
+            // The bill of materials, two rows: the wave being counted to and the one after it.
+            panel.NextLabel = Label(root, "waveNext", HudType.Micro, FontStyle.Bold, TextAnchor.MiddleLeft,
+                tracked: true);
+            At(panel.NextLabel.Rect, CardInset, ChipsTop + 2f, ChipLabelWidth, 14f);
+            panel.AfterLabel = Label(root, "waveAfter", HudType.Micro, FontStyle.Bold, TextAnchor.MiddleLeft,
+                tracked: true);
+            At(panel.AfterLabel.Rect, CardInset, ChipsAfterTop + 2f, ChipLabelWidth, 14f);
 
             panel.Chips = BuildChips(root, "chip");
             panel.ChipsAfter = BuildChips(root, "after");
 
-            // Two lines that only speak when something needs them: a jam or a starved gun, and what is out
-            // of view. Quiet is the default and silence is the good news - a line that only says "all clear"
-            // trains the player to stop reading.
-            panel.Production = Label(root, "production", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.Production.Rect, 14f * _scale, 145f * _scale, rect.width - 28f * _scale, 19f * _scale);
+            // A hairline over the card's footer: the band below is either the two diagnostics or, when the
+            // run is quiet, the two stable facts a player still wants at hand - the seed and the gear.
+            HudBox footerRule = HudUi.Box(root, "footerRule", HudInk.Rule(_palette));
+            At(footerRule.Rect, CardInset, 119f, inner, 1f);
+
+            panel.Seed = Label(root, "seed", HudType.Micro, FontStyle.Normal, TextAnchor.MiddleLeft);
+            At(panel.Seed.Rect, CardInset, 122f, inner * 0.62f, 13f);
+
+            panel.Speed = Label(root, "speed", HudType.Micro, FontStyle.Normal, TextAnchor.MiddleRight);
+            AtRight(panel.Speed.Rect, CardInset, 122f, inner, 13f);
+
+            // Two lines that only speak when something needs them: quiet is the default and silence is the
+            // good news - a line that only says "all clear" trains the player to stop reading.
+            panel.Production = Label(root, "production", HudType.Micro, FontStyle.Normal,
+                TextAnchor.MiddleLeft);
+            At(panel.Production.Rect, CardInset, 122f, inner, 13f);
+            AutoFit(panel.Production, 8f);
             panel.Production.Show(false);
 
-            panel.Threat = Label(root, "threat", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.Threat.Rect, 14f * _scale, 164f * _scale, rect.width - 28f * _scale, 19f * _scale);
+            panel.Threat = Label(root, "threat", HudType.Micro, FontStyle.Normal, TextAnchor.MiddleLeft);
+            At(panel.Threat.Rect, CardInset, 135f, inner, 13f);
+            AutoFit(panel.Threat, 8f);
             panel.Threat.Show(false);
-
-            panel.WaveButton = HudUi.Button(root, "wave", 250f * _scale, 26f * _scale, string.Empty,
-                FontSize(13f), _palette.HudPanel, PressWave);
-            HudUi.TopLeft(panel.WaveButton.Root, 14f * _scale, 183f * _scale, 250f * _scale, 26f * _scale);
-            panel.WaveButton.Root.gameObject.SetActive(false);
-
-            // The run's seed, in the corner the button leaves beside it: on the title's line it pushed the
-            // wave number off the card, and it is not what anyone reads the card for.
-            panel.Seed = Label(root, "seed", 11f, FontStyle.Normal, TextAnchor.LowerRight);
-            HudUi.TopLeft(panel.Seed.Rect, 272f * _scale, 186f * _scale, rect.width - 286f * _scale,
-                20f * _scale);
 
             return panel;
         }
@@ -584,9 +605,11 @@ namespace Facet.Game
             {
                 var chip = new Chip
                 {
-                    Back = HudUi.Box(root, prefix + i + ".back", Blend(_palette.HudPanel, _palette.HudText, 0.07f)),
-                    Count = Label(root, prefix + i + ".count", 12f, FontStyle.Bold, TextAnchor.UpperLeft),
-                    Name = Label(root, prefix + i + ".name", 11f, FontStyle.Normal, TextAnchor.UpperLeft),
+                    Back = HudUi.Round(root, prefix + i + ".back", HudInk.Raised(_palette), 4f),
+                    Count = Label(root, prefix + i + ".count", HudType.Micro, FontStyle.Bold,
+                        TextAnchor.MiddleLeft, tracked: true),
+                    Name = Label(root, prefix + i + ".name", HudType.Micro, FontStyle.Normal,
+                        TextAnchor.MiddleLeft),
                 };
                 RectTransform iconRect = HudUi.Node(root, prefix + i + ".icon");
                 var icon = iconRect.gameObject.AddComponent<RawImage>();
@@ -609,49 +632,49 @@ namespace Facet.Game
             var panel = new TutorialPanel { Root = BuildCard("tutorial", rect, PlaceCorner.TopLeft) };
             RectTransform root = panel.Root;
 
-            HudBox stripe = HudUi.Box(root, "stripe", _palette.HudAccent);
-            HudUi.TopLeft(stripe.Rect, 0f, 0f, 3f * _scale, rect.height);
+            const float w = HudLayout.StatusWidth;
+            const float inner = w - CardInset * 2f;
 
-            HudText title = Label(root, "title", 17f, FontStyle.Bold, TextAnchor.UpperLeft);
-            HudUi.TopLeft(title.Rect, 14f * _scale, 10f * _scale, rect.width - 100f * _scale, 24f * _scale);
-            title.Set("HOW TO PLAY", _palette.HudAccent);
+            HudText title = Label(root, "title", HudType.Body, FontStyle.Bold, TextAnchor.MiddleLeft,
+                tracked: true);
+            At(title.Rect, CardInset, 4f, 250f, 22f);
+            title.Set("HOW TO PLAY", _palette.HudText);
 
             // The player's way out: the card is a first-map default, not a rule, and the key on the button
             // is the way back once it is gone (the help card names it too).
-            panel.Hide = HudUi.Button(root, "hide", 70f * _scale, 22f * _scale, "hide  (T)", FontSize(11f),
-                _palette.HudText, () => SetTutorialShown(false));
-            HudUi.TopRight(panel.Hide.Root, 10f * _scale, 9f * _scale, 70f * _scale, 22f * _scale);
+            panel.Hide = HudUi.Button(root, "hide", 58f * _scale, 18f * _scale, "HIDE  T",
+                FontSize(HudType.Micro), HudInk.Muted(_palette), () => SetTutorialShown(false));
+            HudUi.TopRight(panel.Hide.Root, CardInset * _scale, 5f * _scale, 58f * _scale, 18f * _scale);
 
-            // The card's one job is being read. Each step is one plain instruction with no hand-made line
-            // breaks - wrapping is the text's job, and breaks written for one width are ragged at every other.
-            // Seven lines at this size fill well under the body's room (HudLayout.TutorialHeight less the
-            // footer), so the last step never runs off the bottom. Only what the first map unlocks is named:
-            // the stacker is not on it.
-            HudText body = Label(root, "body", 13f, FontStyle.Normal, TextAnchor.UpperLeft, wrap: true);
-            HudUi.TopLeft(body.Rect, 14f * _scale, 40f * _scale, rect.width - 28f * _scale, 134f * _scale);
+            HudBox rule = HudUi.Box(root, "rule", HudInk.Rule(_palette));
+            At(rule.Rect, CardInset, 27f, inner, 1f);
+
+            // Five steps, one line each: the numerals are the one accent, because they are the lesson's
+            // rhythm rather than decoration. Rich text is on for this one label only.
+            HudText body = Label(root, "body", HudType.Micro, FontStyle.Normal, TextAnchor.UpperLeft,
+                wrap: false, rich: true);
+            At(body.Rect, CardInset, 30f, inner, 66f);
+
+            string accent = "#" + ColorUtility.ToHtmlStringRGB(_palette.HudAccent);
             body.Set(
-                "1. Put a Drill (2) on ore and drag Belts (1) to the Core.\n" +
-                "2. Each full shape that reaches the Core earns 1 coin.\n" +
-                "3. Each wave is weak to the shape shown next to it above.\n" +
-                "4. Make that shape: a Cutter (3) splits it in half, a Rotator (4) turns a piece. " +
-                "Press Q/E to turn a machine before you place it.\n" +
-                "5. Belt that shape into a Turret (0). The exact shape does full damage, anything else half.",
-                _palette.HudText);
-
-            HudText footer = Label(root, "footer", 11f, FontStyle.Normal, TextAnchor.UpperLeft, wrap: true);
-            HudUi.TopLeft(footer.Rect, 14f * _scale, rect.height - 28f * _scale, rect.width - 28f * _scale,
-                20f * _scale);
-            footer.Set("Line stuck? Right-click the red belt, or end a spare lane in a Sink (X).",
-                _palette.MachineIdle);
+                "<color=" + accent + ">1</color>  Drill (2) on ore, then drag Belt (1) to the Core.\n" +
+                "<color=" + accent + ">2</color>  A full shape banked earns one coin.\n" +
+                "<color=" + accent + ">3</color>  Each wave is weak to the shape printed above it.\n" +
+                "<color=" + accent + ">4</color>  Cutter (3) splits, Rotator (4) turns  ·  Q/E turns a ghost.\n" +
+                "<color=" + accent + ">5</color>  Belt it to a Turret (0): the exact shape does full damage.",
+                Blend(_palette.HudText, _palette.HudPanel, 0.18f));
 
             panel.Root.gameObject.SetActive(ShowTutorial);
             return panel;
         }
 
-        /// <summary>The controls cluster: pause and help, two small buttons in the screen's top-right
-        /// corner. The keyboard list is reference material and lives behind the help button, in
+        /// <summary>The controls cluster: wave, pause, gear and help, four small buttons in the screen's
+        /// top-right corner. The keyboard list is reference material and lives behind the help button, in
         /// <see cref="BuildHelp"/>. Pause stays out here - pausing is a mid-play act - while restart stays
-        /// inside the card, one deliberate click further from a misfire.</summary>
+        /// inside the card, one deliberate click further from a misfire. The wave button moved here from
+        /// the status rail's last row: it is a time control like pause and the gear, and the rail needed
+        /// the row back for its diagnostics.
+        /// </summary>
         private ControlsPanel BuildControls()
         {
             Rect rect = HudLayout.Controls(Screen.width, _scale);
@@ -659,19 +682,40 @@ namespace Facet.Game
             Place(panel.Root, rect, PlaceCorner.TopRight);
 
             float side = HudLayout.ControlsHeight * _scale;
-            panel.Pause = HudUi.Button(panel.Root, "pause", side, side,
-                _world.Paused ? ">" : "II", FontSize(15f), _palette.HudText, PressPause);
-            HudUi.TopLeft(panel.Pause.Root, 0f, 0f, side, side);
+            float wave = HudLayout.WaveButtonWidth * _scale;
+            float gap = HudLayout.ControlGap * _scale;
 
-            panel.Gear = HudUi.Button(panel.Root, "gear", side, side, GearWord(), FontSize(12f), _palette.HudText,
-                PressGear);
-            HudUi.TopLeft(panel.Gear.Root, (HudLayout.ControlsHeight + HudLayout.ControlGap) * _scale, 0f,
-                side, side);
+            // The wave is the cluster's one filled control: the only action that starts something, so it is
+            // the only one allowed to wear the accent as a surface.
+            panel.Wave = HudUi.Button(panel.Root, "wave", wave, side, "WAVE",
+                FontSize(HudType.Micro), _palette.HudPanel, PressWave);
+            HudUi.TopLeft(panel.Wave.Root, 0f, 0f, wave, side);
+            panel.Wave.Root.gameObject.SetActive(false);
 
-            panel.Help = HudUi.Button(panel.Root, "help", side, side, "?", FontSize(15f), _palette.HudText,
-                () => SetHelpOpen(!_helpOpen));
-            HudUi.TopLeft(panel.Help.Root, (HudLayout.ControlsWidth - HudLayout.ControlsHeight) * _scale, 0f,
-                side, side);
+            panel.Pause = HudUi.Button(panel.Root, "pause", side, side, string.Empty,
+                FontSize(HudType.Body), _palette.HudText, PressPause);
+            HudUi.TopLeft(panel.Pause.Root, wave + gap, 0f, side, side);
+
+            // Two bars rather than the word "II": a transport glyph is drawn, not typed, so it cannot turn
+            // into a missing-character box in a font that lacks the character.
+            panel.PauseBars = HudUi.Node(panel.Pause.Root, "bars");
+            HudUi.TopLeft(panel.PauseBars, (HudLayout.ControlsHeight - 10f) * 0.5f * _scale,
+                (HudLayout.ControlsHeight - 12f) * 0.5f * _scale, 10f * _scale, 12f * _scale);
+            panel.PauseBarA = HudUi.Round(panel.PauseBars, "a", _palette.HudText, 1f);
+            HudUi.TopLeft(panel.PauseBarA.Rect, 0f, 0f, 3f * _scale, 12f * _scale);
+            panel.PauseBarB = HudUi.Round(panel.PauseBars, "b", _palette.HudText, 1f);
+            HudUi.TopLeft(panel.PauseBarB.Rect, 7f * _scale, 0f, 3f * _scale, 12f * _scale);
+
+            panel.Gear = HudUi.Button(panel.Root, "gear", side, side, GearWord(),
+                FontSize(HudType.Label), _palette.HudText, PressGear);
+            HudUi.TopLeft(panel.Gear.Root,
+                (HudLayout.WaveButtonWidth + HudLayout.ControlsHeight + 2f * HudLayout.ControlGap) * _scale,
+                0f, side, side);
+
+            panel.Help = HudUi.Button(panel.Root, "help", side, side, "?",
+                FontSize(HudType.Body), _palette.HudText, () => SetHelpOpen(!_helpOpen));
+            HudUi.TopLeft(panel.Help.Root,
+                (HudLayout.ControlsWidth - HudLayout.ControlsHeight) * _scale, 0f, side, side);
 
             return panel;
         }
@@ -687,34 +731,39 @@ namespace Facet.Game
             var panel = new HelpPanel { Root = BuildCard("help", rect, PlaceCorner.TopRight) };
             RectTransform root = panel.Root;
 
-            HudText header = Label(root, "header", HudLayout.HelpLineSize, FontStyle.Normal,
-                TextAnchor.UpperLeft);
+            HudText header = Label(root, "header", HudLayout.HelpLineSize, FontStyle.Bold,
+                TextAnchor.MiddleLeft, tracked: true);
             HudUi.TopLeft(header.Rect, HudLayout.HelpInset * _scale, HudLayout.HelpHeaderTop * _scale,
                 rect.width - 60f * _scale, HudLayout.HelpLineHeight * _scale);
-            header.Set("CONTROLS", _palette.HudAccent);
+            header.Set("CONTROLS", _palette.HudText);
+
+            HudBox rule = HudUi.Box(root, "rule", HudInk.Rule(_palette));
+            HudUi.TopLeft(rule.Rect, HudLayout.HelpInset * _scale, 23f * _scale,
+                rect.width - 2f * HudLayout.HelpInset * _scale, 1f);
 
             float y = HudLayout.HelpLineTop;
             foreach (string key in lines)
             {
                 HudText line = Label(root, "key" + y, HudLayout.HelpLineSize, FontStyle.Normal,
-                    TextAnchor.UpperLeft);
+                    TextAnchor.MiddleLeft);
                 HudUi.TopLeft(line.Rect, HudLayout.HelpInset * _scale, y * _scale,
                     rect.width - 2f * HudLayout.HelpInset * _scale, HudLayout.HelpLineHeight * _scale);
-                line.Set(key, _palette.MachineIdle);
+                AutoFit(line, 8f);
+                line.Set(key, HudInk.Muted(_palette));
                 y += HudLayout.HelpLineStep;
             }
 
             panel.Restart = HudUi.Button(root, "restart", rect.width - 2f * HudLayout.HelpInset * _scale,
-                HudLayout.HelpButtonHeight * _scale, "R  restart  run", FontSize(13f), _palette.HudText,
-                PressRestart);
+                HudLayout.HelpButtonHeight * _scale, "R  restart  run", FontSize(HudType.Label),
+                _palette.HudText, PressRestart);
             // Under the last key line, so a line added to KeyLines pushes the button down with it.
             HudUi.TopLeft(panel.Restart.Root, HudLayout.HelpInset * _scale,
                 (y + HudLayout.HelpButtonGap) * _scale, rect.width - 2f * HudLayout.HelpInset * _scale,
                 HudLayout.HelpButtonHeight * _scale);
 
-            panel.Close = HudUi.Button(root, "close", 22f * _scale, 22f * _scale, "×", FontSize(13f),
-                _palette.HudText, () => SetHelpOpen(false));
-            HudUi.TopRight(panel.Close.Root, 8f * _scale, 7f * _scale, 22f * _scale, 22f * _scale);
+            panel.Close = HudUi.Button(root, "close", 20f * _scale, 20f * _scale, "×",
+                FontSize(HudType.Label), _palette.HudText, () => SetHelpOpen(false));
+            HudUi.TopRight(panel.Close.Root, 6f * _scale, 6f * _scale, 20f * _scale, 20f * _scale);
 
             root.gameObject.SetActive(false);
             return panel;
@@ -723,52 +772,68 @@ namespace Facet.Game
         private StockpilePanel BuildStockpile()
         {
             Rect rect = HudLayout.Stockpile(Screen.width, _scale);
-            _stockpileRect = rect;
 
             var panel = new StockpilePanel { Root = HudUi.Node(_canvasRoot, "stockpile") };
             Place(panel.Root, rect, PlaceCorner.TopLeft);
 
-            panel.Number = Label(panel.Root, "number", 26f, FontStyle.Bold, TextAnchor.MiddleLeft);
-            HudUi.TopLeft(panel.Number.Rect, 0f, 0f, rect.width, rect.height);
+            // The bank wears the same ink as the cards rather than floating as loose type over the map: it
+            // is part of the HUD, and one surface language is what keeps the top row reading as one row.
+            HudUi.Shadow(panel.Root, "shadow", 10f, _palette.HudShadow);
+            HudBox back = HudUi.Round(panel.Root, "back", _palette.HudPanel, 10f);
+            HudUi.StretchFull(back.Rect);
+            HudUi.Border(panel.Root, "frame", HudInk.Edge(_palette), 10f, 1f);
 
-            HudIcons.Icon coin = _icons.Mark(MoneyShape);
-            panel.Icon = HudUi.Icon(panel.Root, "icon", coin);
-            float side = Mathf.Min(28f * _scale, rect.height - 4f * _scale);
-            HudUi.TopLeft(panel.Icon.rectTransform, rect.width, (rect.height - side) * 0.5f, side, side);
+            float w = rect.width / _scale;
+
+            // The mark first, then the number: a bank is read as "this much of this", and a mark pinned to
+            // the left never collides with a number that grows to the right.
+            panel.Icon = HudUi.Icon(panel.Root, "icon", _icons.Mark(MoneyShape));
+            At(panel.Icon.rectTransform, 12f, 10f, 24f, 24f);
             panel.Icon.gameObject.SetActive(false);
+
+            panel.Number = Label(panel.Root, "number", HudType.Display, FontStyle.Bold,
+                TextAnchor.MiddleLeft, tracked: true);
+            At(panel.Number.Rect, 40f, 2f, w - 46f, 40f);
 
             return panel;
         }
 
+        /// <summary>
+        /// The bar: every building this run's table carries, on one row, in the table's own order - which is
+        /// also the hotkey order, so the tenth key is the tile under the 0 and the eleventh under the X.
+        ///
+        /// One row, not a role tab over a shelf of two or three. The table has eleven buildings: seven roles
+        /// would have been seven words of chrome to reach a bar that never held more than three tiles, four
+        /// of the roles holding one building each. A player building a factory should not pay a click to
+        /// look at a catalogue they can see at a glance, and the hotkeys are global anyway - the tab was
+        /// only a second answer to "where is the cutter". The roles still exist, but as the info card's
+        /// metadata, where a word is worth reading and costs the bar nothing.
+        ///
+        /// Locked buildings stay on the bar and say LOCKED: the ladder is worth seeing, and a key that
+        /// vanished until a map handed its operator over would hide the progression. Eleven tiles at the
+        /// strip's 880 design units is 73 apiece, so a tile is a key rather than a row: name, then hotkey
+        /// and price, then the afford line.
+        /// </summary>
         private BarPanel BuildBar()
         {
             Rect rect = HudLayout.Bar(Screen.width, Screen.height, _scale);
             var panel = new BarPanel { Root = BuildCard("bar", rect, PlaceCorner.BottomLeft) };
             RectTransform root = panel.Root;
 
-            HudBox stripe = HudUi.Box(root, "stripe", _palette.HudAccent);
-            HudUi.TopLeft(stripe.Rect, 0f, 0f, rect.width, 3f * _scale);
-
-            // The hint, right-aligned along the tab row. There is no "BUILD" label any more: the tabs are
-            // what the panel is called, and a word naming the panel beside seven words naming its contents
-            // is the one line the two-level bar does not need.
-            HudText hint = Label(root, "hint", 11f, FontStyle.Normal, TextAnchor.UpperRight);
-            HudUi.TopLeft(hint.Rect, 12f * _scale, 8f * _scale, rect.width - 24f * _scale, 15f * _scale);
-            hint.Set("click a tile or press " + BuildInput.KeyRangeText() +
-                "   ·   again drops it   ·   drag lays a run",
-                _palette.HudText);
+            const float w = HudLayout.BarWidth;
+            const float pad = 12f;
+            const float gap = 5f;
+            const float tileHeight = 40f;
 
             BuildKind[] kinds = _world.Content.BuildKinds;
             int count = kinds.Length;
-            float pad = 10f * _scale;
-            float gap = 6f * _scale;
-            float tileWidth = (rect.width - 2f * pad - (count - 1) * gap) / count;
-            float tileHeight = rect.height - 39f * _scale;
-            panel.TileWidth = tileWidth;
-            panel.TileHeight = tileHeight;
-            panel.Pad = pad;
-            panel.Gap = gap;
-            panel.TilesTop = 29f * _scale;
+            float tileWidth = (w - 2f * pad - (count - 1) * gap) / count;
+
+            panel.TileWidth = tileWidth * _scale;
+            panel.TileHeight = tileHeight * _scale;
+            panel.Pad = pad * _scale;
+            panel.Gap = gap * _scale;
+            panel.TilesTop = 6f * _scale;
 
             for (int i = 0; i < count; i++)
             {
@@ -776,7 +841,8 @@ namespace Facet.Game
                 var tile = new BuildTile { Kind = kind };
 
                 tile.Root = HudUi.Node(root, "tile" + i);
-                HudUi.TopLeft(tile.Root, pad + i * (tileWidth + gap), 29f * _scale, tileWidth, tileHeight);
+                HudUi.TopLeft(tile.Root, panel.Pad + i * (panel.TileWidth + panel.Gap), panel.TilesTop,
+                    panel.TileWidth, panel.TileHeight);
 
                 tile.Button = tile.Root.gameObject.AddComponent<HudButton>();
                 BuildKind captured = kind;
@@ -785,141 +851,137 @@ namespace Facet.Game
                 // click that produced "NOT ON THIS MAP" would be a worse answer than no selection at all.
                 tile.Button.Pressed = () => SelectKind(captured);
 
-                tile.Button.Fill = HudUi.Box(tile.Root, "back", _palette.HudPanel);
+                tile.Button.Fill = HudUi.Round(tile.Root, "back", HudInk.Raised(_palette), ControlRadius);
                 HudUi.StretchFull(tile.Button.Fill.Rect);
                 tile.Button.Fill.Image.raycastTarget = true;
 
-                tile.Stripe = HudUi.Box(tile.Root, "stripe", _palette.HudPanel);
-                HudUi.TopLeft(tile.Stripe.Rect, 0f, 0f, tileWidth, 3f * _scale);
+                // Name across the top, then the hotkey and the price on one line: a key you can read from
+                // its shape, its key and its cost without the pointer having to arrive first.
+                //
+                // The one place the HUD drops its tracking. Eleven keys across 880 units leave a name 51
+                // screen pixels wide at 960x600, and the widest name (SPLITTER, ROTATOR) is 49 untracked
+                // against those 51 - the +9 % the card labels wear would cost it a point of size in two
+                // keys out of eleven, which reads as two keys printed a little smaller rather than as air.
+                tile.Name = Label(tile.Root, "name", HudType.Label, FontStyle.Bold,
+                    TextAnchor.MiddleLeft);
+                At(tile.Name.Rect, 6f, 3f, tileWidth - 12f, 16f);
+                tile.Name.Set(_world.Content.Machine(kind).Name, _palette.HudText);
+                AutoFit(tile.Name, 9f);
 
-                tile.Hotkey = Label(tile.Root, "hotkey", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
-                HudUi.TopLeft(tile.Hotkey.Rect, 8f * _scale, 9f * _scale, 26f * _scale, 15f * _scale);
-                tile.Hotkey.Set(BuildInput.HotkeyLabel(i), _palette.MachineIdle);
+                // The keycap is drawn as a little key so the digit reads as "press this" rather than as a
+                // label - the one glyph on the tile that is a control rather than a fact.
+                tile.Keycap = HudUi.Round(tile.Root, "keycap", HudInk.Raised(_palette), 4f);
+                At(tile.Keycap.Rect, 6f, 21f, 16f, 14f);
 
-                tile.Cost = Label(tile.Root, "cost", 12f, FontStyle.Bold, TextAnchor.UpperRight);
-                HudUi.TopLeft(tile.Cost.Rect, 0f, 9f * _scale, tileWidth - 8f * _scale, 15f * _scale);
-                tile.Cost.Set(_world.Content.Machine(kind).Cost.ToString(), _palette.MachineIdle);
+                tile.Hotkey = Label(tile.Root, "hotkey", HudType.Micro, FontStyle.Bold,
+                    TextAnchor.MiddleCenter);
+                At(tile.Hotkey.Rect, 6f, 21f, 16f, 14f);
+                tile.Hotkey.Set(BuildInput.HotkeyLabel(i), HudInk.Faint(_palette));
+
+                // The price is a number, not a word, so it carries no tracking either; LOCKED is the one
+                // word it can hold, and it has to fit the same 43 units a three-digit price does.
+                tile.Cost = Label(tile.Root, "cost", HudType.Micro, FontStyle.Bold,
+                    TextAnchor.MiddleRight);
+                At(tile.Cost.Rect, 24f, 21f, tileWidth - 30f, 14f);
+                tile.Cost.Set(_world.Content.Machine(kind).Cost.ToString(), HudInk.Muted(_palette));
+                AutoFit(tile.Cost, 7f);
 
                 tile.CostIcon = HudUi.Icon(tile.Root, "costIcon", _icons.Mark(MoneyShape));
-                HudUi.TopLeft(tile.CostIcon.rectTransform, tileWidth, 10f * _scale, 13f * _scale,
-                    13f * _scale);
+                At(tile.CostIcon.rectTransform, tileWidth - 22f, 23.5f, 9f, 9f);
                 tile.CostIcon.gameObject.SetActive(false);
 
-                tile.Name = Label(tile.Root, "name", 13f, FontStyle.Bold, TextAnchor.MiddleCenter);
-                HudUi.TopLeft(tile.Name.Rect, 4f * _scale, 27f * _scale, tileWidth - 8f * _scale, 20f * _scale);
-                tile.Name.Set(_world.Content.Machine(kind).Name, _palette.HudText);
-
                 tile.Locked = !_world.IsUnlocked(kind);
+                if (tile.Locked) tile.Cost.Set("LOCKED");
 
-                tile.Role = Label(tile.Root, "role", 10f, FontStyle.Bold, TextAnchor.MiddleCenter);
-                HudUi.TopLeft(tile.Role.Rect, 4f * _scale, tileHeight - 20f * _scale,
-                    tileWidth - 8f * _scale, 14f * _scale);
-                tile.Role.Set(tile.Locked ? "LOCKED" : RoleOf(kind),
-                    Blend(CategoryColor(kind), _palette.HudText, 0.15f));
+                // The fraction of the price the bank covers, along the tile's floor: nine tenths of the
+                // way is a belt to lay now, a tenth is a plan for later.
+                tile.Afford = HudUi.BarFill(tile.Root, "afford", 6f * _scale, 2f * _scale,
+                    (tileWidth - 12f) * _scale, 2f * _scale, 1f);
 
-                tile.Afford = HudUi.BarFill(tile.Root, "afford", 1f * _scale, 1f * _scale,
-                    tileWidth - 2f * _scale, 2f * _scale);
-
-                tile.Border = HudUi.Frame(tile.Root, "frame", _palette.HudAccent, 1f * _scale);
+                tile.Border = HudUi.Border(tile.Root, "frame", _palette.HudAccent, ControlRadius, 1f);
                 tile.Border.Show(false);
 
                 tile.Selected = kind == _world.SelectedKind;
                 tile.Affordable = _world.Economy.CanAfford(kind);
 
+                // Dress the first frame here: the update pass only re-dresses a tile whose state *changed*,
+                // so a tile built with the panel's own colour would stay invisible until the player
+                // happened to select or hover it.
+                DressBuildTile(tile);
+
                 panel.Tiles.Add(tile);
             }
-
-            BuildRoleTabs(panel, root, kinds);
-
-            // The first tab is open before the first frame: a bar that opened empty would read as a bar with
-            // nothing in it, one frame before the player's first glance.
-            panel.OpenRole = panel.Tabs.Count > 0 ? panel.Tabs[0].Role : (MachineRole?)null;
-            LayoutBarTiles(panel);
 
             return panel;
         }
 
-        /// <summary>
-        /// The bar's first level: one tab per role this run's table actually carries, in the order each
-        /// role's first building appears in it. A reading of the content rather than a second table to keep
-        /// in step with the first - a new building lands in its role's tab by saying what role it has, and a
-        /// narrower table simply has fewer tabs.
-        ///
-        /// Locked buildings stay inside their tab: the ladder is worth seeing, and the tile says LOCKED
-        /// itself, so a tab that vanished until a map handed its operator over would hide the progression.
-        /// </summary>
-        private void BuildRoleTabs(BarPanel panel, RectTransform root, BuildKind[] kinds)
-        {
-            for (int i = 0; i < kinds.Length; i++)
-            {
-                MachineRole role = MachineReading.Role(_world.Content.Machine(kinds[i]));
-                if (panel.HasTab(role)) continue;
-
-                var tab = new RoleTab { Role = role };
-                MachineRole captured = role;
-                tab.Button = HudUi.Button(root, "tab" + panel.Tabs.Count, 0f, 0f,
-                    MachineReading.RoleLabel(role), FontSize(11f), _palette.HudText,
-                    () => OpenRoleTab(captured));
-                DressRoleTab(tab);
-                panel.Tabs.Add(tab);
-            }
-        }
-
         private InfoPanel BuildInfo()
         {
-            Rect rect = HudLayout.Info(HudLayout.Bar(Screen.width, Screen.height, _scale), _scale);
+            Rect rect = HudLayout.Info(Screen.width, Screen.height, _scale);
 
             var panel = new InfoPanel { Root = BuildCard("info", rect, PlaceCorner.BottomRight) };
             RectTransform root = panel.Root;
 
-            // ----- the build card
+            const float w = HudLayout.InfoWidth;
+            const float inner = w - CardInset * 2f;
+
+            // ----- the build card: a title, a hairline, then the catalogue's sentences
             panel.BuildRoot = HudUi.Node(root, "build");
             HudUi.StretchFull(panel.BuildRoot);
 
-            panel.BuildStripe = HudUi.Box(panel.BuildRoot, "stripe", _palette.HudAccent);
-            Stripe(panel.BuildStripe, 3f * _scale);
+            panel.BuildTitle = Label(panel.BuildRoot, "title", HudType.Body, FontStyle.Bold,
+                TextAnchor.MiddleLeft, tracked: true);
+            At(panel.BuildTitle.Rect, CardInset, 4f, inner - 130f, 20f);
+            AutoFit(panel.BuildTitle, HudType.Micro);
 
-            panel.BuildTitle = Label(panel.BuildRoot, "title", 15f, FontStyle.Bold, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.BuildTitle.Rect, 14f * _scale, 9f * _scale, rect.width - 28f * _scale, 18f * _scale);
+            panel.BuildRight = Label(panel.BuildRoot, "right", HudType.Micro, FontStyle.Normal,
+                TextAnchor.MiddleRight);
+            At(panel.BuildRight.Rect, CardInset, 6f, inner, 16f);
 
-            panel.BuildRight = Label(panel.BuildRoot, "right", 12f, FontStyle.Normal, TextAnchor.UpperRight);
-            HudUi.TopLeft(panel.BuildRight.Rect, 14f * _scale, 9f * _scale, rect.width - 28f * _scale, 18f * _scale);
+            HudBox buildRule = HudUi.Box(panel.BuildRoot, "rule", HudInk.Rule(_palette));
+            At(buildRule.Rect, CardInset, 27f, inner, 1f);
 
-            panel.Blurb = Label(panel.BuildRoot, "blurb", 11f, FontStyle.Normal, TextAnchor.UpperLeft, wrap: true);
-            HudUi.TopLeft(panel.Blurb.Rect, 14f * _scale, 33f * _scale, rect.width - 28f * _scale, 32f * _scale);
+            panel.Blurb = Label(panel.BuildRoot, "blurb", HudType.Label, FontStyle.Normal,
+                TextAnchor.UpperLeft, wrap: true);
+            At(panel.Blurb.Rect, CardInset, 31f, inner, 48f);
 
-            panel.Stats = Label(panel.BuildRoot, "stats", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.Stats.Rect, 14f * _scale, 67f * _scale, rect.width - 28f * _scale, 15f * _scale);
+            panel.Stats = Label(panel.BuildRoot, "stats", HudType.Micro, FontStyle.Normal,
+                TextAnchor.UpperLeft, wrap: true);
+            At(panel.Stats.Rect, CardInset, 82f, inner, 22f);
 
-            panel.Facing = Label(panel.BuildRoot, "facing", 12f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.Facing.Rect, 14f * _scale, 85f * _scale, 130f * _scale, 22f * _scale);
+            panel.Facing = Label(panel.BuildRoot, "facing", HudType.Micro, FontStyle.Bold,
+                TextAnchor.MiddleLeft, tracked: true);
+            At(panel.Facing.Rect, CardInset, 108f, 120f, 14f);
 
-            panel.TurnLeft = HudUi.Button(panel.BuildRoot, "turnL", 54f * _scale, 22f * _scale, "< turn",
-                FontSize(13f), _palette.HudText, () => _rotate?.Invoke(-1));
-            panel.TurnRight = HudUi.Button(panel.BuildRoot, "turnR", 54f * _scale, 22f * _scale, "turn >",
-                FontSize(13f), _palette.HudText, () => _rotate?.Invoke(+1));
-            panel.Inspect = HudUi.Button(panel.BuildRoot, "inspect", 74f * _scale, 22f * _scale, "inspect",
-                FontSize(13f), _palette.HudText, PressInspect);
+            panel.TurnLeft = HudUi.Button(panel.BuildRoot, "turnL", 24f * _scale, 20f * _scale, "<",
+                FontSize(HudType.Label), _palette.HudText, () => _rotate?.Invoke(-1));
+            panel.TurnRight = HudUi.Button(panel.BuildRoot, "turnR", 24f * _scale, 20f * _scale, ">",
+                FontSize(HudType.Label), _palette.HudText, () => _rotate?.Invoke(+1));
+            panel.Inspect = HudUi.Button(panel.BuildRoot, "inspect", 52f * _scale, 20f * _scale, "READ",
+                FontSize(HudType.Micro), _palette.HudText, PressInspect);
 
-            // ----- the inspect card
+            // ----- the inspect card: the same header grammar, then one row per fact
             panel.InspectRoot = HudUi.Node(root, "inspect");
             HudUi.StretchFull(panel.InspectRoot);
 
-            panel.InspectStripe = HudUi.Box(panel.InspectRoot, "stripe", _palette.HudAccent);
-            Stripe(panel.InspectStripe, 3f * _scale);
+            panel.InspectTitle = Label(panel.InspectRoot, "title", HudType.Body, FontStyle.Bold,
+                TextAnchor.MiddleLeft, tracked: true);
+            At(panel.InspectTitle.Rect, CardInset, 4f, inner - 130f, 20f);
+            AutoFit(panel.InspectTitle, HudType.Micro);
 
-            panel.InspectTitle = Label(panel.InspectRoot, "title", 15f, FontStyle.Bold, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.InspectTitle.Rect, 14f * _scale, 9f * _scale, rect.width - 28f * _scale, 18f * _scale);
+            panel.InspectRight = Label(panel.InspectRoot, "right", HudType.Micro, FontStyle.Normal,
+                TextAnchor.MiddleRight);
+            At(panel.InspectRight.Rect, CardInset, 6f, inner, 16f);
 
-            panel.InspectRight = Label(panel.InspectRoot, "right", 12f, FontStyle.Normal, TextAnchor.UpperRight);
-            HudUi.TopLeft(panel.InspectRight.Rect, 14f * _scale, 9f * _scale, rect.width - 28f * _scale, 18f * _scale);
+            HudBox inspectRule = HudUi.Box(panel.InspectRoot, "rule", HudInk.Rule(_palette));
+            At(inspectRule.Rect, CardInset, 27f, inner, 1f);
 
             panel.Rows = new HudText[InspectRowCapacity];
             for (int i = 0; i < panel.Rows.Length; i++)
             {
-                panel.Rows[i] = Label(panel.InspectRoot, "row" + i, 12f, FontStyle.Normal, TextAnchor.UpperLeft);
-                HudUi.TopLeft(panel.Rows[i].Rect, 14f * _scale, (31f + 17f * i) * _scale,
-                    rect.width - 28f * _scale, 15f * _scale);
+                panel.Rows[i] = Label(panel.InspectRoot, "row" + i, HudType.Label, FontStyle.Normal,
+                    TextAnchor.MiddleLeft);
+                At(panel.Rows[i].Rect, CardInset, 33f + 15f * i, inner, 14f);
                 panel.Rows[i].Show(false);
             }
 
@@ -952,12 +1014,13 @@ namespace Facet.Game
             picker.Root = HudUi.Node(root, "picker");
             HudUi.TopLeft(picker.Root, 0f, PickerTop * _scale, card.width, HudLayout.InfoPickHeight * _scale);
 
-            picker.Title = Label(picker.Root, "title", 11f, FontStyle.Bold, TextAnchor.UpperLeft);
-            HudUi.TopLeft(picker.Title.Rect, 14f * _scale, 0f, 120f * _scale, 14f * _scale);
-            picker.Title.Set("ROUTES", _palette.HudAccent);
+            picker.Title = Label(picker.Root, "title", HudType.Micro, FontStyle.Bold, TextAnchor.MiddleLeft,
+                tracked: true);
+            HudUi.TopLeft(picker.Title.Rect, 12f * _scale, 0f, 120f * _scale, 12f * _scale);
+            picker.Title.Set("ROUTES", HudInk.Faint(_palette));
 
             RectTransform canvas = HudUi.Node(picker.Root, "canvas");
-            HudUi.TopLeft(canvas, 14f * _scale, 15f * _scale, CanvasSize * _scale, CanvasSize * _scale);
+            HudUi.TopLeft(canvas, 12f * _scale, 13f * _scale, CanvasSize * _scale, CanvasSize * _scale);
 
             // Draw order inside the canvas is the read order: the ghost cells, then the figure over them,
             // then the buttons that claim the clicks.
@@ -965,7 +1028,7 @@ namespace Facet.Game
             {
                 Vector2 at = CellOffset(quadrant);
 
-                HudBox ghost = HudUi.Box(canvas, "ghost" + quadrant, GhostCell);
+                HudBox ghost = HudUi.Round(canvas, "ghost" + quadrant, GhostCell, 2f);
                 HudUi.TopLeft(ghost.Rect, at.x * _scale, at.y * _scale, CellSize * _scale, CellSize * _scale);
                 picker.Ghosts[quadrant] = ghost;
             }
@@ -983,21 +1046,22 @@ namespace Facet.Game
                 // a click on a quarter is a click on that quadrant of the item.
                 int captured = quadrant;
                 HudButton button = HudUi.Button(canvas, "pick" + quadrant, CellSize * _scale, CellSize * _scale,
-                    string.Empty, FontSize(11f), _palette.HudText, () => PressFilterQuadrant(captured));
+                    string.Empty, FontSize(HudType.Micro), _palette.HudText, () => PressFilterQuadrant(captured));
                 button.Label.Show(false);
                 HudUi.TopLeft(button.Root, at.x * _scale, at.y * _scale, CellSize * _scale, CellSize * _scale);
                 picker.Quadrants[quadrant] = button;
             }
 
-            HudUi.Frame(canvas, "frame", PanelBorder(), 1f * _scale);
+            HudUi.Border(canvas, "frame", PanelBorder(), 3f, 1f);
 
-            picker.Mode = HudUi.Button(picker.Root, "mode", ModeWidth * _scale, 20f * _scale, string.Empty,
-                FontSize(12f), _palette.HudText, PressFilterMode);
-            HudUi.TopLeft(picker.Mode.Root, ModeLeft * _scale, 15f * _scale, ModeWidth * _scale, 20f * _scale);
+            picker.Mode = HudUi.Button(picker.Root, "mode", ModeWidth * _scale, 18f * _scale, string.Empty,
+                FontSize(HudType.Micro), _palette.HudText, PressFilterMode);
+            HudUi.TopLeft(picker.Mode.Root, ModeLeft * _scale, 13f * _scale, ModeWidth * _scale, 18f * _scale);
 
-            picker.Caption = Label(picker.Root, "caption", 11f, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(picker.Caption.Rect, ModeLeft * _scale, 38f * _scale,
-                card.width - (ModeLeft + 14f) * _scale, 14f * _scale);
+            picker.Caption = Label(picker.Root, "caption", HudType.Micro, FontStyle.Normal,
+                TextAnchor.MiddleLeft);
+            HudUi.TopLeft(picker.Caption.Rect, ModeLeft * _scale, 34f * _scale,
+                card.width - (ModeLeft + 12f) * _scale, 12f * _scale);
 
             picker.Root.gameObject.SetActive(false);
             return picker;
@@ -1019,17 +1083,21 @@ namespace Facet.Game
             RectTransform root = panel.Root;
 
             // The banner's own rectangle, in the layout's y-down screen space: centred, its top edge
-            // at 42% of the leftover height - and placed by that top edge, the way every panel is.
-            Rect rect = new Rect((Screen.width - 460f * _scale) * 0.5f, (Screen.height - 150f * _scale) * 0.42f,
-                460f * _scale, 150f * _scale);
+            // at 42% of the leftover height - and placed by that top edge, the way every panel is. It is a
+            // transient overlay, so it is not on the 22 % budget; 560 wide is what the run's one-line
+            // report needs at the display size.
+            Rect rect = new Rect((Screen.width - 560f * _scale) * 0.5f, (Screen.height - 170f * _scale) * 0.42f,
+                560f * _scale, 170f * _scale);
             HudUi.TopCentre(root, rect.y, rect.width, rect.height);
 
-            HudBox back = HudUi.Box(root, "back", _palette.HudPanel);
+            HudUi.Shadow(root, "shadow", 12f, _palette.HudShadow);
+            HudBox back = HudUi.Round(root, "back", _palette.HudPanel, 12f);
             HudUi.StretchFull(back.Rect);
-            HudUi.Frame(root, "frame", PanelBorder(), 1f * _scale);
+            HudUi.Border(root, "frame", PanelBorder(), 12f, 1f);
 
-            panel.Label = Label(root, "label", 22f, FontStyle.Bold, TextAnchor.MiddleCenter, wrap: true);
-            HudUi.Stretch(panel.Label.Rect, 0f, 22f * _scale, 0f, 120f * _scale);
+            panel.Label = Label(root, "label", HudType.Display, FontStyle.Bold, TextAnchor.MiddleCenter,
+                wrap: true, tracked: true);
+            HudUi.Stretch(panel.Label.Rect, 0f, 18f * _scale, 0f, 136f * _scale);
 
             root.gameObject.SetActive(false);
             return panel;
@@ -1045,12 +1113,13 @@ namespace Facet.Game
             panel.Group.interactable = false;
             panel.Group.alpha = 0f;
 
-            panel.Back = HudUi.Box(root, "back", _palette.HudPanel);
+            HudUi.Shadow(root, "shadow", 8f, _palette.HudShadow);
+            panel.Back = HudUi.Round(root, "back", _palette.HudPanel, 8f);
             HudUi.StretchFull(panel.Back.Rect);
-            panel.Frame = HudUi.Frame(root, "frame", _palette.HudWarn, 2f * _scale);
-
-            panel.Label = Label(root, "label", 15f, FontStyle.Bold, TextAnchor.MiddleCenter);
-            HudUi.TopLeft(panel.Label.Rect, 14f * _scale, 8f * _scale, 100f, 30f);
+            panel.Frame = HudUi.Border(root, "frame", _palette.HudWarn, 8f, 2f);
+            panel.Label = Label(root, "label", HudType.Label, FontStyle.Bold, TextAnchor.MiddleCenter,
+                tracked: true);
+            HudUi.TopLeft(panel.Label.Rect, 14f * _scale, 8f * _scale, 100f, 22f * _scale);
 
             root.gameObject.SetActive(false);
             return panel;
@@ -1068,18 +1137,21 @@ namespace Facet.Game
             var panel = new TooltipPanel { Root = HudUi.Node(_canvasRoot, "tooltip") };
             RectTransform root = panel.Root;
 
-            panel.Back = HudUi.Box(root, "back", _palette.HudPanel);
+            HudUi.Shadow(root, "shadow", 8f, _palette.HudShadow);
+            panel.Back = HudUi.Round(root, "back", _palette.HudPanel, 8f);
             HudUi.StretchFull(panel.Back.Rect);
-            panel.Frame = HudUi.Frame(root, "frame", PanelBorder(), 1f * _scale);
+            panel.Frame = HudUi.Border(root, "frame", PanelBorder(), 8f, 1f);
 
-            panel.Title = Label(root, "title", 13f, FontStyle.Bold, TextAnchor.UpperLeft);
-            HudUi.TopLeft(panel.Title.Rect, 12f * _scale, 7f * _scale, 200f, 18f * _scale);
+            panel.Title = Label(root, "title", HudType.Label, FontStyle.Bold, TextAnchor.UpperLeft,
+                tracked: true);
+            HudUi.TopLeft(panel.Title.Rect, 10f * _scale, 5f * _scale, 200f, 16f * _scale);
 
             panel.Rows = new HudText[TooltipRowCapacity];
             for (int i = 0; i < panel.Rows.Length; i++)
             {
-                panel.Rows[i] = Label(root, "row" + i, 11f, FontStyle.Normal, TextAnchor.UpperLeft);
-                HudUi.TopLeft(panel.Rows[i].Rect, 12f * _scale, (27f + 16f * i) * _scale, 200f, 15f * _scale);
+                panel.Rows[i] = Label(root, "row" + i, HudType.Micro, FontStyle.Normal,
+                    TextAnchor.UpperLeft);
+                HudUi.TopLeft(panel.Rows[i].Rect, 10f * _scale, (23f + 14f * i) * _scale, 200f, 13f * _scale);
                 panel.Rows[i].Show(false);
             }
 
@@ -1209,7 +1281,7 @@ namespace Facet.Game
             _toastAlpha = fade;
             _toast.Group.alpha = fade;
             _toast.Back.Set(WithAlpha(_palette.HudPanel, fade));
-            _toast.Frame.Set(WithAlpha(_palette.HudWarn, fade), 2f * _scale);
+            _toast.Frame.Set(WithAlpha(_palette.HudWarn, fade));
             _toast.Label.Set(_toastText, WithAlpha(_palette.HudWarn, fade));
         }
 
@@ -1292,7 +1364,7 @@ namespace Facet.Game
         private void UpdateStockpile()
         {
             BuildKind? selected = _world.SelectedKind;
-            Color numberColour = _palette.Outline;
+            Color numberColour = HudInk.Paper(_palette);
             if (selected.HasValue && !_world.Economy.CanAfford(selected.Value))
                 numberColour = _palette.CursorNoFunds;
             if (_toastAlpha > 0f)
@@ -1304,20 +1376,10 @@ namespace Facet.Game
                 _stockpileCount = shapes;
                 _stockpile.Number.Set(shapes.ToString(), numberColour);
 
-                // The shape follows the number rather than sitting in a column of its own: the readout grows
-                // rightwards and stays glued to the card. Drawn, not typed - the character for a mineral is
-                // not in every font a player has, and this mark must never be a gap.
+                // The mark stands to the left of the number, so it never has to move as the number grows;
+                // it is shown only when the palette could draw the map's mineral.
                 if (_stockpile.Icon != null)
-                {
-                    float used = _stockpile.Number.PreferredWidth;
-                    float side = Mathf.Min(28f * _scale, _stockpileRect.height - 4f * _scale);
-                    float iconX = used + 6f * _scale;
-                    bool fits = iconX + side <= _stockpileRect.width;
-                    _stockpile.Icon.gameObject.SetActive(fits);
-                    if (fits)
-                        HudUi.TopLeft(_stockpile.Icon.rectTransform, iconX,
-                            (_stockpileRect.height - side) * 0.5f, side, side);
-                }
+                    _stockpile.Icon.gameObject.SetActive(_stockpile.Icon.texture != null);
             }
             else _stockpile.Number.SetColour(numberColour);
 
@@ -1368,12 +1430,9 @@ namespace Facet.Game
             ThreatRadar.Summary outOfView = ReadOutOfView();
             bool coreHit = ThreatRadar.CoreIsBeingHit(_world, _palette.Radar.DangerTicks);
 
-            _status.Stripe.Set(
-                jams > 0 || blocked > 0 || stalled > 0 || starved || hurting || coreHit || outOfView.Urgent
-                    ? _palette.HudWarn : _palette.HudAccent);
-
-            _status.Title.Set(TitleLine(), _palette.HudAccent);
-            _status.Seed.Set(SeedLine(), Blend(_palette.HudText, _palette.HudPanel, 0.45f));
+            _status.Title.Set(MapLine(), _palette.HudText);
+            _status.WaveTag.Set(WaveTag(),
+                CanStartWaveNow ? _palette.HudAccent : HudInk.Muted(_palette));
 
             // The clock as a length above the clock as a number: the bar is what a player reads without
             // taking their eyes off the map, and the line underneath says what the wait is for.
@@ -1393,11 +1452,17 @@ namespace Facet.Game
             _status.Threat.Show(threatNews);
             if (threatNews) _status.Threat.Set(threat, ThreatColour(in outOfView));
 
-            bool button = CanStartWaveNow;
-            if (_status.WaveButton.Root.gameObject.activeSelf != button)
-                _status.WaveButton.Root.gameObject.SetActive(button);
-            if (button)
-                _status.WaveButton.Label.Set(">  start wave " + _world.Waves.NextWave + " now");
+            // The footer band: diagnostics when there are any, otherwise the two stable facts - the run's
+            // seed and the gear. A reserved band that is empty most of the run reads as a broken card; one
+            // that always says something useful reads as a footer.
+            bool quiet = !productionNews && !threatNews;
+            _status.Seed.Show(quiet);
+            _status.Speed.Show(quiet);
+            if (quiet)
+            {
+                _status.Seed.Set(SeedLine(), HudInk.Muted(_palette));
+                _status.Speed.Set(SpeedFooter(), HudInk.Muted(_palette));
+            }
         }
 
         /// <summary>
@@ -1414,8 +1479,8 @@ namespace Facet.Game
         /// </summary>
         /// <summary>
         /// The production line, said only when something is wrong: a segment that cannot pass its item on
-        /// first - it stops the run, not just one machine - then a machine holding a piece its outlets will not
-        /// take, then a gun that cannot shoot, then, once a wave
+        /// first - it stops the run, not just one machine - then a machine holding a piece it has nowhere to
+        /// put, then a gun that cannot shoot, then, once a wave
         /// is walking in, the absence of anything to shoot it with. When the defence is fed and the belts
         /// are clear the line stays silent: "all clear" printed every second is a line nobody reads. Null
         /// means no news, and the line is hidden.
@@ -1425,8 +1490,10 @@ namespace Facet.Game
         /// to go at all. The block is the one that used to be silent - a line ending in the air reddened nothing,
         /// so a factory came to a standstill with nothing on the HUD to say why. The stalled machine is the
         /// third of the three and the last one to have been silent: a machine that has eaten its item and
-        /// cannot pass it on is neither a jam nor a block, so without the count here the belts behind it queue
-        /// and the card says nothing.
+        /// has no outlet for it is neither a jam nor a block, so without the count here the belts behind it
+        /// queue and the card says nothing. A <em>full</em> outlet is not that - a line loaded behind a full
+        /// consumer is a line doing its job - so the count is of machines with nowhere to put the piece, not of
+        /// machines that are merely waiting for room.
         /// </summary>
         private string ProductionLine(int jams, int blocked, int stalled, bool starved, int total)
         {
@@ -1441,12 +1508,11 @@ namespace Facet.Game
 
             if (stalled > 0)
                 // The third way a line stops, and the one that had no words before: the machine has eaten its
-                // item and cannot pass it on, so the belts behind it queue and nothing upstream is ever
-                // "blocked". Both causes are one sentence - a lane that was never wired and a lane whose belt
-                // is full are the same fact to the machine - and clicking the one the locator points at is
-                // where the two are told apart.
+                // item and has no outlet to pass it on to, so the belts behind it queue and nothing upstream
+                // is ever "blocked". Only a <em>missing</em> outlet is said here - a full one is a loaded line,
+                // and a gun waiting for the next wave is not a fault the player can go and fix.
                 return stalled + " machine" + (stalled == 1 ? "" : "s") +
-                       " stalled - an outlet is full or missing   ·   click one to read it";
+                       " stalled - an outlet is missing   ·   click one";
 
             if (starved)
                 // The chamber is universal, so a starved gun is not missing the right shape - it is missing
@@ -1483,20 +1549,20 @@ namespace Facet.Game
                     .Append(" out of view");
 
                 if (outOfView.Nearest < float.MaxValue)
-                    text.Append("   ·   nearest ").Append(Mathf.RoundToInt(outOfView.Nearest)).Append(" tiles");
+                    text.Append("   ·   nearest ").Append(Mathf.RoundToInt(outOfView.Nearest));
 
                 // The word that matters is the verb: an enemy out of view is news, an enemy out of view that
                 // is hitting something is the reason the arrows pulse.
-                if (outOfView.Urgent) text.Append("   ·   hitting something");
+                if (outOfView.Urgent) text.Append("   ·   hitting");
             }
 
             if (outOfView.HasStops)
                 AppendSeparator(text)
                     .Append(outOfView.Stops)
-                    .Append(" stopped out of view");
+                    .Append(" stopped");
 
             if (outOfView.CoreIsOut)
-                AppendSeparator(text).Append("the Core is out of view   ·   C goes back to it");
+                AppendSeparator(text).Append("Core out   ·   C goes back");
 
             return text.ToString();
         }
@@ -1552,8 +1618,10 @@ namespace Facet.Game
             ChipEntries(next, _nextEntries);
             ChipEntries(after, _afterEntries);
 
-            string nextLabel = "WAVE " + waves.NextWave;
-            string afterLabel = "THEN " + (waves.NextWave + 1);
+            // "NOW" and "THEN" rather than the wave numbers: the title tag already names the wave, and a
+            // label that starts with a digit reads as one more count beside the chips.
+            string nextLabel = "NOW";
+            string afterLabel = "THEN";
 
             if (!LayoutChips(_status.Chips, _status.NextLabel, nextLabel, _nextEntries, ChipsTop, withNames: true) ||
                 !LayoutChips(_status.ChipsAfter, _status.AfterLabel, afterLabel, _afterEntries, ChipsAfterTop, withNames: true))
@@ -1600,11 +1668,11 @@ namespace Facet.Game
         private bool LayoutChips(Chip[] row, HudText label, string labelText, List<ChipEntry> entries,
             float top, bool withNames)
         {
-            label.Set(labelText, _palette.HudAccent);
+            label.Set(labelText, HudInk.Muted(_palette));
             label.Show(entries.Count > 0);
 
-            float x = 14f * _scale;
-            if (entries.Count > 0) x += label.PreferredWidth + 6f * _scale;
+            float x = CardInset * _scale;
+            if (entries.Count > 0) x += (ChipLabelWidth + 4f) * _scale;
 
             for (int i = 0; i < ChipCapacity; i++)
             {
@@ -1623,21 +1691,23 @@ namespace Facet.Game
 
                 float countWidth = chip.Count.PreferredWidth;
                 float nameWidth = withNames ? chip.Name.PreferredWidth : 0f;
-                float chipWidth = countWidth + (withNames ? 3f * _scale + nameWidth + 5f * _scale : 0f) + 13f * _scale;
+                float chipWidth = (withNames ? countWidth + 4f * _scale + nameWidth : countWidth) +
+                                  22f * _scale;
 
-                if (x + chipWidth > _status.Root.rect.width - 14f * _scale) return false;
+                if (x + chipWidth > _status.Root.rect.width - CardInset * _scale) return false;
 
                 chip.Back.Show(true);
                 chip.Count.Show(true);
-                HudUi.TopLeft(chip.Back.Rect, x - 5f * _scale, top * _scale, chipWidth + 10f * _scale, 24f * _scale);
-                HudUi.TopLeft(chip.Count.Rect, x, (top + 4f) * _scale, countWidth + 2f * _scale, 18f * _scale);
+                HudUi.TopLeft(chip.Back.Rect, x, top * _scale, chipWidth, 17f * _scale);
+                HudUi.TopLeft(chip.Count.Rect, x + 5f * _scale, (top + 2.5f) * _scale,
+                    countWidth + 2f * _scale, 12f * _scale);
                 chip.Count.SetColour(_palette.HudText);
 
                 if (withNames)
                 {
-                    HudUi.TopLeft(chip.Name.Rect, x + countWidth + 3f * _scale, (top + 4f) * _scale,
-                        nameWidth + 2f * _scale, 18f * _scale);
-                    chip.Name.SetColour(_palette.MachineIdle);
+                    HudUi.TopLeft(chip.Name.Rect, x + 5f * _scale + countWidth + 4f * _scale,
+                        (top + 2.5f) * _scale, nameWidth + 2f * _scale, 12f * _scale);
+                    chip.Name.SetColour(HudInk.Muted(_palette));
                 }
 
                 if (chip.Icon != null)
@@ -1647,14 +1717,14 @@ namespace Facet.Game
                     {
                         chip.Icon.texture = icon.Texture;
                         chip.Icon.uvRect = icon.Uv;
-                        HudUi.TopLeft(chip.Icon.rectTransform, x + chipWidth - 13f * _scale,
-                            (top + 5f) * _scale, 13f * _scale, 13f * _scale);
+                        HudUi.TopLeft(chip.Icon.rectTransform, x + chipWidth - 17f * _scale,
+                            (top + 3f) * _scale, 11f * _scale, 11f * _scale);
                         chip.Icon.gameObject.SetActive(true);
                     }
                     else chip.Icon.gameObject.SetActive(false);
                 }
 
-                x += chipWidth + 12f * _scale;
+                x += chipWidth + 6f * _scale;
             }
 
             return true;
@@ -1687,26 +1757,23 @@ namespace Facet.Game
             float life = hit ? Mathf.Clamp01(1f - age / (float)Mathf.Max(1, look.DangerTicks)) : 0f;
 
             float fraction = _world.Core.HealthFraction;
-            Color colour = fraction > 0.4f ? _palette.HudGood : _palette.HudWarn;
 
-            _status.Health.Set(fraction, colour);
+            // Full Core reads as paper: the brightest thing in the rail, which is what "healthy" looks like
+            // without spending a fourth hue on it. Only damage turns it warning-coloured.
+            _status.Health.Set(fraction, fraction > 0.4f ? HudInk.Paper(_palette) : _palette.HudWarn);
 
-            // The edge carries the hit: a bar that only shrinks says the same thing twice, while one that
-            // goes red-rimmed for the window the Core was last chewed says it is happening now. The same
-            // window the screen's danger frame fades over, so the card and the frame pulse together.
-            _status.HealthFrame.Set(hit
+            // The metre's track carries the hit: it goes warning-coloured for the window the Core was last
+            // chewed, the same window the screen's danger frame fades over.
+            _status.HealthTrack.Set(hit
+                ? WithAlpha(_palette.HudWarn, 0.16f + 0.30f * life)
+                : HudInk.Raised(_palette));
+
+            // One number, said once: what is left, and - while a hit is fresh - what the last one cost.
+            string value = Mathf.CeilToInt(_world.Core.Hp) + " / " + Mathf.CeilToInt(_world.Core.MaxHp);
+            if (hit) value += "   -" + DamageText(damage) + " hp";
+            _status.HealthValue.Set(value, hit
                 ? WithAlpha(_palette.HudWarn, 0.45f + 0.55f * life)
-                : Blend(_palette.HudText, _palette.HudPanel, 0.5f));
-
-            _status.HealthLabel.Set(
-                "core " + Mathf.CeilToInt(_world.Core.Hp) + " / " + Mathf.CeilToInt(_world.Core.MaxHp),
-                _palette.Outline);
-
-            // What the last hit cost, printed in the bar's right-hand margin and fading with it: the
-            // difference between "87" and "87, and four of those just went".
-            _status.HealthDamage.Show(hit);
-            if (hit)
-                _status.HealthDamage.Set("-" + DamageText(damage) + " hp", WithAlpha(_palette.HudWarn, life));
+                : HudInk.Muted(_palette));
         }
 
         /// <summary>A hit on the Core, printed without a decimal tail when it does not have one.</summary>
@@ -1729,7 +1796,7 @@ namespace Facet.Game
             // A wave being spent is good news and a countdown running is not, so the bar wears the colour of
             // whichever it is - the same two colours the diagnostics below it are said in.
             Color fill = waves.Phase == WavePhase.Running || waves.Phase == WavePhase.Over
-                ? _palette.HudGood : _palette.HudAccent;
+                ? HudInk.Good(_palette) : _palette.HudAccent;
 
             _status.Clock.Set(fraction, fill);
         }
@@ -1762,60 +1829,43 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>
-        /// The card's title: the run's identity - the map in the campaign and where the clock is. The seed
-        /// the wave generator drew from is the card's footer (<see cref="SeedLine"/>): it belongs with the
-        /// run, but it is twelve digits nobody reads twice, and on the title's line it pushed the wave the
-        /// player is actually waiting for off the end of the card.
-        ///
-        /// The total is <see cref="WaveDirector.TotalWaves"/>, and an endless run has none: it prints the
-        /// wave number alone rather than "wave 7 of 0", and no line here ever claims a final wave, because
-        /// an endless run does not have one.
-        /// </summary>
-        private string TitleLine()
+        /// <summary>The run's identity, on the title line's left end: the map in the campaign and - when the
+        /// last map re-enters as an endless run - the word for it. The wave used to share this line and
+        /// pushed the map's name off the end whenever the two were long; it now has the right end.</summary>
+        private string MapLine()
         {
-            string map = _world.Map.Name;
             string at = _campaign != null && _campaign.MapCount > 1
-                ? "map " + (_campaign.MapIndex + 1) + "/" + _campaign.MapCount + "  ·  "
+                ? (_campaign.MapIndex + 1) + "/" + _campaign.MapCount + "  ·  "
                 : string.Empty;
 
-            // The endless re-entry of the last map is the same map on the card, so the card says so -
-            // a run with no total to print is otherwise indistinguishable from a scripted one.
-            string endless = _world.Waves.Endless ? "  ·  endless" : string.Empty;
+            return at + _world.Map.Name + (_world.Waves.Endless ? "  ·  endless" : string.Empty);
+        }
 
-            string head = "FACET  ·  " + at + map + endless;
+        /// <summary>The title line's right end: which wave the clock is on or counting to, and whether the
+        /// run has a last one to be counted against. A word rather than a sentence, because it shares its
+        /// line with the map's name.</summary>
+        private string WaveTag()
+        {
+            if (_world.Status == GameStatus.Won) return "CLEARED";
+            if (_world.Status == GameStatus.Lost) return "LOST";
 
-            switch (_world.Status)
-            {
-                case GameStatus.Won:
-                    return head + (_campaign != null && _campaign.HasNext ? "  ·  map cleared" : "  ·  campaign cleared");
-                case GameStatus.Lost: return head + "  ·  the core is gone";
-            }
-
-            // The title names the wave and nothing else: the bar under it is the clock, and the line under
-            // that has the number when the number is what matters.
             WaveDirector waves = _world.Waves;
+            string total = waves.TotalWaves > 0 ? " OF " + waves.TotalWaves : string.Empty;
+
             switch (waves.Phase)
             {
                 case WavePhase.Held:
                 case WavePhase.Intermission:
-                    return head + "  ·  wave " + waves.NextWave + OfTotal(waves) + " next";
+                    return "WAVE " + waves.NextWave + total + " NEXT";
                 case WavePhase.Running:
-                    return head + "  ·  wave " + waves.CurrentWave + OfTotal(waves);
+                    return "WAVE " + waves.CurrentWave + total;
                 case WavePhase.Over:
-                    // The tick that finishes the table also ends the run, so a playing map never shows
-                    // this; the clock still owes the title an answer rather than a default.
-                    return head + "  ·  every wave fought";
+                    return "ALL WAVES";
                 default:
                     throw new ArgumentOutOfRangeException(nameof(waves), waves.Phase,
-                        "a new wave phase must name its title line");
+                        "a new wave phase must name its title tag");
             }
         }
-
-        /// <summary>" of 6" while the run has a bound, and nothing at all when it does not: an endless run
-        /// counts toward no final wave, so a total would be a number it cannot reach.</summary>
-        private static string OfTotal(WaveDirector waves)
-            => waves.TotalWaves > 0 ? " of " + waves.TotalWaves : string.Empty;
 
         /// <summary>The card's footer: the seed a run is reproducible from, in the corner the start-wave
         /// button leaves empty. Dim and out of the way - the one number on this card nobody plays against.</summary>
@@ -1847,7 +1897,7 @@ namespace Facet.Game
 
                 case WavePhase.Intermission:
                     return "next wave in " + Mathf.CeilToInt(waves.IntermissionRemaining) + "s"
-                        + (_world.Paused ? string.Empty : "   ·   N starts it now") + SpeedNote();
+                        + (_world.Paused ? string.Empty : "   ·   N starts it now");
 
                 case WavePhase.Running:
                 {
@@ -1856,7 +1906,7 @@ namespace Facet.Game
                     WaveDefinition current = waves.Definition(waves.CurrentWave);
                     int left = _world.Enemies.AliveCount + waves.PendingInWave;
                     return left + " of " + (current != null ? current.Total : left) + " enemies left in this wave"
-                        + (_world.Paused ? "   ·   paused" : string.Empty) + SpeedNote();
+                        + (_world.Paused ? "   ·   paused" : string.Empty);
                 }
 
                 default:
@@ -1879,16 +1929,26 @@ namespace Facet.Game
 
             int gear = _clock != null ? _clock.Gear : 1;
             bool behind = _clock != null && _clock.FallingBehind && !_world.Paused;
+            bool canWave = CanStartWaveNow;
             if (!_controlsDirty && _controlsPaused == _world.Paused && _controlsGear == gear &&
-                _controlsBehind == behind) return;
+                _controlsBehind == behind && _controlsCanWave == canWave) return;
             _controlsDirty = false;
             _controlsPaused = _world.Paused;
             _controlsGear = gear;
             _controlsBehind = behind;
+            _controlsCanWave = canWave;
 
-            _controls.Pause.Label.Set(_world.Paused ? ">" : "II");
+            _controls.Pause.Label.Set(_world.Paused ? ">" : string.Empty, _palette.HudText);
+            _controls.PauseBars.gameObject.SetActive(!_world.Paused);
+
             // The gear's word; amber when this browser cannot keep up with it, so 3x never quietly means 2x.
             _controls.Gear.Label.Set(GearWord(), behind ? _palette.HudWarn : _palette.HudText);
+
+            // The wave button is the one control in the cluster that comes and goes: it is drawn only
+            // when the director has a wave to start, so it never promises something it would ignore.
+            if (_controls.Wave.Root.gameObject.activeSelf != canWave)
+                _controls.Wave.Root.gameObject.SetActive(canWave);
+            if (canWave) _controls.Wave.Label.Set("WAVE " + _world.Waves.NextWave);
         }
 
         private void SetHelpOpen(bool open)
@@ -1931,39 +1991,15 @@ namespace Facet.Game
 
         private void UpdateBuildBar()
         {
-            if (!_tabsMeasured) LayoutRoleTabs();
-
             BuildKind? selected = _world.SelectedKind;
-
-            // The hotkeys are global - a digit picks its building wherever it is filed - so a selection made
-            // from the keyboard opens whichever tab that building lives in, and the bar follows the keys
-            // rather than hiding what they just picked. Only a *change* of selection moves the bar: browsing
-            // to another tab while a belt is in hand must not be undone the next frame.
-            if (selected.HasValue && selected != _seenSelected)
-                OpenRoleTab(MachineReading.Role(_world.Content.Machine(selected.Value)));
-            _seenSelected = selected;
-
-            for (int i = 0; i < _bar.Tabs.Count; i++)
-            {
-                RoleTab tab = _bar.Tabs[i];
-                bool open = _bar.OpenRole.HasValue && _bar.OpenRole.Value == tab.Role;
-                bool hovered = tab.Button.Hovered;
-                if (tab.Open == open && tab.Hovered == hovered) continue;
-
-                tab.Open = open;
-                tab.Hovered = hovered;
-                DressRoleTab(tab);
-            }
-
             _hoveredTile = -1;
 
             for (int i = 0; i < _bar.Tiles.Count; i++)
             {
                 BuildTile tile = _bar.Tiles[i];
 
-                // A closed tile's button is inactive, so the pointer cannot leave it: its hover flag is frozen
-                // at whatever it was when the tab closed. Asking the object rather than the flag is what keeps
-                // the info card from describing a building that is off the bar.
+                // Every tile is on the bar all the time, so the pointer's answer is the button's own; the
+                // object test is kept because a hierarchy torn down under a pointer can leave a flag set.
                 bool hovered = tile.Root.gameObject.activeSelf && tile.Button.Hovered;
                 if (hovered) _hoveredTile = i;
 
@@ -1980,12 +2016,16 @@ namespace Facet.Game
                     tile.Affordable = affordable;
                     tile.Locked = locked;
 
-                    // The two labels the lock owns: put the role back the moment the map hands the operator
+                    // The one label the lock owns: put the price back the moment the map hands the operator
                     // over, which is what a campaign's map change does. The cost mark is placed from the
                     // cost's measured width, so a lock change makes it place itself again.
                     if (wasLocked != locked)
                     {
-                        tile.Role.Set(locked ? "LOCKED" : RoleOf(tile.Kind));
+                        // The tile's second line is its cost, or LOCKED where the map has not handed the
+                        // operator over. The role is the info card's word, so the tile does not repeat it.
+                        tile.Cost.Set(locked
+                            ? "LOCKED"
+                            : _world.Content.Machine(tile.Kind).Cost.ToString());
                         tile.CostPlaced = false;
                     }
 
@@ -2020,50 +2060,49 @@ namespace Facet.Game
         /// </summary>
         private void DressBuildTile(BuildTile tile)
         {
-            Color category = CategoryColor(tile.Kind);
-
             if (tile.Locked)
             {
-                tile.Button.Fill.Set(Blend(_palette.HudPanel, _palette.Outline, 0.25f));
-                tile.Stripe.Set(Blend(category, _palette.HudPanel, 0.8f));
-                tile.Border.Show(false);
-                tile.Hotkey.SetColour(Blend(_palette.MachineIdle, _palette.HudPanel, 0.5f));
-                tile.Cost.SetColour(Blend(_palette.MachineIdle, _palette.HudPanel, 0.5f));
-                tile.Name.SetColour(Blend(_palette.HudText, _palette.HudPanel, 0.55f));
-                tile.Role.SetColour(Blend(_palette.MachineIdle, _palette.HudPanel, 0.6f));
+                tile.Button.Fill.Set(Blend(_palette.HudPanel, _palette.HudText, 0.03f));
+                tile.Keycap.Set(Blend(_palette.HudPanel, _palette.HudText, 0.05f));
+                tile.Border.Show(true);
+                tile.Border.Set(Blend(_palette.HudPanel, _palette.HudText, 0.08f));
+                tile.Hotkey.SetColour(HudInk.Faint(_palette));
+                tile.Cost.SetColour(HudInk.Faint(_palette));
+                tile.Name.SetColour(HudInk.Muted(_palette));
                 return;
             }
 
-            Color fill = _palette.HudPanel;
-            if (tile.Selected) fill = Blend(_palette.HudPanel, category, 0.18f);
-            else if (tile.Hovered) fill = Blend(_palette.HudPanel, _palette.HudText, 0.10f);
-            else if (!tile.Affordable) fill = Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.12f);
+            // The tile wears one of the ink levels plus the one focus colour; roles are words on the card,
+            // not hues on the keys, so a bar of eleven tiles does not look like a paint chart.
+            Color fill = Blend(_palette.HudPanel, _palette.HudText, 0.11f);
+            if (tile.Selected) fill = Blend(_palette.HudPanel, _palette.HudAccent, 0.22f);
+            else if (tile.Hovered) fill = Blend(_palette.HudPanel, _palette.HudText, 0.19f);
+            else if (!tile.Affordable) fill = Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.08f);
             tile.Button.Fill.Set(fill);
 
-            tile.Stripe.Set(tile.Selected ? category : Blend(category, _palette.HudPanel, 0.4f));
+            tile.Keycap.Set(tile.Selected
+                ? Blend(_palette.HudPanel, _palette.HudAccent, 0.40f)
+                : Blend(_palette.HudPanel, _palette.HudText, 0.18f));
 
-            if (tile.Selected)
-            {
-                tile.Border.Show(true);
-                tile.Border.Set(_palette.HudAccent, 2f * _scale);
-            }
-            else if (tile.Hovered)
-            {
-                tile.Border.Show(true);
-                tile.Border.Set(Blend(_palette.HudText, _palette.HudPanel, 0.35f), 1f * _scale);
-            }
-            else tile.Border.Show(false);
+            // Every tile keeps a hairline: eleven surfaces need an edge to read as eleven keys rather than
+            // as one dark strip with floating words on it.
+            tile.Border.Show(true);
+            tile.Border.Set(tile.Selected
+                ? _palette.HudAccent
+                : tile.Hovered
+                    ? Blend(_palette.HudPanel, _palette.HudText, 0.38f)
+                    : Blend(_palette.HudPanel, _palette.HudText, 0.18f));
 
-            tile.Hotkey.SetColour(tile.Selected ? _palette.HudAccent : _palette.MachineIdle);
+            tile.Hotkey.SetColour(tile.Selected ? _palette.HudText : HudInk.Muted(_palette));
 
             // The cost is the line that answers "can I afford this", so it is the line that turns amber
             // when the answer is no - the same colour the cursor ghost and the resource band use for the
             // same fact.
             tile.Cost.SetColour(tile.Affordable
-                ? (tile.Selected ? _palette.HudText : _palette.MachineIdle)
+                ? (tile.Selected ? _palette.HudText : HudInk.Muted(_palette))
                 : _palette.CursorNoFunds);
 
-            tile.Name.SetColour(tile.Affordable ? _palette.HudText : _palette.MachineIdle);
+            tile.Name.SetColour(tile.Affordable ? _palette.HudText : HudInk.Muted(_palette));
         }
 
         /// <summary>The bar's one way to change what is selected, and the one place a locked kind is
@@ -2076,101 +2115,7 @@ namespace Facet.Game
             _selectKind?.Invoke(kind);
         }
 
-        // ------------------------------------------------------------------ the bar's two levels
-
-        /// <summary>Open a role's tab. Browsing is not selecting: the tab decides what the bar shows and
-        /// nothing else, so a player can look at what a later map will hand them without dropping the belt in
-        /// hand - and the selection, when it changes, opens its own tab in
-        /// <see cref="UpdateBuildBar"/>.</summary>
-        private void OpenRoleTab(MachineRole role)
-        {
-            if (_bar.OpenRole.HasValue && _bar.OpenRole.Value == role) return;
-
-            _bar.OpenRole = role;
-            LayoutBarTiles(_bar);
-        }
-
-        /// <summary>
-        /// Show the open role's buildings and slide them up to the left edge, in the table's own order; the
-        /// rest go away. A hidden tile is not merely invisible - its button stops taking clicks and its
-        /// tooltip stops firing - which is what "the bar is showing this role" has to mean for the one panel
-        /// that answers the pointer.
-        ///
-        /// Tile sizes are set once, when the bar is built, from the whole table's count. A tile that grew and
-        /// shrank as the player browsed would move its own cost, name and afford line under the pointer that
-        /// was about to click it. The cost icon is placed from the tile's width and so survives a move.
-        /// </summary>
-        private void LayoutBarTiles(BarPanel panel)
-        {
-            float x = panel.Pad;
-
-            for (int i = 0; i < panel.Tiles.Count; i++)
-            {
-                BuildTile tile = panel.Tiles[i];
-                bool open = !panel.OpenRole.HasValue
-                    || MachineReading.Role(_world.Content.Machine(tile.Kind)) == panel.OpenRole.Value;
-
-                if (tile.Root.gameObject.activeSelf != open) tile.Root.gameObject.SetActive(open);
-                if (!open) continue;
-
-                HudUi.TopLeft(tile.Root, x, panel.TilesTop, panel.TileWidth, panel.TileHeight);
-                x += panel.TileWidth + panel.Gap;
-            }
-
-            // The pointer may well be standing on the tile that just left; a hover flag nobody can clear
-            // would keep the info card describing a building that is no longer on the bar.
-            _hoveredTile = -1;
-        }
-
-        /// <summary>
-        /// Lay the tabs out along the header row, each as wide as its own word plus padding. Measured rather
-        /// than guessed: the words are the roles' own labels, and a tab one character too narrow is a clipped
-        /// PROCESSING. uGUI measures text on its own schedule, so this runs again until every width has
-        /// arrived.
-        /// </summary>
-        private void LayoutRoleTabs()
-        {
-            float x = _bar.Pad;
-            float y = 5f * _scale;
-            float height = 22f * _scale;
-            bool measured = true;
-
-            for (int i = 0; i < _bar.Tabs.Count; i++)
-            {
-                RoleTab tab = _bar.Tabs[i];
-                float width = tab.Button.Label.PreferredWidth + 18f * _scale;
-                if (tab.Button.Label.PreferredWidth <= 0f) measured = false;
-
-                HudUi.TopLeft(tab.Button.Root, x, y, width, height);
-                x += width + _bar.Gap;
-            }
-
-            _tabsMeasured = measured;
-        }
-
-        /// <summary>
-        /// A tab's three states: the open one wears its role's colour, the one under the pointer lifts out of
-        /// the panel, and the rest sit flat and grey. The word on it is the role's own label - the same word
-        /// the tiles underneath print - so the bar's two levels are one taxonomy read twice, and a building
-        /// is filed where its own tile says it is.
-        /// </summary>
-        private void DressRoleTab(RoleTab tab)
-        {
-            Color category = CategoryColour(tab.Role);
-
-            tab.Button.Fill.Set(tab.Open
-                ? Blend(_palette.HudPanel, category, 0.22f)
-                : tab.Hovered
-                    ? Blend(_palette.HudPanel, _palette.HudText, 0.10f)
-                    : Blend(_palette.HudPanel, _palette.Outline, 0.30f));
-
-            tab.Button.Label.SetColour(tab.Open
-                ? _palette.HudText
-                : Blend(category, _palette.HudText, 0.4f));
-
-            tab.Button.Border.Set(tab.Open ? category : Blend(category, _palette.HudPanel, 0.55f),
-                tab.Open ? 2f * _scale : 1f * _scale);
-        }
+        // ------------------------------------------------------------------ the bar's keys
 
         /// <summary>The cost's shape, once the cost's own width is known: the picture just outside the
         /// number's left edge, where a cost is a mark rather than a sentence. A locked tile has no price to
@@ -2190,10 +2135,11 @@ namespace Facet.Game
             if (textWidth <= 0f) return;
 
             tile.CostPlaced = true;
-            float x = _bar.TileWidth - 8f * _scale - textWidth - 13f * _scale - 3f * _scale;
-            if (x < 28f * _scale) return;   // never under the hotkey
+            float size = 9f * _scale;
+            float x = _bar.TileWidth - 6f * _scale - textWidth - 4f * _scale - size;
+            if (x < 24f * _scale) return;   // never under the keycap
 
-            HudUi.TopLeft(tile.CostIcon.rectTransform, x, 10f * _scale, 13f * _scale, 13f * _scale);
+            HudUi.TopLeft(tile.CostIcon.rectTransform, x, 23.5f * _scale, size, size);
             tile.CostIcon.gameObject.SetActive(true);
         }
 
@@ -2234,8 +2180,16 @@ namespace Facet.Game
                 if (facing != _infoFacing)
                 {
                     _infoFacing = facing;
-                    _info.Facing.Set(GhostFacing(kind), _palette.MachineIdle);
+                    _info.Facing.Set(GhostFacing(kind), HudInk.Muted(_palette));
                 }
+
+                // The READ button is the card's door into the inspect mode, so it follows the selection
+                // every frame rather than the card's words: hovering a building the player has just
+                // selected changes nothing on the card, and a button written only when the words changed
+                // would stay hidden in exactly that case.
+                bool canRead = _world.SelectedKind.HasValue;
+                if (_info.Inspect.Root.gameObject.activeSelf != canRead)
+                    _info.Inspect.Root.gameObject.SetActive(canRead);
 
                 return;
             }
@@ -2257,15 +2211,16 @@ namespace Facet.Game
             _info.InspectRoot.gameObject.SetActive(false);
 
             MachineDef def = _world.Content.Machine(kind);
-            Color category = CategoryColor(kind);
             bool locked = !_world.IsUnlocked(kind);
 
-            _info.BuildStripe.Set(category);
-            _info.BuildTitle.Set(def.Name, _palette.HudText);
+            // No role hue on the stripe: the card is about one building, and the header says whether that
+            // building is available to place (a live title) or still locked (a muted one), not which family
+            // it belongs to.
+            _info.BuildTitle.Set(def.Name, locked ? HudInk.Muted(_palette) : _palette.HudText);
             _info.BuildRight.Set(
-                def.Cost + " " + Plural(Shape.MineralName(_world.Map.CurrencyMineral), def.Cost) + "   " +
+                def.Cost + " " + Plural(Shape.MineralName(_world.Map.CurrencyMineral), def.Cost) + "   ·   " +
                 (locked ? "LOCKED" : RoleOf(kind)),
-                _palette.MachineIdle);
+                HudInk.Muted(_palette));
 
             // A locked kind is described on the card like any other - the catalogue's words are not a
             // secret - with the one thing the player needs to know about it said first.
@@ -2276,21 +2231,21 @@ namespace Facet.Game
             string stats = Stats(kind);
             bool hasStats = !string.IsNullOrEmpty(stats);
             _info.Stats.Show(hasStats);
-            if (hasStats) _info.Stats.Set(stats, category);
+            if (hasStats) _info.Stats.Set(stats, HudInk.Muted(_palette));
 
-            // The facing line and the three buttons sit on the first line after whatever came above:
-            // a building with numbers to show pushes them down, one without keeps them up.
-            float y = hasStats ? 85f : 67f;
-            At(_info.Facing.Rect, 14f, y, 130f, 22f);
-            AtRight(_info.TurnLeft.Root, 74f, y, 54f, 22f);
-            AtRight(_info.TurnRight.Root, 14f, y, 54f, 22f);
-            AtRight(_info.Inspect.Root, 180f, y, 74f, 22f);
+            // The facing line sits under the stats, and the three buttons under it: the card's height is
+            // fixed, so a building with no stats leaves a gap rather than moving the buttons under the
+            // pointer.
+            At(_info.Facing.Rect, CardInset, 108f, 120f, 14f);
+            AtRight(_info.Inspect.Root, CardInset, 112f, 52f, 20f);
+            AtRight(_info.TurnRight.Root, 70f, 112f, 24f, 20f);
+            AtRight(_info.TurnLeft.Root, 98f, 112f, 24f, 20f);
 
             // With something selected the card also carries the keyboard-free way back to reading the
-            // map: the key is Escape, the button is the same door.
-            _info.Inspect.Root.gameObject.SetActive(_world.SelectedKind.HasValue);
-
-            _info.Facing.Set(GhostFacing(kind), _palette.MachineIdle);
+            // map: the key is Escape, the button is the same door. Its visible state is the update pass's
+            // to keep true (see UpdateInfo), because selecting the building the card already describes is
+            // not a change of words.
+            _info.Facing.Set(GhostFacing(kind), HudInk.Muted(_palette));
         }
 
         /// <summary>The build card's facing line, for the placement the card is describing: what that
@@ -2336,26 +2291,25 @@ namespace Facet.Game
             if (machineHere)
             {
                 MachineDef def = _world.Content.Machine(machine.Build);
-                Color category = CategoryColor(machine.Build);
 
-                InspectHeader(def.Name, category, RoleOf(machine.Build) + "   " + cell);
-                InspectLine(MachineReading.Ports(machine), _palette.MachineIdle);
+                InspectHeader(def.Name, _palette.HudAccent, RoleOf(machine.Build) + "   " + cell);
+                InspectLine(PortsLine(machine), HudInk.Muted(_palette));
 
                 ReadingNote note = MachineReading.LiveNote(_world, cell, machine);
                 InspectLine(note.Text, NoteColour(note.Severity));
 
                 string stats = Stats(machine.Build);
-                if (!string.IsNullOrEmpty(stats)) InspectLine(stats, category);
+                if (!string.IsNullOrEmpty(stats)) InspectLine(stats, HudInk.Muted(_palette));
 
                 if (machine.MaxHp > 0f)
                 {
                     bool hurting = machine.HealthFraction < 0.4f;
                     InspectLine("holding " + Mathf.CeilToInt(machine.Hp) + " / " +
                         Mathf.CeilToInt(machine.MaxHp) + " health",
-                        hurting ? _palette.HudWarn : _palette.HudGood);
+                        hurting ? _palette.HudWarn : HudInk.Good(_palette));
                 }
 
-                InspectLine(MachineReading.FacingNote(def, machine), _palette.MachineIdle);
+                InspectLine(MachineReading.FacingNote(def, machine), HudInk.Muted(_palette));
                 FinishInspect();
                 return;
             }
@@ -2364,8 +2318,7 @@ namespace Facet.Game
             {
                 MachineDef def = _world.Content.Machine(BuildKind.Belt);
 
-                InspectHeader(def.Name, CategoryColor(BuildKind.Belt),
-                    RoleOf(BuildKind.Belt) + "   " + cell);
+                InspectHeader(def.Name, _palette.HudAccent, RoleOf(BuildKind.Belt) + "   " + cell);
 
                 if (belt.Jammed)
                 {
@@ -2373,7 +2326,7 @@ namespace Facet.Game
                     // there, because a jam is always "this machine refuses this round" and the round is the
                     // half of it the player can act on.
                     string culprit = belt.Item.IsEmpty ? string.Empty : " by " + belt.Item.Describe();
-                    InspectLine("JAMMED" + culprit + " - the machine this segment feeds will not take it",
+                    InspectLine("JAMMED" + culprit + " - the machine it feeds will not take it",
                         _palette.HudWarn);
                 }
                 else if (belt.HasItem)
@@ -2382,8 +2335,8 @@ namespace Facet.Game
                 else
                     InspectLine("empty - nothing riding it right now", _palette.HudText);
 
-                InspectLine("carries its item to the " + MachineReading.DirName(belt.Direction) +
-                    " · one item per cell, so this is also its rate", _palette.MachineIdle);
+                InspectLine("runs " + MachineReading.DirName(belt.Direction) +
+                    " · one item per cell, so this is its rate", HudInk.Muted(_palette));
                 FinishInspect();
                 return;
             }
@@ -2396,10 +2349,10 @@ namespace Facet.Game
                 bool hurting = _world.Core.HealthFraction < 0.4f;
                 InspectLine("holding " + Mathf.CeilToInt(_world.Core.Hp) + " / " +
                     Mathf.CeilToInt(_world.Core.MaxHp) + " health",
-                    hurting ? _palette.HudWarn : _palette.HudGood);
-                InspectLine("a complete shape belted into it becomes spendable - anything less is destroyed",
-                    _palette.MachineIdle);
-                InspectLine("losing it loses the run", _palette.MachineIdle);
+                    hurting ? _palette.HudWarn : HudInk.Good(_palette));
+                InspectLine("only a complete shape banks - anything less is lost",
+                    HudInk.Muted(_palette));
+                InspectLine("losing it loses the run", HudInk.Muted(_palette));
                 FinishInspect();
                 return;
             }
@@ -2415,11 +2368,13 @@ namespace Facet.Game
                 return;
             }
 
-            InspectHeader("INSPECT", _palette.HudAccent, "nothing selected");
-            InspectLine("click a building, a vein or a doorway to read it: what it is, what it is doing, and " +
-                "how its belts wire it up", _palette.HudText);
-            InspectLine("click a build tile or press 1-9 to build one · the same one again to read instead",
-                _palette.MachineIdle);
+            InspectHeader("Inspect", _palette.HudAccent, "nothing selected");
+
+            // Nothing to read is not an error: the message sits in the middle of the card's body rather
+            // than pinned under the header, so an empty card looks deliberate instead of truncated.
+            PlaceInspectRows(58);
+            InspectLine("click a building, vein or doorway to read it", _palette.HudText);
+            InspectLine("or pick a tile to place it", HudInk.Muted(_palette));
             FinishInspect();
         }
 
@@ -2434,13 +2389,19 @@ namespace Facet.Game
 
             _pickerUp = up;
             _info.Picker.Root.gameObject.SetActive(up);
-            Place(_info.Root, HudLayout.Info(HudLayout.Bar(Screen.width, Screen.height, _scale), _scale, up),
+            Place(_info.Root, HudLayout.Info(Screen.width, Screen.height, _scale, up),
                 PlaceCorner.BottomRight);
+            PlaceInspectRows(33 + (up ? HudLayout.InfoPickHeight : 0));
+        }
 
+        /// <summary>Put the inspect rows back on their base grid, in design units from the card's top. The
+        /// header calls this for every real card, because the empty state's two lines sit lower in the card
+        /// (there is nothing under them, and a message pinned to the header looks like a clipped card).</summary>
+        private void PlaceInspectRows(float top)
+        {
             for (int i = 0; i < _info.Rows.Length; i++)
-                HudUi.TopLeft(_info.Rows[i].Rect, 14f * _scale,
-                    (31f + (up ? HudLayout.InfoPickHeight : 0f) + 17f * i) * _scale,
-                    (HudLayout.InfoWidth - 28f) * _scale, 15f * _scale);
+                At(_info.Rows[i].Rect, CardInset, top + 15f * i,
+                    HudLayout.InfoWidth - 2f * CardInset, 14f);
         }
 
         /// <summary>
@@ -2481,20 +2442,20 @@ namespace Facet.Game
             // A card built without a way to send a rule - the honest read-only one - says what the machine
             // routes without inviting a click that could never take effect.
             string caption = PickerCaption();
-            Color captionColour = _palette.MachineIdle;
+            Color captionColour = HudInk.Muted(_palette);
             if (!TryPendingFilter(out _))
             {
                 if (_setFilter == null)
                 {
                     caption = "routing " + machine.Filter.Describe() + " now   ·   read-only";
-                    captionColour = _palette.MachineIdle;
+                    captionColour = HudInk.Muted(_palette);
                 }
                 else
                 {
                     caption = machine.Filter.IsNone
                         ? caption
                         : "routing " + machine.Filter.Describe() + " now   ·   click a quadrant to change it";
-                    captionColour = machine.Filter.IsNone ? _palette.HudWarn : _palette.MachineIdle;
+                    captionColour = machine.Filter.IsNone ? _palette.HudWarn : HudInk.Muted(_palette);
                 }
             }
 
@@ -2670,13 +2631,30 @@ namespace Facet.Game
         private static bool SameFilter(in ShapeFilter left, in ShapeFilter right)
             => left.Mode == right.Mode && left.Exact == right.Exact && left.Mineral == right.Mineral;
 
-        /// <summary>The card's title row and the accent stripe: every card opens the same way, with the
-        /// building's own category colour.</summary>
+        /// <summary>The card's title row: the header grammar every card shares - a title on the left end of the
+        /// line, the secondary words on the right, a hairline under both. The stripe the card used to wear is
+        /// gone; when the header is about ground rather than a building, the title itself carries the ground's
+        /// hue, because a mineral is worth a colour and a corner is not.</summary>
         private void InspectHeader(string name, Color accent, string right)
         {
-            _info.InspectStripe.Set(accent);
-            _info.InspectTitle.Set(name, _palette.HudText);
-            _info.InspectRight.Set(right, _palette.MachineIdle);
+            Color title = accent == _palette.HudAccent
+                ? _palette.HudText
+                : Blend(accent, _palette.HudText, 0.35f);
+
+            _info.InspectTitle.Set(name, title);
+            _info.InspectRight.Set(right, HudInk.Muted(_palette));
+            PlaceInspectRows(33 + (_pickerUp ? HudLayout.InfoPickHeight : 0));
+        }
+
+        /// <summary>The ports line, at the width the card can print: MachineReading's sentence explains
+        /// the whole wiring rule, which is right for the catalogue and three lines too long for a 276-unit
+        /// row. The short form keeps the one fact a reader needs - nothing is wired - without the essay.</summary>
+        private static string PortsLine(in MachineSnapshot machine)
+        {
+            string ports = MachineReading.Ports(machine);
+            return ports.StartsWith("no belts wired", StringComparison.Ordinal)
+                ? "no belts wired · a belt in feeds it"
+                : ports;
         }
 
         private void InspectLine(string text, Color colour)
@@ -2701,7 +2679,7 @@ namespace Facet.Game
             switch (severity)
             {
                 case NoteSeverity.Neutral: return _palette.HudText;
-                case NoteSeverity.Good: return _palette.HudGood;
+                case NoteSeverity.Good: return HudInk.Good(_palette);
                 case NoteSeverity.Warn: return _palette.HudWarn;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(severity), severity,
@@ -2734,16 +2712,15 @@ namespace Facet.Game
             if (doorway >= 0)
             {
                 InspectLine(WavesAt(doorway), _palette.SpawnMarker);
-                InspectLine("enemies enter on this tile and walk at the Core", _palette.MachineIdle);
+                InspectLine("enemies enter on this tile and walk at the Core", HudInk.Muted(_palette));
             }
 
             if (!ore) return;
 
-            InspectLine("mines as " + Shape.Full(mineral).Describe() +
-                " - only a drill may be built on it", oreColour);
+            InspectLine("mines as " + Shape.Full(mineral).Describe() + " · a drill must stand here", oreColour);
 
             if (TryVeinAt(cell, out ShapePatch vein))
-                InspectLine(vein.Width + " × " + vein.Height + " vein in the ground", _palette.MachineIdle);
+                InspectLine(vein.Width + " x " + vein.Height + " vein in the ground", HudInk.Muted(_palette));
         }
 
         /// <summary>A tile of ground the map draws as an obstacle, in the same colours the terrain view draws
@@ -2758,7 +2735,7 @@ namespace Facet.Game
             InspectHeader(kind.ToString(), colour, cell.ToString());
 
             InspectLine(ObstacleNote(kind), Blend(colour, _palette.HudText, 0.6f));
-            InspectLine("map ground - nothing may be built on it, and it cannot fall", _palette.MachineIdle);
+            InspectLine("map ground - nothing may be built on it", HudInk.Muted(_palette));
         }
 
         private static string ObstacleNote(TerrainKind kind)
@@ -2860,8 +2837,8 @@ namespace Facet.Game
             if (_world.Machines.TryGetSnapshot(cell, out MachineSnapshot machine))
             {
                 MachineDef def = _world.Content.Machine(machine.Build);
-                TooltipHeader(def.Name, CategoryColor(machine.Build));
-                TooltipLine(MachineReading.Ports(machine), _palette.MachineIdle);
+                TooltipHeader(def.Name, _palette.HudAccent);
+                TooltipLine(PortsLine(machine), HudInk.Muted(_palette));
 
                 ReadingNote note = MachineReading.LiveNote(_world, cell, machine);
                 TooltipLine(note.Text, NoteColour(note.Severity));
@@ -2871,7 +2848,7 @@ namespace Facet.Game
 
             if (_world.Belts.TryGet(cell, out BeltState belt))
             {
-                TooltipHeader(_world.Content.Machine(BuildKind.Belt).Name, CategoryColor(BuildKind.Belt));
+                TooltipHeader(_world.Content.Machine(BuildKind.Belt).Name, _palette.HudAccent);
 
                 string state = belt.Jammed
                     ? "JAMMED" + (belt.Item.IsEmpty ? "" : " by " + belt.Item.Describe()) +
@@ -2892,7 +2869,7 @@ namespace Facet.Game
                 TooltipHeader("Core", _palette.Core);
                 TooltipLine("holding " + Mathf.CeilToInt(_world.Core.Hp) + " / " +
                     Mathf.CeilToInt(_world.Core.MaxHp) + " health",
-                    _world.Core.HealthFraction < 0.4f ? _palette.HudWarn : _palette.HudGood);
+                    _world.Core.HealthFraction < 0.4f ? _palette.HudWarn : HudInk.Good(_palette));
                 FinishTooltip();
                 return true;
             }
@@ -2926,7 +2903,7 @@ namespace Facet.Game
             }
 
             if (ore && TryVeinAt(cell, out ShapePatch vein))
-                TooltipLine(vein.Width + " × " + vein.Height + " vein in the ground", _palette.MachineIdle);
+                TooltipLine(vein.Width + " x " + vein.Height + " vein in the ground", HudInk.Muted(_palette));
 
             FinishTooltip();
             return true;
@@ -2957,8 +2934,8 @@ namespace Facet.Game
             for (int i = 0; i < _tooltipRows; i++)
                 width = Mathf.Max(width, _tooltip.Rows[i].PreferredWidth);
 
-            _tooltipWidth = Mathf.Min(width + 24f * _scale, Screen.width - 16f);
-            _tooltipHeight = (27f + 16f * _tooltipRows + 6f) * _scale;
+            _tooltipWidth = Mathf.Min(width + 20f * _scale, Screen.width - 16f);
+            _tooltipHeight = (20f + 14f * _tooltipRows + 6f) * _scale;
         }
 
         /// <summary>Beside the pointer, over its right shoulder - flipped left near the screen's right edge
@@ -3028,7 +3005,7 @@ namespace Facet.Game
                                     : "\nR to restart");
                     }
 
-                    colour = _palette.HudGood;
+                    colour = HudInk.Good(_palette);
                     show = true;
                     break;
                 default:
@@ -3065,12 +3042,12 @@ namespace Facet.Game
             Dress(_controls.Pause, ButtonFill);
             Dress(_controls.Gear, ButtonFill);
             Dress(_controls.Help, ButtonFill);
-            Dress(_help.Close, ButtonFill);
             Dress(_help.Restart, ButtonFill);
-            if (_tutorial.Root.gameObject.activeSelf) Dress(_tutorial.Hide, ButtonFill);
-            Dress(_info.TurnLeft, ButtonFill);
-            Dress(_info.TurnRight, ButtonFill);
-            if (_info.Inspect.Root.gameObject.activeSelf) Dress(_info.Inspect, ButtonFill);
+            DressGhost(_help.Close);
+            if (_tutorial.Root.gameObject.activeSelf) DressGhost(_tutorial.Hide);
+            DressGhost(_info.TurnLeft);
+            DressGhost(_info.TurnRight);
+            if (_info.Inspect.Root.gameObject.activeSelf) DressGhost(_info.Inspect);
 
             // The picker's quarters are cells of the figure, not buttons with a colour of their own: their
             // fill stays clear so the item underneath is the content, and their border is what says the cell
@@ -3084,20 +3061,37 @@ namespace Facet.Game
 
             // The start-wave button breathes while it waits: the one motion the HUD spends on itself, on the
             // one action a player can take early and might not notice. A paused world holds its breath.
-            if (_status.WaveButton.Root.gameObject.activeSelf)
+            if (_controls.Wave.Root.gameObject.activeSelf)
             {
                 float phase = (Time.time % 1.2f) / 1.2f;
-                float pulse = _world.Paused ? 1f : 0.8f + 0.2f * (0.5f + 0.5f * Mathf.Sin(phase * (2f * Mathf.PI)));
-                Dress(_status.WaveButton, WithAlpha(_palette.HudAccent, pulse));
+                float pulse = _world.Paused
+                    ? 1f
+                    : 0.86f + 0.14f * (0.5f + 0.5f * Mathf.Sin(phase * (2f * Mathf.PI)));
+                Color fill = WithAlpha(_palette.HudAccent, pulse);
+                _controls.Wave.Fill.Set(_controls.Wave.Hovered ? Blend(fill, _palette.HudText, 0.16f) : fill);
+                _controls.Wave.Border.Set(Color.clear);
             }
         }
 
+        /// <summary>A control with a surface: a raised fill and a hairline that answers the pointer. The
+        /// border is the quiet edge level, so a cluster of four controls does not draw four bright boxes.</summary>
         private void Dress(HudButton button, Color fill)
         {
             bool hovered = button.Hovered;
-            button.Fill.Set(hovered ? Blend(fill, _palette.HudText, 0.16f) : fill);
-            button.Border.Set(hovered ? _palette.HudAccent : Blend(_palette.HudText, _palette.HudPanel, 0.35f),
-                1f * _scale);
+            button.Fill.Set(hovered ? Blend(fill, _palette.HudText, 0.14f) : fill);
+            button.Border.Set(hovered ? _palette.HudAccent : PanelBorder());
+        }
+
+        /// <summary>A control without a surface: one step off the card, no edge until the pointer arrives.
+        /// The card's secondary actions - read, turn, hide, close - are quiet until asked for.</summary>
+        private void DressGhost(HudButton button)
+        {
+            button.Fill.Set(button.Hovered
+                ? HudInk.Raised(_palette)
+                : Blend(_palette.HudPanel, _palette.HudText, 0.045f));
+            button.Border.Set(button.Hovered
+                ? Blend(_palette.HudPanel, _palette.HudText, 0.30f)
+                : HudInk.Edge(_palette));
         }
 
         // ------------------------------------------------------------------ the button handlers
@@ -3117,16 +3111,15 @@ namespace Facet.Game
         /// <summary>The active gear, or 1 with no driver's clock.</summary>
         private int GearNow => _clock != null ? _clock.Gear : 1;
 
-        /// <summary>The wave line's tail naming the gear and its keys, so the status card says how to speed up
-        /// the wait it is describing. Empty while paused: a stopped run has no pace to talk about.</summary>
-        private string SpeedNote()
-        {
-            if (_world.Paused) return string.Empty;
-            return GearNow > 1 ? "   ·   " + GearWord() + "  [ ] speed" : "   ·   ] speeds up";
-        }
+        /// <summary>The status card's footer, right end: the gear and the keys that change it. The card is
+        /// where a player looks for "how fast is this going", so the answer lives there even while nothing
+        /// is wrong.</summary>
+        private string SpeedFooter()
+            => _world.Paused ? "paused  ·  space resumes" : GearWord() + "  ·  [ ] speed";
 
-        /// <summary>The gear button's word: "1x", "2x" or "3x".</summary>
-        private string GearWord() => _clock != null ? _clock.Label : "1x";
+        /// <summary>The gear button's word: "1×", "2×" or "3×". The multiplication sign, not an x, because
+        /// at 10 points the letter reads as a letter.</summary>
+        private string GearWord() => _clock != null ? _clock.Label.Replace('x', '×') : "1×";
 
         private void PressRestart()
         {
@@ -3143,33 +3136,6 @@ namespace Facet.Game
         // The catalogue's words and numbers all live in MachineReading - the one behaviour
         // dispatch the HUD merely formats, and the interface the EditMode tests cross to check what
         // a card would claim. What stays here is the palette question: which colour says which role.
-
-        private Color CategoryColor(BuildKind kind) =>
-            CategoryColour(MachineReading.Role(_world.Content.Machine(kind)));
-
-        /// <summary>Which colour files which role under. The two mineral colours are the palette's warm
-        /// pair, and the roles take them the way the chains do: the mining and processing machines wear the
-        /// circle's gold, the routing piece the HUD's own accent, and transport and walls the quiet machine
-        /// grey. A role nobody has coloured is an error, not a quiet slide into "transport" - the discipline
-        /// the badge and draw dispatches keep.</summary>
-        private Color CategoryColour(MachineRole role)
-        {
-            switch (role)
-            {
-                case MachineRole.Defence: return _palette.HudWarn;
-                case MachineRole.Mining:
-                case MachineRole.Processing: return _palette.CircleMineral;
-                case MachineRole.Routing: return _palette.HudAccent;
-                case MachineRole.Transport: return _palette.MachineIdle;   // belts and pipes
-                case MachineRole.Wall: return _palette.MachineIdle;
-                // The drain wears the same quiet grey as the plumbing: it is a hole in the ground, not a
-                // machine with a state worth watching, and the one thing it must not look like is a warning.
-                case MachineRole.Waste: return _palette.MachineIdle;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(role), role,
-                        "a new role needs a colour in the build bar");
-            }
-        }
 
         private string RoleOf(BuildKind kind) =>
             MachineReading.RoleLabel(MachineReading.Role(_world.Content.Machine(kind)));
@@ -3221,13 +3187,14 @@ namespace Facet.Game
         private sealed class StatusPanel
         {
             public RectTransform Root;
-            public HudBox Stripe;
             public HudText Title;
+            public HudText WaveTag;
+            public HudText CoreCap;
+            public HudBox HealthTrack;
             public HudBar Health;
-            public HudFrame HealthFrame;
-            public HudText HealthLabel;
-            public HudText HealthDamage;
+            public HudText HealthValue;
             public HudBar Clock;
+            public HudBox Rule;
             public HudText News;
             public HudText NextLabel;
             public HudText AfterLabel;
@@ -3235,14 +3202,18 @@ namespace Facet.Game
             public Chip[] ChipsAfter;
             public HudText Production;
             public HudText Threat;
-            public HudButton WaveButton;
             public HudText Seed;
+            public HudText Speed;
         }
 
         private sealed class ControlsPanel
         {
             public RectTransform Root;
+            public HudButton Wave;
             public HudButton Pause;
+            public RectTransform PauseBars;
+            public HudBox PauseBarA;
+            public HudBox PauseBarB;
             public HudButton Gear;
             public HudButton Help;
         }
@@ -3258,7 +3229,7 @@ namespace Facet.Game
         {
             public RectTransform Root;
             public HudBox Back;
-            public HudFrame Frame;
+            public HudBorder Frame;
             public HudText Title;
             public HudText[] Rows;
         }
@@ -3300,7 +3271,7 @@ namespace Facet.Game
             public RectTransform Root;
             public CanvasGroup Group;
             public HudBox Back;
-            public HudFrame Frame;
+            public HudBorder Frame;
             public HudText Label;
         }
 
@@ -3321,52 +3292,26 @@ namespace Facet.Game
             public RectTransform Root;
             public readonly List<BuildTile> Tiles = new List<BuildTile>();
 
-            /// <summary>The bar's first level: one tab per role this table carries, in table order.</summary>
-            public readonly List<RoleTab> Tabs = new List<RoleTab>();
-
-            /// <summary>The role whose buildings the second level is showing, or null for "all of them" -
-            /// which only a table with no roles at all can be.</summary>
-            public MachineRole? OpenRole;
-
             public float TileWidth;
             public float TileHeight;
             public float Pad;
             public float Gap;
 
-            /// <summary>Where the top of the tile row sits, under the tab row.</summary>
+            /// <summary>Where the top of the tile row sits, inside the bar's card.</summary>
             public float TilesTop;
-
-            public bool HasTab(MachineRole role)
-            {
-                for (int i = 0; i < Tabs.Count; i++)
-                    if (Tabs[i].Role == role) return true;
-
-                return false;
-            }
-        }
-
-        /// <summary>One tab: the role it opens, the button that opens it, and the two states its dressing
-        /// is written from - so a tab is only re-dressed when one of them changes.</summary>
-        private sealed class RoleTab
-        {
-            public MachineRole Role;
-            public HudButton Button;
-            public bool Open;
-            public bool Hovered;
         }
 
         private sealed class BuildTile
         {
             public RectTransform Root;
             public HudButton Button;
-            public HudBox Stripe;
+            public HudBox Keycap;
             public HudText Hotkey;
             public HudText Cost;
             public RawImage CostIcon;
             public HudText Name;
-            public HudText Role;
             public HudBar Afford;
-            public HudFrame Border;
+            public HudBorder Border;
             public BuildKind Kind;
             public bool Selected;
             public bool Hovered;
@@ -3380,7 +3325,6 @@ namespace Facet.Game
             public RectTransform Root;
 
             public RectTransform BuildRoot;
-            public HudBox BuildStripe;
             public HudText BuildTitle;
             public HudText BuildRight;
             public HudText Blurb;
@@ -3391,7 +3335,6 @@ namespace Facet.Game
             public HudButton Inspect;
 
             public RectTransform InspectRoot;
-            public HudBox InspectStripe;
             public HudText InspectTitle;
             public HudText InspectRight;
             public HudText[] Rows;
@@ -3432,11 +3375,13 @@ namespace Facet.Game
         private readonly List<ChipEntry> _nextEntries = new List<ChipEntry>();
         private readonly List<ChipEntry> _afterEntries = new List<ChipEntry>();
 
-        /// <summary>Where the two briefing rows' chip backs sit, in design units from the card's top: the
-        /// wave being counted to, then the one after it. The labels above each row are placed with them, in
-        /// <see cref="BuildStatus"/>.</summary>
-        private const float ChipsTop = 90f;
-        private const float ChipsAfterTop = 114f;
+        /// <summary>Where the two briefing rows sit, in design units from the card's top: the wave being
+        /// counted to, then the one after it. The labels and the chips share the row.</summary>
+        private const float ChipsTop = 82f;
+        private const float ChipsAfterTop = 101f;
+
+        /// <summary>The column the NOW/THEN labels own, so both chip rows start on the same vertical line.</summary>
+        private const float ChipLabelWidth = 36f;
 
         /// <summary>
         /// The sorter picker's geometry, in design units: a quartered canvas of four cells and the mode
@@ -3447,15 +3392,12 @@ namespace Facet.Game
         private const float CellSize = 22f;
         private const float CanvasSize = CellSize * 2f;
 
-        /// <summary>Where the picker's band starts inside the card, under the header: the header runs
-        /// 9..27, and the band's own widgets hang from here. The card's rows move down by
-        /// <see cref="HudLayout.InfoPickHeight"/> while it is up, so this is the whole of the overlap
-        /// rule.</summary>
-        private const float PickerTop = 30f;
+        /// <summary>Where the picker's band starts inside the card, under the header and its hairline.</summary>
+        private const float PickerTop = 32f;
 
-        /// <summary>The mode toggle's column, clear of the canvas.</summary>
-        private const float ModeLeft = 14f + CanvasSize + 6f;
-        private const float ModeWidth = 250f;
+        /// <summary>The mode toggle's column, clear of the canvas, and the width the card leaves it.</summary>
+        private const float ModeLeft = 12f + CanvasSize + 8f;
+        private const float ModeWidth = HudLayout.InfoWidth - ModeLeft - 12f;
 
         /// <summary>The faint cell an empty quadrant wears in the picker, and nowhere else: on the map an
         /// empty quadrant is nothing, and a ghost there would draw an item the simulation does not have.

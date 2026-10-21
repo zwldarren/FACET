@@ -19,9 +19,10 @@ namespace Facet.Game
     /// picture and the sentence, because both ask this class.
     ///
     /// Three subjects are worth locating, and no fourth: a <see cref="Subject.Threat"/> (enemies out of
-    /// view, because the wave decides the run), a <see cref="Subject.Jam"/> (a blocked belt segment, whose
-    /// fix is a right-click on a tile the player cannot see), and the <see cref="Subject.Core"/> (because
-    /// everything else is only worth getting back to).
+    /// view, because the wave decides the run), a <see cref="Subject.Jam"/> (a line that has stopped - a
+    /// jammed or blocked segment, or a stalled machine - whose fix is a right-click, or one more belt, on a
+    /// tile the player cannot see), and the <see cref="Subject.Core"/> (because everything else is only
+    /// worth getting back to).
     ///
     /// Pure and camera-free on purpose (<see cref="HudLayout"/> and <see cref="PanLimits"/> are the same
     /// kind of module): the geometry is pinned from EditMode, where a viewport is four numbers and a wave
@@ -247,7 +248,10 @@ namespace Facet.Game
             /// <summary>Enemies out of view. The count says how many, the colour says what they are.</summary>
             Threat = 0,
 
-            /// <summary>A jammed belt segment out of view: the arrow marks where the right-click has to go.</summary>
+            /// <summary>A stopped line out of view - a jammed segment, a segment whose line ends in the air,
+            /// or a machine holding a piece it cannot pass on: the mark says where the right-click (or the
+            /// missing belt) has to go. The name is the belt's first way of stopping, because that was the
+            /// subject before the other two joined it; to the locator all three are one piece of news.</summary>
             Jam = 1,
 
             /// <summary>The Core, off the screen. Navigation rather than warning - nothing is lost by

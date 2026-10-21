@@ -91,6 +91,10 @@ namespace Facet.Game
         /// the hover pass can skip them without a flag on the row.</summary>
         private readonly List<HudButton> _locked = new List<HudButton>();
 
+        /// <summary>The title's one filled action: the accent is the shell's "this is the door" colour,
+        /// and a title with three identical buttons has no door at all.</summary>
+        private readonly List<HudButton> _primary = new List<HudButton>();
+
         // ------------------------------------------------------------------ wiring and lifecycle
 
         /// <summary>Point the shell at the palette, the campaign and its catalog, and hand it the two
@@ -130,6 +134,7 @@ namespace Facet.Game
             // a late dress pass cannot walk a destroyed component.
             _buttons.Clear();
             _locked.Clear();
+            _primary.Clear();
         }
 
         // ------------------------------------------------------------------ the driver's doors
@@ -201,6 +206,7 @@ namespace Facet.Game
 
             _buttons.Clear();
             _locked.Clear();
+            _primary.Clear();
 
             BuildBackdrop();
 
@@ -216,7 +222,13 @@ namespace Facet.Game
 
         private void BuildBackdrop()
         {
-            HudBox backdrop = HudUi.Box(_canvasRoot, "backdrop", _palette.HudPanel);
+            // Opaque, not the panel's 96.5 %: the shell is a place, not a veil, and at 3.5 % of a bright
+            // map the cards and the Core's square showed through the title exactly where the eye was
+            // trying to read the wordmark.
+            Color ink = _palette.HudPanel;
+            ink.a = 1f;
+
+            HudBox backdrop = HudUi.Box(_canvasRoot, "backdrop", ink);
             HudUi.StretchFull(backdrop.Rect);
             // The one panel that does take clicks: the shell owns the screen while it is up, and a
             // click that misses every button lands here rather than on the map behind it.
@@ -225,6 +237,11 @@ namespace Facet.Game
 
         // ------------------------------------------------------------------ the title screen
 
+        /// <summary>The wordmark's size in design units: a title is an identity, not a line of HUD - the
+        /// four-step scale stops at the stockpile's 28, and a title set at a data size was the smallest
+        /// thing on its own screen.</summary>
+        private const float WordmarkSize = 64f;
+
         private void BuildTitle()
         {
             RectTransform root = HudUi.Node(_canvasRoot, "title");
@@ -232,19 +249,24 @@ namespace Facet.Game
             // root they hang off has to span the canvas rather than sit unsized at its centre.
             HudUi.StretchFull(root);
 
-            HudText name = Label(root, "name", 58f, FontStyle.Bold, TextAnchor.MiddleCenter);
-            HudUi.TopCentre(name.Rect, Screen.height * TitleNameTop, Screen.width, 80f * _scale);
-            name.Set("FACET", _palette.HudAccent);
+            BuildTitleMotif(root);
 
-            HudText subtitle = Label(root, "subtitle", 13f, FontStyle.Normal, TextAnchor.UpperCenter,
-                wrap: true);
+            HudText name = Label(root, "name", WordmarkSize, FontStyle.Bold, TextAnchor.MiddleCenter);
+            // The one place the HUD's tracking rule widens: a wordmark is drawn, not set, and 64-point type
+            // at the labels' 9 % reads as a line of text that happens to be big.
+            name.Text.characterSpacing = 16f;
+            HudUi.TopCentre(name.Rect, Screen.height * TitleNameTop, Screen.width, 80f * _scale);
+            name.Set("FACET", _palette.HudText);
+
+            HudText subtitle = Label(root, "subtitle", HudType.Body, FontStyle.Normal,
+                TextAnchor.UpperCenter, wrap: true);
             HudUi.TopCentre(subtitle.Rect, Screen.height * TitleNameTop + 86f * _scale,
-                Mathf.Min(560f, Screen.width / _scale - 40f) * _scale, 40f * _scale);
+                Mathf.Min(680f, Screen.width / _scale - 40f) * _scale, 40f * _scale);
             subtitle.Set("an enemy's weakness is a shape, and what your factory builds is what your guns fire",
                 _palette.MachineIdle);
 
             float y = Screen.height * TitleNameTop + 150f * _scale;
-            AddMenuButton(root, "play", y, PlayLabel(), PressPlay);
+            AddMenuButton(root, "play", y, PlayLabel(), PressPlay, primary: true);
             y += ButtonStep;
             AddMenuButton(root, "maps", y, "the maps  ·  M", ShowLevelScreen);
             y += ButtonStep;
@@ -257,10 +279,35 @@ namespace Facet.Game
             AddMenuButton(root, "quit", y, "quit", Application.Quit);
 #endif
 
-            HudText footer = Label(root, "footer", 11f, FontStyle.Normal, TextAnchor.LowerCenter);
+            HudText footer = Label(root, "footer", HudType.Micro, FontStyle.Normal, TextAnchor.LowerCenter);
             HudUi.TopCentre(footer.Rect, Screen.height - 30f * _scale, Screen.width - 40f, 18f * _scale);
             footer.Set("a factory-defence prototype  ·  github.com/zwldarren/FACET",
                 Blend(_palette.HudText, _palette.HudPanel, 0.45f));
+        }
+
+        /// <summary>
+        /// The title's ground: a square and the diamond inside it, drawn in the world's own ink at a
+        /// watermark. It is the game's one figure and the game's own name - a facet is a square seen at the
+        /// angle its cut makes - and it costs two generated outlines rather than an asset or a ring whose
+        /// corner radius would have to be generated at the size of the screen.
+        /// </summary>
+        private void BuildTitleMotif(RectTransform root)
+        {
+            float side = Mathf.Min(Screen.width, Screen.height) * 0.62f;
+            float y = (0.44f - 0.5f) * Screen.height;
+            Color ink = new Color(_palette.HudText.r, _palette.HudText.g, _palette.HudText.b, 0.05f);
+
+            RectTransform square = HudUi.Node(root, "motif.square");
+            HudUi.Place(square, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, y), new Vector2(side, side));
+            HudUi.Border(square, "line", ink, 6f, 1f);
+
+            RectTransform diamond = HudUi.Node(root, "motif.diamond");
+            float inner = side * 0.70f;
+            HudUi.Place(diamond, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(0f, y), new Vector2(inner, inner));
+            diamond.localRotation = Quaternion.Euler(0f, 0f, 45f);
+            HudUi.Border(diamond, "line", ink, 4f, 1f);
         }
 
         /// <summary>The play button's words, from where the campaign stands: a fresh profile plays,
@@ -276,12 +323,13 @@ namespace Facet.Game
         }
 
         private HudButton AddMenuButton(RectTransform parent, string name, float yFromTop, string label,
-            Action pressed)
+            Action pressed, bool primary = false)
         {
             HudButton button = HudUi.Button(parent, name, 320f * _scale, 36f * _scale, label,
-                FontSize(13f), _palette.HudText, pressed);
+                FontSize(HudType.Label), primary ? _palette.HudPanel : _palette.HudText, pressed);
             HudUi.TopCentre(button.Root, yFromTop, 320f * _scale, 36f * _scale);
             _buttons.Add(button);
+            if (primary) _primary.Add(button);
             return button;
         }
 
@@ -331,15 +379,17 @@ namespace Facet.Game
             RectTransform card = HudUi.Node(levels, "card");
             HudUi.TopCentre(card, (Screen.height - cardHeight) * 0.5f, cardWidth, cardHeight);
 
-            HudUi.Box(card, "back", _palette.HudPanel);
-            HudUi.StretchFull(card);
-            HudUi.Frame(card, "frame", PanelBorder(), 1f * _scale);
+            HudUi.Shadow(card, "shadow", 12f, _palette.HudShadow);
+            HudBox back = HudUi.Round(card, "back", _palette.HudPanel, 12f);
+            HudUi.StretchFull(back.Rect);
+            HudUi.Border(card, "frame", PanelBorder(), 12f, 1f);
 
-            HudText title = Label(card, "title", 15f, FontStyle.Bold, TextAnchor.UpperLeft);
+            HudText title = Label(card, "title", HudType.Body, FontStyle.Bold, TextAnchor.UpperLeft,
+                tracked: true);
             HudUi.TopLeft(title.Rect, 14f * _scale, 9f * _scale, 200f * _scale, 22f * _scale);
-            title.Set("MAPS", _palette.HudAccent);
+            title.Set("MAPS", _palette.HudText);
 
-            HudText count = Label(card, "count", 11f, FontStyle.Normal, TextAnchor.UpperRight);
+            HudText count = Label(card, "count", HudType.Micro, FontStyle.Normal, TextAnchor.UpperRight);
             HudUi.TopLeft(count.Rect, 14f * _scale, 12f * _scale,
                 cardWidth - (14f + (InRun ? 160f : 100f)) * _scale, 16f * _scale);
             count.Set(_campaign.ClearedCount + " of " + _campaign.MapCount + " cleared",
@@ -348,7 +398,7 @@ namespace Facet.Game
             // The one way out, top-right where the help card's close button sits. Over a run it goes
             // back to that run; from the title's level list it goes back to the title.
             HudButton backButton = HudUi.Button(card, "back", (InRun ? 150f : 90f) * _scale, 22f * _scale,
-                InRun ? "back to the run  ·  M" : "title  ·  Esc", FontSize(11f), _palette.HudText,
+                InRun ? "back to the run  ·  M" : "title  ·  Esc", FontSize(HudType.Micro), _palette.HudText,
                 InRun ? (Action)(() => _resume?.Invoke()) : () => SetMode(Mode.Title));
             HudUi.TopRight(backButton.Root, 10f * _scale, 9f * _scale, (InRun ? 150f : 90f) * _scale,
                 22f * _scale);
@@ -367,7 +417,7 @@ namespace Facet.Game
             if (InRun)
             {
                 HudButton titleButton = HudUi.Button(card, "totitle", cardWidth - 28f * _scale, 26f * _scale,
-                    "to the title screen", FontSize(13f), _palette.HudText, () => _toTitle?.Invoke());
+                    "to the title screen", FontSize(HudType.Label), _palette.HudText, () => _toTitle?.Invoke());
                 HudUi.TopLeft(titleButton.Root, 14f * _scale, (rowsBottom + 4f) * _scale,
                     cardWidth - 28f * _scale, 26f * _scale);
                 _buttons.Add(titleButton);
@@ -397,10 +447,10 @@ namespace Facet.Game
                 (cardWidth - 28f) * _scale, rowHeight * _scale);
 
             HudButton button = root.gameObject.AddComponent<HudButton>();
-            button.Fill = HudUi.Box(root, "back", _palette.HudPanel);
+            button.Fill = HudUi.Round(root, "back", _palette.HudPanel, 8f);
             HudUi.StretchFull(button.Fill.Rect);
             button.Fill.Image.raycastTarget = true;
-            button.Border = HudUi.Frame(root, "frame", _palette.HudPanel, 1f * _scale);
+            button.Border = HudUi.Border(root, "frame", Color.clear, 8f, 1f);
 
             // An open row asks for its map; a locked one presses nothing, and is dressed dim by the
             // hover pass's locked list - the honest read-only answer, like the read-only picker's.
@@ -412,19 +462,21 @@ namespace Facet.Game
             }
             else _locked.Add(button);
 
-            HudText name = Label(root, "name", 15f, FontStyle.Bold, TextAnchor.UpperLeft);
+            HudText name = Label(root, "name", HudType.Body, FontStyle.Bold, TextAnchor.UpperLeft,
+                tracked: true);
             HudUi.TopLeft(name.Rect, 12f * _scale, 7f * _scale, 300f * _scale, 20f * _scale);
             name.Set(map.Name, locked ? LockedText() : _palette.HudText);
 
             if (roomy)
             {
-                HudText facts = Label(root, "facts", 11f, FontStyle.Normal, TextAnchor.UpperLeft);
+                HudText facts = Label(root, "facts", HudType.Micro, FontStyle.Normal, TextAnchor.UpperLeft);
                 HudUi.TopLeft(facts.Rect, 12f * _scale, 29f * _scale, (cardWidth - 184f) * _scale,
                     16f * _scale);
                 facts.Set(Facts(map), locked ? LockedText() : _palette.MachineIdle);
             }
 
-            HudText state = Label(root, "state", 12f, FontStyle.Bold, TextAnchor.UpperRight);
+            HudText state = Label(root, "state", HudType.Micro, FontStyle.Bold, TextAnchor.UpperRight,
+                tracked: true);
             HudUi.TopRight(state.Rect, 12f * _scale, 8f * _scale, 120f * _scale, 17f * _scale);
             state.Set(StateWord(index), StateColour(index));
 
@@ -433,7 +485,8 @@ namespace Facet.Game
             // The reason, under the state word: the map standing in the way, and - when the map on the
             // way is the one that teaches something new - the operator it is there to hand over. That
             // is the unlock ladder said out loud, not a bare ordinal.
-            HudText reason = Label(root, "reason", 10f, FontStyle.Normal, TextAnchor.UpperRight, wrap: true);
+            HudText reason = Label(root, "reason", HudType.Micro, FontStyle.Normal, TextAnchor.UpperRight,
+                wrap: true);
             HudUi.TopRight(reason.Rect, 12f * _scale, 27f * _scale, 260f * _scale, 24f * _scale);
             reason.Set(LockedReason(), LockedText());
         }
@@ -541,28 +594,33 @@ namespace Facet.Game
             RectTransform card = HudUi.Node(root, "card");
             HudUi.TopCentre(card, (Screen.height - height) * 0.5f, width, height);
 
-            HudUi.Box(card, "back", _palette.HudPanel);
-            HudUi.StretchFull(card);
-            HudUi.Frame(card, "frame", PanelBorder(), 1f * _scale);
+            HudUi.Shadow(card, "shadow", 12f, _palette.HudShadow);
+            HudBox back = HudUi.Round(card, "back", _palette.HudPanel, 12f);
+            HudUi.StretchFull(back.Rect);
+            HudUi.Border(card, "frame", PanelBorder(), 12f, 1f);
 
-            HudText header = Label(card, "header", HudLayout.HelpLineSize, FontStyle.Normal,
-                TextAnchor.UpperLeft);
+            HudText header = Label(card, "header", HudLayout.HelpLineSize, FontStyle.Bold,
+                TextAnchor.MiddleLeft, tracked: true);
             HudUi.TopLeft(header.Rect, HudLayout.HelpInset * _scale, HudLayout.HelpHeaderTop * _scale,
                 width - 60f * _scale, HudLayout.HelpLineHeight * _scale);
-            header.Set("CONTROLS", _palette.HudAccent);
+            header.Set("CONTROLS", _palette.HudText);
+
+            HudBox rule = HudUi.Box(card, "rule", HudInk.Rule(_palette));
+            HudUi.TopLeft(rule.Rect, HudLayout.HelpInset * _scale, 23f * _scale,
+                width - 2f * HudLayout.HelpInset * _scale, 1f);
 
             float y = HudLayout.HelpLineTop;
             foreach (string line in lines)
             {
                 HudText lineText = Label(card, "key" + y, HudLayout.HelpLineSize, FontStyle.Normal,
-                    TextAnchor.UpperLeft);
+                    TextAnchor.MiddleLeft);
                 HudUi.TopLeft(lineText.Rect, HudLayout.HelpInset * _scale, y * _scale,
                     width - 2f * HudLayout.HelpInset * _scale, HudLayout.HelpLineHeight * _scale);
-                lineText.Set(line, _palette.MachineIdle);
+                lineText.Set(line, HudInk.Muted(_palette));
                 y += HudLayout.HelpLineStep;
             }
 
-            HudButton close = HudUi.Button(card, "close", 22f * _scale, 22f * _scale, "×", FontSize(13f),
+            HudButton close = HudUi.Button(card, "close", 20f * _scale, 20f * _scale, "×", FontSize(HudType.Label),
                 _palette.HudText, () => SetMode(Mode.Title));
             HudUi.TopRight(close.Root, 8f * _scale, 7f * _scale, 22f * _scale, 22f * _scale);
             _buttons.Add(close);
@@ -621,34 +679,42 @@ namespace Facet.Game
         private void DressButtons()
         {
             for (int i = 0; i < _buttons.Count; i++) Dress(_buttons[i]);
-            for (int i = 0; i < _locked.Count; i++) _locked[i].Border.Set(LockedText(), 1f * _scale);
+            for (int i = 0; i < _locked.Count; i++) _locked[i].Border.Set(LockedText());
         }
 
         /// <summary>The HUD's generic button look, said once here as the HUD says it once: a fill that
         /// lightens under the pointer and an edge that takes the accent - the shell's buttons are the
-        /// HUD's buttons, and a menu that dressed differently would read as a different game.</summary>
+        /// HUD's buttons, and a menu that dressed differently would read as a different game. The title's
+        /// play button is the exception the rule exists for: the one filled accent surface on the screen,
+        /// because "start here" is the only thing a first-time player has to find.</summary>
         private void Dress(HudButton button)
         {
             bool hovered = button.Hovered;
-            button.Fill.Set(hovered ? Blend(ButtonFill, _palette.HudText, 0.16f) : ButtonFill);
-            button.Border.Set(hovered ? _palette.HudAccent : Blend(_palette.HudText, _palette.HudPanel, 0.35f),
-                1f * _scale);
+
+            if (_primary.Contains(button))
+            {
+                button.Fill.Set(hovered ? Blend(_palette.HudAccent, _palette.HudText, 0.16f) : _palette.HudAccent);
+                button.Border.Set(hovered ? _palette.HudText : Blend(_palette.HudAccent, _palette.HudPanel, 0.35f));
+                return;
+            }
+
+            button.Fill.Set(hovered ? Blend(ButtonFill, _palette.HudText, 0.14f) : ButtonFill);
+            button.Border.Set(hovered ? _palette.HudAccent : PanelBorder());
         }
 
         /// <summary>Is the shell open over a run? The header's back button and the rows' PLAYING mark
         /// both read it; the boot's shell has no run behind it to go back to.</summary>
         private bool InRun => _inRun;
 
-        private int FontSize(float design) => Mathf.Max(8, Mathf.RoundToInt(design * _scale));
+        private int FontSize(float design) => Mathf.Max(8, Mathf.CeilToInt(design * _scale));
 
         private HudText Label(RectTransform parent, string name, float design, FontStyle style,
-            TextAnchor anchor, bool wrap = false)
-            => HudUi.Text(parent, name, FontSize(design), style, anchor, wrap);
+            TextAnchor anchor, bool wrap = false, bool tracked = false)
+            => HudUi.Text(parent, name, FontSize(design), style, anchor, wrap, tracked);
 
-        private Color PanelBorder()
-            => new Color(_palette.HudText.r, _palette.HudText.g, _palette.HudText.b, 0.12f);
+        private Color PanelBorder() => HudInk.Edge(_palette);
 
-        private Color ButtonFill => Blend(_palette.HudPanel, _palette.HudText, 0.09f);
+        private Color ButtonFill => HudInk.Raised(_palette);
 
         private static Color Blend(Color from, Color to, float t) => Color.Lerp(from, to, t);
 

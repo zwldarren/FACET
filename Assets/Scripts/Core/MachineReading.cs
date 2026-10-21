@@ -191,11 +191,11 @@ namespace Facet.Core
 
                 case BehaviorKind.Sink:
                     return "1 × 1 tile · no outlet · never jams · eats "
-                        + config.BeltSpeed.ToString("0.##") + " shapes/s, one a segment";
+                        + ShapesPerSecond(config.BeltSpeed) + ", one a segment";
 
                 case BehaviorKind.None:
                     return def.Tile == TileKind.Belt
-                        ? config.BeltSpeed.ToString("0.##") + " shapes/s per segment"
+                        ? ShapesPerSecond(config.BeltSpeed) + " per segment"
                         : def.MaxHp > 0f
                             ? def.MaxHp.ToString("0.##") + " hp · blocks enemies"
                             : string.Empty;
@@ -205,6 +205,11 @@ namespace Facet.Core
                         "a new behaviour must say which numbers its line shows");
             }
         }
+
+        /// <summary>A belt's rate, pluralised: "1 shape/s" is a rate of one, and "1 shapes/s" reads like a
+        /// bug in the card rather than a fact about the machine.</summary>
+        private static string ShapesPerSecond(float speed)
+            => speed.ToString("0.##") + (speed == 1f ? " shape/s" : " shapes/s");
 
         // ---------------------------------------------------------------- the live card
 
@@ -257,8 +262,12 @@ namespace Facet.Core
                     }
 
                     if (state.OutputCount > 0 || state.OutputCount2 > 0)
+                        // The same question the stall counter asks (CutterBehavior.MissingLane), so the card
+                        // and the status line cannot call one machine "full" and "missing" in the same breath:
+                        // a lane with no belt is the mis-wiring, a lane that is full is backpressure.
                         return new ReadingNote("holding " + Held(in state) +
-                            " - an outlet is full", NoteSeverity.Warn);
+                            (CutterBehavior.MissingLane(in state, world.Belts, cell)
+                                ? " - a lane has no belt" : " - an outlet is full"), NoteSeverity.Warn);
 
                     // Idle, but not empty-handed in the only sense that matters: what is on its way in is
                     // already decided, so the card can say what the next cut will be instead of "waiting".

@@ -174,6 +174,25 @@ namespace Facet.Core
         public static bool IsOutletDirection(Dir beltDirection, Dir side) => beltDirection != side.Opposite();
 
         /// <summary>
+        /// Is there an outlet belt on any side in <paramref name="allowed"/> at all - <b>room or no room</b>?
+        /// The question a machine holding something asks when it has to tell two waits apart: a machine
+        /// with <em>nowhere</em> to hand its piece on is stopped (the mis-wiring the HUD counts), while a
+        /// machine whose outlet is merely full is backed up (the line is loaded as far as it goes, which is
+        /// what a factory waiting out an intermission looks like).
+        ///
+        /// A full outlet is not worth counting because it is never the whole story: the belt behind it is
+        /// either jammed or blocked (both counted on their own) or queueing behind a consumer that is full
+        /// by design - a loaded gun, and every line feeding one.
+        /// </summary>
+        public static bool HasOutlet(BeltField belts, Int2 cell, DirMask allowed)
+        {
+            for (int i = 0; i < Ports.Length; i++)
+                if (allowed.Has(Ports[i]) && IsOutput(belts, cell, Ports[i])) return true;
+
+            return false;
+        }
+
+        /// <summary>
         /// Push <paramref name="shape"/> out through the first outlet with room, starting at the
         /// machine's rotation cursor and wrapping, then advance the cursor past the outlet used. Shared
         /// by the stacker and the splitter so both distribute round-robin - a stacker's two halves of one

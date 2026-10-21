@@ -41,13 +41,17 @@ The project introduction is in [README.md](README.md); this is only the naming.
   refusal is a decision - the item waits for the right-click that clears it. A **blocked** segment is the
   other way a line stops, and is *derived* rather than latched, because its cure is to finish the line.
 - **Stall** (`MachineState.StallTicks`, `MachineField.CountStalled`) - a machine that has eaten its item and
-  cannot pass it on: the cutter with a full lane, the sorter whose outlet never has room, the pipe landing on a
-  busy belt, the stacker whose finished round has nowhere to go. The third way a line stops, and the only one
-  no belt can report - the machine *would* take what is behind it and it refused nothing, so nothing upstream
-  is jammed or blocked and the line simply queues. Counted in ticks and cleared the tick anything moves, so
-  "stopped" is a question about now; a second of it and the **status card** says how many and the **locator**
-  marks where. Deliberately not counted: a stacker waiting for a piece that fits (a design - see **Stack**),
-  and a drill's wait for its own landing belt (that one is a **blocked** segment or nothing).
+  has **nowhere** to pass it on: the cutter with a lane that was never wired, the sorter whose routed side has
+  no belt, the pipe whose landing cell is not a belt, the stacker with no outlet at all. The third way a line
+  stops, and the only one no belt can report - the machine *would* take what is behind it and it refused
+  nothing, so nothing upstream is jammed or blocked and the line simply queues. Counted in ticks and cleared
+  the tick it has somewhere to put the piece, so "stopped" is a question about now; a second of it and the
+  **status card** says how many and the **locator** marks where. A **full** outlet is deliberately *not* a
+  stall: that is backpressure - a line loaded as far as it goes - and whatever is really wrong there is
+  already a jam or a blocked segment, or nothing at all (a loaded gun takes no second round, and a factory
+  that is simply ahead of the wave is not news). Deliberately not counted either: a stacker waiting for a
+  piece that fits (a design - see **Stack**), a drill's wait for its own landing belt (that one is a
+  **blocked** segment or nothing), and a turret's wait for a target, which is **armed**/**starved**.
 
 ## Shapes
 
@@ -144,9 +148,13 @@ The project introduction is in [README.md](README.md); this is only the naming.
   `HudLayout.Panels` - the cards' boxes - rather than `HudLayout.Insets`: an inset is one number per side,
   which is right for a camera bound and wrong for a question about a tile, because the ground below the
   status card is free and a walker there needs no arrow.
-- **Arrow / mark** - what the locator puts on the edge of that open screen. A chevron is something that
-  moves and is coming (an enemy cluster); a mark is a place to go (a stopped line - a jammed segment, a blocked
-  one or a **stall**ed machine - or the Core). Sizes are
+- **Arrow / mark** - what the locator puts on the edge of that open screen. A **chevron** is something that
+  moves and is coming (an enemy cluster), in that enemy's own body colour. A **mark** is a place to go, and
+  the two marks are told apart by their fill: a stopped line - a jammed segment, a blocked one or a
+  **stall**ed machine - wears a **hollow** diamond in the amber a blocked segment wears, while the Core
+  wears a filled one in its own pale. Red is therefore the wave's and nothing else: a filled red dot on the
+  edge of a map with no enemies on it reads as an enemy that is not there, which is a bug report the shape
+  has to answer without being explained. Sizes are
   screen pixels rather than tiles, because an arrow is a mark on the window and the window is what zooms.
 - **Step back** (`EdgeTowards`) - an arrow that would land under a card is slid in along its own sight line
   until it clears the card. The sight line is what the arrow means, so it is the one thing the arrow never
@@ -182,7 +190,8 @@ The project introduction is in [README.md](README.md); this is only the naming.
   **severity** (`Neutral` / `Good` / `Warn`) instead of a colour; `Warn` means "the player should
   look, and a fix at the cursor exists" (starved turret, no outlet, nothing to push onto).
 - **Role** (`MachineRole`) - what a building is filed under: transport, wall, mining, processing,
-  routing, defence. The build bar's category colour and the card's header word hang off this one enum.
+  routing, defence, waste. The card's header word hangs off this one enum; the bar does not divide by
+  it, because eleven buildings do not need seven shelves.
 - **Landing** (`DrillLanding`, `PipeLanding`) - the cell a drill pushes its mined shape onto (the
   tile it faces), and the cell a pipe drops its carried shape onto (two tiles along its facing,
   jumping exactly one). One statement each: the tick delivers through them and the card describes

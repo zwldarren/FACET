@@ -32,14 +32,44 @@ namespace Facet.Core
 
         public void Step(ref MachineState cutter, Int2 cell, in MachineTickContext ctx)
         {
-            // The machine answers "am I waiting on an outlet" at every one of its exits, so the counter the
-            // HUD reads cannot drift from the tick's own decision to stop.
-            MachineClock.Waiting(ref cutter, Cut(ref cutter, cell, in ctx));
+            // The tick answers "am I waiting on an outlet" at every one of its exits, and this narrows that
+            // to the wait the counter is for: a lane with no belt on it. A lane that is merely full is
+            // backpressure - the line is loaded as far as it goes, and anything actually stuck is further on
+            // (or, behind a loaded gun, nothing is stuck at all).
+            bool waiting = Cut(ref cutter, cell, in ctx);
+            MachineClock.Waiting(ref cutter, waiting && MissingLane(in cutter, ctx.Belts, cell));
         }
 
         /// <summary>
-        /// One tick of the fork, reporting <b>whether it is waiting on an outlet</b> - the state
-        /// <see cref="MachineState.StallTicks"/> counts. Three ways it can be waiting, and they are the three
+        /// Which lane the machine needs and has not got: the fork is two pieces out of two tiles, so the
+        /// question is per-lane. A queued piece needs the front of the tile it leaves by, and a piece still in
+        /// the chamber needs the front of <em>both</em> once it is cut - an empty piece needs neither.
+        ///
+        /// The narrow half of "am I waiting": a lane that is full is backpressure and drains by itself, so it
+        /// is not news; a lane with no outlet belt on it never drains, and that is the mis-wiring the HUD
+        /// counts and the locator points at. The info card asks the same question of the same machine
+        /// (<see cref="MachineReading.LiveNote"/>), which is why this one is not private.
+        /// </summary>
+        internal static bool MissingLane(in MachineState cutter, BeltField belts, Int2 cell)
+        {
+            Dir flow = cutter.Direction;
+            Int2 lane = cell + MachineFootprint.LaneOf(flow).Offset();
+
+            bool front = MachineDelivery.IsOutput(belts, cell, flow);
+            bool beside = MachineDelivery.IsOutput(belts, lane, flow);
+
+            if (cutter.OutputCount > 0 && !front) return true;
+            if (cutter.OutputCount2 > 0 && !beside) return true;
+            if (cutter.Carried.IsEmpty) return false;
+
+            (Shape straight, Shape displaced) = Pieces(cutter.Carried, flow);
+            return (!straight.IsEmpty && !front) || (!displaced.IsEmpty && !beside);
+        }
+
+        /// <summary>
+        /// One tick of the fork, reporting <b>whether it is waiting on an outlet</b> - the raw wait
+        /// <see cref="Step"/> narrows to the one <see cref="MachineState.StallTicks"/> counts. Three ways it
+        /// can be waiting, and they are the three
         /// the machine's own comments below name: a lane at its buffer, a split whose two pieces have nowhere
         /// to go yet, and an item it cannot take because a slot still holds something else. Cooldown and
         /// intake are not waiting: the machine is working, or nothing is coming.

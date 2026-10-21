@@ -29,12 +29,14 @@ namespace Facet.Core
                     Allowed(in sorter, sorter.Carried)))
                 sorter.Carried = Shape.None;
 
-            // Still holding: the routed outlet had no room, or the item has nowhere to go. Waiting is
-            // the honest signal for a mis-wired stage, the same as a drill facing bare ground - and it is
-            // counted, so a stage that has stopped reads on the HUD as well as on its own card.
+            // Still holding: the routed outlet had no room, or the shape has nowhere to go. Only the second
+            // is a stoppage - a full outlet is backpressure, and a line loaded behind a full consumer is a
+            // line doing its job. A shape whose routed side has no belt at all will never leave, so that
+            // wait is the mis-wired stage this counter exists for, and it is counted.
             if (!sorter.Carried.IsEmpty)
             {
-                MachineClock.Waiting(ref sorter, waiting: true);
+                MachineClock.Waiting(ref sorter,
+                    waiting: !MachineDelivery.HasOutlet(ctx.Belts, cell, Allowed(in sorter, sorter.Carried)));
                 return;
             }
 

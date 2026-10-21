@@ -301,6 +301,43 @@ namespace Facet.Tests
         }
 
         /// <summary>
+        /// The false alarm a full line raises, and the one a player reported: a gun that is loaded and has
+        /// nothing to shoot stops taking rounds, so the belt into it backs up and the hub behind it holds
+        /// one item for as long as the map stays quiet. That wait is real - but it is <b>backpressure</b>,
+        /// not a stoppage: nothing is missing, nothing was refused, and the line is exactly what the player
+        /// built. The number the card prints is for a machine with <em>nowhere</em> to put its piece, so a
+        /// loaded gun waiting for a wave has to report zero.
+        /// </summary>
+        [Test]
+        public void AFullLine_BehindALoadedGun_IsNotStalled()
+        {
+            // Drill -> hub -> gun, all three wired and nothing to shoot: the smallest line that is fully
+            // loaded rather than broken, and the shape of the report this test exists to stop.
+            SimWorld world = Sim.NewWorld(20, 12);
+            world.Terrain.SetOre(new Int2(2, 6), Quad.Circle);
+            Sim.Place(world, BuildKind.Drill, new Int2(2, 6), Dir.East);
+            Sim.LayRun(world, new Int2(3, 6), Dir.East, 1);            // into the hub
+            Sim.Place(world, BuildKind.Splitter, new Int2(4, 6), Dir.East);
+            Sim.LayRun(world, new Int2(5, 6), Dir.East, 1);            // into the gun
+            Sim.Place(world, BuildKind.Turret, new Int2(6, 6), Dir.East);
+
+            Sim.Tick(world, 300);                                       // ten seconds of a quiet map
+
+            Assert.AreEqual(0, world.Enemies.AliveCount, "no enemies: the gun has nothing to fire at");
+            Assert.IsTrue(Sim.MachineAt(world, new Int2(6, 6)).Armed, "so it sits loaded");
+            Assert.IsTrue(world.Belts.HasItemAt(new Int2(5, 6)), "and the belt into it backs up");
+            Assert.IsFalse(Sim.MachineAt(world, new Int2(4, 6)).Carried.IsEmpty,
+                "with the hub holding the next item, waiting for room");
+
+            world.Machines.CountStalled(out int stalled);
+            Assert.AreEqual(0, stalled, "a loaded gun waiting for a wave is not a stoppage");
+
+            var stopped = new System.Collections.Generic.List<Int2>();
+            world.Machines.GetStalled(stopped);
+            Assert.AreEqual(0, stopped.Count, "so the locator has nothing to point at either");
+        }
+
+        /// <summary>
         /// A drill, one belt cell, and a cutter flowing north with the lane the belt fed wired out to a sink -
         /// the smallest line whose second lane can be the problem. With <paramref name="secondLane"/> the
         /// displaced piece's lane is wired to a sink of its own as well.

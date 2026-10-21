@@ -141,7 +141,7 @@ namespace Facet.Tests
                 Rect bar = HudLayout.Bar(screen.x, screen.y, s);
                 Rect status = HudLayout.Status(s);
                 Rect controls = HudLayout.Controls(screen.x, s);
-                Rect info = HudLayout.Info(bar, s);
+                Rect info = HudLayout.Info(screen.x, screen.y, s);
 
                 // The readout has no panel of its own, so its contract is the top strip, the screen edges, and
                 // the right of the card it is measured from - the overlap test below holds the rest.
@@ -191,7 +191,7 @@ namespace Facet.Tests
                     ("status", HudLayout.Status(s)),
                     ("tutorial", HudLayout.Tutorial(s)),
                     ("controls", HudLayout.Controls(screen.x, s)),
-                    ("info", HudLayout.Info(bar, s)),
+                    ("info", HudLayout.Info(screen.x, screen.y, s)),
                     ("bar", bar),
                 };
 
@@ -220,13 +220,13 @@ namespace Facet.Tests
                 string at = " at " + screen.x + "x" + screen.y;
                 float s = HudLayout.Scale(screen.y);
                 Rect bar = HudLayout.Bar(screen.x, screen.y, s);
-                Rect grown = HudLayout.Info(bar, s, pickerUp: true);
+                Rect grown = HudLayout.Info(screen.x, screen.y, s, pickerUp: true);
 
-                Assert.Greater(grown.height, HudLayout.Info(bar, s).height,
+                Assert.Greater(grown.height, HudLayout.Info(screen.x, screen.y, s).height,
                     "the picker's band makes the card taller, which is the whole reason it grows" + at);
-                Assert.AreEqual(HudLayout.Info(bar, s).yMax, grown.yMax, 1e-2f,
+                Assert.AreEqual(HudLayout.Info(screen.x, screen.y, s).yMax, grown.yMax, 1e-2f,
                     "and it grows upward from the same bottom edge, so the bar under it does not move" + at);
-                Assert.Less(grown.yMin, HudLayout.Info(bar, s).yMin,
+                Assert.Less(grown.yMin, HudLayout.Info(screen.x, screen.y, s).yMin,
                     "which means its far edge is higher up the screen" + at);
 
                 var panels = new Rect[HudLayout.PanelCount];

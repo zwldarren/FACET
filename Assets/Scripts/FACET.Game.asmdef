@@ -3,7 +3,8 @@
     "rootNamespace": "Facet",
     "references": [
         "FACET.Core",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
