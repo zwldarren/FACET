@@ -219,6 +219,17 @@ The project introduction is in [README.md](README.md); this is only the naming.
   **budget** of enemies (`base * growth^(n-1)`, jittered), every group in it pairs an **archetype** with a
   **demand**, and the demand is drawn only from the map's producible pool. Depth drives both: a shallow
   demand comes as Runners, a deeper one as Tanks.
+- **Question / count** (`WaveGenerator.MaxDemands`) - the two things a wave spends its budget on, and they
+  are not the same size. A wave **briefs** at most two distinct **demands** - two questions the player has
+  to have an answer for - and what is left of the budget buys **count**: more of what the wave already
+  asks for. A wave that briefed a new demand for every enemy it bought would ask for a production line
+  per enemy, and the answer to that is a bigger factory rather than a better one; the count is what
+  should grow, not the number of different things to build. The authored table briefs two as well.
+- **Depth band** (`WaveGenerator.DepthCap`) - the range of depths one wave may demand: a floor, which is
+  the deepest demand the map's own table taught, and a cap, which opens on the run's wave number (waves
+  1-2 ask for halves, 3-6 for quarters, 7 and up for whatever the map can build). The band is *climbed*,
+  never jumped: a wave that asked for the ladder's top on its first generated wave asked for a shape the
+  player had never been taught to build.
 - **Determinism / seed** - the generator's own xorshift stream, one seed per run mixed with the wave
   number, is the only randomness in Core: no `System.Random`, because a run that replays differently
   after a runtime upgrade is not a replay. The seed is printed in the HUD, and a run is reproducible

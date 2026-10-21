@@ -75,6 +75,21 @@ namespace Facet.Core
         public const int MaxGroups = WaveDirector.MaxGroups;
 
         /// <summary>
+        /// How many distinct demands one generated wave briefs - the wave's <em>questions</em>, as against
+        /// its enemy count.
+        ///
+        /// Two, because that is what the authored table asks: a wave is a set of decisions a player can
+        /// hold in their head and a line can answer, and a wave that briefs a new demand for every enemy
+        /// it buys asks for six production lines at once on a deep wave. The answer to that is not a
+        /// better factory but a bigger one, and it puts the wave's difficulty on the wrong axis: the count
+        /// is what should grow, not the number of different things to build.
+        ///
+        /// The count that follows a demand comes from <see cref="Spread"/>, which spends what is left of
+        /// the budget on the pairs the wave already holds.
+        /// </summary>
+        public const int MaxDemands = 2;
+
+        /// <summary>
         /// The most enemies one generated wave may hold, however far the budget curve has climbed:
         /// <see cref="MaxGroups"/> groups of twenty-five, which at the groups' own spacing is a quarter of a
         /// minute of arrivals per group. Two things need it. It is the pacing ceiling - a wave is a sequence
@@ -142,10 +157,13 @@ namespace Facet.Core
             if (_authoredWaves > 0 && n > _authoredWaves)
             {
                 // The generated stretch behind an authored table: the band starts at the depth the
-                // table's own finale demanded and reaches everything the map can build. The exam asks
-                // for the deep end the player was just tested on - a band that fell back to a fresh
-                // opening's shallows left the deep line they had just built idle for waves.
-                cap = _pool.MaxDepth;
+                // table's own finale demanded, and it OPENS on the same schedule the from-scratch
+                // path opens it - the ladder's top is not reached on the first generated wave, it is
+                // climbed to. The exam asks for the deep end the player was just tested on - a band
+                // that fell back to a fresh opening's shallows left the deep line they had just built
+                // idle for waves, and one that jumped to the ladder's top asked for a shape the player
+                // had never been taught to build.
+                cap = DepthCap(n);
                 floor = Math.Min(Math.Max(1, _authoredEndDepth), cap);
             }
             else
@@ -156,9 +174,16 @@ namespace Facet.Core
 
             while (budget >= RunnerCost)
             {
+                // The wave's questions are asked: past this many, the budget buys more of what the wave
+                // already asks for, not more questions. A wave that briefs one demand per enemy asks the
+                // player for a production line per enemy - seven lines at once on a deep wave, which is a
+                // bigger factory rather than a better one, and a question no single turret can answer.
+                // The authored table briefs two, and the count that follows a demand comes from Spread.
+                if (groups.Count >= MaxDemands) break;
+
                 // A pair the wave has not briefed yet, drawn from the band. A wave *briefs* each shape once:
                 // the count that follows comes from Spread, not from drawing the same shape again.
-                Shape demand = DrawFresh(rng, floor, cap, used);
+                Shape demand = DrawFresh(ref rng, floor, cap, used);
 
                 // Nothing left to brief: the band is spent, or the wave already holds every pair it may hold.
                 // What remains of the budget is count on the pairs it has - which is what keeps the curve
@@ -284,18 +309,25 @@ namespace Facet.Core
         /// the way the band does - before the answer is "nothing": on a small pool one tier can be a single
         /// shape, and ending the wave at the first exhausted tier would leave the budget unspent and make
         /// the curve a promise the wave does not keep.
+        ///
+        /// <b>The stream is passed by reference.</b> <see cref="Rng"/> is a mutable struct, so a copy would
+        /// take the draw's advance with it: the caller's stream would stand still, every group in a wave
+        /// would come off the same depth, and one tier would be walked in one fixed order for the whole
+        /// wave. <see cref="BudgetFor"/> takes its stream by reference for the same reason, and a wave
+        /// whose groups were one draw repeated was a wave with a single decision in it, however many
+        /// groups it wore.
         /// </summary>
-        private Shape DrawFresh(Rng rng, int floor, int cap, List<Shape> used)
+        private Shape DrawFresh(ref Rng rng, int floor, int cap, List<Shape> used)
         {
             int depth = floor + rng.Next(cap - floor + 1);
-            Shape drawn = Draw(rng, depth, used);
+            Shape drawn = Draw(ref rng, depth, used);
             if (!drawn.IsEmpty) return drawn;
 
             for (int d = floor; d <= cap; d++)
             {
                 if (d == depth) continue;
 
-                Shape other = Draw(rng, d, used);
+                Shape other = Draw(ref rng, d, used);
                 if (!other.IsEmpty) return other;
             }
 
@@ -304,7 +336,7 @@ namespace Facet.Core
 
         /// <summary>A demand of exactly this depth, drawn uniformly from the items at it that
         /// <paramref name="used"/> does not already name. Nothing when the tier is empty or spent.</summary>
-        private Shape Draw(Rng rng, int depth, List<Shape> used)
+        private Shape Draw(ref Rng rng, int depth, List<Shape> used)
         {
             IReadOnlyList<Shape> tier = _pool.AtDepth(depth);
             if (tier.Count == 0) return Shape.None;

@@ -220,6 +220,65 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void AGroupsDepth_IsItsOwnDraw_AndNotOneDrawRepeated()
+        {
+            // The stream is the generator's own and it advances: a wave's groups are independent draws, not
+            // the same draw wearing seven faces. It is a property of the struct, not of the arithmetic -
+            // <c>Rng</c> is a mutable struct, and a copy took the draw's advance with it, so the caller's
+            // stream stood still and every group in a wave came off one depth, walking one tier in one
+            // fixed order. A wave like that has a single decision in it however many groups it wears, and
+            // a band that opens over the run is then a band that opens once per wave instead.
+            ShapePool pool = FullPool();
+            WaveGenerator generator = Generator(seed: 4242, pool);
+
+            // Waves 7 and up draw from the whole ladder, so a wave there can hold more than one depth at
+            // all - the opening waves draw from a band of one and are single-depth by construction.
+            const int From = 7, To = 30;
+            int mixed = 0;
+            int waves = 0;
+
+            for (int n = From; n <= To; n++)
+            {
+                WaveDefinition wave = generator.Wave(n);
+                waves++;
+
+                int first = pool.Depth(wave.Groups[0].Weakness);
+                bool oneDepth = true;
+                foreach (SpawnGroup group in wave.Groups)
+                    if (pool.Depth(group.Weakness) != first) { oneDepth = false; break; }
+
+                if (!oneDepth) mixed++;
+            }
+
+            Assert.Greater(mixed, waves / 2,
+                "only " + mixed + " of " + waves + " waves in the deep window briefed their groups at more " +
+                "than one depth: the generator's stream is not advancing within a wave");
+        }
+
+        [Test]
+        public void AGeneratedWave_AsksAtMostTwoQuestions_AndTheCountCarriesThePressure()
+        {
+            // A wave's difficulty should grow on its count, not on how many different things the player
+            // has to build at the same time. A wave that briefs a new demand for every enemy it buys asks
+            // for a production line per enemy - six lines at once on a deep wave - and the answer to that
+            // is a bigger factory rather than a better one. The authored table briefs two; so does this.
+            ShapePool pool = FullPool();
+            WaveGenerator generator = Generator(seed: 2024, pool);
+
+            for (int n = 1; n <= 30; n++)
+            {
+                WaveDefinition wave = generator.Wave(n);
+                Assert.LessOrEqual(wave.Groups.Length, WaveGenerator.MaxDemands,
+                    "wave " + n + " asks for " + wave.Groups.Length + " different shapes at once");
+                Assert.Greater(wave.Total, 0, "wave " + n + " is empty");
+
+                // The count is where the budget went: a wave that asks two questions still sends a crowd.
+                Assert.GreaterOrEqual(wave.Total, wave.Groups.Length,
+                    "wave " + n + " has fewer enemies than questions");
+            }
+        }
+
+        [Test]
         public void AMapWhoseDeepestItemIsShallow_CapsItsOwnDemandsAtThat()
         {
             // The cap is the map's own reach, not a constant: a circle-only map with a cutter cannot be

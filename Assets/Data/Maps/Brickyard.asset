@@ -79,6 +79,18 @@ MonoBehaviour:
     Mineral: 2
   - Cell: {x: 40, y: 26}
     Mineral: 2
+  - Cell: {x: 17, y: 29}
+    Mineral: 1
+  - Cell: {x: 18, y: 29}
+    Mineral: 1
+  - Cell: {x: 19, y: 29}
+    Mineral: 1
+  - Cell: {x: 17, y: 30}
+    Mineral: 1
+  - Cell: {x: 18, y: 30}
+    Mineral: 1
+  - Cell: {x: 19, y: 30}
+    Mineral: 1
   SpawnPoints:
   - {x: 13, y: 70}
   - {x: 23, y: 70}
@@ -160,6 +172,28 @@ MonoBehaviour:
         NE: 0
         SE: 2
         SW: 0
-  Unlocked: 3
+  - Intermission: 90
+    Groups:
+    - Kind: 1
+      Count: 5
+      SpawnPoint: 0
+      FirstDelay: 0
+      Interval: 2
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 2
+        SW: 2
+    - Kind: 0
+      Count: 5
+      SpawnPoint: 1
+      FirstDelay: 12
+      Interval: 2.2
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 2
+        SW: 2
+  Unlocked: 7
   Seed: 0
-  GeneratedWaves: 0
+  GeneratedWaves: 6

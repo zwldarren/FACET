@@ -151,11 +151,14 @@ namespace Facet.Tests
         [Test]
         public void AWalker_DropsItsSilhouette_ButItsHealthBarDoesNot()
         {
-            // OneWaveWorld's wave starts itself on the first tick, so a walker is on the map before the
-            // view draws. What the shadow must not pick up is the rest of the enemy mesh: the bar above
+            // OneWaveWorld's wave starts itself on the first tick, but the walker's group has a
+            // FirstDelay of one second - thirty ticks at the simulation's rate - so the walker is on
+            // the map from the thirty-first tick, not the first. Five ticks left the map empty and the
+            // shadow pass had nothing to draw, which read as a broken shadow rather than as an empty
+            // map. What the shadow must not pick up is the rest of the enemy mesh: the bar above
             // the body and the weakness figure inside it are readouts, not things that stand.
             SimWorld world = Sim.OneWaveWorld();
-            Sim.Tick(world, 5);
+            Sim.Tick(world, 40);
 
             var go = new GameObject("Enemies");
             try

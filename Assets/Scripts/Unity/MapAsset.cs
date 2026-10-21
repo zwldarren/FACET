@@ -116,8 +116,8 @@ namespace Facet.Game
 
         [Header("Progression")]
         [Tooltip("The operator machines this map hands the player. Progression is this set rather than a map " +
-            "ordinal: both shipped maps hand over the cutter and the rotator, and a map that taught " +
-            "combination would name the stacker here. " +
+            "ordinal: the campaign's first map hands over the cutter and the rotator, and the map that " +
+            "teaches combination hands over the stacker as well. " +
             "A locked machine cannot be built at all, and the wave generator never demands a shape this map's " +
             "minerals and unlocked operators cannot build.")]
         public Operators Unlocked = Operators.All;
