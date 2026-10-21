@@ -27,6 +27,12 @@ namespace Facet.EditorTools
     {
         private const string ScenePath = "Assets/Scenes/Main.unity";
 
+        /// <summary>The page the player is published in: FACET's own (Assets/WebGLTemplates/FACET), not Unity's
+        /// default - a fixed 960x600 frame, the game's own loading screen and failure message, a fullscreen button
+        /// that letterboxes, and no Unity branding (#17). "PROJECT:" is Unity's prefix for a template that lives
+        /// in the project rather than in the Editor install.</summary>
+        public const string Template = "PROJECT:FACET";
+
         /// <summary>Where the build lands. Git-ignored: it is an artefact, and Pages serves a copy.</summary>
         private const string OutputDirectory = "Builds/WebGL";
 
@@ -95,11 +101,13 @@ namespace Facet.EditorTools
             EditorUtility.DisplayDialog(FailureTitle, message, "OK");
         }
 
-        /// <summary>Compression settings a plain static host can actually serve.</summary>
+        /// <summary>Compression settings a plain static host can actually serve, and the page the player ships
+        /// in - set here as well as in the project settings, so a batchmode build cannot fall back to Unity's.</summary>
         private static void ConfigureForStaticHosting()
         {
             PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Brotli;
             PlayerSettings.WebGL.decompressionFallback = true;
+            PlayerSettings.WebGL.template = Template;
         }
     }
 }

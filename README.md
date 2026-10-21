@@ -55,6 +55,10 @@ the maps are data rather than code — edited as assets in the Editor, with no r
 
 ### Publishing the playable build
 
+The player ships in FACET's own page, `Assets/WebGLTemplates/FACET` (a fixed 960×600 frame, the game's
+loading and failure screens, a letterboxing fullscreen button, no Unity branding). The build tool selects it,
+so edit the template there - never the generated `docs/index.html`.
+
 `Tools/publish-pages.sh` builds the player, mirrors `Builds/WebGL` into `docs/` and prints the
 publish steps (`--no-build` mirrors what is already on disk). `docs/` is generated, not source:
 every run replaces it wholesale, so nothing in it should be edited by hand. Pages requires
