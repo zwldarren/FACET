@@ -31,15 +31,21 @@ namespace Facet.Game
         /// it: §5 previews both), the two diagnostic lines and the seed.</summary>
         public const float StatusHeight = 148f;
 
-        /// <summary>The controls cluster collapsed: the wave, pause, speed-gear and help buttons, a small
-        /// cluster in the screen's top-right corner (two 54/34-unit buttons and two 34s, three 6-unit
-        /// gaps). The keyboard list lives behind the help button instead of costing a corner of the screen
-        /// all run; the wave button lives here so the status rail does not owe it a row.</summary>
-        public const float ControlsWidth = 174f;
+        /// <summary>The controls cluster collapsed: the wave, pause, speed-gear, help and menu buttons, a
+        /// small cluster in the screen's top-right corner (a 54-unit wave, three 34-unit squares, a 44-unit
+        /// MENU and four 6-unit gaps). The keyboard list lives behind the help button instead of costing a
+        /// corner of the screen all run; the wave button lives here so the status rail does not owe it a
+        /// row. The menu button is the cluster's one door out of the run - the same door Esc opens - and is
+        /// a word rather than a glyph for the same reason the wave button is.</summary>
+        public const float ControlsWidth = 224f;
         public const float ControlsHeight = 34f;
 
         /// <summary>The wave button is wider than the square ones: it carries a word, not a glyph.</summary>
         public const float WaveButtonWidth = 54f;
+
+        /// <summary>The menu button, on the same reasoning: four letters at the micro size, and the
+        /// cluster's rightmost piece, so the way out is where the eye looks for it.</summary>
+        public const float MenuButtonWidth = 44f;
 
         /// <summary>The gap between the cluster's buttons.</summary>
         public const float ControlGap = 6f;
@@ -133,7 +139,7 @@ namespace Facet.Game
         public static Rect Status(float s)
             => new Rect(Margin * s, Margin * s, StatusWidth * s, StatusHeight * s);
 
-        /// <summary>The controls cluster: wave, pause, gear and help, hung off the screen's top-right
+        /// <summary>The controls cluster: wave, pause, gear, menu and help, hung off the screen's top-right
         /// corner. The keyboard list lives in <see cref="Help"/> behind the help button - reference
         /// material is worth a click, not a corner of the screen.</summary>
         public static Rect Controls(float screenWidth, float s)

@@ -4,6 +4,7 @@ using Facet.Core;
 using Facet.Game;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 #if UNITY_EDITOR
@@ -35,6 +36,13 @@ namespace Facet.PlayTests
         private int _progressBefore;
         private bool _progressKeyExisted;
         private bool _progressSnapshotted;
+
+        private SimulationDriver Driver => _driverObject.GetComponent<SimulationDriver>();
+
+        /// <summary>Leave the boot title the way the title's play button does - as a fresh run on a named
+        /// map - because the game now opens held on that screen. Every test that plays rather than looks
+        /// at the shell starts here; the ones that watch the title itself call it later.</summary>
+        private void BeginRun() => Driver.PlayMap(0, false);
 
         [SetUp]
         public void CreateScene()
@@ -198,6 +206,13 @@ namespace Facet.PlayTests
             Assert.AreEqual(driver.Catalog.At(0).Height, driver.World.TileGrid.Height);
             Assert.IsNotNull(Camera.main, "with a MainCamera for the views to sit under");
 
+            // The shipped scene opens on the title, held: a player's first frame is the wordmark, not a
+            // map already ticking under it. The play button is the one door that starts the clock.
+            ShellView shell = Object.FindFirstObjectByType<ShellView>();
+            Assert.IsNotNull(shell, "the driver builds the shell the title lives in");
+            Assert.IsTrue(shell.Open, "and the shipped scene opens on that title");
+            Assert.AreEqual(0, driver.World.TickCount, "the held run has spent no time");
+
             // The committed content asset is what the shipped scene boots with, so it has to agree with
             // the code's own table to the value - otherwise "the shipped game" would depend on which of
             // the two you happened to read.
@@ -215,6 +230,10 @@ namespace Facet.PlayTests
             Assert.AreEqual(ContentDatabase.Default.Enemy(EnemyKind.Runner).Hp,
                 driver.Content.Enemy(EnemyKind.Runner).Hp, 1e-4f, "the shipped runner's hp");
 
+            // Play the title, then let the driver tick: the same door a player's click takes.
+            driver.PlayMap(0, false);
+            yield return null;
+
             int ticks = driver.World.TickCount;
             yield return new WaitForSeconds(0.3f);
             Assert.Greater(driver.World.TickCount, ticks, "and the clock runs in the shipped scene too");
@@ -225,8 +244,10 @@ namespace Facet.PlayTests
         {
             yield return null;   // let Awake and the first Update run
 
-            var driver = _driverObject.GetComponent<SimulationDriver>();
+            var driver = Driver;
             Assert.IsNotNull(driver.World, "the driver owns a simulation");
+            BeginRun();          // the boot title holds the run; the play door hands it back
+            yield return null;
 
             foreach (string view in new[] { "Grid", "Terrain", "Ore", "Belts", "Core", "Machines", "Items", "Enemies", "Shots", "Cursor", "ThreatRadar", "Hud", "Shell" })
                 Assert.IsNotNull(_driverObject.transform.Find(view), "the driver did not build the " + view + " view");
@@ -236,37 +257,275 @@ namespace Facet.PlayTests
             Assert.Greater(driver.World.TickCount, ticks, "the fixed 30 Hz clock keeps running across frames");
         }
 
+        /// <summary>
+        /// The boot screen: the scene opens on the shell's title, with the run built behind it and held -
+        /// the same hold the in-run menu uses, so no device, no tick and no second of the run is spent
+        /// before the player presses play. This is the one test of what a player sees on the first frame.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheBootTitle_HoldsTheRun_UntilThePlayerPlays()
+        {
+            yield return null;   // let Awake and the first Update run
+
+            SimulationDriver driver = Driver;
+            var shell = _driverObject.GetComponentInChildren<ShellView>(true);
+            Assert.IsNotNull(shell, "the driver builds the shell that opens the game");
+            Assert.IsTrue(shell.Open, "and the boot lands on its title screen");
+            Assert.AreEqual(0, driver.World.TickCount, "the held run has spent no time");
+
+            int held = driver.World.TickCount;
+            yield return new WaitForSeconds(0.2f);
+            Assert.AreEqual(held, driver.World.TickCount, "no time passes on the title");
+
+            driver.PlayMap(0, false);
+            yield return null;
+            Assert.IsFalse(shell.Open, "the play door closes the title");
+
+            int started = driver.World.TickCount;
+            yield return new WaitForSeconds(0.2f);
+            Assert.Greater(driver.World.TickCount, started, "and the clock runs once a run is started");
+        }
+
         [UnityTest]
         public IEnumerator TheShell_HoldsTheRun_WhileItStands()
         {
             yield return null;   // let Awake and the first Update run
+            BeginRun();          // leave the boot title first - the pause menu is opened over a run
 
-            var driver = _driverObject.GetComponent<SimulationDriver>();
+            var driver = Driver;
             var shell = _driverObject.GetComponentInChildren<ShellView>(true);
+            var hud = _driverObject.GetComponentInChildren<HudView>(true);
             Assert.IsNotNull(shell, "the driver builds the shell");
+            Assert.IsNotNull(hud, "and the HUD the menu stands down");
 
-            // Opened the way the driver's own M key opens it, only without the input device: the shell is
-            // the state the driver holds the run on.
-            shell.ShowLevels(true);
+            // Opened the way Esc and the HUD's menu button open it, only without the input device: the
+            // shell is the state the driver holds the run on.
+            driver.OpenMenu();
             yield return null;
+
+            Assert.IsTrue(shell.Open, "the pause menu is the one on screen");
+            Assert.IsFalse(hud.enabled, "and the HUD is stood down behind it");
 
             int heldTicks = driver.World.TickCount;
             yield return new WaitForSeconds(0.2f);
             Assert.AreEqual(heldTicks, driver.World.TickCount, "the run does not tick behind the shell");
             Assert.IsTrue(shell.Open, "and the shell is still the one on screen");
 
-            shell.Close();
+            driver.ResumeRun();
             yield return null;
-            yield return new WaitForSeconds(0.2f);
+            Assert.IsFalse(shell.Open, "resume closes the menu");
+            Assert.IsTrue(hud.enabled, "and hands the HUD back");
+            yield return new WaitForSeconds(0.2f);   // the 30 Hz clock needs a tick's worth of time
             Assert.Greater(driver.World.TickCount, heldTicks, "and it ticks again once the shell is gone");
+        }
+
+        /// <summary>The main menu is not a one-way trip any more: the pause menu's far door leaves the
+        /// run, but only on the second press - the first arms it and says so, so an accidental click on
+        /// the bottom of the card cannot throw a run away. The abandoned run is held, not ticked, and a
+        /// fresh play from the title is a fresh run.</summary>
+        [UnityTest]
+        public IEnumerator ThePauseMenu_TakesTwoPresses_ToLeaveTheRunForTheTitle()
+        {
+            yield return null;
+            BeginRun();
+
+            var driver = Driver;
+            var shell = _driverObject.GetComponentInChildren<ShellView>(true);
+            SimWorld run = driver.World;
+
+            driver.OpenMenu();
+            yield return null;
+            Assert.IsTrue(shell.Open, "the pause menu is up");
+
+            shell.RequestMainMenu();
+            yield return null;
+            Assert.IsTrue(shell.Open, "the first press only arms the main-menu door");
+            Assert.AreEqual(run, driver.World, "and leaves the run exactly where it was");
+
+            shell.RequestMainMenu();
+            yield return null;
+            Assert.IsTrue(shell.Open, "the title stands where the menu was");
+            Assert.IsTrue(shell.AtTitle, "and it is the title, not another pause card");
+            Assert.AreEqual(run, driver.World, "the abandoned run is still built behind it");
+
+            int held = driver.World.TickCount;
+            yield return new WaitForSeconds(0.2f);
+            Assert.AreEqual(held, driver.World.TickCount, "and it does not tick behind the title");
+
+            driver.PlayMap(0, false);
+            yield return null;
+            int started = driver.World.TickCount;
+            yield return new WaitForSeconds(0.2f);
+            Assert.Greater(driver.World.TickCount, started, "play from the title starts a fresh run");
+        }
+
+        /// <summary>The pause menu's restart door starts this map over: the run is reused rather than
+        /// rebuilt (a restart is the world's own reset), the shell closes, and the clock is back at zero
+        /// once the next tick applies the request - the same path the R key takes.</summary>
+        [UnityTest]
+        public IEnumerator ThePauseMenusRestartDoor_StartsTheRunOver()
+        {
+            yield return null;
+            BeginRun();
+
+            var driver = Driver;
+            var shell = _driverObject.GetComponentInChildren<ShellView>(true);
+            SimWorld run = driver.World;
+            var belt = new Int2(20, 10);
+            Assert.IsTrue(run.TryPlaceBelt(belt, Dir.East));
+            for (int i = 0; i < 10; i++) run.Tick(InputCommand.None);
+            Assert.Greater(run.TickCount, 0, "the run has time on it to lose");
+
+            driver.OpenMenu();
+            yield return null;
+            driver.RestartRun();
+            yield return null;                    // let the shell go
+            yield return new WaitForSeconds(0.2f); // and let the next tick apply the restart request
+
+            Assert.IsFalse(shell.Open, "the restart closes the menu");
+            Assert.AreEqual(run, driver.World, "and reuses the run's own world");
+            Assert.IsFalse(run.Belts.Has(belt), "the placed belt is gone with the restart");
+            Assert.Less(run.TickCount, 10, "and the clock started over");
+        }
+
+        /// <summary>The restart door costs the same run the main-menu door does, so it is armed the same
+        /// way: the first press asks and leaves everything standing, the second starts the map over.</summary>
+        [UnityTest]
+        public IEnumerator TheRestartDoor_TakesTwoPresses_ToStartTheRunOver()
+        {
+            yield return null;
+            BeginRun();
+
+            var driver = Driver;
+            var shell = _driverObject.GetComponentInChildren<ShellView>(true);
+            SimWorld run = driver.World;
+            var belt = new Int2(20, 10);
+            Assert.IsTrue(run.TryPlaceBelt(belt, Dir.East));
+
+            driver.OpenMenu();
+            yield return null;
+
+            shell.RequestRestart();
+            yield return null;
+            Assert.IsTrue(shell.Open, "the first press only arms the restart door");
+            Assert.IsTrue(run.Belts.Has(belt), "and leaves the factory where it was");
+
+            shell.RequestRestart();
+            yield return null;
+            yield return new WaitForSeconds(0.2f);   // the next tick applies the restart request
+
+            Assert.IsFalse(shell.Open, "the second press closes the menu");
+            Assert.IsFalse(run.Belts.Has(belt), "and starts the run over");
+        }
+
+        /// <summary>
+        /// The keys the driver reads for itself, through a real Input System device: M opens the pause
+        /// menu and Escape hands the run back; Escape with a building on the cursor drops that building
+        /// instead of stopping the run, and only the next Escape opens the menu - the narrowed contract
+        /// the driver's own comment makes. The title's two keys are pinned at both ends (M to the map
+        /// list, Enter to play), and an armed door is disarmed by the same Escape that means "back".
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheDriversKeys_OpenTheMenu_AndEscapeDropsASelectionFirst()
+        {
+            yield return null;   // let Awake and the first Update run
+            SimulationDriver driver = Driver;
+            var shell = _driverObject.GetComponentInChildren<ShellView>(true);
+            Assert.IsTrue(shell.Open, "the boot title stands");
+            Assert.IsTrue(shell.AtTitle, "and it is the title");
+
+            // The fixture severs the real devices, so the machine running the tests cannot press anything.
+            // The keyboard it does hand back is the one every key below goes through.
+            var input = new InputTestFixture();
+            input.Setup();
+            try
+            {
+                Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
+                InputSystem.AddDevice<Mouse>();   // the shell's UI module binds a pointer; leave it one
+                yield return null;   // the test keyboard is the current one from this frame on
+
+                // On the title, M opens the map list and Escape steps back to the title.
+                input.Press(keyboard.mKey);
+                yield return null;
+                Assert.IsFalse(shell.AtTitle, "M opens the title's map list");
+                input.Release(keyboard.mKey);
+                yield return null;
+
+                input.Press(keyboard.escapeKey);
+                yield return null;
+                Assert.IsTrue(shell.AtTitle, "Escape steps back to the title");
+                input.Release(keyboard.escapeKey);
+                yield return null;
+
+                // Enter is the title's play door.
+                input.Press(keyboard.enterKey);
+                yield return null;
+                Assert.IsFalse(shell.Open, "Enter starts the run");
+                input.Release(keyboard.enterKey);
+                yield return new WaitForSeconds(0.2f);
+                Assert.Greater(driver.World.TickCount, 0, "and the clock is running");
+
+                // M over a run opens the pause menu; Escape hands the run back.
+                input.Press(keyboard.mKey);
+                yield return null;
+                Assert.IsTrue(shell.Open, "M opens the pause menu over the run");
+                input.Release(keyboard.mKey);
+                yield return null;
+
+                // An armed door is disarmed by Escape, not taken by it.
+                shell.RequestRestart();
+                Assert.IsTrue(shell.Open, "the restart door is armed over the pause card");
+                input.Press(keyboard.escapeKey);
+                yield return null;
+                Assert.IsTrue(shell.Open, "Escape disarms it rather than leaving");
+                input.Release(keyboard.escapeKey);
+                yield return null;
+
+                input.Press(keyboard.escapeKey);
+                yield return null;
+                Assert.IsFalse(shell.Open, "the next Escape resumes the run");
+                input.Release(keyboard.escapeKey);
+                yield return null;
+
+                // A digit puts a building on the cursor. The selection is latched by the input and applied
+                // by the next tick, so the world's own answer is read after one tick's worth of time.
+                input.Press(keyboard.digit1Key);
+                yield return new WaitForSeconds(0.1f);
+                Assert.IsNotNull(driver.World.SelectedKind, "a digit selects a building");
+                input.Release(keyboard.digit1Key);
+                yield return null;
+
+                // Escape, meaning "back", drops it - and must not also stop the run, because that press
+                // was the map's. The driver reads the world's selection before the input latch clears it,
+                // which is what keeps the two meanings of the key apart.
+                input.Press(keyboard.escapeKey);
+                yield return new WaitForSeconds(0.1f);
+                Assert.IsNull(driver.World.SelectedKind, "Escape drops the selection");
+                Assert.IsFalse(shell.Open, "and the run keeps going");
+                input.Release(keyboard.escapeKey);
+                yield return null;
+
+                // With nothing selected, the next Escape is the menu's.
+                input.Press(keyboard.escapeKey);
+                yield return null;
+                Assert.IsTrue(shell.Open, "the next Escape opens the pause menu");
+                Assert.IsFalse(shell.AtTitle, "and it is the pause card, not the title");
+                input.Release(keyboard.escapeKey);
+                yield return null;
+            }
+            finally
+            {
+                input.TearDown();
+            }
         }
 
         [UnityTest]
         public IEnumerator PlacingABuilding_PutsGeometryOnScreen()
         {
             yield return null;
+            BeginRun();
 
-            var driver = _driverObject.GetComponent<SimulationDriver>();
+            var driver = Driver;
             SimWorld world = driver.World;
             var belt = new Int2(20, 10);
             var turret = new Int2(21, 10);
@@ -291,8 +550,9 @@ namespace Facet.PlayTests
         public IEnumerator Restart_ClearsWhatTheViewsDraw()
         {
             yield return null;
+            BeginRun();
 
-            var driver = _driverObject.GetComponent<SimulationDriver>();
+            var driver = Driver;
             SimWorld world = driver.World;
             Assert.IsTrue(world.TryPlaceBelt(new Int2(20, 10), Dir.East));
 
@@ -316,8 +576,9 @@ namespace Facet.PlayTests
         public IEnumerator AKill_LeavesAVisibleBurst_ThatThenFades()
         {
             yield return null;
+            BeginRun();   // the burst fades on the run's own tick, so the clock has to be running
 
-            var driver = _driverObject.GetComponent<SimulationDriver>();
+            var driver = Driver;
             SimWorld world = driver.World;
 
             var belt = new Int2(20, 10);
@@ -359,8 +620,9 @@ namespace Facet.PlayTests
         public IEnumerator LoadingTheNextMap_SwapsTheWorld_UnderTheSameViews()
         {
             yield return null;
+            BeginRun();
 
-            var driver = _driverObject.GetComponent<SimulationDriver>();
+            var driver = Driver;
             Assert.AreEqual(driver.Catalog.At(0).Name, driver.World.Map.Name, "the driver opens on the first map");
             Assert.AreEqual(0, driver.Campaign.MapIndex, "the driver opens on the first map");
 
@@ -406,8 +668,9 @@ namespace Facet.PlayTests
         public IEnumerator ARefusedPlacement_IsReported_AndTheHudDrawsIt()
         {
             yield return null;
+            BeginRun();   // the HUD is stood down behind the boot title; the band only draws on a run
 
-            var driver = _driverObject.GetComponent<SimulationDriver>();
+            var driver = Driver;
             SimWorld world = driver.World;
 
             // The bootstrap budget spent: the next belt is a purchase this run cannot make - the click a
@@ -441,8 +704,9 @@ namespace Facet.PlayTests
         public IEnumerator AnEnemyOutOfView_IsPointedAt_FromTheEdgeOfTheScreen()
         {
             yield return null;
+            BeginRun();
 
-            var driver = _driverObject.GetComponent<SimulationDriver>();
+            var driver = Driver;
             SimWorld world = driver.World;
             int before = Vertices("ThreatRadar");
 
@@ -466,6 +730,7 @@ namespace Facet.PlayTests
         public IEnumerator AMapWithItsOwnGround_DrawsIt()
         {
             yield return null;
+            BeginRun();
 
             Assert.Greater(Vertices("Terrain"), 0, "the map's own rock and water are drawn");
             Assert.Greater(Vertices("Grid"), 0, "and the ground they stand on is still drawn under them");

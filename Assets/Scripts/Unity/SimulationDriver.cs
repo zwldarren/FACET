@@ -33,8 +33,9 @@ namespace Facet.Game
 
         [Header("Progress")]
         [Tooltip("Which map of the campaign to start on, when the scene wants a specific one. Left at 0, " +
-            "the campaign opens on its frontier - the first map the saved progress has not cleared, and " +
-            "the first map alone on a fresh profile.")]
+            "the game opens on its title screen and the campaign's frontier - the first map the saved " +
+            "progress has not cleared, and the first map alone on a fresh profile. A named map boots " +
+            "straight into that map instead, skipping the title, which is the door a scene under test uses.")]
         [SerializeField] private int startMapIndex = 0;
 
         [Header("Views")]
@@ -92,9 +93,9 @@ namespace Facet.Game
         /// for a driver that never built any).</summary>
         private HudView _hud;
 
-        /// <summary>The shell: the level list, the in-run menu, and the title screen the menu leads to.
-        /// Null for a driver that built no views; it asks the driver for every transition rather than
-        /// touching the world itself.</summary>
+        /// <summary>The shell: the title screen (the main menu), the in-run pause menu with the level list
+        /// and the help card behind it. Null for a driver that built no views; it asks the driver for
+        /// every transition rather than touching the world itself.</summary>
         private ShellView _shell;
 
         /// <summary>The cleared count last written to the store. The world reports its win every frame
@@ -187,12 +188,20 @@ namespace Facet.Game
                 return;
             }
 
-            // M opens the in-run menu. Read here rather than in the shell, because the driver is what
-            // holds the run, and read before the devices are sampled so the press cannot also build.
-            if (_shell != null && Keyboard.current != null && Keyboard.current.mKey.wasPressedThisFrame)
+            // Esc and M open the pause menu - the one in-run hub, the same door the HUD's menu button
+            // asks for. Read here rather than in the shell, because the driver is what holds the run, and
+            // read before the devices are sampled so the press cannot also build. Esc still drops a
+            // selected building first: the key that reads the map should not also stop the run, so the
+            // menu only opens when there is no placement on the cursor to put down.
+            if (_shell != null && Keyboard.current != null)
             {
-                OpenMenu();
-                return;
+                bool menu = Keyboard.current.mKey.wasPressedThisFrame;
+                bool escape = Keyboard.current.escapeKey.wasPressedThisFrame && World.SelectedKind == null;
+                if (menu || escape)
+                {
+                    OpenMenu();
+                    return;
+                }
             }
 
             if (_input.ConsumePauseToggle())
@@ -294,11 +303,15 @@ namespace Facet.Game
             _writtenCleared = cleared;
         }
 
-        /// <summary>Open the in-run menu over the run the player is in. The shell draws over it and the
-        /// driver holds it, so nothing the menu reads can also be a key the run answers.</summary>
-        private void OpenMenu()
+        /// <summary>Open the pause menu over the run the player is in. The shell draws over it and the
+        /// driver holds it, so nothing the menu reads can also be a key the run answers. Public because
+        /// its three callers are the driver's own Esc/M reading, the HUD's menu button and a PlayMode
+        /// test, and they all mean the same door.</summary>
+        public void OpenMenu()
         {
-            _shell.ShowLevels(true);
+            if (_shell == null) return;
+
+            _shell.ShowPause();
             SetRunHeld(true);
         }
 
@@ -313,11 +326,14 @@ namespace Facet.Game
 
         /// <summary>The shell's "play" door: open the map it asked for as a fresh run. A run is one run, so
         /// a map is always built again - the world behind a menu is never carried past it. Endless is the
-        /// same map with its wave table unbounded, which is the only thing the flag changes.</summary>
-        private void PlayMap(int index, bool endless)
+        /// same map with its wave table unbounded, which is the only thing the flag changes.
+        ///
+        /// Public because it is also the door out of the boot title: a caller that starts a run this way
+        /// gets exactly what the title's play button gets, devices and clock handed back included.</summary>
+        public void PlayMap(int index, bool endless)
         {
             SetRunHeld(false);
-            _shell.Close();
+            if (_shell != null) _shell.Close();
 
             Campaign.StartMap(index);
             if (endless) LoadMap(Catalog.At(Campaign.MapIndex).WithEndless());
@@ -326,16 +342,40 @@ namespace Facet.Game
             PersistProgress();
         }
 
-        /// <summary>The in-run menu's back door: the run behind it carries on exactly where it was held.</summary>
-        private void ResumeRun()
+        /// <summary>The pause menu's back door: the run behind it carries on exactly where it was held,
+        /// pause state and clock gear included - the menu never touched either.</summary>
+        public void ResumeRun()
         {
+            if (_shell == null) return;
+
             _shell.Close();
             SetRunHeld(false);
         }
 
-        /// <summary>The in-run menu's far door: leave the run for the title. The run behind stays built but
-        /// held - picking a map from there builds that map's own world, so nothing is carried across.</summary>
-        private void ReturnToTitle() => _shell.ShowTitle();
+        /// <summary>The pause menu's restart door: start this map's run over. The request goes through the
+        /// world and lands on the next tick, exactly as the R key's does - a click happens between ticks
+        /// and the world is the one that knows the order. Closing the shell first is what lets that tick
+        /// happen; the world's restart resets its own pause and status.</summary>
+        public void RestartRun()
+        {
+            if (_shell == null) return;
+
+            _shell.Close();
+            SetRunHeld(false);
+            World.RequestRestart();
+        }
+
+        /// <summary>The pause menu's far door: leave the run for the title, the main menu. The run behind
+        /// stays built but held - picking a map from there builds that map's own world, so nothing is
+        /// carried across - and the hold is set here rather than assumed, so the door leaves the same
+        /// state whichever screen asked for it.</summary>
+        public void ReturnToTitle()
+        {
+            if (_shell == null) return;
+
+            _shell.ShowTitle();
+            SetRunHeld(true);
+        }
 
         /// <summary>Swap in the map the campaign is now on, without reloading the scene.
         ///
@@ -367,7 +407,7 @@ namespace Facet.Game
             if (_radar != null) _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
             if (_hud != null)
                 _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,
-                    _input.RequestFilter, Clock);
+                    _input.RequestFilter, Clock, OpenMenu);
 
             Debug.Log("FACET: loaded map " + (Campaign.MapIndex + 1) + " of " + Campaign.MapCount +
                 " - " + World.Map.Name + (World.Map.GeneratedWaves < 0 ? " (endless)" : string.Empty), this);
@@ -442,7 +482,7 @@ namespace Facet.Game
 
             _hud = AddView<HudView>("Hud");
             _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,
-                _input.RequestFilter, Clock);
+                _input.RequestFilter, Clock, OpenMenu);
 
             _rig = _camera.GetComponent<CameraRig>();
             if (_rig == null) _rig = _camera.gameObject.AddComponent<CameraRig>();
@@ -451,7 +491,18 @@ namespace Facet.Game
             // The shell last: it draws over the run and asks the driver for every transition, so it is
             // handed the doors only once the HUD and the rig it will hold while it is open exist.
             _shell = AddView<ShellView>("Shell");
-            _shell.Initialize(palette, Catalog, Campaign, PlayMap, ResumeRun, ReturnToTitle);
+            _shell.Initialize(palette, Catalog, Campaign, PlayMap, ResumeRun, RestartRun, ReturnToTitle);
+
+            // The title opens the game: the run is built behind it and held, so the first frame a player
+            // sees is the wordmark rather than a map already under way. It is the same hold the pause menu
+            // uses - devices, clock and HUD all stood down - and the play button is the one door out.
+            // A scene that names a start map is the test door and boots straight into it instead, which is
+            // what keeps Start Map Index doing what it says.
+            if (startMapIndex <= 0)
+            {
+                _shell.ShowTitle();
+                SetRunHeld(true);
+            }
         }
 
         private T AddView<T>(string viewName) where T : Component

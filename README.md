@@ -10,9 +10,16 @@ The names this codebase uses for its own concepts are in [GLOSSARY.md](GLOSSARY.
 ## Getting started
 
 Open the project in Unity `6000.3.23f1` and press Play with `Assets/Scenes/Main.unity` open. The
-scene holds a `Main Camera` and one object with `SimulationDriver`; the driver builds every view at
-runtime (terrain, machines, belts, items, enemies, shots, cursor, HUD), so there are no prefabs to
-wire. `SimulationDriver`'s **Start Map Index** boots straight into any map for testing.
+scene opens on the title screen - Play or Enter starts the campaign at its frontier map, and the run
+behind the title is held until then, so no time passes or keys reach it. In a run, **Esc or M** (or the
+**MENU** button in the HUD's top-right cluster) opens the pause menu: resume, restart this run, the map
+list, how to play, and main menu. The two doors that throw the run away - restart and main menu - each
+take a second press on that button: the first arms it and says so, because the run is not saved;
+cleared maps are kept either way.
+
+The scene holds a `Main Camera` and one object with `SimulationDriver`; the driver builds every view at
+runtime (terrain, machines, belts, items, enemies, shots, cursor, HUD), so there are no prefabs to wire.
+`SimulationDriver`'s **Start Map Index** boots straight into any map for testing and skips the title.
 
 ## Development
 

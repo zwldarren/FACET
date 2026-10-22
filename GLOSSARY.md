@@ -307,6 +307,26 @@ The project introduction is in [README.md](README.md); this is only the naming.
   any mineral with it, and `PaintOre` writes the one place a vein lives). A query that resized the map
   under a repaint, with no Undo and no dirty, was the bug this rule retired.
 
+## The shell
+
+- **Title screen** (`ShellView.Title`) - the game's boot screen and main menu: the wordmark, the subtitle
+  and play / maps / how to play. The scene opens on it with the run built and held behind it, and the play
+  button hands the clock back and opens the campaign's frontier map. It is also where the pause menu's far
+  door lands. A scene that names a `startMapIndex` boots straight into that map instead, title skipped -
+  the door a scene under test uses.
+- **Pause menu** (`ShellView.Pause`) - the in-run hub, opened by Esc, M or the HUD's MENU button: resume,
+  restart this run, the map list, how to play, and main menu (plus quit where the host has one). The map
+  list opened from it goes back to it, not to the run, so every in-run screen has one parent.
+- **Armed door** (`ShellView.RequestMainMenu`, `ShellView.RequestRestart`) - the pause menu's two
+  irreversible clicks, and why each takes two: the first press renames its button ("abandon this run?" /
+  "restart this run?") in the warning ink, the second takes it, and Escape or any other screen disarms it.
+  Only one door is armed at a time. Progress is safe either way - cleared maps were written when they were
+  cleared - but the factory is not saved, so both doors that discard it ask twice.
+- **Shell hold** - the shell's one effect on the run: while it stands the driver samples no devices and
+  ticks no world, and the HUD and the camera rig are stood down with it, so no second of a run is spent
+  behind a menu and no key aimed at the menu reaches the simulation. Resume hands it back; the world's own
+  pause state and clock gear are untouched by the menu and return exactly as they were.
+
 ## The run
 
 - **Tick** - one step of the fixed-timestep simulation; the eight-step order inside it is

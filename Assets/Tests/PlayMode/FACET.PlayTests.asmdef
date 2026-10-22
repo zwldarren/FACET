@@ -4,6 +4,8 @@
     "references": [
         "FACET.Core",
         "FACET.Game",
+        "Unity.InputSystem",
+        "Unity.InputSystem.TestFramework",
         "UnityEngine.TestRunner"
     ],
     "includePlatforms": [],

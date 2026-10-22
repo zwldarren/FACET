@@ -17,9 +17,9 @@ namespace Facet.Game
     /// The player's whole operating surface: a status rail top-left (the map and its wave, the Core's
     /// health and the wave's clock as two bars, the wave's bill of materials as chips, and two diagnostic
     /// lines), the stockpile floating beside it as a shape, a number and the run's seed with no panel of its
-    /// own, a controls cluster top-right (the wave, pause, speed gear and help, with the keyboard and restart
-    /// behind the help card), a clickable build bar centred along the bottom, and an info card above it
-    /// describing whichever building is hovered, selected - or, with nothing selected, read (see
+    /// own, a controls cluster top-right (the wave, pause, speed gear, menu and help, with the keyboard and
+    /// restart behind the help card), a clickable build bar centred along the bottom, and an info card above
+    /// it describing whichever building is hovered, selected - or, with nothing selected, read (see
     /// <see cref="RefreshInspect"/>).
     ///
     /// The card reports, in the order the questions come: is my bank holding, how long do I have, what is
@@ -74,6 +74,10 @@ namespace Facet.Game
         /// still draws.</summary>
         private Action<BuildKind?> _selectKind;
         private Action<int> _rotate;
+
+        /// <summary>The cluster's way out of the run: the driver's pause-menu door, the same one Esc opens.
+        /// Null for a HUD the driver did not wire, in which case the button draws and does nothing.</summary>
+        private Action _openMenu;
 
         /// <summary>
         /// The sorter picker's way back into the input latch: re-route the sorter at this cell. It is a
@@ -300,7 +304,7 @@ namespace Facet.Game
         /// sorter's picker draw without them, they just cannot be clicked.</summary>
         public void Initialize(SimWorld world, Palette palette, CampaignState campaign = null,
             Action<BuildKind?> selectKind = null, Action<int> rotate = null, MapCatalog catalog = null,
-            Action<Int2, ShapeFilter> setFilter = null, TickClock clock = null)
+            Action<Int2, ShapeFilter> setFilter = null, TickClock clock = null, Action openMenu = null)
         {
             _world = world;
             if (clock != null) _clock = clock;
@@ -310,6 +314,7 @@ namespace Facet.Game
             if (selectKind != null) _selectKind = selectKind;
             if (rotate != null) _rotate = rotate;
             if (setFilter != null) _setFilter = setFilter;
+            if (openMenu != null) _openMenu = openMenu;
 
             if (_icons == null) _icons = new HudIcons(palette);
 
@@ -668,12 +673,13 @@ namespace Facet.Game
             return panel;
         }
 
-        /// <summary>The controls cluster: wave, pause, gear and help, four small buttons in the screen's
-        /// top-right corner. The keyboard list is reference material and lives behind the help button, in
-        /// <see cref="BuildHelp"/>. Pause stays out here - pausing is a mid-play act - while restart stays
-        /// inside the card, one deliberate click further from a misfire. The wave button moved here from
-        /// the status rail's last row: it is a time control like pause and the gear, and the rail needed
-        /// the row back for its diagnostics.
+        /// <summary>The controls cluster: wave, pause, gear, menu and help, five small controls in the
+        /// screen's top-right corner. The keyboard list is reference material and lives behind the help
+        /// button, in <see cref="BuildHelp"/>. Pause stays out here - pausing is a mid-play act - while
+        /// restart stays inside the card, one deliberate click further from a misfire. The wave button moved
+        /// here from the status rail's last row: it is a time control like pause and the gear, and the rail
+        /// needed the row back for its diagnostics. The menu button is the clickable form of Esc: it opens
+        /// the shell's pause menu, so a player who never learns a key still has a way back to the title.
         /// </summary>
         private ControlsPanel BuildControls()
         {
@@ -717,8 +723,22 @@ namespace Facet.Game
             HudUi.TopLeft(panel.Help.Root,
                 (HudLayout.ControlsWidth - HudLayout.ControlsHeight) * _scale, 0f, side, side);
 
+            // The way out sits between the gear and the help: the cluster reads left to right as
+            // "what the run is doing" and then "what I can do about it", with the door to the menu
+            // one word away from the run's own controls rather than hidden behind a glyph.
+            panel.Menu = HudUi.Button(panel.Root, "menu", HudLayout.MenuButtonWidth * _scale, side, "MENU",
+                FontSize(HudType.Micro), _palette.HudText, PressMenu);
+            HudUi.TopLeft(panel.Menu.Root,
+                (HudLayout.WaveButtonWidth + 2f * HudLayout.ControlsHeight + 3f * HudLayout.ControlGap) * _scale,
+                0f, HudLayout.MenuButtonWidth * _scale, side);
+
             return panel;
         }
+
+        /// <summary>The menu button's press: the driver's pause-menu door. Read through the driver rather
+        /// than toggled here because the driver owns the run's hold - the same separation the pause and
+        /// wave buttons keep.</summary>
+        private void PressMenu() => _openMenu?.Invoke();
 
         /// <summary>The help card: the keyboard, one pair of ideas per line, and the restart button - here
         /// rather than on the cluster because a misplaced click must never restart the run, and opening a card
@@ -1967,7 +1987,7 @@ namespace Facet.Game
                 "Q / E turn  ·  drag lays belts",
                 "T how to play  ·  H this card",
                 "RMB deletes, or clears a jam",
-                "Esc reads  ·  C goes to the Core",
+                "Esc / M menu  ·  C the Core",
                 "N the wave  ·  Space  ·  R restart",
                 "[ / ] speed 1x - 3x",
             };
@@ -3027,6 +3047,7 @@ namespace Facet.Game
         {
             Dress(_controls.Pause, ButtonFill);
             Dress(_controls.Gear, ButtonFill);
+            Dress(_controls.Menu, ButtonFill);
             Dress(_controls.Help, ButtonFill);
             Dress(_help.Restart, ButtonFill);
             DressGhost(_help.Close);
@@ -3199,6 +3220,7 @@ namespace Facet.Game
             public HudBox PauseBarA;
             public HudBox PauseBarB;
             public HudButton Gear;
+            public HudButton Menu;
             public HudButton Help;
         }
 
