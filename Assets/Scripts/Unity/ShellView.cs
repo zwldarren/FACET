@@ -282,7 +282,7 @@ namespace Facet.Game
             HudText footer = Label(root, "footer", HudType.Micro, FontStyle.Normal, TextAnchor.LowerCenter);
             HudUi.TopCentre(footer.Rect, Screen.height - 30f * _scale, Screen.width - 40f, 18f * _scale);
             footer.Set("a factory-defence prototype  ·  github.com/zwldarren/FACET",
-                Blend(_palette.HudText, _palette.HudPanel, 0.45f));
+                HudInk.Blend(_palette.HudText, _palette.HudPanel, 0.45f));
         }
 
         /// <summary>
@@ -393,7 +393,7 @@ namespace Facet.Game
             HudUi.TopLeft(count.Rect, 14f * _scale, 12f * _scale,
                 cardWidth - (14f + (InRun ? 160f : 100f)) * _scale, 16f * _scale);
             count.Set(_campaign.ClearedCount + " of " + _campaign.MapCount + " cleared",
-                Blend(_palette.HudText, _palette.HudPanel, 0.45f));
+                HudInk.Blend(_palette.HudText, _palette.HudPanel, 0.45f));
 
             // The one way out, top-right where the help card's close button sits. Over a run it goes
             // back to that run; from the title's level list it goes back to the title.
@@ -505,7 +505,7 @@ namespace Facet.Game
         private Color StateColour(int index)
         {
             if (index == _campaign.MapIndex && InRun) return _palette.HudAccent;
-            if (index < _campaign.ClearedCount) return _palette.HudGood;
+            if (index < _campaign.ClearedCount) return HudInk.Good(_palette);
             if (index == _campaign.ClearedCount) return _palette.HudAccent;
             return LockedText();
         }
@@ -572,7 +572,7 @@ namespace Facet.Game
             return text.ToString();
         }
 
-        private Color LockedText() => Blend(_palette.HudText, _palette.HudPanel, 0.55f);
+        private Color LockedText() => HudInk.Blend(_palette.HudText, _palette.HudPanel, 0.55f);
 
         // ------------------------------------------------------------------ the help card
 
@@ -693,12 +693,12 @@ namespace Facet.Game
 
             if (_primary.Contains(button))
             {
-                button.Fill.Set(hovered ? Blend(_palette.HudAccent, _palette.HudText, 0.16f) : _palette.HudAccent);
-                button.Border.Set(hovered ? _palette.HudText : Blend(_palette.HudAccent, _palette.HudPanel, 0.35f));
+                button.Fill.Set(hovered ? HudInk.Blend(_palette.HudAccent, _palette.HudText, 0.16f) : _palette.HudAccent);
+                button.Border.Set(hovered ? _palette.HudText : HudInk.Blend(_palette.HudAccent, _palette.HudPanel, 0.35f));
                 return;
             }
 
-            button.Fill.Set(hovered ? Blend(ButtonFill, _palette.HudText, 0.14f) : ButtonFill);
+            button.Fill.Set(hovered ? HudInk.Blend(ButtonFill, _palette.HudText, 0.14f) : ButtonFill);
             button.Border.Set(hovered ? _palette.HudAccent : PanelBorder());
         }
 
@@ -715,8 +715,6 @@ namespace Facet.Game
         private Color PanelBorder() => HudInk.Edge(_palette);
 
         private Color ButtonFill => HudInk.Raised(_palette);
-
-        private static Color Blend(Color from, Color to, float t) => Color.Lerp(from, to, t);
 
         // ------------------------------------------------------------------ geometry
 

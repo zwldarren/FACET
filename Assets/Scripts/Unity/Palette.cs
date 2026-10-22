@@ -165,10 +165,6 @@ namespace Facet.Game
         [Tooltip("HUD warning: a jam, a leaking Core, a lost run, an unaffordable cost.")]
         public Color HudWarn = new Color(0.9333f, 0.4431f, 0.3216f, 1f);
 
-        [Tooltip("Kept as an alias of HudAccent for assets authored before the HUD's palette was cut to " +
-            "six hues: good news is the focus hue, not a seventh colour.")]
-        public Color HudGood = new Color(0.4863f, 0.7412f, 0.9098f, 1f);
-
         [Header("Material")]
         [Tooltip("The one material every view draws with: unlit, multiplying the meshes' vertex " +
             "colours (the built-in 'Sprites/Default' shader is the one that does). It lives as an " +

@@ -662,7 +662,7 @@ namespace Facet.Game
                 "<color=" + accent + ">3</color>  Each wave is weak to the shape printed above it.\n" +
                 "<color=" + accent + ">4</color>  Cutter (3) splits, Rotator (4) turns  ·  Q/E turns a ghost.\n" +
                 "<color=" + accent + ">5</color>  Belt it to a Turret (0): the exact shape does full damage.",
-                Blend(_palette.HudText, _palette.HudPanel, 0.18f));
+                HudInk.Blend(_palette.HudText, _palette.HudPanel, 0.18f));
 
             panel.Root.gameObject.SetActive(ShowTutorial);
             return panel;
@@ -1467,18 +1467,6 @@ namespace Facet.Game
 
         /// <summary>
         /// The production line, said only when something is wrong: a segment that cannot pass its item on
-        /// first - it stops the run, not just one machine - then a gun that cannot shoot, then, once a wave
-        /// is walking in, the absence of anything to shoot it with. When the defence is fed and the belts
-        /// are clear the line stays silent: "all clear" printed every second is a line nobody reads. Null
-        /// means no news, and the line is hidden.
-        ///
-        /// Jammed and blocked are two words for one symptom, and both are counted here because they are the
-        /// two ways a line stops: a jam is an item a machine refused, a block is an item with nowhere to go
-        /// at all. The block is the one that used to be silent - a line ending in the air reddened nothing,
-        /// so a factory came to a standstill with nothing on the HUD to say why.
-        /// </summary>
-        /// <summary>
-        /// The production line, said only when something is wrong: a segment that cannot pass its item on
         /// first - it stops the run, not just one machine - then a machine holding a piece it has nowhere to
         /// put, then a gun that cannot shoot, then, once a wave
         /// is walking in, the absence of anything to shoot it with. When the defence is fed and the belts
@@ -1790,13 +1778,11 @@ namespace Facet.Game
         /// player's first building, not for time.</summary>
         private void DrawWaveClock()
         {
-            WaveDirector waves = _world.Waves;
             float fraction = WaveClockFraction();
 
-            // A wave being spent is good news and a countdown running is not, so the bar wears the colour of
-            // whichever it is - the same two colours the diagnostics below it are said in.
-            Color fill = waves.Phase == WavePhase.Running || waves.Phase == WavePhase.Over
-                ? HudInk.Good(_palette) : _palette.HudAccent;
+            // One hue however the clock reads: a wave being spent is good news, and good news is the
+            // focus hue here - the HUD spends no second colour on it (HudInk.Good is HudAccent by design).
+            Color fill = _palette.HudAccent;
 
             _status.Clock.Set(fraction, fill);
         }
@@ -2062,10 +2048,10 @@ namespace Facet.Game
         {
             if (tile.Locked)
             {
-                tile.Button.Fill.Set(Blend(_palette.HudPanel, _palette.HudText, 0.03f));
-                tile.Keycap.Set(Blend(_palette.HudPanel, _palette.HudText, 0.05f));
+                tile.Button.Fill.Set(HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.03f));
+                tile.Keycap.Set(HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.05f));
                 tile.Border.Show(true);
-                tile.Border.Set(Blend(_palette.HudPanel, _palette.HudText, 0.08f));
+                tile.Border.Set(HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.08f));
                 tile.Hotkey.SetColour(HudInk.Faint(_palette));
                 tile.Cost.SetColour(HudInk.Faint(_palette));
                 tile.Name.SetColour(HudInk.Muted(_palette));
@@ -2074,15 +2060,15 @@ namespace Facet.Game
 
             // The tile wears one of the ink levels plus the one focus colour; roles are words on the card,
             // not hues on the keys, so a bar of eleven tiles does not look like a paint chart.
-            Color fill = Blend(_palette.HudPanel, _palette.HudText, 0.11f);
-            if (tile.Selected) fill = Blend(_palette.HudPanel, _palette.HudAccent, 0.22f);
-            else if (tile.Hovered) fill = Blend(_palette.HudPanel, _palette.HudText, 0.19f);
-            else if (!tile.Affordable) fill = Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.08f);
+            Color fill = HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.11f);
+            if (tile.Selected) fill = HudInk.Blend(_palette.HudPanel, _palette.HudAccent, 0.22f);
+            else if (tile.Hovered) fill = HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.19f);
+            else if (!tile.Affordable) fill = HudInk.Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.08f);
             tile.Button.Fill.Set(fill);
 
             tile.Keycap.Set(tile.Selected
-                ? Blend(_palette.HudPanel, _palette.HudAccent, 0.40f)
-                : Blend(_palette.HudPanel, _palette.HudText, 0.18f));
+                ? HudInk.Blend(_palette.HudPanel, _palette.HudAccent, 0.40f)
+                : HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.18f));
 
             // Every tile keeps a hairline: eleven surfaces need an edge to read as eleven keys rather than
             // as one dark strip with floating words on it.
@@ -2090,8 +2076,8 @@ namespace Facet.Game
             tile.Border.Set(tile.Selected
                 ? _palette.HudAccent
                 : tile.Hovered
-                    ? Blend(_palette.HudPanel, _palette.HudText, 0.38f)
-                    : Blend(_palette.HudPanel, _palette.HudText, 0.18f));
+                    ? HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.38f)
+                    : HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.18f));
 
             tile.Hotkey.SetColour(tile.Selected ? _palette.HudText : HudInk.Muted(_palette));
 
@@ -2639,7 +2625,7 @@ namespace Facet.Game
         {
             Color title = accent == _palette.HudAccent
                 ? _palette.HudText
-                : Blend(accent, _palette.HudText, 0.35f);
+                : HudInk.Blend(accent, _palette.HudText, 0.35f);
 
             _info.InspectTitle.Set(name, title);
             _info.InspectRight.Set(right, HudInk.Muted(_palette));
@@ -2734,7 +2720,7 @@ namespace Facet.Game
             Color colour = TerrainRenderer.ColorOf(kind, _palette);
             InspectHeader(kind.ToString(), colour, cell.ToString());
 
-            InspectLine(ObstacleNote(kind), Blend(colour, _palette.HudText, 0.6f));
+            InspectLine(ObstacleNote(kind), HudInk.Blend(colour, _palette.HudText, 0.6f));
             InspectLine("map ground - nothing may be built on it", HudInk.Muted(_palette));
         }
 
@@ -2880,7 +2866,7 @@ namespace Facet.Game
             if (kind.IsObstacle())
             {
                 TooltipHeader(kind.ToString(), TerrainRenderer.ColorOf(kind, _palette));
-                TooltipLine(ObstacleNote(kind), Blend(TerrainRenderer.ColorOf(kind, _palette), _palette.HudText, 0.6f));
+                TooltipLine(ObstacleNote(kind), HudInk.Blend(TerrainRenderer.ColorOf(kind, _palette), _palette.HudText, 0.6f));
                 FinishTooltip();
                 return true;
             }
@@ -3068,7 +3054,7 @@ namespace Facet.Game
                     ? 1f
                     : 0.86f + 0.14f * (0.5f + 0.5f * Mathf.Sin(phase * (2f * Mathf.PI)));
                 Color fill = WithAlpha(_palette.HudAccent, pulse);
-                _controls.Wave.Fill.Set(_controls.Wave.Hovered ? Blend(fill, _palette.HudText, 0.16f) : fill);
+                _controls.Wave.Fill.Set(_controls.Wave.Hovered ? HudInk.Blend(fill, _palette.HudText, 0.16f) : fill);
                 _controls.Wave.Border.Set(Color.clear);
             }
         }
@@ -3078,7 +3064,7 @@ namespace Facet.Game
         private void Dress(HudButton button, Color fill)
         {
             bool hovered = button.Hovered;
-            button.Fill.Set(hovered ? Blend(fill, _palette.HudText, 0.14f) : fill);
+            button.Fill.Set(hovered ? HudInk.Blend(fill, _palette.HudText, 0.14f) : fill);
             button.Border.Set(hovered ? _palette.HudAccent : PanelBorder());
         }
 
@@ -3088,9 +3074,9 @@ namespace Facet.Game
         {
             button.Fill.Set(button.Hovered
                 ? HudInk.Raised(_palette)
-                : Blend(_palette.HudPanel, _palette.HudText, 0.045f));
+                : HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.045f));
             button.Border.Set(button.Hovered
-                ? Blend(_palette.HudPanel, _palette.HudText, 0.30f)
+                ? HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.30f)
                 : HudInk.Edge(_palette));
         }
 
@@ -3150,8 +3136,6 @@ namespace Facet.Game
         /// circles" is the HUD's mistake to avoid, not the algebra's.</summary>
         private static string Plural(string word, int count)
             => count == 1 ? word : word + "s";
-
-        private static Color Blend(Color from, Color to, float t) => Color.Lerp(from, to, t);
 
         /// <summary>The same colour, faded: what a refusal and the number it is about are drawn with
         /// while they age out.</summary>

@@ -50,9 +50,5 @@ namespace Facet.Game
         public static Color Good(Palette palette) => palette.HudAccent;
 
         public static Color Blend(Color from, Color to, float t) => Color.Lerp(from, to, t);
-
-        /// <summary>The same colour, faded: for a refusal or a hit that ages out.</summary>
-        public static Color Fade(Color colour, float alpha)
-            => new Color(colour.r, colour.g, colour.b, colour.a * alpha);
     }
 }

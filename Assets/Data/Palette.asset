@@ -49,4 +49,3 @@ MonoBehaviour:
   HudAccent: {r: 0.4863, g: 0.7412, b: 0.9098, a: 1}
   HudShadow: {r: 0.03, g: 0.035, b: 0.04, a: 0.42}
   HudWarn: {r: 0.9333, g: 0.4431, b: 0.3216, a: 1}
-  HudGood: {r: 0.4863, g: 0.7412, b: 0.9098, a: 1}
