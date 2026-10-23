@@ -60,32 +60,33 @@ namespace Facet.Game
         /// <summary>The line-stoppage form's submit address, ending in <c>/formResponse</c> - a second form,
         /// set up exactly like the one above, with short-answer questions titled Session, Map, Wave, Jammed,
         /// Blocked, Stalled, Outcome, Build. Empty switches this metric off without touching the other.</summary>
-        public const string StoppageFormResponseUrl = "";
+        public const string StoppageFormResponseUrl =
+            "https://docs.google.com/forms/d/e/1FAIpQLSdwGugV91YlhJ1LvhogRMgs92x36AjB0vMSpIDVwe4RcNPh0w/formResponse";
 
         /// <summary>The <c>Session</c> question: the same per-page-load id the matched-round rows carry, so
         /// the two sheets can be joined row for row.</summary>
-        public const string EntryStopSession = "";
+        public const string EntryStopSession = "entry.1280893396";
 
         /// <summary>The <c>Map</c> question.</summary>
-        public const string EntryStopMap = "";
+        public const string EntryStopMap = "entry.1850395391";
 
         /// <summary>The <c>Wave</c> question: the wave the row ends with, 0 for a stretch abandoned between waves.</summary>
-        public const string EntryStopWave = "";
+        public const string EntryStopWave = "entry.105302095";
 
         /// <summary>The <c>Jammed</c> question: belts a machine refused the shape on.</summary>
-        public const string EntryStopJammed = "";
+        public const string EntryStopJammed = "entry.422896905";
 
         /// <summary>The <c>Blocked</c> question: lines that ended on bare ground, the map's edge or a wall.</summary>
-        public const string EntryStopBlocked = "";
+        public const string EntryStopBlocked = "entry.444497167";
 
         /// <summary>The <c>Stalled</c> question: machines whose piece had nowhere to go.</summary>
-        public const string EntryStopStalled = "";
+        public const string EntryStopStalled = "entry.1001425333";
 
         /// <summary>The <c>Outcome</c> question: cleared, won, lost or abandoned.</summary>
-        public const string EntryStopOutcome = "";
+        public const string EntryStopOutcome = "entry.1373610827";
 
         /// <summary>The <c>Build</c> question: <see cref="BuildLabel"/>.</summary>
-        public const string EntryStopBuild = "";
+        public const string EntryStopBuild = "entry.996622364";
 
         /// <summary>Whether the line-stoppage form is named - its own switch, so either metric can be sent
         /// without the other.</summary>
