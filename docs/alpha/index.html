@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" style="--w: 960; --h: 600;">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FACET - a factory-defence game</title>
+    <meta name="description" content="An enemy's weakness is a shape, and what your factory builds is what your guns fire.">
+    <link rel="icon" type="image/svg+xml" href="TemplateData/favicon.svg">
+    <link rel="stylesheet" href="TemplateData/style.css">
+  </head>
+  <body>
+    <main class="page">
+      <header class="masthead">
+        <h1 class="wordmark">FACET</h1>
+        <p class="tagline">An enemy's weakness is a shape, and what your factory builds is what your guns fire.</p>
+      </header>
+
+      <!-- The play area: a fixed 960x600 frame (the size the HUD is laid out for), scaled down to fit a smaller
+           window and letterboxed in fullscreen. The canvas fills the frame; Unity keeps its render size matched
+           to the canvas, so the game always sees the same aspect. -->
+      <section class="frame" id="frame">
+        <canvas id="game" tabindex="-1" aria-label="FACET"></canvas>
+
+        <div class="cover" id="loading">
+          <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+            <!-- The game's own language: four quadrants, two minerals - a circle half over a square half. -->
+            <path class="q circle" d="M32 32 L32 6 A26 26 0 0 0 6 32 Z"/>
+            <path class="q circle" d="M32 32 L58 32 A26 26 0 0 0 32 6 Z"/>
+            <rect class="q square" x="32" y="32" width="26" height="26"/>
+            <rect class="q square" x="6" y="32" width="26" height="26"/>
+          </svg>
+          <p class="cover-title">FACET</p>
+          <p class="cover-line">Drill ore, belt it to the Core, cut and turn it into the shape the next wave is weak to,
+            and feed it to your guns.</p>
+          <div class="bar" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" id="bar">
+            <div class="bar-fill" id="bar-fill"></div>
+          </div>
+          <p class="cover-status" id="status">Loading...</p>
+        </div>
+
+        <div class="cover cover-error" id="failure" hidden>
+          <p class="cover-title">FACET could not start</p>
+          <p class="cover-line" id="failure-text"></p>
+        </div>
+      </section>
+
+      <nav class="controls" aria-label="Player controls">
+        <p class="hint">Click the game first, then: WASD to look around · mouse wheel to zoom · C finds your Core · T shows the guide</p>
+        <button type="button" class="button" id="fullscreen" disabled>Fullscreen</button>
+      </nav>
+
+      <div class="notes" id="notes"></div>
+
+      <noscript>
+        <p class="notice">FACET runs in your browser and needs JavaScript turned on.</p>
+      </noscript>
+
+      <footer class="footer">
+        <span>FACET 1.0</span>
+        <span>CSCI 526 · USC</span>
+        <a href="https://github.com/zwldarren/FACET">Source on GitHub</a>
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        var frame = document.getElementById("frame");
+        var canvas = document.getElementById("game");
+        var loading = document.getElementById("loading");
+        var fill = document.getElementById("bar-fill");
+        var bar = document.getElementById("bar");
+        var status = document.getElementById("status");
+        var failure = document.getElementById("failure");
+        var failureText = document.getElementById("failure-text");
+        var fullscreen = document.getElementById("fullscreen");
+        var notes = document.getElementById("notes");
+
+        // The game's own words for the one thing that can go wrong before it starts. Unity's template showed an
+        // alert(); a page that is the game's says it in the frame.
+        function fail(message) {
+          loading.hidden = true;
+          failure.hidden = false;
+          failureText.textContent = message;
+        }
+
+        // Unity reports non-fatal warnings through this. They go under the frame and fade, never over the game.
+        function note(message, type) {
+          if (type === "error") { fail(String(message)); return; }
+          var line = document.createElement("p");
+          line.className = "note" + (type === "warning" ? " note-warning" : "");
+          line.textContent = String(message).replace(/<[^>]*>/g, "");
+          notes.appendChild(line);
+          setTimeout(function () { if (line.parentNode) line.parentNode.removeChild(line); }, 6000);
+        }
+
+        var gl = null;
+        try { gl = document.createElement("canvas").getContext("webgl2"); } catch (e) { gl = null; }
+        if (!gl) {
+          fail("Your browser has WebGL 2 turned off or does not support it. FACET plays in a recent desktop " +
+               "Chrome, Edge, Firefox or Safari - with hardware acceleration switched on.");
+          return;
+        }
+
+        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+          note("FACET is built for a keyboard and mouse. It will load here, but it plays best on a desktop.",
+               "warning");
+        }
+
+        var buildUrl = "Build";
+        var config = {
+          arguments: [],
+          dataUrl: buildUrl + "/WebGL.data.unityweb",
+          frameworkUrl: buildUrl + "/WebGL.framework.js.unityweb",
+          codeUrl: buildUrl + "/WebGL.wasm.unityweb",
+          streamingAssetsUrl: "StreamingAssets",
+          companyName: "DefaultCompany",
+          productName: "FACET",
+          productVersion: "1.0",
+          showBanner: note,
+        };
+
+        function progress(p) {
+          var percent = Math.round(100 * p);
+          fill.style.width = percent + "%";
+          bar.setAttribute("aria-valuenow", String(percent));
+          status.textContent = p < 0.9 ? "Loading... " + percent + "%" : "Starting the factory...";
+        }
+
+        // Fullscreen is the frame, not the canvas: the frame keeps the game's aspect and letterboxes the rest,
+        // where Unity's own SetFullscreen would stretch the canvas to whatever shape the screen is.
+        function toggleFullscreen() {
+          if (document.fullscreenElement) { document.exitFullscreen().catch(function () {}); return; }
+          if (frame.requestFullscreen) frame.requestFullscreen().catch(function () {});
+        }
+
+        // A fullscreen browser keeps Escape for itself: the press leaves fullscreen and never reaches the
+        // game, whose menu key it is. The Keyboard Lock API takes the key back for the page - fullscreen
+        // only, and Chromium only - so Escape reaches the player, and the browser's own way out is gone
+        // with it. That way out becomes the game's: the pause card's "leave fullscreen" row, and Escape on
+        // the title. Where the API is missing or refuses, Escape goes on leaving fullscreen as it always
+        // did, and the game keeps that row hidden because there is nothing for it to do.
+        function holdEscape() {
+          if (!navigator.keyboard || !navigator.keyboard.lock) return;
+          navigator.keyboard.lock(["Escape"]).catch(function () {});
+        }
+
+        function releaseEscape() {
+          if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock();
+        }
+
+        document.addEventListener("fullscreenchange", function () {
+          if (document.fullscreenElement) holdEscape(); else releaseEscape();
+        });
+
+        // What the game asks the page, through Assets/Plugins/WebGL/FacetPage.jslib: is the frame
+        // fullscreen, and - if it is - would it please give the window back. The shell draws its one
+        // conditional row from the first. Leaving needs no user gesture, which is what makes it the one
+        // direction a button drawn inside the game can ask for.
+        window.facetPage = {
+          fullscreen: function () { return !!document.fullscreenElement; },
+          leaveFullscreen: function () {
+            if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+          }
+        };
+
+        var script = document.createElement("script");
+        script.src = buildUrl + "/WebGL.loader.js";
+        script.onload = function () {
+          createUnityInstance(canvas, config, progress).then(function () {
+            loading.hidden = true;
+            fullscreen.disabled = !document.fullscreenEnabled;
+            fullscreen.addEventListener("click", toggleFullscreen);
+            canvas.focus();
+          }).catch(function (message) {
+            fail(String(message));
+          });
+        };
+        script.onerror = function () {
+          fail("The game files did not download. Check your connection and reload the page.");
+        };
+        document.body.appendChild(script);
+      })();
+    </script>
+  </body>
+</html>
