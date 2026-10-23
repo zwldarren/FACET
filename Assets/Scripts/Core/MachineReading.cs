@@ -121,7 +121,11 @@ namespace Facet.Core
                     return "turns a shape a quarter clockwise · the orientation fix";
 
                 case BehaviorKind.Stacker:
-                    return "unions two shapes that do not overlap · an overlapping pair waits on its belt";
+                    // An example rather than a rule (#19): the first thing a player needs to know is what the
+                    // machine is *for* - one item carrying two minerals - and the disjointness rule only makes
+                    // sense once they have that picture.
+                    return "joins two pieces into one round · a circle top half + a square bottom half make " +
+                           "one mixed shape · the two pieces must not overlap";
 
                 case BehaviorKind.Sorter:
                     // The row's words alone: what this sorter actually routes for is the machine's own
@@ -301,19 +305,34 @@ namespace Facet.Core
                     world.Machines.TryGet(cell, out MachineState state);
 
                     if (!state.Carried.IsEmpty && !state.Carried2.IsEmpty)
-                        return new ReadingNote("fusing " + state.Carried.Describe() + " + " +
-                            state.Carried2.Describe() + " · " + Percent(machine.Work) + "% through",
-                            NoteSeverity.Neutral);
-
-                    if (!state.Carried.IsEmpty)
-                        return new ReadingNote("holding " + state.Carried.Describe() +
-                            " - waiting for a piece that does not overlap it", NoteSeverity.Neutral);
+                        return new ReadingNote("joining " + state.Carried.Describe() + " + " +
+                            state.Carried2.Describe() + " into " +
+                            Shape.Stacked(state.Carried, state.Carried2).Describe() + " · " +
+                            Percent(machine.Work) + "% through", NoteSeverity.Neutral);
 
                     if (state.OutputCount > 0)
                         return new ReadingNote("holding " + state.OutputShape.Describe() +
                             " - every outlet is full", NoteSeverity.Warn);
 
-                    return new ReadingNote("idle - waiting for two pieces that fit together",
+                    if (!state.Carried.IsEmpty)
+                    {
+                        // The stall a player reads as "broken" (#19): the piece waiting at the door covers a
+                        // quarter the held piece already fills, so the machine leaves it on its belt. Said as a
+                        // warning, with the fix, because nothing else on screen explains a queue that never moves.
+                        if (TryFindOverlapping(world, cell, state.Carried, out Shape blocked))
+                            return new ReadingNote("stalled - the " + blocked.Describe() + " waiting overlaps the " +
+                                state.Carried.Describe() + " it holds · feed it the other half",
+                                NoteSeverity.Warn);
+
+                        return new ReadingNote("holding " + state.Carried.Describe() +
+                            " - waiting for a piece that fills the other half", NoteSeverity.Neutral);
+                    }
+
+                    if (TryPreviewStack(world, cell, out Shape first, out Shape second, out Shape union))
+                        return new ReadingNote("will join " + first.Describe() + " + " + second.Describe() +
+                            " into " + union.Describe(), NoteSeverity.Neutral);
+
+                    return new ReadingNote("idle - waiting for two pieces that do not overlap",
                         NoteSeverity.Neutral);
                 }
 
@@ -449,6 +468,121 @@ namespace Facet.Core
             displaced = b;
             return true;
         }
+
+        /// <summary>
+        /// What a stacker at this cell would join, read the way <see cref="TryPreviewCut"/> reads a cutter: the
+        /// items on their way in along the belts pointing into the cell, in the ports' scan order and through the
+        /// stacker's diet - the same walk its intake makes a tick later. A stacker already standing here and
+        /// holding a piece answers with that piece as <paramref name="first"/>, since it is what the next
+        /// delivery is matched against.
+        ///
+        /// The second piece is the first incoming item that does not overlap the first - which is exactly the one
+        /// the machine will take, because an overlapping delivery is skipped rather than stopped on. False when
+        /// there is no such pair: nothing to describe, and a figure drawn anyway would be a guess (#19).
+        /// </summary>
+        public static bool TryPreviewStack(SimWorld world, Int2 cell,
+            out Shape first, out Shape second, out Shape union)
+        {
+            first = Shape.None;
+            second = Shape.None;
+            union = Shape.None;
+
+            MachineDef def = world.Content.Machine(BuildKind.Stacker);
+            if (world.Machines.TryGet(cell, out MachineState standing) &&
+                world.Content.Machine(standing.Build).Behavior == BehaviorKind.Stacker)
+            {
+                if (!standing.Carried2.IsEmpty) return false;   // already joining; the live note says so
+                first = standing.Carried;
+            }
+
+            for (int i = 0; i < MachineDelivery.Ports.Length; i++)
+            {
+                if (!MachineDelivery.TryIncomingAt(world.Belts, cell, MachineDelivery.Ports[i], rejectJammed: true,
+                        out _, out BeltState state)) continue;
+                if (!MachineDelivery.Eats(in def, state.Item)) continue;
+
+                if (first.IsEmpty) { first = state.Item; continue; }
+                if (first.Overlaps(state.Item)) continue;
+
+                second = state.Item;
+                union = Shape.Stacked(first, second);
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>Is a delivery standing at this stacker's door that it will not take, because it covers a
+        /// quarter <paramref name="held"/> already fills? The stacker's stall, found with the same ready-at-the-
+        /// exit-edge test the intake uses, so the card names the stall the tick is actually in.</summary>
+        public static bool TryFindOverlapping(SimWorld world, Int2 cell, Shape held, out Shape blocked)
+        {
+            blocked = Shape.None;
+            if (held.IsEmpty) return false;
+
+            MachineDef def = world.Content.Machine(BuildKind.Stacker);
+            bool fits = false;
+            for (int i = 0; i < MachineDelivery.Ports.Length; i++)
+            {
+                if (!MachineDelivery.TryReadyAt(world.Belts, cell, MachineDelivery.Ports[i], rejectJammed: false,
+                        out _, out BeltState state)) continue;
+                if (!MachineDelivery.Eats(in def, state.Item)) continue;
+
+                if (!held.Overlaps(state.Item)) fits = true;
+                else if (blocked.IsEmpty) blocked = state.Item;
+            }
+
+            // A fitting piece at another door is about to be taken, so the overlapping one is a queue, not a stall.
+            return !blocked.IsEmpty && !fits;
+        }
+
+        // ---------------------------------------------------------------- handing over an operator
+
+        /// <summary>Does this shape carry two minerals in one item? The demand a cutter and a rotator alone can
+        /// never answer - only a stacker can put a circle piece and a square piece into one round.</summary>
+        public static bool IsMixed(Shape shape)
+        {
+            Quad seen = Quad.Empty;
+            for (int q = 0; q < 4; q++)
+            {
+                Quad at = shape.At(q);
+                if (at == Quad.Empty) continue;
+                if (seen == Quad.Empty) seen = at;
+                else if (at != seen) return true;
+            }
+            return false;
+        }
+
+        /// <summary>The operators <paramref name="map"/> hands over that <paramref name="previous"/> did not - what a
+        /// map has to introduce. With no previous map (the campaign's first, or a single-map run) it is every
+        /// operator the map has.</summary>
+        public static Operators NewOperators(MapDefinition map, MapDefinition previous)
+            => previous == null ? map.Unlocked : map.Unlocked & ~previous.Unlocked;
+
+        /// <summary>One sentence per operator, said the moment a map hands it over: what the machine is for, with
+        /// an example, rather than the build bar's rule. ASCII plus the middle dot, like every shipped HUD string.</summary>
+        public static string Introduction(Operators op)
+        {
+            // One line each, short enough for the HUD card's unwrapped Micro lines (about 58 characters).
+            switch (op)
+            {
+                case Operators.Cutter:
+                    return "Cutter splits a shape in half; Q/E picks which cut.";
+                case Operators.Rotator:
+                    return "Rotator turns a piece a quarter clockwise.";
+                case Operators.Stacker:
+                    return "Stacker joins a circle half and a square half into one.";
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(op), op, "introduce one operator at a time");
+            }
+        }
+
+        /// <summary>The line a briefing carries beside a mixed demand: why the figure is two colours, and which
+        /// machine makes it. Null for a demand that is not mixed - there is nothing extra to say.</summary>
+        public static string DemandNote(Shape demand)
+            => IsMixed(demand)
+                ? "two minerals in one round - join a half of each in a Stacker"
+                : null;
 
         /// <summary>What a placement's facing would mean - the ghost's half of <see cref="FacingNote"/>,
         /// asked before the machine exists. The build card prints it beside the rotate buttons, so a

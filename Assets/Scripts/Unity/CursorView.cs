@@ -39,6 +39,12 @@ namespace Facet.Game
         private Shape _seenStraight = Shape.None;
         private Shape _seenDisplaced = Shape.None;
 
+        /// <summary>The stacker ghost's preview (#19): the two pieces on their way in and the round they would
+        /// join into, or nothing when no disjoint pair is coming.</summary>
+        private Shape _seenStackFirst = Shape.None;
+        private Shape _seenStackSecond = Shape.None;
+        private Shape _seenStackUnion = Shape.None;
+
         /// <summary>The figures the cutter's ghost previews, at the radius and outline the belt items and the
         /// machine badges are drawn with - so a previewed half is the very figure that will ride the belt.</summary>
         private ShapeIconSet _pieceIcons;
@@ -70,6 +76,14 @@ namespace Facet.Game
             if (kind == BuildKind.Cutter && valid)
                 MachineReading.TryPreviewCut(World, cell, direction, out _, out straight, out displaced);
 
+            // The stacker's half of the same idea: what the two belts pointing into this cell would hand it,
+            // and what comes out.
+            Shape stackFirst = Shape.None;
+            Shape stackSecond = Shape.None;
+            Shape stackUnion = Shape.None;
+            if (kind.HasValue && valid && World.Content.Machine(kind.Value).Behavior == BehaviorKind.Stacker)
+                MachineReading.TryPreviewStack(World, cell, out stackFirst, out stackSecond, out stackUnion);
+
             // What the inspected cell holds, so the marker and ring follow a building placed or removed under the
             // pin rather than describing the tile it used to be.
             bool pinned = World.CanInspect(inspected);
@@ -83,6 +97,7 @@ namespace Facet.Game
                 kind == _seenKind && direction == _seenDirection &&
                 readable == _seenReadable && inspected == _seenInspected &&
                 straight == _seenStraight && displaced == _seenDisplaced &&
+                stackFirst == _seenStackFirst && stackSecond == _seenStackSecond && stackUnion == _seenStackUnion &&
                 pinned == _seenPinned && pinnedTurret == _seenPinnedTurret) return;
 
             _seenCell = cell;
@@ -98,6 +113,9 @@ namespace Facet.Game
             _seenShapes = shapes;
             _seenStraight = straight;
             _seenDisplaced = displaced;
+            _seenStackFirst = stackFirst;
+            _seenStackSecond = stackSecond;
+            _seenStackUnion = stackUnion;
             MarkDirty();
         }
 
@@ -178,6 +196,8 @@ namespace Facet.Game
                     AppendChevron(centre, _seenDirection,
                         look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, edge);
                 }
+
+                if (World.Content.Machine(kind).Behavior == BehaviorKind.Stacker) AppendStackPreview(_seenCell);
             }
 
             if (World.Content.IsTurret(kind))
@@ -250,6 +270,18 @@ namespace Facet.Game
                 AppendIcon(_pieceIcons, straight, Centre(straightCell), null);
             if (World.TileGrid.InBounds(displacedCell))
                 AppendIcon(_pieceIcons, displaced, Centre(displacedCell), null);
+        }
+
+        /// <summary>
+        /// The stacker ghost's preview (#19), the counterpart of the cutter's pieces: the round the two pieces on
+        /// their way in would join into, drawn on the machine itself - the pieces are already on screen riding
+        /// their belts, so the one thing the player cannot see yet is what they make. Nothing is drawn when no
+        /// disjoint pair is coming: the honest answer, since the machine would wait.
+        /// </summary>
+        private void AppendStackPreview(Int2 cell)
+        {
+            if (!_seenValid || _seenStackUnion.IsEmpty) return;
+            AppendIcon(_pieceIcons, _seenStackUnion, Centre(cell), null);
         }
 
         /// <summary>
