@@ -272,16 +272,55 @@ namespace Facet.Tests
             Assert.IsFalse(drill.Covers(laneCentre), "and a drill's frame stays on its own tile");
         }
 
+        [Test]
+        public void ABeltGhostDockingIntoAMachine_DrawsOneLaneIn_AndNotACross()
+        {
+            // The join between a line and the machine it feeds is one lane: the cell in front of the drill is
+            // fed across the edge the drill stands on, so it owes a lane in from that side and its exit lane
+            // out the other - a run docking into the frame. Every side of that cell used to be asked "is this
+            // tile a machine's front?", which the front tile answers yes to from all four, so the joint grew a
+            // lane in from every side at once and read as a cross standing on the track. The two sides nothing
+            // arrives on are what tells the two drawings apart.
+            var drill = new Int2(5, 2);
+            var joint = drill + Dir.West.Offset();          // the cell in front of the drill
+            GhostFigure figure = BlueprintOf(joint, new[]
+            {
+                new TutorialGhost(BuildKind.Drill, drill, Dir.West),
+                new TutorialGhost(BuildKind.Belt, joint, Dir.West),
+                new TutorialGhost(BuildKind.Belt, joint + Dir.West.Offset(), Dir.West),
+            });
+
+            var middle = new Vector2(joint.X + 0.5f, joint.Y + 0.5f);
+            Assert.IsTrue(figure.Covers(middle), "the joint is a belt cell, so it draws its bed");
+            Assert.IsTrue(figure.Covers(middle + new Vector2(0.35f, 0f)),
+                "a lane runs in from the drill's side, so the run docks into the machine");
+            Assert.IsTrue(figure.Covers(middle + new Vector2(-0.35f, 0f)),
+                "and the belt's own exit lane runs on out the other side");
+
+            Assert.IsFalse(figure.Covers(middle + new Vector2(0f, 0.35f)),
+                "nothing arrives from the north, so no lane is drawn there");
+            Assert.IsFalse(figure.Covers(middle + new Vector2(0f, -0.35f)),
+                "nor from the south: the join is a run, not a cross");
+        }
+
         /// <summary>
         /// One ghost of the given kind drawn by the real guide, on a lesson whose only line asks for it: the
         /// camera looks straight at the cell, so the layout is on screen and the blueprint - not the edge
         /// marker - is what lands in the mesh.
         /// </summary>
         private GhostFigure GhostFigureOf(BuildKind kind, Int2 cell, Dir direction)
+            => BlueprintOf(cell, new[] { new TutorialGhost(kind, cell, direction) });
+
+        /// <summary>
+        /// A whole blueprint - several pieces of one line - drawn by the real guide: the camera looks straight
+        /// at <paramref name="target"/>, so the layout is on screen and the blueprint, not the edge marker, is
+        /// what lands in the mesh. The pieces are drawn together because that is the state the guide reads
+        /// them in: what a belt cell draws depends on its neighbours in the same blueprint.
+        /// </summary>
+        private GhostFigure BlueprintOf(Int2 target, TutorialGhost[] ghosts)
         {
-            var ghost = new TutorialGhost(kind, cell, direction);
-            var line = new TutorialTask(TutorialStep.PlaceDrill, "one ghost", cell,
-                new BuildKind[0], false, null, new[] { ghost });
+            var line = new TutorialTask(TutorialStep.PlaceDrill, "a blueprint", target,
+                new BuildKind[0], false, null, ghosts);
             var script = new TutorialScript(new[] { BuildKind.Belt }, new[] { line });
 
             MapDefinition rig = Sim.RigMap();
@@ -299,7 +338,7 @@ namespace Facet.Tests
                 camera.orthographic = true;
                 camera.orthographicSize = 6f;
                 camera.aspect = 1.6f;
-                camera.transform.position = new Vector3(cell.X + 0.5f, cell.Y + 0.5f, -10f);
+                camera.transform.position = new Vector3(target.X + 0.5f, target.Y + 0.5f, -10f);
 
                 var view = viewObject.AddComponent<TutorialGuideView>();
                 view.Initialize(world, _clock, _palette);

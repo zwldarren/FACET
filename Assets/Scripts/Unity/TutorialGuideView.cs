@@ -27,12 +27,12 @@ namespace Facet.Game
     /// cannot promise a shape the placed machine does not stand on.
     ///
     /// <b>Colour: the building's own, or the guide's accent when that would read as built work.</b> A
-    /// machine ghost wears the body colour its building will have, mixed a little toward the outline so its
-    /// slate does not stand on pale ground as solidly as a standing machine's. A belt cannot do that: its
-    /// bed is cream on paper, so a bed in its own colour - faded or darkened - is exactly what a laid belt
-    /// looks like. The one transport on the map is therefore drawn in the guide's accent, pale for the bed
-    /// and solid for the rails and the direction arrow, so a blue track says "this goes here" the way a
-    /// cream one never can.
+    /// machine ghost wears the body colour its building will have, mixed a little toward the outline and held
+    /// at a wash's alpha, so its slate does not stand on pale ground as solidly as a standing machine's. A
+    /// belt cannot do that: its bed is cream on paper, so a bed in its own colour - faded or darkened - is
+    /// exactly what a laid belt looks like. The one transport on the map is therefore drawn in the guide's
+    /// accent, pale for the bed and solid for the rails and the direction arrow, so a blue track says "this
+    /// goes here" the way a cream one never can.
     ///
     /// <b>And why the rim is the accent.</b> A ghost whose body is the real building's colour is one glance
     /// away from reading as a building that is already there. Every machine ghost therefore wears the HUD's
@@ -59,12 +59,20 @@ namespace Facet.Game
         private const float ChevronHalfWidthPixels = 6f;
         private const float ChevronLengthPixels = 13f;
 
-        /// <summary>How solid a ghost's body and its belt are. Translucent enough that the grid, a vein and
-        /// an item still show through the plan, solid enough that the silhouette - which is now the whole
-        /// readout - survives those things underneath it. <see cref="GhostEdgeAlpha"/> is the rim's, and the
-        /// rim is the accent: see <see cref="Rim"/>.</summary>
-        private const float GhostBodyAlpha = 0.55f;
-        private const float GhostEdgeAlpha = 0.82f;
+        /// <summary>How a machine ghost is weighted: a light wash where the body will stand, the plan's ink on
+        /// its edge.
+        ///
+        /// <b>A ghost is a drawing, so the ink carries it and the fill only says what will be covered.</b> The
+        /// old 0.55 body was near enough to a standing machine's slate to be the darkest thing on the layer -
+        /// darker than the accent rim that is supposed to answer "this is the plan" - and it buried what the
+        /// ghost is drawn <em>on</em>: a drill's hollow frame put a grey slab over the vein it exists to point
+        /// at, and a turret's body over the lane its range ring is bought to cover. So the body is now the
+        /// palest wash that still fills its silhouette, the rim is the strongest line the layer draws, and the
+        /// map a lesson is about stays the brightest thing on the tile. Belt ghosts have always been weighted
+        /// this way - a 0.30 bed under 0.50 rails and a 0.85 arrow; this is the machine's half of the same
+        /// rule.</summary>
+        private const float GhostBodyAlpha = 0.38f;
+        private const float GhostEdgeAlpha = 0.90f;
 
         /// <summary>The belt's three alphas, all in the guide's accent rather than in the belt's own cream:
         /// a bed in its real colour read as a belt that was already laid, whichever way it was faded. Blue
@@ -398,26 +406,33 @@ namespace Facet.Game
 
         /// <summary>Does anything in this blueprint push an item onto <paramref name="cell"/> across the side
         /// <paramref name="side"/>? A belt that points at the cell feeds it; a machine feeds the tiles its own
-        /// fronts are on, and a cutter's two fronts sit on both of its tiles.</summary>
+        /// fronts are on, and a cutter's two fronts sit on both of its tiles.
+        ///
+        /// <b>The lane is owed to one side, so the piece that answers has to be the neighbour across it.</b>
+        /// This is asked once per side - whatever answers "yes" draws a lane on that side - so the answer must
+        /// name both who pushes and over which edge, and a piece that is not the neighbour of
+        /// <paramref name="side"/> has nothing to say about it at all. Asked of a machine as "is this tile your
+        /// front?", the front tile answers yes whichever side is named: the belt cell in front of a drill grew
+        /// a lane in from all four sides at once, and the join between a lesson's belt and its machine read as a
+        /// cross standing on the track rather than as a run docking into the machine.</summary>
         private static bool Feeds(TutorialGhost[] ghosts, Int2 cell, Dir side)
         {
             Int2 from = cell + side.Offset();
+            Dir into = side.Opposite();     // the way the neighbour across this side would have to push
 
             for (int i = 0; i < ghosts.Length; i++)
             {
                 TutorialGhost other = ghosts[i];
 
-                if (other.Build == BuildKind.Belt)
-                {
-                    if (other.Cell == from && other.Direction == side.Opposite()) return true;
-                    continue;
-                }
+                // A piece that does not push toward this cell feeds none of its sides, however close it is.
+                if (other.Direction != into) continue;
 
-                if (other.Cell + other.Direction.Offset() == cell) return true;
+                if (other.Cell == from) return true;     // a belt, a drill, an operator, the cutter's own tile
 
+                // A cutter's second front sits on the lane tile beside it and pushes the same way, so the
+                // displaced half arrives across the lane tile's own edge - one tile over from the machine.
                 if (other.Build == BuildKind.Cutter &&
-                    other.Cell + MachineFootprint.LaneOf(other.Direction).Offset() + other.Direction.Offset() == cell)
-                    return true;
+                    other.Cell + MachineFootprint.LaneOf(other.Direction).Offset() == from) return true;
             }
 
             return false;
@@ -438,7 +453,7 @@ namespace Facet.Game
                 AppendBracket(bar, body, edge);
             }
 
-            AppendMachineChevron(cell, direction, body);
+            AppendMachineChevron(cell, direction);
         }
 
         /// <summary>One axis-aligned bar as an outlined quad - <see cref="AppendRect"/> cannot wear a rim, and
@@ -522,7 +537,7 @@ namespace Facet.Game
             AppendLane(entry - forward * ct + right * cw, entry - forward * ct - right * cw, ct, body);
             AppendLane(landing + right * cw, landing - right * cw, ct, body);
 
-            AppendMachineChevron(cell, direction, body);
+            AppendMachineChevron(cell, direction);
         }
 
         /// <summary>A sorter's ghost: the triangle turned so its apex points out the exit side - the machine's
@@ -567,13 +582,19 @@ namespace Facet.Game
         }
 
         /// <summary>A machine's outlet chevron, at the offset the placed machine draws its own: the guide must
-        /// point where the real arrow points, or following it lands the belt a tile off.</summary>
-        private void AppendMachineChevron(Int2 cell, Dir direction, Color color)
+        /// point where the real arrow points, or following it lands the belt a tile off.
+        ///
+        /// It wears the plan's ink, not the body's wash, and it is the one mark on a ghost that has to leave the
+        /// machine's own tile to be read: a drill's arrow is drawn over the vein it stands on, where a body
+        /// colour at a wash's alpha was a smudge inside the frame rather than an arrow out of it. The placed
+        /// machine draws the same arrow in its own body colour; the plan draws the same arrow in the colour
+        /// that means "plan" everywhere else on this layer.</summary>
+        private void AppendMachineChevron(Int2 cell, Dir direction)
         {
             Palette.MachineLook look = Colors.Machines;
 
             AppendChevron(CellCentre(cell) + ToVector(direction) * look.ChevronOffset, direction,
-                look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, color);
+                look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, Rim());
         }
 
         /// <summary>The ring a turret ghost projects, as a thin annulus of quads: its width stays a constant
