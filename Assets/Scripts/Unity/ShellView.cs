@@ -26,8 +26,11 @@ namespace Facet.Game
     ///   runtime-built canvas, not a second scene, so the WebGL build and
     ///   <c>Tools/publish-pages.sh</c> are untouched.
     /// - The pause menu is the in-run hub, and Esc and M both open it (as does the HUD's menu button):
-    ///   resume, restart this run, the map list, how to play, and the two ways out. The map list opened
-    ///   from it goes back to it, not to the run, so every in-run destination has one parent.
+    ///   resume, restart this run, the map list, how to play, and the two ways out - plus, in the web
+    ///   player while it is fullscreen, the way back to a window, because the page has taken the
+    ///   browser's own Escape in exchange for giving the game its menu key (<see cref="PlayerPage"/>).
+    ///   The map list opened from it goes back to it, not to the run, so every in-run destination has
+    ///   one parent.
     /// - The two doors that throw a run away - leaving for the title and restarting this run - are
     ///   armed by one press and taken by the next, and Escape always disarms before either leaves.
     ///   Progress is not at risk either way: cleared maps were written when they were cleared and the
@@ -386,18 +389,18 @@ namespace Facet.Game
             subtitle.Set("an enemy's weakness is a shape, and what your factory builds is what your guns fire",
                 _palette.MachineIdle);
 
-            float y = Screen.height * TitleNameTop + 150f * _scale;
-            AddMenuButton(root, "play", y, PlayLabel(), PressPlay, primary: true);
-            y += ButtonStep;
-            AddMenuButton(root, "maps", y, "the maps  ·  M", ShowLevelScreen);
-            y += ButtonStep;
-            AddMenuButton(root, "howto", y, "how to play  ·  T", OpenHelp);
-            y += ButtonStep;
+            int row = 0;
+            AddMenuButton(root, "play", TitleButtonTop(Screen.height, _scale, row++), PlayLabel(), PressPlay,
+                primary: true);
+            AddMenuButton(root, "maps", TitleButtonTop(Screen.height, _scale, row++), "the maps  ·  M",
+                ShowLevelScreen);
+            AddMenuButton(root, "howto", TitleButtonTop(Screen.height, _scale, row++), "how to play  ·  T",
+                OpenHelp);
 
 #if !UNITY_WEBGL || UNITY_EDITOR
             // A quit is a host's luxury: a WebGL build has no tab to close from inside, so the button
             // is a desktop one and says nothing where it cannot mean it.
-            AddMenuButton(root, "quit", y, "quit", Application.Quit);
+            AddMenuButton(root, "quit", TitleButtonTop(Screen.height, _scale, row), "quit", Application.Quit);
 #endif
 
             HudText footer = Label(root, "footer", HudType.Micro, FontStyle.Normal, TextAnchor.LowerCenter);
@@ -446,9 +449,9 @@ namespace Facet.Game
         private HudButton AddMenuButton(RectTransform parent, string name, float yFromTop, string label,
             Action pressed, bool primary = false)
         {
-            HudButton button = HudUi.Button(parent, name, 320f * _scale, 36f * _scale, label,
+            HudButton button = HudUi.Button(parent, name, 320f * _scale, TitleButtonHeight * _scale, label,
                 FontSize(HudType.Label), primary ? _palette.HudPanel : _palette.HudText, pressed);
-            HudUi.TopCentre(button.Root, yFromTop, 320f * _scale, 36f * _scale);
+            HudUi.TopCentre(button.Root, yFromTop, 320f * _scale, TitleButtonHeight * _scale);
             _buttons.Add(button);
             if (primary) _primary.Add(button);
             return button;
@@ -477,8 +480,9 @@ namespace Facet.Game
 
         /// <summary>
         /// The in-run screen and the game's one hub: resume, restart, the map list, how to play, and the
-        /// two ways out. It is built out of the same card and buttons as the title, so the shell reads as
-        /// one place with two faces rather than as a menu bolted onto a game.
+        /// two ways out - plus, in a fullscreen web player, the way back to a window (see
+        /// <see cref="PlayerPage"/>). It is built out of the same card and buttons as the title, so the
+        /// shell reads as one place with two faces rather than as a menu bolted onto a game.
         ///
         /// The run behind it is held by the driver, not paused in the world: the shell does not touch
         /// <c>World.Paused</c>, so a player who paused before opening the menu gets their pause back on
@@ -491,10 +495,16 @@ namespace Facet.Game
             HudUi.StretchFull(root);
 
 #if !UNITY_WEBGL || UNITY_EDITOR
-            const int buttons = 6;   // resume, restart, maps, how to play, main menu, quit
+            const int fixedButtons = 6;   // resume, restart, maps, how to play, main menu, quit
 #else
-            const int buttons = 5;   // a WebGL build has no tab to close from inside
+            const int fixedButtons = 5;   // a WebGL build has no tab to close from inside
 #endif
+            // ...plus the one row that exists on one screen only: the way out of the browser's
+            // fullscreen. The page hands Escape to the game while the frame is fullscreen (see
+            // PlayerPage), so the browser's own "Escape leaves fullscreen" is gone, and a player who
+            // cannot find this row has no way back to a window.
+            bool fullscreen = PlayerPage.InFullscreen;
+            int buttons = fixedButtons + (fullscreen ? 1 : 0);
 
             float cardWidth = Mathf.Min(PauseCardWidth, Screen.width / _scale - 2f * HudLayout.Margin);
 
@@ -545,6 +555,12 @@ namespace Facet.Game
                 _confirmQuit ? "abandon this run?  ·  click again" : "main menu", RequestMainMenu,
                 labelColour: _confirmQuit ? HudInk.Warning(_palette) : null);
             y += step;
+
+            if (fullscreen)
+            {
+                AddCardButton(card, "windowed", y, cardWidth, "leave fullscreen", PlayerPage.LeaveFullscreen);
+                y += step;
+            }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
             AddCardButton(card, "quit", y, cardWidth, "quit", Application.Quit);
@@ -845,7 +861,9 @@ namespace Facet.Game
         ///
         /// Back is one step, whatever the screen: Escape or M closes the help card and the map list
         /// onto whichever screen opened them, and closes the pause menu onto the run. On the title,
-        /// Escape has no step to take, which is why the title's own map button advertises M and not Esc.
+        /// Escape has no screen behind it - in a fullscreen page it leaves fullscreen instead, the one
+        /// step that is behind the title itself, and in a window it has nothing to do (see
+        /// <see cref="PlayerPage"/>).
         /// Inside the pause menu, Escape first disarms an armed door rather than leaving: the irreversible
         /// presses are always cancellable by the key that means "back".
         ///
@@ -867,10 +885,15 @@ namespace Facet.Game
             switch (_mode)
             {
                 case Mode.Title:
-                    // M opens the map list here; Escape has no step back to take on the title.
+                    // M opens the map list here. Escape has no screen behind it to go back to, so it
+                    // takes the one step that is behind the title itself: out of fullscreen, where the
+                    // page is holding the key for the game (see PlayerPage). In a windowed page - or a
+                    // build with no page at all - there is no step to take and the key does nothing,
+                    // which is why the title's map button advertises M and not Esc.
                     if (menu) SetMode(Mode.Levels);
                     else if (confirm) PressPlay();
                     else if (keyboard.tKey.wasPressedThisFrame) SetMode(Mode.Help);
+                    else if (back && PlayerPage.InFullscreen) PlayerPage.LeaveFullscreen();
                     break;
 
                 case Mode.Help:
@@ -957,8 +980,30 @@ namespace Facet.Game
         /// <summary>Where the game's name starts, as a fraction of the screen height from the top.</summary>
         private const float TitleNameTop = 0.14f;
 
-        /// <summary>The title column's step: one button's height and the gap to the next.</summary>
-        private const float ButtonStep = 46f;
+        /// <summary>Where the title column starts, in design units below the name's band.</summary>
+        private const float TitleFirstButtonTop = 150f;
+
+        /// <summary>One title button's height, in design units. The column's step is this plus its gap,
+        /// so a step below it stacks the buttons on each other - see <see cref="TitleButtonTop"/>.</summary>
+        public const float TitleButtonHeight = 36f;
+
+        /// <summary>The title column's step: one button's height and the gap to the next, in design
+        /// units - the caller scales it once, with the height it steps past.</summary>
+        public const float ButtonStep = 46f;
+
+        /// <summary>
+        /// Where the title column's <paramref name="index"/>-th button starts, measured from the
+        /// screen's top edge: the name's band, then one step per button. Both terms are design units
+        /// scaled once by <paramref name="scale"/>.
+        ///
+        /// The column used to step in screen pixels while its buttons scaled, which is invisible until
+        /// the scale passes 46/36 (a canvas taller than 920 pixels): a fullscreen 1080 - scale 1.5 -
+        /// drew three 54-pixel buttons 46 pixels apart and stacked them on each other, and the shorter
+        /// the window the wider the gap looked. The gap is a constant fraction of a button at every
+        /// size, which is what reads as a column.
+        /// </summary>
+        public static float TitleButtonTop(float screenHeight, float scale, int index)
+            => screenHeight * TitleNameTop + (TitleFirstButtonTop + index * ButtonStep) * scale;
 
         /// <summary>A level row's height and the gap between rows, in design units, before the
         /// fit-into-the-screen shrink; the floor is the shortest row that still carries a name and a

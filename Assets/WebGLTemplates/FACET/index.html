@@ -140,9 +140,39 @@
         // Fullscreen is the frame, not the canvas: the frame keeps the game's aspect and letterboxes the rest,
         // where Unity's own SetFullscreen would stretch the canvas to whatever shape the screen is.
         function toggleFullscreen() {
-          if (document.fullscreenElement) { document.exitFullscreen(); return; }
+          if (document.fullscreenElement) { document.exitFullscreen().catch(function () {}); return; }
           if (frame.requestFullscreen) frame.requestFullscreen().catch(function () {});
         }
+
+        // A fullscreen browser keeps Escape for itself: the press leaves fullscreen and never reaches the
+        // game, whose menu key it is. The Keyboard Lock API takes the key back for the page - fullscreen
+        // only, and Chromium only - so Escape reaches the player, and the browser's own way out is gone
+        // with it. That way out becomes the game's: the pause card's "leave fullscreen" row, and Escape on
+        // the title. Where the API is missing or refuses, Escape goes on leaving fullscreen as it always
+        // did, and the game keeps that row hidden because there is nothing for it to do.
+        function holdEscape() {
+          if (!navigator.keyboard || !navigator.keyboard.lock) return;
+          navigator.keyboard.lock(["Escape"]).catch(function () {});
+        }
+
+        function releaseEscape() {
+          if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock();
+        }
+
+        document.addEventListener("fullscreenchange", function () {
+          if (document.fullscreenElement) holdEscape(); else releaseEscape();
+        });
+
+        // What the game asks the page, through Assets/Plugins/WebGL/FacetPage.jslib: is the frame
+        // fullscreen, and - if it is - would it please give the window back. The shell draws its one
+        // conditional row from the first. Leaving needs no user gesture, which is what makes it the one
+        // direction a button drawn inside the game can ask for.
+        window.facetPage = {
+          fullscreen: function () { return !!document.fullscreenElement; },
+          leaveFullscreen: function () {
+            if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+          }
+        };
 
         var script = document.createElement("script");
         script.src = buildUrl + "/{{{ LOADER_FILENAME }}}";
