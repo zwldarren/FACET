@@ -172,6 +172,9 @@ namespace Facet.Game
             Frames = new FrameClock { Frame = new ViewFrame(1f, WorldPerPixel, new Int2(-1, -1), Time.unscaledTime) };
 
             if (autoCreateViews) BuildViews();
+
+            // The matched-round analytics: a reader of the world, like the views, sending one row per wave.
+            gameObject.AddComponent<AnalyticsReporter>().Bind(this);
         }
 
         private void Update()
