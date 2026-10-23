@@ -53,6 +53,13 @@ namespace Facet.Game
     /// - The tutorial card and the opening camera strip belong to map 0 itself, whoever reaches it and
     ///   however (<see cref="CampaignState.IsFirstMap"/> stays the map's own number, not the entry path),
     ///   and the player's own hide/show choice outranks the default from their first press on.
+    /// - No screen is torn down inside the press that asked for it. uGUI is still walking the widget it
+    ///   dispatched the press to when the button's callback returns, and the input module has not yet
+    ///   finished the press either; destroying that widget there throws out of both, and the press it
+    ///   never finished comes back on the next frame - now aimed at whatever the new screen put under the
+    ///   pointer. Every change of screen therefore goes through <see cref="RequestRebuild"/>, which builds
+    ///   a press's new screen in this frame's own <see cref="Update"/> (after the dispatch) and builds
+    ///   anywhere else immediately.
     /// </summary>
     [DefaultExecutionOrder(210)]   // after the HUD (200): the shell's keys are read with the run already held
     public sealed class ShellView : MonoBehaviour
@@ -80,6 +87,10 @@ namespace Facet.Game
         /// shell's M would close it again the same frame - so a mode just built ignores its keys until
         /// the next one. One frame of silence, and only on the frame something changed.</summary>
         private int _shownAtFrame = -1;
+
+        /// <summary>Is a rebuild waiting for this frame's update? Set by a button's press, which may not
+        /// tear the card down while uGUI is still walking it (see <see cref="RequestRebuild"/>).</summary>
+        private bool _rebuildPending;
 
         /// <summary>Is the shell on screen? The driver's one question: while it stands the devices are
         /// the shell's, the run is held, and nothing ticks.</summary>
@@ -146,6 +157,11 @@ namespace Facet.Game
         {
             if (_palette == null || _canvasRoot == null || !Open) return;
 
+            // The screen a press asked for is built here, not inside the press: by now the event system
+            // has finished walking the card that was clicked, so replacing it costs no exception and
+            // leaves no half-finished press to land on the new screen's widgets.
+            if (_rebuildPending) Rebuild();
+
             RefreshScale();
             ReadKeys();
             DressButtons();
@@ -203,7 +219,7 @@ namespace Facet.Game
 
             _confirmQuit = true;
             _confirmRestart = false;
-            Rebuild();
+            RequestRebuild();
         }
 
         /// <summary>
@@ -224,7 +240,7 @@ namespace Facet.Game
 
             _confirmRestart = true;
             _confirmQuit = false;
-            Rebuild();
+            RequestRebuild();
         }
 
         /// <summary>Close the shell. The run behind a pause menu is the driver's to hand back - it held
@@ -232,6 +248,9 @@ namespace Facet.Game
         public void Close()
         {
             Open = false;
+            // A screen change still queued belongs to a shell that is no longer on screen; the next open
+            // rebuilds for whatever mode it opens in.
+            _rebuildPending = false;
             if (_canvasRoot != null) _canvasRoot.gameObject.SetActive(false);
         }
 
@@ -240,10 +259,37 @@ namespace Facet.Game
             _mode = mode;
             _confirmQuit = false;
             _confirmRestart = false;
-            Rebuild();
+            RequestRebuild();
             Open = true;
             _shownAtFrame = Time.frameCount;
             if (_canvasRoot != null) _canvasRoot.gameObject.SetActive(true);
+        }
+
+        /// <summary>
+        /// Build the screen of the moment, or queue it for this frame's update when the ask came from a
+        /// press. The rule and its reason are one: a button's press is dispatched from inside the event
+        /// system's walk of the card, and both uGUI and the input module still hold the widget it was
+        /// delivered to when the callback returns.
+        ///
+        /// Tearing that card down there throws <c>MissingReferenceException</c> out of
+        /// <c>ExecuteEvents.ExecuteHierarchy</c> and out of <c>InputSystemUIInputModule.ProcessPointer</c>,
+        /// which is also the call that finishes the press. The press therefore stays "pressed" into the
+        /// next frame and is dispatched again - to the level list's first row, say, which is exactly where
+        /// the title's "the maps" button was - and the campaign starts a map the player never picked.
+        ///
+        /// Deferring is free: this update runs after the event system's, before anything is drawn, so the
+        /// new screen is the one on screen in the frame the button was pressed. A rebuild asked for
+        /// anywhere else - the driver's doors, a key, a resize, a test - still happens immediately.
+        /// </summary>
+        private void RequestRebuild()
+        {
+            if (HudButton.Dispatching)
+            {
+                _rebuildPending = true;
+                return;
+            }
+
+            Rebuild();
         }
 
         // ------------------------------------------------------------------ building the canvas
@@ -270,6 +316,7 @@ namespace Facet.Game
         /// point size to stay crisp.</summary>
         private void Rebuild()
         {
+            _rebuildPending = false;
             _scale = HudLayout.Scale(Screen.height);
             _screenWidth = Screen.width;
             _screenHeight = Screen.height;
@@ -848,7 +895,7 @@ namespace Facet.Game
         {
             _confirmQuit = false;
             _confirmRestart = false;
-            Rebuild();
+            RequestRebuild();
         }
 
         private void RefreshScale()

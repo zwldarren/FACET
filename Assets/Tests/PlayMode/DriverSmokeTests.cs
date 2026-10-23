@@ -4,6 +4,7 @@ using Facet.Core;
 using Facet.Game;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -284,6 +285,79 @@ namespace Facet.PlayTests
             int started = driver.World.TickCount;
             yield return new WaitForSeconds(0.2f);
             Assert.Greater(driver.World.TickCount, started, "and the clock runs once a run is started");
+        }
+
+        /// <summary>
+        /// The title's map button opens the list, and nothing else. This is the one path a press takes
+        /// that a key does not: uGUI dispatches the press from inside its own walk of the card, so a
+        /// shell that rebuilt itself inside the callback threw out of the event system, never finished
+        /// the press, and had that same click delivered again to the level list's first row - which sits
+        /// where the button was. The player saw "the maps" start map 1 instead of listing the maps.
+        ///
+        /// The press is dispatched the way the input module dispatches it, so a screen that tears itself
+        /// down mid-dispatch fails here with the exception a player's click used to throw.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheTitlesMapButton_OpensTheList_InsteadOfStartingARun()
+        {
+            yield return null;   // let Awake and the first Update run
+
+            SimulationDriver driver = Driver;
+            var shell = _driverObject.GetComponentInChildren<ShellView>(true);
+            Assert.IsTrue(shell.AtTitle, "the boot lands on the title");
+            SimWorld held = driver.World;
+
+            Assert.IsTrue(Press(shell, "title/maps"), "the title's map button survives its own press");
+            yield return null;   // the shell builds the screen the press asked for in its own update
+
+            Assert.IsFalse(shell.AtTitle, "the maps button opens the map list");
+            Assert.IsTrue(shell.Open, "and the shell is still the screen in front of the run");
+            Assert.AreSame(held, driver.World, "a list is not a run: nothing was started");
+            Assert.AreEqual(0, driver.World.TickCount, "and the run behind it is still held");
+
+            // The list is a picker, not a wall: the row starts the map it names, and closes the list.
+            Assert.IsTrue(Press(shell, "levels/card/map0"), "a map row answers its press");
+            yield return null;
+
+            Assert.IsFalse(shell.Open, "picking a map closes the shell onto the run");
+            Assert.AreEqual(driver.Catalog.At(0).Name, driver.World.Map.Name, "and starts that map");
+            Assert.AreEqual(0, driver.Campaign.MapIndex, "the campaign is on it");
+        }
+
+        /// <summary>
+        /// The armed doors are pressed the same way, and the reason the shell may not rebuild inside a
+        /// press is most visible here: the press that never finished used to come back on the next frame
+        /// at the same button, so "restart this run" took one click and threw the run away - the two
+        /// presses the door is built to ask for collapsed into one.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheArmedRestartDoor_TakesOnePress_ToArm_AndOneToTake()
+        {
+            yield return null;
+            BeginRun();
+
+            SimulationDriver driver = Driver;
+            var shell = _driverObject.GetComponentInChildren<ShellView>(true);
+            SimWorld run = driver.World;
+            var belt = new Int2(20, 10);
+            Assert.IsTrue(run.TryPlaceBelt(belt, Dir.East));
+
+            driver.OpenMenu();
+            yield return null;
+
+            Assert.IsTrue(Press(shell, "pause/card/restart"), "the restart button answers its press");
+            yield return null;
+
+            Assert.IsTrue(shell.Open, "one press only arms the door");
+            Assert.AreSame(run, driver.World, "and leaves the run where it was");
+            Assert.IsTrue(run.Belts.Has(belt), "with the factory still standing");
+
+            Assert.IsTrue(Press(shell, "pause/card/restart"), "the armed door answers the next press");
+            yield return null;
+            yield return new WaitForSeconds(0.2f);   // the next tick applies the restart request
+
+            Assert.IsFalse(shell.Open, "the second press takes the door");
+            Assert.IsFalse(run.Belts.Has(belt), "and starts the run over");
         }
 
         [UnityTest]
@@ -734,6 +808,24 @@ namespace Facet.PlayTests
 
             Assert.Greater(Vertices("Terrain"), 0, "the map's own rock and water are drawn");
             Assert.Greater(Vertices("Grid"), 0, "and the ground they stand on is still drawn under them");
+        }
+
+        /// <summary>
+        /// Press a shell button the way the input module presses it - a left-button pointer down walked up
+        /// the widget's own hierarchy - and answer whether the widget is still standing when the event
+        /// system is done with it. That last part is the point: uGUI reads the target after the handler
+        /// returns, so a screen that rebuilds itself inside its own press destroys the very object the
+        /// dispatch is still holding, and the exception it throws here is the one a player's click threw.
+        /// </summary>
+        private static bool Press(ShellView shell, string path)
+        {
+            Transform button = shell.transform.Find("ShellCanvas/" + path);
+            Assert.IsNotNull(button, "no " + path + " button on the shell");
+
+            var press = new PointerEventData(EventSystem.current);
+            ExecuteEvents.ExecuteHierarchy(button.gameObject, press, ExecuteEvents.pointerDownHandler);
+
+            return button != null;   // a widget destroyed by its own press reads as null
         }
 
         private int Vertices(string viewName)

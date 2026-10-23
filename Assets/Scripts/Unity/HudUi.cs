@@ -636,6 +636,20 @@ namespace Facet.Game
         /// can never say something a key press would not.</summary>
         public Action Pressed;
 
+        /// <summary>Is a button running its own press callback right now?
+        ///
+        /// A press is dispatched from inside the event system's own walk of the UI: by the time
+        /// <see cref="OnPointerDown"/> returns, uGUI still has to read the widget it just dispatched to
+        /// (<c>ExecuteEvents.ExecuteHierarchy</c> does, and the input module then stores the press on the
+        /// pointer). A handler that destroys that widget - a screen that rebuilds itself on a click - makes
+        /// both of those throw: the module never finishes the press, so <c>OnFrameFinished</c> never runs,
+        /// the button keeps reading as "pressed" on the next frame, and the same still-held click is
+        /// delivered again to whatever the new screen put under the pointer.
+        ///
+        /// <see cref="ShellView.RequestRebuild"/> is the one reader: it queues a screen change for the
+        /// frame's own update - after the dispatch - instead of taking the card down inside the press.</summary>
+        internal static bool Dispatching { get; private set; }
+
         /// <summary>The rectangle the button is drawn in, for the view's own placement passes.</summary>
         public RectTransform Root => (RectTransform)transform;
 
@@ -644,7 +658,18 @@ namespace Facet.Game
         public void OnPointerDown(PointerEventData eventData)
         {
             if (eventData.button != PointerEventData.InputButton.Left) return;
-            Pressed?.Invoke();
+
+            // try/finally rather than a straight call: a handler that throws must not leave the flag
+            // standing, or every later press would be deferred to a frame that no longer exists.
+            Dispatching = true;
+            try
+            {
+                Pressed?.Invoke();
+            }
+            finally
+            {
+                Dispatching = false;
+            }
         }
 
         public void OnPointerEnter(PointerEventData eventData) => Hovered = true;
