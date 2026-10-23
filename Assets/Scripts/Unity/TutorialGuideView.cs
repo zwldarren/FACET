@@ -142,6 +142,13 @@ namespace Facet.Game
         private readonly Vector2[] _bracket = new Vector2[4];
         private readonly Rect[] _frameBars = new Rect[4];
 
+        /// <summary>The renderer this view draws through, and the plane its last frame was put on. The view is
+        /// one mesh on one object, but it draws two different kinds of thing - a plan on the map and an arrow
+        /// off it - and they belong on different planes: see <see cref="PlaceOn"/>.</summary>
+        private MeshRenderer _renderer;
+        private float _placedZ = float.NaN;
+        private int _placedOrder = int.MinValue;
+
         protected override Palette.Layer Layer => Colors.GuideLayer;
 
         /// <summary>Hand the view the camera to measure the screen against. Called on every map load, like the
@@ -183,9 +190,13 @@ namespace Facet.Game
         }
 
         /// <summary>Every silhouette a ghost can wear, built the way <see cref="MachineRenderer"/> builds the
-        /// bodies it draws, plus the two rounded blocks (wall, sink) that machine has no operator row for.</summary>
+        /// bodies it draws, plus the two rounded blocks (wall, sink) that machine has no operator row for.
+        /// The renderer is taken here because this view is the one that moves itself between planes - see
+        /// <see cref="PlaceOn"/>.</summary>
         protected override void OnInitialized()
         {
+            _renderer = GetComponent<MeshRenderer>();
+
             Palette.MachineLook look = Colors.Machines;
             float corner = look.CornerRadius;
 
@@ -270,13 +281,35 @@ namespace Facet.Game
                 // the way the player has to go - the locator's own answer to the same question.
                 Vector2 at = view.EdgeTowards(centre, out Vector2 direction);
 
+                PlaceOn(Colors.GuideMarkerLayer);
                 AppendChevron(at, DirFor(direction),
                     ChevronBackPixels * pixel, ChevronHalfWidthPixels * pixel, ChevronLengthPixels * pixel,
                     Colors.HudAccent);
                 return;
             }
 
+            PlaceOn(Colors.GuideLayer);
             AppendBlueprint();
+        }
+
+        /// <summary>Put this frame's geometry on one of the guide's two planes.
+        ///
+        /// The blueprint lies on the map's plane (<see cref="Palette.GuideLayer"/>), where the ground and a
+        /// vein are behind it and everything built on that ground is in front: a ghost says "this cell is
+        /// still empty, do this here", so a plan drawn over a laid belt would cover the one answer the player
+        /// needs next - which way their belt runs. The off-screen arrow is the opposite case and gets the
+        /// annotation plane (<see cref="Palette.GuideMarkerLayer"/>): it is not a tile, and it has to read over
+        /// whatever the camera is pointed at. The two never share a frame - the arrow only replaces a blueprint
+        /// that is off screen - so one mesh on one renderer can carry both.</summary>
+        private void PlaceOn(Palette.Layer layer)
+        {
+            if (layer.Z == _placedZ && layer.SortingOrder == _placedOrder) return;
+
+            _placedZ = layer.Z;
+            _placedOrder = layer.SortingOrder;
+
+            transform.position = new Vector3(0f, 0f, layer.Z);
+            if (_renderer != null) _renderer.sortingOrder = layer.SortingOrder;
         }
 
         /// <summary>Draw the current line's standard layout, ghost by ghost. Each piece is drawn from its own

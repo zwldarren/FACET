@@ -188,6 +188,17 @@ namespace Facet.Game
         public Layer GridLayer = new Layer(0f, -10);
         public Layer TerrainLayer = new Layer(-0.01f, -9);
         public Layer ShapePatchLayer = new Layer(-0.02f, -8);
+
+        /// <summary>Where the tutorial's blueprint draws: on the map's own plane, in front of the ground and
+        /// of an ore patch - a drill's ghost is drawn on the vein it stands on, and that vein is what says
+        /// which machine goes there - and behind everything built on that ground. A belt, a machine, an item
+        /// and the Core all cover the plan, which is the order that matters: a ghost's sentence is "this cell
+        /// is still empty, do this here", so where the player has already built, painting the plan over the
+        /// answer they need next - the direction arrow on their own belt - is the one thing this layer must
+        /// not do. The off-screen arrow is the other half of the same rule: it is not a tile, see
+        /// <see cref="GuideMarkerLayer"/>.</summary>
+        public Layer GuideLayer = new Layer(-0.03f, -7);
+
         public Layer BeltLayer = new Layer(-0.05f, -5);
         public Layer CoreLayer = new Layer(-0.06f, 0);
         public Layer MachineLayer = new Layer(-0.07f, 1);
@@ -196,11 +207,11 @@ namespace Facet.Game
         public Layer ProjectileLayer = new Layer(-0.10f, 6);
         public Layer CursorLayer = new Layer(-0.2f, 10);
 
-        /// <summary>Where the tutorial's guide draws: over the map, under the placement ghost and under the
-        /// locator. It is an annotation of the map rather than a thing on it, so it belongs above everything
-        /// the tiles hold - a ghost has to read over a belt, an item and an enemy alike - while staying
-        /// behind the two views that say where the player's own pointer and danger are.</summary>
-        public Layer GuideLayer = new Layer(-0.155f, 8);
+        /// <summary>Where the tutorial's off-screen chevron draws: above the map, next to the placement ghost
+        /// and the locator, because it is not a tile at all. It is the answer to "where did the lesson go?"
+        /// while the blueprint is off screen, so it has to read over whatever the camera happens to be
+        /// showing - and it never shares a frame with the blueprint it replaces.</summary>
+        public Layer GuideMarkerLayer = new Layer(-0.155f, 8);
 
         /// <summary>Where the off-screen locator draws: in front of the placement ghost, so the arrow is not
         /// hidden by it. It is the only view whose geometry is screen geometry, sitting at the open screen's

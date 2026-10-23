@@ -273,6 +273,42 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void TheGuideLiesOnTheMap_UnderWhatIsBuiltOnIt_AndItsArrowAboveTheMap()
+        {
+            // A blueprint is a plan for a cell that is still empty, so the plan has to lose every pixel it
+            // shares with something already built: where the player has laid a belt, the belt's direction arrow
+            // is the answer they need next, and a ghost painted over it hides that answer. It must still win
+            // over the ground and the vein it is drawn on, or a drill's ghost would disappear under the ore
+            // patch that is its whole identity. The off-screen arrow is the other case - not a tile at all -
+            // and goes in front of everything on the map; it only ever draws in a frame where the blueprint
+            // does not, so one view can carry both planes. More negative z is closer to the camera.
+            var palette = ScriptableObject.CreateInstance<Palette>();
+            try
+            {
+                Assert.Less(palette.GuideLayer.Z, palette.ShapePatchLayer.Z,
+                    "the plan draws in front of the vein it stands on");
+                Assert.Greater(palette.GuideLayer.Z, palette.BeltLayer.Z,
+                    "and behind a belt laid on that cell, so the built run covers its own ghost");
+                Assert.Greater(palette.GuideLayer.Z, palette.MachineLayer.Z, "and behind a built machine");
+                Assert.Greater(palette.GuideLayer.Z, palette.CoreLayer.Z, "and behind the Core");
+                Assert.Greater(palette.GuideLayer.Z, palette.EnemyLayer.Z, "and behind an enemy walking over it");
+
+                Assert.Less(palette.GuideMarkerLayer.Z, palette.BeltLayer.Z,
+                    "the off-screen arrow reads over the map's belts");
+                Assert.Less(palette.GuideMarkerLayer.Z, palette.MachineLayer.Z, "over its machines");
+                Assert.Less(palette.GuideMarkerLayer.Z, palette.EnemyLayer.Z, "and over its enemies");
+                Assert.Greater(palette.GuideMarkerLayer.Z, palette.CursorLayer.Z,
+                    "while the player's own placement ghost stays in front of it");
+                Assert.Greater(palette.GuideMarkerLayer.Z, palette.RadarLayer.Z,
+                    "and the locator's arrows stay in front of that");
+            }
+            finally
+            {
+                Object.DestroyImmediate(palette);
+            }
+        }
+
+        [Test]
         public void ABeltGhostDockingIntoAMachine_DrawsOneLaneIn_AndNotACross()
         {
             // The join between a line and the machine it feeds is one lane: the cell in front of the drill is
