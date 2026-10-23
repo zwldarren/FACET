@@ -30,9 +30,13 @@ namespace Facet.Game
     [DefaultExecutionOrder(105)]
     public sealed class MachineRenderer : MeshView
     {
+        private readonly FeedbackEvents _feedback = new FeedbackEvents();
+        private float _seconds;
+
         private static readonly Dir[] Sides = { Dir.North, Dir.East, Dir.South, Dir.West };
 
         private readonly List<MachineSnapshot> _machines = new List<MachineSnapshot>();
+        private readonly Dictionary<VisualStyle, Vector2[]> _overridePoints = new Dictionary<VisualStyle, Vector2[]>();
 
         /// <summary>Scratch barrel points, reused so a per-machine-per-frame array is not allocated.</summary>
         private readonly Vector2[] _barrel = new Vector2[4];
@@ -81,7 +85,7 @@ namespace Facet.Game
         /// <summary>The points to draw a body with: the authored shape when the override ticks one,
         /// otherwise the shipped silhouette.</summary>
         private Vector2[] BodyOf(VisualStyle style, Vector2[] shipped)
-            => Overridden(style) ? VisualShapes.Points(style, Colors.CircleSides) : shipped;
+            => Overridden(style) && _overridePoints.TryGetValue(style, out Vector2[] points) ? points : shipped;
 
         /// <summary>A body's fill: the authored colour when overridden, otherwise what the machine's
         /// behaviour calls for.</summary>
@@ -112,6 +116,14 @@ namespace Facet.Game
 
         protected override void OnInitialized()
         {
+            _feedback.Reset(World.Events);
+            // A placed body's animation must not regenerate override polygons on each frame.
+            foreach (BuildKind kind in World.Content.BuildKinds)
+            {
+                VisualStyle style = Over(kind);
+                if (Overridden(style) && !IsSprite(style) && !_overridePoints.ContainsKey(style))
+                    _overridePoints.Add(style, VisualShapes.Points(style, Colors.CircleSides));
+            }
             Palette.MachineLook look = Colors.Machines;
 
             // Every body is the same silhouette with its points taken off: one corner radius across the
@@ -162,7 +174,17 @@ namespace Facet.Game
 
         /// <summary>Everything this view draws moves or changes state every tick, so it rebuilds
         /// every frame.</summary>
-        protected override void Observe(in ViewFrame frame) => MarkDirty();
+        protected override void OnWorldRebound() => _feedback.Reset(World.Events);
+
+        protected override void Observe(in ViewFrame frame)
+        {
+            _seconds = frame.Seconds;
+            _feedback.Capture(World.Events, _seconds,
+                (1 << (int)SimEventKind.Built) | (1 << (int)SimEventKind.Removed) |
+                (1 << (int)SimEventKind.BuildingDestroyed) | (1 << (int)SimEventKind.ShotFired),
+                Colors.Feedback.Active);
+            MarkDirty();
+        }
 
         protected override void AppendFrame(in ViewFrame frame)
         {
@@ -172,6 +194,7 @@ namespace Facet.Game
 
             for (int i = 0; i < _machines.Count; i++)
             {
+                GeometryMark mark = MarkGeometry();
                 switch (_machines[i].Behavior)
                 {
                     case BehaviorKind.Drill: AppendDrill(_machines[i]); break;
@@ -191,9 +214,54 @@ namespace Facet.Game
                             nameof(_machines), _machines[i].Behavior,
                             "a new behaviour must get a drawing case in MachineRenderer");
                 }
+                MachineSnapshot machine = _machines[i];
+                float scale = PlacementScale(machine.Cell);
+                if (!Mathf.Approximately(scale, 1f))
+                {
+                    Vector2 pivot = CellCentre(machine.Cell);
+                    if (MachineFootprint.TrySecond(machine.Behavior, machine.Cell, machine.Direction, out Int2 second))
+                        pivot = (pivot + CellCentre(second)) * 0.5f;
+                    ScaleGeometry(mark, pivot, scale);
+                }
+                AppendMuzzle(machine);
             }
 
             EndSprites();
+        }
+
+        private float PlacementScale(Int2 cell)
+        {
+            // A removal after a build cancels the old pop, even if a new occupant shares the tile.
+            for (int i = 0; i < _feedback.Count; i++)
+            {
+                FeedbackEvents.Entry entry = _feedback[i];
+                if (entry.Event.Cell != cell) continue;
+                if (entry.Event.Kind == SimEventKind.Removed || entry.Event.Kind == SimEventKind.BuildingDestroyed) return 1f;
+                if (entry.Event.Kind != SimEventKind.Built) continue;
+                float t = (_seconds - entry.Seconds) / Mathf.Max(0.01f, Colors.Feedback.PlacementSeconds);
+                return t >= 0f && t < 1f ? Mathf.LerpUnclamped(0.7f, 1f, ViewFeedback.EaseOutBack(t)) : 1f;
+            }
+            return 1f;
+        }
+
+        private void AppendMuzzle(in MachineSnapshot machine)
+        {
+            if (machine.Behavior != BehaviorKind.Turret ||
+                !_feedback.Latest(SimEventKind.ShotFired, machine.Cell, out FeedbackEvents.Entry shot)) return;
+            float t = (_seconds - shot.Seconds) / Mathf.Max(0.01f, Colors.Feedback.MuzzleSeconds);
+            if (t < 0f || t >= 1f) return;
+            Vector2 direction = new Vector2(machine.Aim.X, machine.Aim.Y).normalized;
+            if (direction.sqrMagnitude < 0.001f)
+            {
+                Vec2 facing = machine.Direction.ToVec();
+                direction = new Vector2(facing.X, facing.Y);
+            }
+            Vector2 tip = CellCentre(machine.Cell) + direction * Colors.Machines.BarrelLength;
+            Color flash = Colors.Feedback.FullHit;
+            flash.a *= 1f - t;
+            AppendFeedbackRing(tip, 0.06f + 0.12f * t, Colors.Feedback.StrokePixels, flash, 12);
+            AppendLane(tip, tip + direction * (0.22f * (1f - t)),
+                WorldPerPixel * Colors.Feedback.StrokePixels, flash);
         }
 
         /// <summary>A hollow frame plus an outlet chevron. No outline: the ore mark underneath IS the

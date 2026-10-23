@@ -169,7 +169,7 @@ namespace Facet.Game
             _camera.backgroundColor = palette.Background;
 
             UpdateWorldPerPixel();
-            Frames = new FrameClock { Frame = new ViewFrame(1f, WorldPerPixel, new Int2(-1, -1)) };
+            Frames = new FrameClock { Frame = new ViewFrame(1f, WorldPerPixel, new Int2(-1, -1), Time.unscaledTime) };
 
             if (autoCreateViews) BuildViews();
         }
@@ -193,7 +193,7 @@ namespace Facet.Game
             // the views keep drawing it under the shell's own backdrop.
             if (_shell != null && _shell.Open)
             {
-                Frames.Frame = new ViewFrame(1f, WorldPerPixel, CursorCell);
+                Frames.Frame = new ViewFrame(1f, WorldPerPixel, CursorCell, Time.unscaledTime);
                 return;
             }
 
@@ -284,7 +284,10 @@ namespace Facet.Game
             int ticks = Clock.Advance(Time.deltaTime, SimConfig.TickDt);
             for (int i = 0; i < ticks; i++)
             {
+                int beforeTick = World.TickCount;
                 World.Tick(cmd);
+                if (cmd.RestartPressed || World.TickCount < beforeTick)
+                    for (int view = 0; view < _views.Count; view++) _views[view].Rebind(World);
                 _input.ConsumeOneShots();
                 cmd = _input.Snapshot();
             }
@@ -313,7 +316,7 @@ namespace Facet.Game
 
             // Publish the frame views draw in, written once after the tick loop and the WorldPerPixel
             // refresh, so every view reads the same value.
-            Frames.Frame = new ViewFrame(Alpha, WorldPerPixel, CursorCell);
+            Frames.Frame = new ViewFrame(Alpha, WorldPerPixel, CursorCell, Time.unscaledTime);
         }
 
         private void UpdateWorldPerPixel()
@@ -445,7 +448,7 @@ namespace Facet.Game
             Clock.ResetBacklog();
             Alpha = 1f;
             CursorCell = new Int2(-1, -1);
-            Frames.Frame = new ViewFrame(1f, WorldPerPixel, CursorCell);
+            Frames.Frame = new ViewFrame(1f, WorldPerPixel, CursorCell, Time.unscaledTime);
 
             for (int i = 0; i < _views.Count; i++) _views[i].Rebind(World);
             // The run opens on the Core: the map can be taller than the screen, and the Core is what the

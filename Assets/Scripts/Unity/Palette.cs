@@ -7,7 +7,7 @@ namespace Facet.Game
 {
     /// <summary>Everything FACET draws, as one asset: the shared material, every colour and outline
     /// thickness, the per-view geometry (radii, insets, chevrons, alphas) and layer depths. The art rule
-    /// "colour says which side it is on, polygon count says how damaged it is" makes this the single
+    /// "colour says which side it is on, the health bar says how damaged it is" makes this the single
     /// source of truth for the look, so a re-skin is a duplicate of this asset, not a code change. One
     /// number is deliberately absent: an enemy's body radius derives from
     /// <see cref="Balance.EnemySpacing"/>, so the drawn body and the room a walker keeps cannot drift.
@@ -221,6 +221,10 @@ namespace Facet.Game
 
         [Header("Enemies and wave entry points")]
         public EnemyLook Enemies = new EnemyLook();
+
+        [Header("Motion and feedback")]
+        [Tooltip("Presentation feedback only. Disable to compare identical runs without effects.")]
+        public FeedbackLook Feedback = new FeedbackLook();
 
         [Header("The defended Core")]
         public CoreLook CoreBlock = new CoreLook();
@@ -484,7 +488,7 @@ namespace Facet.Game
             [Tooltip("Kill burst: the colour the ring wears as it expands and fades.")]
             public Color HitFlash = new Color(1f, 1f, 1f, 1f);
 
-            [Tooltip("Kill burst: how many ticks the ring is drawn for after a kill.")]
+            [Tooltip("Legacy serialized value, retained for asset compatibility. Feedback.KillSeconds now controls duration.")]
             public int KillRingTicks = 10;
             [Tooltip("Kill burst: how far the ring has expanded when it fades out, in tiles.")]
             public float KillRingRadius = 0.8f;
@@ -493,6 +497,25 @@ namespace Facet.Game
             public float KillRingPixels = 5f;
             [Tooltip("Kill burst: segments in the ring. Enough that a three-quarter-tile ring reads round.")]
             public int KillRingSegments = 28;
+        }
+
+        [Serializable]
+        public sealed class FeedbackLook
+        {
+            public bool Enabled = true;
+            [Tooltip("Suppress the added pops, impact flashes and bursts without changing gameplay.")]
+            public bool ReducedMotion = false;
+            public bool Active => Enabled && !ReducedMotion;
+            [Min(0.01f)] public float PlacementSeconds = 0.24f;
+            [Min(0.01f)] public float HitSeconds = 0.18f;
+            [Min(0.01f)] public float ImpactSeconds = 0.42f;
+            [Min(0.01f)] public float KillSeconds = 0.34f;
+            [Min(0.01f)] public float CoreHitSeconds = 0.4f;
+            [Min(0.01f)] public float MuzzleSeconds = 0.12f;
+            [Min(1f)] public float StrokePixels = 2f;
+            public Color FullHit = Color.white;
+            public Color HalfHit = new Color(0.95f, 0.65f, 0.25f, 1f);
+            public Color CoreHit = new Color(0.85f, 0.22f, 0.16f, 1f);
         }
 
         [Serializable]
