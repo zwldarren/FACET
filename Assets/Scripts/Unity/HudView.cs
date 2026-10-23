@@ -1070,11 +1070,13 @@ namespace Facet.Game
         /// map grants: the shelf fills as the lesson hands things over, and the ladder between maps is the
         /// shell's sentence rather than a row of grey keys.
         ///
-        /// <b>The current lesson line points here too.</b> Every kind its ghost blueprint names wears a slow
-        /// accent pulse for as long as the line is current (<see cref="BuildTile.Lesson"/>), which is the
-        /// thread from the card's sentence and the map's picture to the key that builds it. A line with no
-        /// blueprint, a finished lesson and the player's own selected or hovered mark all leave the outline
-        /// alone.
+        /// <b>The current lesson line points here too.</b> Every kind its ghost blueprint names wears a
+        /// breathing ring of its own for as long as the line is current (<see cref="BuildTile.Lesson"/>),
+        /// which is the thread from the card's sentence and the map's picture to the key that builds it. The
+        /// ring is deliberately several times the weight of the tile's hairline and pulses to the brightest
+        /// ink, because a pulse that rode the same hairline the selected tile wears made the two states look
+        /// alike. A line with no blueprint, a finished lesson and the player's own selected or hovered mark
+        /// all leave the ring off.
         ///
         /// Eleven tiles at the strip's 808.25 design units is 66.75 apiece, so a tile is a key rather than a
         /// row: name, then hotkey and price, then the afford line.
@@ -1172,6 +1174,12 @@ namespace Facet.Game
 
                 tile.Border = HudUi.Border(tile.Root, "frame", _palette.HudAccent, ControlRadius, 1f);
                 tile.Border.Show(false);
+
+                // The lesson's own ring, three units thick against the hairline above: "this key is the
+                // answer to the current line" has to be a different *weight* of mark, not a brighter shade
+                // of the same outline the selected tile wears - the two states were one glance apart.
+                tile.Cue = HudUi.Border(tile.Root, "cue", _palette.HudAccent, ControlRadius, 3f);
+                tile.Cue.Show(false);
 
                 tile.Selected = kind == _world.SelectedKind;
                 tile.Affordable = _world.Economy.CanAfford(kind);
@@ -2526,15 +2534,27 @@ namespace Facet.Game
                     }
                 }
 
-                // The lesson's own tile wears a slow pulse for as long as the line is current: the card says
-                // what to do, the map shows where, and this is the one thread from the sentence to the key
-                // that does it. The player's own marks still win - selected or hovered has been seen.
+                // The lesson's own key wears a ring three times the hairline's weight that breathes from the
+                // accent toward the brightest ink, and the keycap behind its digit lights with it. Weight,
+                // not shade, is the point: the selected tile's outline and this ring are no longer two
+                // brightnesses of the same line, so "the line wants this key" cannot be read as "this key is
+                // selected" - which is what a pulse that only rode the same hairline did. The player's own
+                // marks still win: selected or hovered has been seen.
                 if (tile.Lesson && !tile.Selected && !tile.Hovered)
                 {
-                    float pulse = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 4.5f);
-                    tile.Border.Set(HudInk.Blend(
-                        HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.18f),
-                        _palette.HudAccent, pulse));
+                    float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4.5f);
+                    Color cue = HudInk.Blend(_palette.HudAccent, _palette.HudText, 0.35f + 0.65f * pulse);
+
+                    tile.Cue.Show(true);
+                    tile.Cue.Set(cue);
+                    tile.Keycap.Set(HudInk.Blend(_palette.HudPanel, cue, 0.28f + 0.34f * pulse));
+                    tile.Hotkey.SetColour(cue);
+                }
+                else
+                {
+                    // The keycap and the digit were put back by DressBuildTile on the frame this state
+                    // changed; only the ring is this block's to clear.
+                    tile.Cue.Show(false);
                 }
 
                 // The line along the tile's bottom says how far from affordable the bank is: nine tenths of
@@ -3880,14 +3900,22 @@ namespace Facet.Game
             public HudText Name;
             public HudBar Afford;
             public HudBorder Border;
+
+            /// <summary>The lesson's ring: the same tile, marked with a ring several times the hairline's
+            /// weight and pulsing toward the brightest ink, so "the line wants this key" can never be read
+            /// as "this key is selected". Shown only while the line wants the kind and the player has not
+            /// marked the tile himself.</summary>
+            public HudBorder Cue;
+
             public BuildKind Kind;
             public bool Selected;
             public bool Hovered;
             public bool Affordable;
             public bool CostPlaced;
 
-            /// <summary>Is this kind part of the current lesson line's blueprint? The update pass pulses its
-            /// outline while the line is current, so the bar points at the key the map is asking for.</summary>
+            /// <summary>Is this kind part of the current lesson line's blueprint? The update pass lights its
+            /// cue ring - a thick, breathing mark of its own - while the line is current, so the bar points at
+            /// the key the map is asking for.</summary>
             public bool Lesson;
 
             /// <summary>A rebuild that grew the bar (a tutorial's hand-over) stamps the added tiles with the

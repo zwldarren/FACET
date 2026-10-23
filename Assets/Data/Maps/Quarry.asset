@@ -268,7 +268,7 @@ MonoBehaviour:
     StartsWave: 0
   - Step: 3
     Text: Cutter (3) on the left line - turn it to flow east so the cut is top/bottom.
-    Hint: Drill the left vein, belt east, jog up one tile, then Q/E the cutter to flow east.
+    Hint: Drill the left vein, belt straight east into the cutter's back, then Q/E to flow east.
     Target: {x: 17, y: 8}
     Ghost:
     - Build: 1
@@ -288,9 +288,6 @@ MonoBehaviour:
       Facing: 1
     - Build: 0
       Cell: {x: 16, y: 7}
-      Facing: 0
-    - Build: 0
-      Cell: {x: 16, y: 8}
       Facing: 1
     - Build: 2
       Cell: {x: 17, y: 8}

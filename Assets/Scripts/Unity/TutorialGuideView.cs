@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Facet.Core;
 using UnityEngine;
 
@@ -14,6 +15,30 @@ namespace Facet.Game
     /// belts as beds with their arrows, a cutter across both its tiles, a turret with its range ring - so the
     /// player can copy the answer instead of inferring it. The ghost is a picture, never a placement: it
     /// casts no shadow, occupies nothing and does not stop the player building somewhere else.
+    ///
+    /// <b>A ghost is the building, faded - not a highlighted tile.</b> An earlier pass drew every piece with
+    /// one accent wash, which said "something goes here" for every cell alike: a line of identical squares
+    /// never told a player whether this one wanted a belt or a gun. So each ghost now wears the silhouette
+    /// its building will have - the drill's hollow frame, the operator's hexagon, the turret's octagon and
+    /// barrel, the cutter's two-tile fork, the belt's bed, rails and arrow - and, where that colour is not
+    /// itself what a finished one looks like, that colour too. The cell is recognised before the sentence is
+    /// read. The two figures that are geometry rather than a lookup are the renderer's own
+    /// (<see cref="MachineRenderer.CutterBodyFigure"/>, <see cref="MachineRenderer.FrameBars"/>), so a ghost
+    /// cannot promise a shape the placed machine does not stand on.
+    ///
+    /// <b>Colour: the building's own, or the guide's accent when that would read as built work.</b> A
+    /// machine ghost wears the body colour its building will have, mixed a little toward the outline so its
+    /// slate does not stand on pale ground as solidly as a standing machine's. A belt cannot do that: its
+    /// bed is cream on paper, so a bed in its own colour - faded or darkened - is exactly what a laid belt
+    /// looks like. The one transport on the map is therefore drawn in the guide's accent, pale for the bed
+    /// and solid for the rails and the direction arrow, so a blue track says "this goes here" the way a
+    /// cream one never can.
+    ///
+    /// <b>And why the rim is the accent.</b> A ghost whose body is the real building's colour is one glance
+    /// away from reading as a building that is already there. Every machine ghost therefore wears the HUD's
+    /// accent as its rim - the same colour the cards and the pulsing build-bar keys use for the lesson - so
+    /// the shape answers "what goes here" and the rim answers "this is the plan". Nothing here casts a
+    /// shadow, carries a badge or shows health, and the rim is fainter than a standing machine's outline.
     ///
     /// <b>Off screen is the old problem, unchanged.</b> The first line points at a vein nine tiles from the
     /// Core, and whether the camera shows it is the camera's business. The edge marker reuses
@@ -34,21 +59,32 @@ namespace Facet.Game
         private const float ChevronHalfWidthPixels = 6f;
         private const float ChevronLengthPixels = 13f;
 
-        /// <summary>How much of the accent a ghost's body carries, and how solid its outline is. Low enough
-        /// to read as a plan laid over the map, high enough to survive a belt, an item and a vein under it.
-        /// </summary>
-        private const float GhostFillAlpha = 0.28f;
-        private const float GhostEdgeAlpha = 0.72f;
-        private const float GhostBedAlpha = 0.16f;
+        /// <summary>How solid a ghost's body and its belt are. Translucent enough that the grid, a vein and
+        /// an item still show through the plan, solid enough that the silhouette - which is now the whole
+        /// readout - survives those things underneath it. <see cref="GhostEdgeAlpha"/> is the rim's, and the
+        /// rim is the accent: see <see cref="Rim"/>.</summary>
+        private const float GhostBodyAlpha = 0.55f;
+        private const float GhostEdgeAlpha = 0.82f;
 
-        /// <summary>The inset of a machine's ghost body inside its tile, matching the placement ghost so
-        /// the tutorial's picture and the player's own ghost describe a footprint the same way.</summary>
-        private const float GhostBodyInset = 0.13f;
+        /// <summary>The belt's three alphas, all in the guide's accent rather than in the belt's own cream:
+        /// a bed in its real colour read as a belt that was already laid, whichever way it was faded. Blue
+        /// is the guide's ink - it is what the machine rims and the lesson's key ring wear - so a blue track
+        /// says "this goes here" the way a cream one never can.</summary>
+        private const float GhostBeltAlpha = 0.30f;
+        private const float GhostRailAlpha = 0.50f;
+        private const float GhostArrowAlpha = 0.85f;
 
-        /// <summary>A ghost outline's screen width, capped so a distant zoom cannot turn a one-tile body
-        /// into an outline with a hole in it.</summary>
-        private const float GhostOutlinePixels = 2f;
-        private const float MaxGhostOutline = 0.16f;
+        /// <summary>The coverage a ghosted turret is bought for, fainter than the placement ghost's own ring:
+        /// the ring is context, the body is the answer to "what goes here".</summary>
+        private const float GhostRingAlpha = 0.30f;
+
+        /// <summary>How far a machine ghost's body is mixed toward the outline, so its slate does not stand
+        /// on pale ground as solidly as the building it promises. The belt is deliberately not mixed: a
+        /// darkened cream bed is exactly what a laid belt looks like.</summary>
+        private const float GhostInkMix = 0.30f;
+
+        /// <summary>The four sides, in <see cref="Dir"/> order, for the belt beds' feed lanes.</summary>
+        private static readonly Dir[] Sides = { Dir.North, Dir.East, Dir.South, Dir.West };
 
         /// <summary>The camera whose view decides whether the layout is on screen - the same one the locator
         /// is handed, so the two cannot disagree.</summary>
@@ -75,6 +111,28 @@ namespace Facet.Game
         private Int2 _seenTarget;
         private int _seenStep = -1;
         private int _seenGhosts = -1;
+
+        /// <summary>The shipped silhouettes the real renderer draws with, cached once: a ghost body is a
+        /// polygon, and rebuilding one per ghost per frame would allocate in the one view that redraws every
+        /// frame a lesson is up.</summary>
+        private Vector2[] _operatorBody;
+        private Vector2[] _turretBody;
+        private Vector2[] _splitterHub;
+        private Vector2[] _sorterBody;
+        private Vector2[] _sorterTurned;
+        private Vector2[] _wallBody;
+        private Vector2[] _sinkBody;
+        private Vector2[] _sinkHole;
+
+        /// <summary>The cutter's fork, one body per facing, cached like the renderer's: its silhouette lies
+        /// along the flow, so its four facings are four shapes rather than one turned.</summary>
+        private Vector2[][] _cutterBodies;
+
+        /// <summary>Scratch for the turret's barrel and the drill's four frame bars - written and read inside
+        /// one ghost, so no ghost allocates.</summary>
+        private readonly Vector2[] _barrel = new Vector2[4];
+        private readonly Vector2[] _bracket = new Vector2[4];
+        private readonly Rect[] _frameBars = new Rect[4];
 
         protected override Palette.Layer Layer => Colors.GuideLayer;
 
@@ -114,6 +172,32 @@ namespace Facet.Game
 
             _barTiles = tiles;
             MarkDirty();
+        }
+
+        /// <summary>Every silhouette a ghost can wear, built the way <see cref="MachineRenderer"/> builds the
+        /// bodies it draws, plus the two rounded blocks (wall, sink) that machine has no operator row for.</summary>
+        protected override void OnInitialized()
+        {
+            Palette.MachineLook look = Colors.Machines;
+            float corner = look.CornerRadius;
+
+            _operatorBody = ProcMesh.Rounded(ProcMesh.RegularPolygon(6, look.OperatorRadius, 30f), corner);
+            _turretBody = ProcMesh.Rounded(ProcMesh.RegularPolygon(8, look.TurretRadius), corner);
+            _splitterHub = ProcMesh.Rounded(
+                ProcMesh.RegularPolygon(4, look.SplitterHubHalfSize * 1.4143f, 45f), corner);
+            _sorterBody = ProcMesh.Rounded(ProcMesh.RegularPolygon(3, look.SorterRadius), corner * 0.75f);
+            _sorterTurned = new Vector2[_sorterBody.Length];
+            _wallBody = ProcMesh.Rounded(
+                ProcMesh.RegularPolygon(4, (0.5f - look.WallInset) * 1.4143f, 45f), corner);
+            _sinkBody = ProcMesh.Rounded(
+                ProcMesh.RegularPolygon(4, (0.5f - look.SinkInset) * 1.4143f, 45f), corner);
+            _sinkHole = ProcMesh.Rounded(
+                ProcMesh.RegularPolygon(4, look.SinkHoleHalfSize * 1.4143f, 45f), corner * 0.6f);
+
+            _cutterBodies = new Vector2[4][];
+            for (int facing = 0; facing < _cutterBodies.Length; facing++)
+                _cutterBodies[facing] = ProcMesh.Rounded(
+                    MachineRenderer.CutterBodyFigure((Dir)facing, look.OperatorRadius), corner);
         }
 
         /// <summary>
@@ -187,43 +271,42 @@ namespace Facet.Game
             AppendBlueprint();
         }
 
-        /// <summary>Draw the current line's standard layout, ghost by ghost. The alpha and the outline are
-        /// the same for every piece, so a multi-tile run reads as one plan rather than as a row of unrelated
-        /// highlights.</summary>
+        /// <summary>Draw the current line's standard layout, ghost by ghost. Each piece is drawn from its own
+        /// building rather than from a shared highlight, so the row reads as a plan of several kinds rather
+        /// than as a run of identical cells.</summary>
         private void AppendBlueprint()
         {
             TutorialTask task = World.Tutorial.Current;
-            if (task.Ghost.Length == 0)
+            TutorialGhost[] ghosts = task.Ghost;
+
+            if (ghosts.Length == 0)
             {
                 AppendFallbackFrame(_seenTarget);
                 return;
             }
 
-            for (int i = 0; i < task.Ghost.Length; i++) AppendGhost(task.Ghost[i]);
+            for (int i = 0; i < ghosts.Length; i++) AppendGhost(ghosts, i);
         }
 
-        /// <summary>One ghost. A belt has no machine row, so it is drawn first; everything else asks the run's
-        /// own content table for its behaviour, which is what lets a second gun or a second operator be
-        /// ghosted without a line here. A kind this table does not define is skipped: a partial table is
-        /// legal, and a guide that threw over an unpainted row would take the whole frame with it.</summary>
-        private void AppendGhost(in TutorialGhost ghost)
+        /// <summary>One ghost, in its building's own figure. A belt is drawn first because it is not a
+        /// machine row; everything else asks the run's content table for its behaviour, which is what lets a
+        /// second gun or a second operator be ghosted without a line here. A kind this table does not define
+        /// is skipped: a partial table is legal, and a guide that threw over an unpainted row would take the
+        /// whole frame with it.</summary>
+        private void AppendGhost(TutorialGhost[] ghosts, int index)
         {
-            Color accent = Colors.HudAccent;
-            Color edge = accent;
-            edge.a = GhostEdgeAlpha;
+            TutorialGhost ghost = ghosts[index];
 
             if (ghost.Build == BuildKind.Belt)
             {
-                Color bed = Color.Lerp(Colors.BodyColor(BehaviorKind.None), accent, 0.35f);
-                bed.a = GhostFillAlpha;
-                AppendBeltGhost(ghost.Cell, ghost.Direction, bed, edge);
+                AppendBeltGhost(ghost, ghosts);
                 return;
             }
 
             if (!World.Content.TryMachine(ghost.Build, out MachineDef machine)) return;
 
-            Color body = Color.Lerp(Colors.BodyColor(machine.Behavior), accent, 0.35f);
-            body.a = GhostFillAlpha;
+            Color body = Ink(Colors.BodyColor(machine.Behavior), GhostBodyAlpha);
+            Color edge = Rim();
 
             switch (machine.Behavior)
             {
@@ -239,143 +322,258 @@ namespace Facet.Game
                     AppendTurretGhost(ghost.Cell, ghost.Build, ghost.Direction, body, edge);
                     break;
 
+                case BehaviorKind.Pipe:
+                    AppendPipeGhost(ghost.Cell, ghost.Direction, body);
+                    break;
+
+                case BehaviorKind.Sorter:
+                    AppendSorterGhost(ghost.Cell, ghost.Direction, body, edge);
+                    break;
+
+                case BehaviorKind.Splitter:
+                    AppendShape(_splitterHub, CellCentre(ghost.Cell), body, edge);
+                    break;
+
                 case BehaviorKind.Sink:
                     AppendSinkGhost(ghost.Cell, body, edge);
                     break;
 
+                case BehaviorKind.None:
+                    AppendShape(_wallBody, CellCentre(ghost.Cell), body, edge);
+                    break;
+
                 default:
-                    AppendBodyQuad(ghost.Cell, body, edge);
-                    if (machine.UsesFacing) AppendBuildChevron(CellCentre(ghost.Cell), ghost.Direction, edge);
+                    // The chambered operators (rotator, stacker) and any future one-tile machine that is not
+                    // otherwise named: the operator's own hexagon, so the family still reads as one.
+                    AppendShape(_operatorBody, CellCentre(ghost.Cell), body, edge);
                     break;
             }
         }
 
-        /// <summary>A belt's ghost: a faint bed and a bright chevron. The bed says "a belt goes here"; the
-        /// chevron says the one thing a belt cannot be inferred without - which way the run points.</summary>
-        private void AppendBeltGhost(Int2 cell, Dir direction, Color bed, Color edge)
+        /// <summary>
+        /// A belt's ghost: the bed, its rails and one lane per side something arrives from, exactly as the
+        /// placed belt is drawn - a hub, an exit lane and a feed lane for every ghost that pushes into it -
+        /// plus the direction chevron, because which way a run points is the one thing a bed cannot say alone.
+        /// The feeds are read off the blueprint rather than off the world: a line is a picture of a run that
+        /// does not exist yet, so its corners have to be inferred from the ghosts themselves or every cell
+        /// would draw as a straight segment.
+        /// </summary>
+        private void AppendBeltGhost(in TutorialGhost ghost, TutorialGhost[] ghosts)
         {
-            Color fill = bed;
-            fill.a = GhostBedAlpha;
-            AppendRect(cell.X, cell.Y, cell.X + 1f, cell.Y + 1f, fill);
-            AppendCellBorder(cell, edge, Colors.Cursor.EdgeAlpha * 0.55f);
-            AppendBuildChevron(CellCentre(cell), direction, edge);
+            Palette.BeltLook look = Colors.Belts;
+            float half = look.HalfWidth;
+            float rail = Mathf.Max(0f, look.RailWidth);
+
+            // Two passes, rails first, like the belt view: a bed laid over its own rail would leave the
+            // neighbour's rail drawn across the joint where two cells meet. All three parts are the guide's
+            // accent: a bed in the belt's own cream, faded or not, reads as a belt that was already laid on
+            // pale ground, and the plan has to be read as a plan at a glance.
+            if (rail > 0f)
+                AppendBed(ghost.Cell, ghost.Direction, ghosts, half + rail, WithAlpha(Colors.HudAccent, GhostRailAlpha));
+
+            AppendBed(ghost.Cell, ghost.Direction, ghosts, half, WithAlpha(Colors.HudAccent, GhostBeltAlpha));
+
+            AppendChevron(CellCentre(ghost.Cell), ghost.Direction,
+                look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength,
+                WithAlpha(Colors.HudAccent, GhostArrowAlpha));
         }
 
-        /// <summary>A drill's ghost: the same hollow frame the machine draws, so the ore under it stays the
-        /// identity, plus its output chevron.</summary>
-        private void AppendDrillGhost(Int2 cell, Dir direction, Color body, Color edge)
+        /// <summary>One cell's bed at a half width: the hub every lane docks into, the exit lane to the cell's
+        /// edge and a lane in from every side the blueprint feeds it from.</summary>
+        private void AppendBed(Int2 cell, Dir direction, TutorialGhost[] ghosts, float half, Color color)
         {
-            Palette.MachineLook look = Colors.Machines;
-            float lo = look.FrameInset;
-            float thickness = look.FrameThickness;
-            float hi = 1f - lo;
-            float hiInner = hi - thickness;
+            Vector2 centre = CellCentre(cell);
+            Vector2 forward = ToVector(direction);
 
-            float x = cell.X;
-            float y = cell.Y;
-            AppendRect(x + lo, y + lo, x + hi, y + lo + thickness, body);
-            AppendRect(x + lo, y + hiInner, x + hi, y + hi, body);
-            AppendRect(x + lo, y + lo, x + lo + thickness, y + hi, body);
-            AppendRect(x + hi - thickness, y + lo, x + hi, y + hi, body);
+            AppendRect(centre.x - half, centre.y - half, centre.x + half, centre.y + half, color);
+            AppendLane(centre, centre + forward * 0.5f, half, color);
 
-            AppendCellBorder(cell, edge, Colors.Cursor.EdgeAlpha * 0.40f);
-            AppendBuildChevron(CellCentre(cell), direction, edge);
-        }
-
-        /// <summary>The cutter's ghost: one body on each tile, the blade down the lane the belt feeds and a
-        /// chevron in each lane it forks into - the same picture the placement ghost makes, so a player who
-        /// follows the tutorial already knows what the cutter asks of them.</summary>
-        private void AppendCutterGhost(Int2 cell, Dir facing, Color body, Color edge)
-        {
-            Dir lane = MachineFootprint.LaneOf(facing);
-            Int2 laneCell = cell + lane.Offset();
-
-            AppendBodyQuad(cell, body, edge);
-            AppendBodyQuad(laneCell, body, edge);
-
-            Vec2 flow2 = facing.ToVec();
-            var flow = new Vector2(flow2.X, flow2.Y);
-            var middle = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
-            var laneMiddle = new Vector2(laneCell.X + 0.5f, laneCell.Y + 0.5f);
-
-            float blade = Mathf.Min(GhostOutlinePixels * WorldPerPixel, MaxGhostOutline) * 0.6f;
-            AppendLane(middle - flow * 0.5f, middle + flow * 0.5f, blade, edge);
-
-            AppendBuildChevron(middle, facing, edge);
-            AppendBuildChevron(laneMiddle, facing, edge);
-        }
-
-        /// <summary>A turret's ghost: its body, its rest barrel and its range ring. The ring is the whole
-        /// reason a turret's tile matters - a gun placed a tile too far from the lane never fires - so the
-        /// blueprint draws the coverage the player is buying, not only where the body goes.</summary>
-        private void AppendTurretGhost(Int2 cell, BuildKind kind, Dir direction, Color body, Color edge)
-        {
-            AppendBodyQuad(cell, body, edge);
-
-            Vec2 forward2 = direction.ToVec();
-            var forward = new Vector2(forward2.X, forward2.Y);
-            var centre = CellCentre(cell);
-            var tip = centre + forward * Colors.Machines.BarrelLength;
-            float halfWidth = Colors.Machines.BarrelHalfWidth;
-
-            AppendLane(centre, tip, halfWidth, edge);
-
-            if (World.Content.IsTurret(kind))
-                AppendRangeRing(centre, World.Content.Turret(kind).Range, WithAlpha(edge, 0.28f));
-        }
-
-        /// <summary>A sink's ghost: a body with a pit and an inward chevron on every side, matching the
-        /// machine and the placement ghost - everything goes in, nothing comes out.</summary>
-        private void AppendSinkGhost(Int2 cell, Color body, Color edge)
-        {
-            AppendBodyQuad(cell, body, edge);
-
-            var centre = CellCentre(cell);
-            float pit = Colors.Machines.SinkHoleHalfSize;
-            AppendRect(centre.x - pit, centre.y - pit, centre.x + pit, centre.y + pit, edge);
-
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < Sides.Length; i++)
             {
-                Dir side = (Dir)i;
-                Vec2 away2 = side.ToVec();
-                var away = new Vector2(away2.X, away2.Y);
-                AppendBuildChevron(centre + away * Colors.Machines.ChevronOffset, side.Opposite(), edge);
+                if (!Feeds(ghosts, cell, Sides[i])) continue;
+
+                AppendLane(centre + ToVector(Sides[i]) * 0.5f, centre, half, color);
             }
         }
 
-        /// <summary>An inset body quad with a screen-constant outline: the generic machine ghost, and half of
-        /// the two-tile cutter's picture.</summary>
-        private void AppendBodyQuad(Int2 cell, Color body, Color edge)
+        /// <summary>Does anything in this blueprint push an item onto <paramref name="cell"/> across the side
+        /// <paramref name="side"/>? A belt that points at the cell feeds it; a machine feeds the tiles its own
+        /// fronts are on, and a cutter's two fronts sit on both of its tiles.</summary>
+        private static bool Feeds(TutorialGhost[] ghosts, Int2 cell, Dir side)
         {
-            float lo = GhostBodyInset;
-            float hi = 1f - GhostBodyInset;
+            Int2 from = cell + side.Offset();
 
-            AppendRect(cell.X + lo, cell.Y + lo, cell.X + hi, cell.Y + hi, body);
-            AppendCellBorder(cell, edge, Colors.Cursor.EdgeAlpha * 0.55f);
+            for (int i = 0; i < ghosts.Length; i++)
+            {
+                TutorialGhost other = ghosts[i];
+
+                if (other.Build == BuildKind.Belt)
+                {
+                    if (other.Cell == from && other.Direction == side.Opposite()) return true;
+                    continue;
+                }
+
+                if (other.Cell + other.Direction.Offset() == cell) return true;
+
+                if (other.Build == BuildKind.Cutter &&
+                    other.Cell + MachineFootprint.LaneOf(other.Direction).Offset() + other.Direction.Offset() == cell)
+                    return true;
+            }
+
+            return false;
         }
 
-        /// <summary>An inset border around a cell. Thin, because the ghost's body already carries the
-        /// footprint: the edge is what keeps it visible over a bright vein.</summary>
-        private void AppendCellBorder(Int2 cell, Color color, float alphaFraction)
+        /// <summary>A drill's ghost: the same hollow frame the machine stands in, so the ore under it stays the
+        /// identity, plus its outlet chevron at the same offset the real drill wears one. Each bar carries the
+        /// rim, which a placed drill's bars do not: it is how the one machine with no body still says "this is
+        /// the plan, not the drill".</summary>
+        private void AppendDrillGhost(Int2 cell, Dir direction, Color body, Color edge)
         {
-            float thickness = Mathf.Min(GhostOutlinePixels * WorldPerPixel, MaxGhostOutline);
-            float a = 0.05f;
-            float b = 0.95f;
+            Palette.MachineLook look = Colors.Machines;
 
-            Color ink = WithAlpha(color, color.a * alphaFraction);
-            AppendRect(cell.X + a, cell.Y + a, cell.X + b, cell.Y + a + thickness, ink);
-            AppendRect(cell.X + a, cell.Y + b - thickness, cell.X + b, cell.Y + b, ink);
-            AppendRect(cell.X + a, cell.Y + a, cell.X + a + thickness, cell.Y + b, ink);
-            AppendRect(cell.X + b - thickness, cell.Y + a, cell.X + b, cell.Y + b, ink);
+            MachineRenderer.FrameBars(new Vector2(cell.X, cell.Y), look, _frameBars);
+            for (int i = 0; i < _frameBars.Length; i++)
+            {
+                Rect bar = _frameBars[i];
+                AppendBracket(bar, body, edge);
+            }
+
+            AppendMachineChevron(cell, direction, body);
         }
 
-        /// <summary>The chevron every ghost wears, in the same geometry the cursor uses: world-space, so it
-        /// reads as an arrow printed on the tile rather than as UI floating over it.</summary>
-        private void AppendBuildChevron(Vector2 centre, Dir direction, Color color)
+        /// <summary>One axis-aligned bar as an outlined quad - <see cref="AppendRect"/> cannot wear a rim, and
+        /// the drill's frame is the one bodyless machine that needs one.</summary>
+        private void AppendBracket(Rect bar, Color body, Color edge)
         {
+            _bracket[0] = new Vector2(bar.xMin, bar.yMin);
+            _bracket[1] = new Vector2(bar.xMax, bar.yMin);
+            _bracket[2] = new Vector2(bar.xMax, bar.yMax);
+            _bracket[3] = new Vector2(bar.xMin, bar.yMax);
+
+            AppendPolygon(_bracket, Vector2.zero, body, edge, OutlineWidth);
+        }
+
+        /// <summary>The cutter's ghost: the renderer's own two-tile fork, the blade down the lane the belt
+        /// feeds, and a chevron in each lane it forks into. The fork already lies along the flow, so its
+        /// silhouette says which way the machine is turned - the chevrons are the guide's addition, and say
+        /// "both halves leave this way" where the body alone leaves the reader to work it out.</summary>
+        private void AppendCutterGhost(Int2 cell, Dir facing, Color body, Color edge)
+        {
+            AppendShape(CutterBodyFor(facing), CellCentre(cell), body, edge);
+
+            Vector2 flow = ToVector(facing);
+            Vector2 middle = CellCentre(cell);
+            Int2 laneCell = cell + MachineFootprint.LaneOf(facing).Offset();
+            Vector2 laneMiddle = CellCentre(laneCell);
+
+            AppendLane(middle - flow * 0.5f, middle + flow * 0.5f, OutlineWidth * 0.5f, edge);
+
             Palette.CursorLook look = Colors.Cursor;
-            AppendChevron(centre, direction, look.ChevronBack, look.ChevronHalfWidth,
-                look.ChevronLength, color);
+            AppendChevron(middle, facing, look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, edge);
+            AppendChevron(laneMiddle, facing, look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, edge);
+        }
+
+        /// <summary>A turret's ghost: the octagon, the barrel at its rest facing - the same readout a placed
+        /// gun gives while it has nothing to aim at - and the range ring. The ring is part of the answer: a gun
+        /// a tile too far from the lane never fires, so the blueprint draws the coverage being bought.</summary>
+        private void AppendTurretGhost(Int2 cell, BuildKind kind, Dir direction, Color body, Color edge)
+        {
+            Vector2 centre = CellCentre(cell);
+            Palette.MachineLook look = Colors.Machines;
+
+            AppendShape(_turretBody, centre, body, edge);
+
+            Vector2 forward = ToVector(direction);
+            Vector2 tip = centre + forward * look.BarrelLength;
+            float half = look.BarrelHalfWidth;
+            var right = new Vector2(-forward.y, forward.x);
+
+            // Wound CCW from the tip's left corner, the order the renderer's barrel uses.
+            _barrel[0] = tip - right * half;
+            _barrel[1] = tip + right * half;
+            _barrel[2] = centre + right * half;
+            _barrel[3] = centre - right * half;
+
+            AppendPolygon(_barrel, Vector2.zero, body, edge, OutlineWidth);
+
+            if (World.Content.IsTurret(kind))
+                AppendRangeRing(centre, World.Content.Turret(kind).Range, WithAlpha(Colors.RangeRing, GhostRingAlpha));
+        }
+
+        /// <summary>A pipe's ghost: the two rails and their collars across the jumped tile, the same 'over' the
+        /// machine reads as, plus its chevron.</summary>
+        private void AppendPipeGhost(Int2 cell, Dir direction, Color body)
+        {
+            Palette.MachineLook look = Colors.Machines;
+            Vector2 centre = CellCentre(cell);
+            Vector2 forward = ToVector(direction);
+            var right = new Vector2(-forward.y, forward.x);
+
+            Vector2 entry = centre - forward * 0.5f;
+            Vector2 landing = centre + forward * 1.5f;
+
+            AppendLane(entry + right * look.PipeRailOffset, landing + right * look.PipeRailOffset,
+                look.PipeRailWidth, body);
+            AppendLane(entry - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
+                look.PipeRailWidth, body);
+
+            float ct = look.PipeCollarThickness;
+            float cw = look.PipeCollarHalfWidth;
+            AppendLane(entry - forward * ct + right * cw, entry - forward * ct - right * cw, ct, body);
+            AppendLane(landing + right * cw, landing - right * cw, ct, body);
+
+            AppendMachineChevron(cell, direction, body);
+        }
+
+        /// <summary>A sorter's ghost: the triangle turned so its apex points out the exit side - the machine's
+        /// facing readout, which is why a placed sorter wears no chevron either.</summary>
+        private void AppendSorterGhost(Int2 cell, Dir direction, Color body, Color edge)
+        {
+            Rotated(_sorterBody, _sorterTurned, FacingAngle(direction));
+
+            AppendShape(_sorterTurned, CellCentre(cell), body, edge);
+        }
+
+        /// <summary>A sink's ghost: the block, the pit and a chevron on every side pointing in - everything
+        /// goes in, nothing comes out, and the machine has no facing for an outlet arrow to describe.</summary>
+        private void AppendSinkGhost(Int2 cell, Color body, Color edge)
+        {
+            Vector2 centre = CellCentre(cell);
+            Palette.MachineLook look = Colors.Machines;
+
+            AppendShape(_sinkBody, centre, body, edge);
+            AppendShape(_sinkHole, centre, Ink(Colors.Outline, GhostEdgeAlpha), edge);
+
+            for (int i = 0; i < Sides.Length; i++)
+            {
+                Dir side = Sides[i];
+                AppendChevron(centre + ToVector(side) * look.ChevronOffset, side.Opposite(),
+                    look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, edge);
+            }
+        }
+
+        /// <summary>One ghost body: the cached silhouette, filled and outlined at the outline width a standing
+        /// machine wears, so the plan and the build share an edge weight.</summary>
+        private void AppendShape(IReadOnlyList<Vector2> points, Vector2 centre, Color body, Color edge)
+            => AppendPolygon(points, centre, body, edge, OutlineWidth);
+
+        /// <summary>The cutter's cached fork for one facing, with the operator body as the fallback for a
+        /// direction the cache does not hold - the same guard the renderer makes, and for the same reason: a
+        /// per-frame draw must not throw over a diagonal nobody authored.</summary>
+        private Vector2[] CutterBodyFor(Dir flow)
+        {
+            int index = (int)flow;
+            return index >= 0 && index < _cutterBodies.Length ? _cutterBodies[index] : _operatorBody;
+        }
+
+        /// <summary>A machine's outlet chevron, at the offset the placed machine draws its own: the guide must
+        /// point where the real arrow points, or following it lands the belt a tile off.</summary>
+        private void AppendMachineChevron(Int2 cell, Dir direction, Color color)
+        {
+            Palette.MachineLook look = Colors.Machines;
+
+            AppendChevron(CellCentre(cell) + ToVector(direction) * look.ChevronOffset, direction,
+                look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, color);
         }
 
         /// <summary>The ring a turret ghost projects, as a thin annulus of quads: its width stays a constant
@@ -403,7 +601,7 @@ namespace Facet.Game
         private void AppendFallbackFrame(Int2 cell)
         {
             Color accent = Colors.HudAccent;
-            float thickness = Mathf.Min(GhostOutlinePixels * WorldPerPixel, MaxGhostOutline);
+            float thickness = Mathf.Min(Colors.OutlinePixels * 2f * WorldPerPixel, 0.16f);
 
             Color wash = WithAlpha(accent, accent.a * 0.12f);
             AppendRect(cell.X, cell.Y, cell.X + 1f, cell.Y + 1f, wash);
@@ -413,10 +611,55 @@ namespace Facet.Game
             AppendRect(cell.X + 1f - thickness, cell.Y, cell.X + 1f, cell.Y + 1f, accent);
         }
 
+        /// <summary>A machine body colour as the ghost wears it: mixed a little toward the outline so the
+        /// slate reads as a plan on pale ground, and translucent because the ghost is one. The belt does not
+        /// come through here - see <see cref="AppendBeltGhost"/>.</summary>
+        private Color Ink(Color color, float alpha)
+        {
+            color = Color.Lerp(color, Colors.Outline, GhostInkMix);
+            color.a = alpha;
+            return color;
+        }
+
+        /// <summary>The rim every machine ghost wears: the HUD's accent, the colour the cards and the build
+        /// bar use for "this is the lesson". It is what keeps a ghost whose body is the real building's own
+        /// colour from reading as a building that is already there.</summary>
+        private Color Rim() => WithAlpha(Colors.HudAccent, GhostEdgeAlpha);
+
         private static Color WithAlpha(Color color, float alpha)
         {
             color.a = alpha;
             return color;
+        }
+
+        private static Vector2 ToVector(Dir direction)
+        {
+            Vec2 v = direction.ToVec();
+            return new Vector2(v.X, v.Y);
+        }
+
+        /// <summary>The angle a machine faces, in degrees, with an east-facing default's vertex at zero -
+        /// the convention <see cref="ProcMesh.RegularPolygon"/> builds point lists in.</summary>
+        private static float FacingAngle(Dir direction)
+        {
+            Vec2 facing = direction.ToVec();
+            return Mathf.Atan2(facing.Y, facing.X) * Mathf.Rad2Deg;
+        }
+
+        /// <summary>One cached polygon turned about the origin through a scratch array, so ghosting a sorter
+        /// allocates nothing. Rotation preserves the counter-clockwise winding the outline normal depends
+        /// on.</summary>
+        private static void Rotated(IReadOnlyList<Vector2> points, Vector2[] scratch, float angleDegrees)
+        {
+            float radians = angleDegrees * Mathf.Deg2Rad;
+            float cos = Mathf.Cos(radians);
+            float sin = Mathf.Sin(radians);
+
+            for (int i = 0; i < points.Count; i++)
+            {
+                Vector2 p = points[i];
+                scratch[i] = new Vector2(p.x * cos - p.y * sin, p.x * sin + p.y * cos);
+            }
         }
 
         /// <summary>The cardinal direction a vector points closest to. A chevron is drawn on the tile grid, so a

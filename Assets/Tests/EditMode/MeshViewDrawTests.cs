@@ -236,6 +236,142 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void ATutorialLine_IsDrawnAsTheBuildingsItPromises_NotAsOneColourOfCell()
+        {
+            // A blueprint used to be one accent wash per ghost, which said "something goes here" for every
+            // cell alike - a line of identical squares never told the player whether this one wanted a belt or
+            // a gun. So each ghost now wears its building's own figure, and the differences below are the ones
+            // the player reads the answer off: a drill is hollow (the ore under it is its identity), a turret
+            // is a body with a gun and a ring, a belt is one tile of bed, a cutter is a fork over two tiles.
+            var cell = new Int2(4, 2);
+            Vector2 centre = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
+
+            GhostFigure drill = GhostFigureOf(BuildKind.Drill, cell, Dir.West);
+            GhostFigure belt = GhostFigureOf(BuildKind.Belt, cell, Dir.East);
+            GhostFigure turret = GhostFigureOf(BuildKind.Turret, cell, Dir.North);
+            GhostFigure cutter = GhostFigureOf(BuildKind.Cutter, cell, Dir.East);
+
+            Assert.Greater(drill.Points.Length, 0, "the drill's ghost is drawn");
+            Assert.Greater(belt.Points.Length, 0, "the belt's ghost is drawn");
+            Assert.Greater(turret.Points.Length, 0, "the turret's ghost is drawn");
+            Assert.Greater(cutter.Points.Length, 0, "the cutter's ghost is drawn");
+
+            Assert.IsFalse(drill.Covers(centre),
+                "a drill's ghost is the hollow frame the machine stands in, " +
+                "so the ore patch under it stays its identity");
+            Assert.IsTrue(belt.Covers(centre), "a belt's ghost is a bed, and a bed covers its tile's middle");
+            Assert.IsTrue(turret.Covers(centre), "a turret's ghost is a body on its tile");
+
+            Assert.LessOrEqual(belt.Reach(cell), 0.5f + 0.06f, "a belt's ghost stays inside the one tile it is");
+            Assert.Greater(turret.Reach(cell), 1f,
+                "while a turret's ghost draws the gun and the coverage it is bought for, past its own tile");
+
+            Int2 laneCell = cell + MachineFootprint.LaneOf(Dir.East).Offset();
+            var laneCentre = new Vector2(laneCell.X + 0.5f, laneCell.Y + 0.5f);
+            Assert.IsTrue(cutter.Covers(laneCentre), "a cutter's fork covers the second tile it stands on");
+            Assert.IsFalse(drill.Covers(laneCentre), "and a drill's frame stays on its own tile");
+        }
+
+        /// <summary>
+        /// One ghost of the given kind drawn by the real guide, on a lesson whose only line asks for it: the
+        /// camera looks straight at the cell, so the layout is on screen and the blueprint - not the edge
+        /// marker - is what lands in the mesh.
+        /// </summary>
+        private GhostFigure GhostFigureOf(BuildKind kind, Int2 cell, Dir direction)
+        {
+            var ghost = new TutorialGhost(kind, cell, direction);
+            var line = new TutorialTask(TutorialStep.PlaceDrill, "one ghost", cell,
+                new BuildKind[0], false, null, new[] { ghost });
+            var script = new TutorialScript(new[] { BuildKind.Belt }, new[] { line });
+
+            MapDefinition rig = Sim.RigMap();
+            var map = new MapDefinition("guide", rig.Width, rig.Height, rig.StartShapes,
+                rig.Patches, rig.SpawnPoints, new[] { new WaveDefinition(10f) }, rig.Terrain,
+                rig.CoreCell, Operators.All, rig.Seed, 0, script);
+
+            var world = new SimWorld(map, new SimConfig());
+
+            var cameraObject = new GameObject("Guide Camera");
+            var viewObject = new GameObject("TutorialGuide");
+            try
+            {
+                Camera camera = cameraObject.AddComponent<Camera>();
+                camera.orthographic = true;
+                camera.orthographicSize = 6f;
+                camera.aspect = 1.6f;
+                camera.transform.position = new Vector3(cell.X + 0.5f, cell.Y + 0.5f, -10f);
+
+                var view = viewObject.AddComponent<TutorialGuideView>();
+                view.Initialize(world, _clock, _palette);
+                view.InitializeGuide(camera);
+                view.Draw(_clock.Frame);
+
+                MeshFilter filter = viewObject.GetComponent<MeshFilter>();
+                Assert.IsNotNull(filter, "the guide draws through a mesh filter");
+                Assert.IsNotNull(filter.sharedMesh, "and built its mesh without a frame arriving");
+
+                Mesh mesh = filter.sharedMesh;
+                return new GhostFigure
+                {
+                    Points = Flat(mesh),
+                    Vertices = mesh.vertices,
+                    Triangles = mesh.triangles,
+                };
+            }
+            finally
+            {
+                Object.DestroyImmediate(viewObject);
+                Object.DestroyImmediate(cameraObject);
+            }
+        }
+
+        /// <summary>A drawn ghost, read out of the mesh before the view that made it goes - the mesh is the
+        /// view's and is freed with it. <see cref="Covers"/> is "is this point inside the figure", asked of
+        /// the triangles rather than of the outline, because hollow and filled are drawn from the same rim.</summary>
+        private sealed class GhostFigure
+        {
+            public Vector2[] Points;
+            public Vector3[] Vertices;
+            public int[] Triangles;
+
+            public bool Covers(Vector2 point)
+            {
+                for (int i = 0; i + 2 < Triangles.Length; i += 3)
+                {
+                    if (Inside(point, Vertices[Triangles[i]], Vertices[Triangles[i + 1]],
+                        Vertices[Triangles[i + 2]])) return true;
+                }
+
+                return false;
+            }
+
+            /// <summary>How far the figure reaches from a tile's middle, in tiles: a ghost of one tile stays
+            /// at half, and a gun's barrel or ring is what pushes past it.</summary>
+            public float Reach(Int2 cell)
+            {
+                var centre = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
+                float reach = 0f;
+                foreach (Vector2 p in Points) reach = Mathf.Max(reach, (p - centre).magnitude);
+
+                return reach;
+            }
+
+            private static bool Inside(Vector2 p, Vector2 a, Vector2 b, Vector2 c)
+            {
+                float d1 = Cross(p, a, b);
+                float d2 = Cross(p, b, c);
+                float d3 = Cross(p, c, a);
+
+                bool negative = d1 < 0f || d2 < 0f || d3 < 0f;
+                bool positive = d1 > 0f || d2 > 0f || d3 > 0f;
+                return !(negative && positive);
+            }
+
+            private static float Cross(Vector2 p, Vector2 a, Vector2 b)
+                => (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y);
+        }
+
+        [Test]
         public void TheQuarterSeamsOfAQuadrantFigure_AreSymmetricAboutItsCentre()
         {
             // Regression for the cross in the middle of a disc. An item is drawn as its four quadrants, and

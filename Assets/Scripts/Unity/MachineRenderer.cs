@@ -515,8 +515,12 @@ namespace Facet.Game
 
         /// <summary>The drill frame's four bars, in tile coordinates: the one layout the visible frame and
         /// its shadow are both read from, so an edit to the frame cannot leave the shadow behind. Filled into
-        /// the caller's array because this runs once per drill per frame.</summary>
-        private static void FrameBars(Vector2 origin, Palette.MachineLook look, Rect[] into)
+        /// the caller's array because this runs once per drill per frame.
+        ///
+        /// Shared with <see cref="TutorialGuideView"/>: a lesson that ghosts a drill has to promise the frame
+        /// the placed one stands in, so the ghost draws these bars rather than a second reading of the
+        /// palette's insets.</summary>
+        internal static void FrameBars(Vector2 origin, Palette.MachineLook look, Rect[] into)
         {
             float lo = look.FrameInset;
             float hiInner = 1f - look.FrameInset - look.FrameThickness;

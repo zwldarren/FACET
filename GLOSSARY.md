@@ -269,9 +269,13 @@ The project introduction is in [README.md](README.md); this is only the naming.
   **fact about the run** and never an action performed - "a drill stands", not "the player pressed 2" -
   because a step that watched input could be ticked by a click that built nothing, and a tutorial that ticks
   on the wrong thing is worse than none. The blueprint is the standard answer as a picture: every belt and
-  building with its facing, a cutter across both its tiles, a turret with its range ring. It is never a
-  placement - the player may build anywhere the rules allow - and the build bar pulses the keys that answer
-  the current line, so the card, the map and the keyboard all point at the same thing.
+  building with its facing, a cutter across both its tiles, a turret with its range ring - and drawn as the
+  building it promises, the machines in their own body colour with the HUD accent as the rim and a belt in
+  the accent itself (its own cream would read as a belt already laid). So a glance says which kind each cell
+  wants rather than only that something goes there, and the blue says it is still a plan. It is never a
+  placement - the player may build anywhere the rules allow - and the build bar lights the keys that answer
+  the current line with a thick, breathing ring of their own (weight, not a brighter shade: the player's own
+  selected key already wears the accent), so the card, the map and the keyboard all point at the same thing.
   The hint is said once in the strip and then pinned under the line until it ticks: a stuck player is
   exactly the one a one-shot sentence loses to a refusal or a glance away. Progress only goes forward: a ticked line stays ticked even if what satisfied it is dismantled, since a
   wave already released cannot be un-released and a list that un-ticks under the player's hands contradicts
