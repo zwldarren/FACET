@@ -132,7 +132,12 @@ namespace Facet.Game
         private static HideFlags MeshFlagsFor(GameObject owner)
             => (owner.hideFlags & HideFlags.DontSave) != 0 ? HideFlags.DontSave : HideFlags.None;
 
-        private Mesh NewMesh() => new Mesh { name = _meshName, hideFlags = _meshFlags };
+        private Mesh NewMesh() => new Mesh
+        {
+            name = _meshName,
+            hideFlags = _meshFlags,
+            indexFormat = _vertices.Capacity > 65535 ? IndexFormat.UInt32 : IndexFormat.UInt16,
+        };
 
         /// <summary>The mesh to fill this frame, made again if it is gone.
         ///
@@ -264,6 +269,112 @@ namespace Facet.Game
         /// <summary>World-space centre of a tile. Tile coordinates are world coordinates, so a cell
         /// spans [x, x+1) and its centre is half a tile in from its origin.</summary>
         protected static Vector2 CellCentre(Int2 cell) => new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
+
+        /// <summary>Mark a group before drawing it; scaling touches only those appended vertices/sprites.
+        /// Meshes, shadows, sprite overrides and functional overlays settle around the same pivot.</summary>
+        protected readonly struct GeometryMark
+        {
+            public readonly int Vertices, Shadows, Sprites;
+            public GeometryMark(int vertices, int shadows, int sprites)
+            { Vertices = vertices; Shadows = shadows; Sprites = sprites; }
+        }
+
+        /// <summary>Reserve effect space once at initialization, so a full wave's bursts do not grow
+        /// the shared managed buffers on the render path. Mesh storage is reused by ProcMesh.Finish.</summary>
+        protected void ReserveFeedbackGeometry(int vertices)
+        {
+            if (_vertices.Capacity < vertices) _vertices.Capacity = vertices;
+            if (_colors.Capacity < vertices) _colors.Capacity = vertices;
+            if (_triangles.Capacity < vertices * 3) _triangles.Capacity = vertices * 3;
+            if (_mesh != null && vertices > 65535) _mesh.indexFormat = IndexFormat.UInt32;
+        }
+
+        protected GeometryMark MarkGeometry() => new GeometryMark(_vertices.Count, _shadowVertices.Count, _spritesUsed);
+
+        protected void ScaleGeometry(GeometryMark mark, Vector2 pivot, float scale)
+        {
+            if (Mathf.Approximately(scale, 1f)) return;
+            ScaleVertices(_vertices, mark.Vertices, pivot, scale);
+            ScaleVertices(_shadowVertices, mark.Shadows, pivot, scale);
+            for (int i = mark.Sprites; i < _spritesUsed; i++)
+            {
+                Transform t = _sprites[i].transform;
+                Vector3 p = t.localPosition;
+                p.x = pivot.x + (p.x - pivot.x) * scale;
+                p.y = pivot.y + (p.y - pivot.y) * scale;
+                t.localPosition = p;
+                t.localScale *= scale;
+            }
+        }
+
+        private static void ScaleVertices(List<Vector3> vertices, int start, Vector2 pivot, float scale)
+        {
+            for (int i = start; i < vertices.Count; i++)
+            {
+                Vector3 p = vertices[i];
+                p.x = pivot.x + (p.x - pivot.x) * scale;
+                p.y = pivot.y + (p.y - pivot.y) * scale;
+                vertices[i] = p;
+            }
+        }
+
+        protected void AppendFeedbackRing(Vector2 at, float radius, float pixels, Color colour, int segments = 24)
+        {
+            segments = Mathf.Clamp(segments, 8, 48);
+            float half = Mathf.Min(radius * 0.45f, Mathf.Max(0.5f, pixels) * WorldPerPixel * 0.5f);
+            for (int i = 0; i < segments; i++)
+            {
+                float a = i * (Mathf.PI * 2f / segments);
+                float b = (i + 1) * (Mathf.PI * 2f / segments);
+                var x = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
+                var y = new Vector2(Mathf.Cos(b), Mathf.Sin(b));
+                AppendQuad(at + x * (radius - half), at + x * (radius + half),
+                    at + y * (radius + half), at + y * (radius - half), colour);
+            }
+        }
+
+        // Seven-segment digits have no font dependency and generate no strings or label objects.
+        private static readonly int[] FeedbackDigits = { 63, 6, 91, 79, 102, 109, 125, 7, 127, 111 };
+
+        protected void AppendFeedbackNumber(float value, Vector2 at, Color colour)
+        {
+            // The damage event carries its actual amount. Show up to two fractional digits so a
+            // custom non-integer gun is not rounded into a misleading full/half readout.
+            int cents = Mathf.RoundToInt(Mathf.Clamp(value, 0f, 9999.99f) * 100f);
+            int whole = cents / 100;
+            int fraction = cents % 100;
+            int divisor = whole >= 1000 ? 1000 : whole >= 100 ? 100 : whole >= 10 ? 10 : 1;
+            int digits = divisor == 1000 ? 4 : divisor == 100 ? 3 : divisor == 10 ? 2 : 1;
+            int decimals = fraction == 0 ? 0 : fraction % 10 == 0 ? 1 : 2;
+            float unit = WorldPerPixel * 1.5f;
+            float width = digits * 4f + (decimals > 0 ? 1.5f + decimals * 4f : 0f);
+            at.x -= width * unit * 0.5f;
+            for (; divisor > 0; divisor /= 10)
+            {
+                AppendFeedbackDigit(whole / divisor % 10, at, unit, colour);
+                at.x += unit * 4f;
+            }
+            if (decimals == 0) return;
+            AppendRect(at.x, at.y, at.x + unit, at.y + unit, colour);
+            at.x += unit * 1.5f;
+            AppendFeedbackDigit(fraction / 10, at, unit, colour);
+            if (decimals == 2) AppendFeedbackDigit(fraction % 10, at + new Vector2(unit * 4f, 0f), unit, colour);
+        }
+
+        private void AppendFeedbackDigit(int digit, Vector2 at, float unit, Color colour)
+        {
+            int mask = FeedbackDigits[digit];
+            if ((mask & 1) != 0) AppendDigitBar(at, unit, 0, 5, 3, 6, colour);
+            if ((mask & 2) != 0) AppendDigitBar(at, unit, 2, 3, 3, 5, colour);
+            if ((mask & 4) != 0) AppendDigitBar(at, unit, 2, 1, 3, 3, colour);
+            if ((mask & 8) != 0) AppendDigitBar(at, unit, 0, 0, 3, 1, colour);
+            if ((mask & 16) != 0) AppendDigitBar(at, unit, 0, 1, 1, 3, colour);
+            if ((mask & 32) != 0) AppendDigitBar(at, unit, 0, 3, 1, 5, colour);
+            if ((mask & 64) != 0) AppendDigitBar(at, unit, 0, 2.5f, 3, 3.5f, colour);
+        }
+
+        private void AppendDigitBar(Vector2 at, float unit, float x0, float y0, float x1, float y1, Color colour)
+            => AppendRect(at.x + x0 * unit, at.y + y0 * unit, at.x + x1 * unit, at.y + y1 * unit, colour);
 
         /// <summary>One CCW quad into the shared buffers.</summary>
         protected void AppendQuad(Vector2 a, Vector2 b, Vector2 c, Vector2 d, Color color)

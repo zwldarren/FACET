@@ -1,0 +1,8 @@
+{
+    "name": "FACET.Feedback.Tests",
+    "rootNamespace": "Facet.Tests",
+    "references": ["FACET.Core", "FACET.Game"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"],
+    "autoReferenced": false
+}

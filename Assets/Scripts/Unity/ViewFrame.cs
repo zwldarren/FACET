@@ -13,15 +13,20 @@ namespace Facet.Game
         /// <summary>How far the renderer is between the previous and the current tick, 0..1.</summary>
         public readonly float Alpha;
 
+        /// <summary>Unscaled presentation seconds, published by the driver. Effects read this clock,
+        /// never TickCount; preview/test callers may supply their own time.</summary>
+        public readonly float Seconds;
+
         /// <summary>Size of one screen pixel in world units, at the current resolution and zoom.</summary>
         public readonly float WorldPerPixel;
 
         /// <summary>Tile under the cursor, or (-1,-1) when there is none.</summary>
         public readonly Int2 CursorCell;
 
-        public ViewFrame(float alpha, float worldPerPixel, Int2 cursorCell = default)
+        public ViewFrame(float alpha, float worldPerPixel, Int2 cursorCell = default, float seconds = 0f)
         {
             Alpha = alpha;
+            Seconds = seconds;
             WorldPerPixel = worldPerPixel;
             CursorCell = cursorCell;
         }

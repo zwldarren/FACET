@@ -29,6 +29,10 @@ namespace Facet.Game
         private readonly List<EnemySnapshot> _enemies = new List<EnemySnapshot>();
 
         private Vector2[] _body;
+        private readonly FeedbackEvents _feedback = new FeedbackEvents();
+        private float _seconds;
+        private float GunDamage => World.Content.IsTurret(BuildKind.Turret)
+            ? World.Content.Turret(BuildKind.Turret).Damage : 0f;
 
         /// <summary>Each kind's override look, resolved once and indexed by (int)EnemyKind.
         /// Disabled overrides use the default hexagonal body.</summary>
@@ -49,6 +53,8 @@ namespace Facet.Game
 
         protected override void OnInitialized()
         {
+            ReserveFeedbackGeometry(98304);
+            _feedback.Reset(World.Events);
             _body = ProcMesh.RegularPolygon(6, Colors.Enemies.BodyRadius, 90f);
             // One style per kind, not one for the field: the Tank's override must not leak onto the Runner.
             var kinds = (EnemyKind[])Enum.GetValues(typeof(EnemyKind));
@@ -72,11 +78,19 @@ namespace Facet.Game
         /// <summary>A new map has its own entry points: the old map's sized markers have to go.</summary>
         protected override void OnWorldRebound()
         {
+            _feedback.Reset(World.Events);
             _nextWaveSpawns = new bool[World.Map.SpawnPoints.Length];
         }
 
         /// <summary>Enemies are always moving, so this view rebuilds every frame.</summary>
-        protected override void Observe(in ViewFrame frame) => MarkDirty();
+        protected override void Observe(in ViewFrame frame)
+        {
+            _seconds = frame.Seconds;
+            _feedback.Capture(World.Events, _seconds,
+                (1 << (int)SimEventKind.EnemyDamaged) | (1 << (int)SimEventKind.EnemyKilled),
+                Colors.Feedback.Active);
+            MarkDirty();
+        }
 
         protected override void AppendFrame(in ViewFrame frame)
         {
@@ -100,6 +114,7 @@ namespace Facet.Game
 
             AppendSpawnMarkers();
             AppendKillBursts();
+            AppendImpacts();
             // Draw health bars after all enemy bodies and effects.
             for (int i = 0; i < _enemies.Count; i++)
             {
@@ -155,69 +170,101 @@ namespace Facet.Game
                     look.HealthBarFill);
             }
         }
-        /// <summary>Read the tick's event stream for kills - the expanding ring is the view's answer to
-        /// the simulation's "killed here", hung off the stream rather than a tracked health edge.</summary>
+        private Color HitColour(in EnemySnapshot enemy)
+        {
+            if (!_feedback.Hit(enemy.Id, out FeedbackEvents.Entry hit)) return Color.clear;
+            float age = (_seconds - hit.Seconds) / Mathf.Max(0.01f, Colors.Feedback.HitSeconds);
+            if (age < 0f || age >= 1f) return Color.clear;
+            int marks = ViewFeedback.DamageMarks(hit.Event.Amount, GunDamage);
+            Color colour = marks == 2 ? Colors.Feedback.FullHit : Colors.Feedback.HalfHit;
+            colour.a = 1f - age;
+            return colour;
+        }
+
         private void AppendKillBursts()
         {
-            SimEventBuffer events = World.Events;
             Palette.EnemyLook look = Colors.Enemies;
-            int now = World.TickCount;
-            int segments = Mathf.Max(8, look.KillRingSegments);
-            float pixel = WorldPerPixel;
-
-            for (int i = 0; i < events.Count; i++)
+            for (int i = 0; i < _feedback.Count; i++)
             {
-                SimEvent e = events[i];
-                if (e.Kind != SimEventKind.EnemyKilled) continue;
-
-                float age = (now - e.Tick) / (float)look.KillRingTicks;
-                if (age < 0f || age > 1f) continue;
-
-                var centre = new Vector2(e.Position.X, e.Position.Y);
-                float radius = Mathf.Lerp(0.12f, look.KillRingRadius, age);
-                float half = Mathf.Max(look.KillRingPixels * pixel * (1f - age), 0.004f) * 0.5f;
+                FeedbackEvents.Entry entry = _feedback[i];
+                if (entry.Event.Kind != SimEventKind.EnemyKilled) continue;
+                float t = (_seconds - entry.Seconds) / Mathf.Max(0.01f, Colors.Feedback.KillSeconds);
+                if (t < 0f || t >= 1f) continue;
+                var at = new Vector2(entry.Event.Position.X, entry.Event.Position.Y);
+                float radius = Mathf.Lerp(0.12f, look.KillRingRadius, ViewFeedback.EaseOutQuad(t));
                 Color colour = look.HitFlash;
-                colour.a = 1f - age;
-
-                for (int s = 0; s < segments; s++)
+                colour.a *= 1f - t;
+                AppendFeedbackRing(at, radius, look.KillRingPixels * (1f - t), colour, look.KillRingSegments);
+                // Four short spokes distinguish a kill from a hit even in monochrome.
+                for (int side = 0; side < 4; side++)
                 {
-                    float a0 = Mathf.PI * 2f * s / segments;
-                    float a1 = Mathf.PI * 2f * (s + 1) / segments;
-                    Vector2 d0 = new Vector2(Mathf.Cos(a0), Mathf.Sin(a0));
-                    Vector2 d1 = new Vector2(Mathf.Cos(a1), Mathf.Sin(a1));
-
-                    AppendQuad(
-                        centre + d0 * (radius - half), centre + d0 * (radius + half),
-                        centre + d1 * (radius + half), centre + d1 * (radius - half), colour);
+                    Vec2 v = ((Dir)side).ToVec();
+                    var d = new Vector2(v.X, v.Y);
+                    AppendLane(at + d * radius, at + d * (radius + 0.16f * (1f - t)),
+                        WorldPerPixel * Colors.Feedback.StrokePixels * 0.5f, colour);
                 }
             }
         }
 
+        private void AppendImpacts()
+        {
+            Palette.FeedbackLook look = Colors.Feedback;
+            float damage = GunDamage;
+            for (int i = 0; i < _feedback.Count; i++)
+            {
+                FeedbackEvents.Entry entry = _feedback[i];
+                SimEvent e = entry.Event;
+                if (e.Kind != SimEventKind.EnemyDamaged) continue;
+                float t = (_seconds - entry.Seconds) / Mathf.Max(0.01f, look.ImpactSeconds);
+                if (t < 0f || t >= 1f) continue;
+                int marks = ViewFeedback.DamageMarks(e.Amount, damage);
+                Color colour = marks == 2 ? look.FullHit : look.HalfHit;
+                colour.a *= 1f - t;
+                var at = new Vector2(e.Position.X, e.Position.Y);
+                // Full damage: two rings. Half: one. Unknown amounts: actual number only.
+                float radius = Colors.Enemies.BodyRadius + 0.08f + ViewFeedback.EaseOutQuad(t) * 0.14f;
+                for (int ring = 0; ring < marks; ring++)
+                {
+                    float r = radius + ring * 5f * WorldPerPixel;
+                    Color edge = Colors.Outline;
+                    edge.a *= 1f - t;
+                    AppendFeedbackRing(at, r, look.StrokePixels + 2f, edge);
+                    AppendFeedbackRing(at, r, look.StrokePixels, colour);
+                }
+                // Dark numerals remain legible on the light map even when the impact flash is white.
+                Color number = Colors.Outline;
+                number.a *= 1f - t;
+                AppendFeedbackNumber(e.Amount, at + new Vector2(0.55f,
+                    Colors.DemandFigureRadius + (10f + 12f * t) * WorldPerPixel), number);
+            }
+        }
+
         /// <summary>The body: a fixed hexagon in the kind's own colour, unless this kind's override
-        /// replaces it. Damage never touches the colour - the bar above is where health reads.</summary>
+        /// replaces it. A brief hit flash overlays the kind colour; persistent health reads in the bar.</summary>
         private void AppendEnemyBody(in EnemySnapshot enemy, Vector2 at, Color outline, float outlineWidth)
         {
             VisualStyle style = _styles[(int)enemy.Kind];
+            Color flash = HitColour(enemy);
 
             if (style.Override && style.Source == VisualSource.Sprite)
             {
                 // A sprite replaces the body's mark, not its footprint: the shipped hexagon is what the
                 // walker stands on, so it is what drops the shadow under an authored body.
                 AppendShadow(_body, at + style.Offset);
-                DrawSprite(style, at, Color.white);
+                DrawSprite(style, at, Color.Lerp(Color.white, flash, flash.a));
                 return;
             }
 
             if (style.Override)
             {
                 AppendShadow(_points[(int)enemy.Kind], at + style.Offset);
-                AppendPolygon(_points[(int)enemy.Kind], at + style.Offset, style.Fill, style.Outline,
+                AppendPolygon(_points[(int)enemy.Kind], at + style.Offset, Color.Lerp(style.Fill, flash, flash.a), style.Outline,
                     OutlineWidthFor(style));
                 return;
             }
 
             AppendShadow(_body, at);
-            AppendPolygon(_body, at, Colors.EnemyColor(enemy.Kind), outline, outlineWidth);
+            AppendPolygon(_body, at, Color.Lerp(Colors.EnemyColor(enemy.Kind), flash, flash.a), outline, outlineWidth);
         }
 
         /// <summary>The wave entry points, each a hollow frame at one alpha this frame: steady and faint
