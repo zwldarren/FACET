@@ -1,3 +1,5 @@
+using System.IO;
+using Facet.EditorTools;
 using Facet.Game;
 using NUnit.Framework;
 using UnityEditor;
@@ -46,6 +48,27 @@ namespace Facet.Tests
             }
 
             Assert.IsTrue(main, "Assets/Scenes/Main.unity has to be enabled in the build settings");
+        }
+
+        [Test]
+        public void ThePlayer_ShipsInFacetsOwnPage_NotUnitysTemplate()
+        {
+            // #17: the published page is the game's - its own loader, frame and failure message - and carries no
+            // Unity branding. Pinned in the project settings and in the build tool, so neither a menu build nor
+            // the batchmode one can quietly fall back to the default template.
+            Assert.AreEqual(BuildWebGL.Template, PlayerSettings.WebGL.template,
+                "Player Settings > WebGL > Resolution and Presentation must select the FACET template");
+
+            const string folder = "Assets/WebGLTemplates/FACET";
+            string page = Path.Combine(folder, "index.html");
+            Assert.IsTrue(File.Exists(page), "no template page at " + page);
+            Assert.IsTrue(File.Exists(Path.Combine(folder, "TemplateData/style.css")), "the page's stylesheet is missing");
+
+            string html = File.ReadAllText(page);
+            StringAssert.Contains("{{{ LOADER_FILENAME }}}", html, "the page has to load the build's own loader");
+            StringAssert.Contains("{{{ WIDTH }}}", html, "and size its frame from the player's default resolution");
+            foreach (string branding in new[] { "unity-logo", "Unity Web Player", "unity-footer" })
+                Assert.IsFalse(html.Contains(branding), "the page still carries Unity branding: " + branding);
         }
     }
 }
