@@ -47,6 +47,11 @@ namespace Facet.Game
             "thirteen-pixel disc would wear a two-pixel ring - a third of what the player is looking at.")]
         public float OutlineMaxRadiusFraction = 0.18f;
 
+        [Tooltip("The demand figure on the map, in tiles: the weakness badge an enemy carries and the round " +
+            "a turret holds are the same figure - what the wave wants and what the gun has - so they are one " +
+            "size, and both wear the standard outline. The HUD's copy is HudLayout.DemandFigure, in pixels.")]
+        public float DemandFigureRadius = 0.22f;
+
         [Tooltip("Cursor ghost border thickness in screen pixels.")]
         public float CursorEdgePixels = 5f;
 
@@ -382,8 +387,6 @@ namespace Facet.Game
             [Tooltip("Operator chamber: the radius of the badge drawn in it - the piece the machine holds.")]
             public float OperatorIconRadius = 0.24f;
             public float TurretRadius = 0.42f;
-            [Tooltip("The radius of a turret's round badge - the armed/silenced readout.")]
-            public float AmmoIconRadius = 0.22f;
 
             [Tooltip("Barrel length measured from the turret centre.")]
             public float BarrelLength = 0.62f;
@@ -442,8 +445,6 @@ namespace Facet.Game
             /// rule for how close two walkers may stand, so a re-skin cannot make two enemies overlap.</summary>
             public float BodyRadius => Balance.EnemySpacing * 0.5f;
 
-            [Tooltip("Weakness-icon radius. Roughly half the body, so it reads as a label, not a second enemy.")]
-            public float WeaknessRadius = 0.20f;
             [Header("Enemy health bars")]
             [Tooltip("Health-bar width in screen pixels.")]
             [Min(1f)]

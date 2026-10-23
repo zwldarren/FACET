@@ -155,7 +155,7 @@ namespace Facet.Game
             // (Decomposer* are the chamber's two radii; the field names keep their old spelling because
             // renaming a serialized field would silently drop its value out of Assets/Data/Palette.asset.)
             _carriedIcons = Colors.ShapeIcons(look.OperatorIconRadius, Colors.OutlinePixels);
-            _roundIcons = Colors.ShapeIcons(look.AmmoIconRadius, Colors.OutlinePixels);
+            _roundIcons = Colors.ShapeIcons(Colors.DemandFigureRadius, Colors.OutlinePixels);
             _pipeIcons = Colors.ShapeIcons(look.PipeItemRadius, Colors.OutlinePixels);
             _sorterIcons = Colors.ShapeIcons(look.SorterIconRadius, Colors.OutlinePixels);
         }

@@ -739,10 +739,10 @@ namespace Facet.Game
             // The bill of materials, two rows: the wave being counted to and the one after it.
             panel.NextLabel = Label(root, "waveNext", HudType.Micro, FontStyle.Bold, TextAnchor.MiddleLeft,
                 tracked: true);
-            At(panel.NextLabel.Rect, CardInset, ChipsTop + 2f, ChipLabelWidth, 14f);
+            At(panel.NextLabel.Rect, CardInset, ChipsTop + (ChipHeight - 14f) * 0.5f, ChipLabelWidth, 14f);
             panel.AfterLabel = Label(root, "waveAfter", HudType.Micro, FontStyle.Bold, TextAnchor.MiddleLeft,
                 tracked: true);
-            At(panel.AfterLabel.Rect, CardInset, ChipsAfterTop + 2f, ChipLabelWidth, 14f);
+            At(panel.AfterLabel.Rect, CardInset, ChipsAfterTop + (ChipHeight - 14f) * 0.5f, ChipLabelWidth, 14f);
 
             panel.Chips = BuildChips(root, "chip");
             panel.ChipsAfter = BuildChips(root, "after");
@@ -750,24 +750,24 @@ namespace Facet.Game
             // A hairline over the card's footer: the band below is either the two diagnostics or, when the
             // run is quiet, the two stable facts a player still wants at hand - the seed and the gear.
             HudBox footerRule = HudUi.Box(root, "footerRule", HudInk.Rule(_palette));
-            At(footerRule.Rect, CardInset, 119f, inner, 1f);
+            At(footerRule.Rect, CardInset, FooterTop, inner, 1f);
 
             panel.Seed = Label(root, "seed", HudType.Micro, FontStyle.Normal, TextAnchor.MiddleLeft);
-            At(panel.Seed.Rect, CardInset, 122f, inner * 0.62f, 13f);
+            At(panel.Seed.Rect, CardInset, FooterTop + 3f, inner * 0.62f, 13f);
 
             panel.Speed = Label(root, "speed", HudType.Micro, FontStyle.Normal, TextAnchor.MiddleRight);
-            AtRight(panel.Speed.Rect, CardInset, 122f, inner, 13f);
+            AtRight(panel.Speed.Rect, CardInset, FooterTop + 3f, inner, 13f);
 
             // Two lines that only speak when something needs them: quiet is the default and silence is the
             // good news - a line that only says "all clear" trains the player to stop reading.
             panel.Production = Label(root, "production", HudType.Micro, FontStyle.Normal,
                 TextAnchor.MiddleLeft);
-            At(panel.Production.Rect, CardInset, 122f, inner, 13f);
+            At(panel.Production.Rect, CardInset, FooterTop + 3f, inner, 13f);
             AutoFit(panel.Production, 8f);
             panel.Production.Show(false);
 
             panel.Threat = Label(root, "threat", HudType.Micro, FontStyle.Normal, TextAnchor.MiddleLeft);
-            At(panel.Threat.Rect, CardInset, 135f, inner, 13f);
+            At(panel.Threat.Rect, CardInset, FooterTop + 16f, inner, 13f);
             AutoFit(panel.Threat, 8f);
             panel.Threat.Show(false);
 
@@ -1033,13 +1033,16 @@ namespace Facet.Game
 
             // The mark first, then the number: a bank is read as "this much of this", and a mark pinned to
             // the left never collides with a number that grows to the right.
+            // The coin is drawn at the demand figure's size, like every other "this shape" mark on the HUD
+            // (issue #12), centred on the pill's height.
+            const float coin = HudLayout.DemandFigure;
             panel.Icon = HudUi.Icon(panel.Root, "icon", _icons.Mark(MoneyShape));
-            At(panel.Icon.rectTransform, 12f, 10f, 24f, 24f);
+            At(panel.Icon.rectTransform, 12f, (HudLayout.StockpileHeight - coin) * 0.5f, coin, coin);
             panel.Icon.gameObject.SetActive(false);
 
             panel.Number = Label(panel.Root, "number", HudType.Display, FontStyle.Bold,
                 TextAnchor.MiddleLeft, tracked: true);
-            At(panel.Number.Rect, 40f, 2f, w - 46f, 40f);
+            At(panel.Number.Rect, 12f + coin + 6f, 2f, w - (12f + coin + 12f), 40f);
 
             return panel;
         }
@@ -2187,22 +2190,25 @@ namespace Facet.Game
 
                 float countWidth = chip.Count.PreferredWidth;
                 float nameWidth = withNames ? chip.Name.PreferredWidth : 0f;
+                // Text, a gap, the figure, a hair of air: the figure is the demand, so it gets the chip's
+                // full height rather than whatever room the words leave.
                 float chipWidth = (withNames ? countWidth + 4f * _scale + nameWidth : countWidth) +
-                                  22f * _scale;
+                                  (5f + 4f + HudLayout.DemandFigure + ChipIconPad) * _scale;
+                float textTop = top + (ChipHeight - 12f) * 0.5f;
 
                 if (x + chipWidth > _status.Root.rect.width - CardInset * _scale) return false;
 
                 chip.Back.Show(true);
                 chip.Count.Show(true);
-                HudUi.TopLeft(chip.Back.Rect, x, top * _scale, chipWidth, 17f * _scale);
-                HudUi.TopLeft(chip.Count.Rect, x + 5f * _scale, (top + 2.5f) * _scale,
+                HudUi.TopLeft(chip.Back.Rect, x, top * _scale, chipWidth, ChipHeight * _scale);
+                HudUi.TopLeft(chip.Count.Rect, x + 5f * _scale, textTop * _scale,
                     countWidth + 2f * _scale, 12f * _scale);
                 chip.Count.SetColour(_palette.HudText);
 
                 if (withNames)
                 {
                     HudUi.TopLeft(chip.Name.Rect, x + 5f * _scale + countWidth + 4f * _scale,
-                        (top + 2.5f) * _scale, nameWidth + 2f * _scale, 12f * _scale);
+                        textTop * _scale, nameWidth + 2f * _scale, 12f * _scale);
                     chip.Name.SetColour(HudInk.Muted(_palette));
                 }
 
@@ -2213,8 +2219,10 @@ namespace Facet.Game
                     {
                         chip.Icon.texture = icon.Texture;
                         chip.Icon.uvRect = icon.Uv;
-                        HudUi.TopLeft(chip.Icon.rectTransform, x + chipWidth - 17f * _scale,
-                            (top + 3f) * _scale, 11f * _scale, 11f * _scale);
+                        HudUi.TopLeft(chip.Icon.rectTransform,
+                            x + chipWidth - (HudLayout.DemandFigure + ChipIconPad) * _scale,
+                            (top + ChipIconPad) * _scale,
+                            HudLayout.DemandFigure * _scale, HudLayout.DemandFigure * _scale);
                         chip.Icon.gameObject.SetActive(true);
                     }
                     else chip.Icon.gameObject.SetActive(false);
@@ -3982,7 +3990,16 @@ namespace Facet.Game
         /// <summary>Where the two briefing rows sit, in design units from the card's top: the wave being
         /// counted to, then the one after it. The labels and the chips share the row.</summary>
         private const float ChipsTop = 82f;
-        private const float ChipsAfterTop = 101f;
+        private const float ChipsAfterTop = 103f;
+
+        /// <summary>A chip is the demand figure plus two units of air above and below it - the figure sets
+        /// the row's height, not the 10-point count beside it (issue #12).</summary>
+        private const float ChipIconPad = 2f;
+        private const float ChipHeight = HudLayout.DemandFigure + ChipIconPad * 2f;
+
+        /// <summary>The hairline over the card's footer: one unit under the second briefing row. The seed,
+        /// the gear and the two diagnostics hang off it.</summary>
+        private const float FooterTop = ChipsAfterTop + ChipHeight + 1f;
 
         /// <summary>The column the NOW/THEN labels own, so both chip rows start on the same vertical line.</summary>
         private const float ChipLabelWidth = 36f;
