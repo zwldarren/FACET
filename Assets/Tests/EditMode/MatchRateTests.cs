@@ -31,6 +31,24 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void TheRate_IsTheShareOfHitsThatMatched_AndZeroForAWaveNobodyShot()
+        {
+            // The row carries the counts; the rate is the one derived thing the plot script asks for, so it
+            // is pinned here rather than only read off a chart.
+            var row = new WaveMatchRow("Quarry", 1, 3, 1, "cleared");
+
+            Assert.AreEqual(4, row.Hits);
+            Assert.AreEqual(0.75f, row.MatchRate, 1e-6f, "three of the four hits matched");
+
+            var won = new WaveMatchRow("Quarry", 2, 5, 0, "won");
+            Assert.AreEqual(1f, won.MatchRate, 1e-6f, "every hit matched");
+
+            var quiet = new WaveMatchRow("Quarry", 3, 0, 0, "cleared");
+            Assert.AreEqual(0, quiet.Hits);
+            Assert.AreEqual(0f, quiet.MatchRate, "a wave nobody shot reports no rate rather than a wrong one");
+        }
+
+        [Test]
         public void TheRig_ReportsOneRowPerWave_WithItsOwnHits()
         {
             // Whether the rig's line holds its second wave is a balance question this test does not ask; what
@@ -131,8 +149,9 @@ namespace Facet.Tests
 
             for (int t = 0; t < ticks && world.Status == GameStatus.Playing; t++)
             {
-                bool between = world.Waves.CurrentWave == 0;
-                world.Tick(new InputCommand(startWavePressed: between));
+                // The question the N key and the HUD button ask, rather than one re-derived from the wave
+                // number: a wave being fought has nothing to start, and an intermission has.
+                world.Tick(new InputCommand(startWavePressed: world.Waves.HasWaveToStart));
 
                 if (tracker != null && tracker.Poll(world, out WaveMatchRow row)) rows.Add(row);
             }

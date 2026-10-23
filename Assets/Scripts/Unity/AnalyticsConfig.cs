@@ -20,12 +20,26 @@ namespace Facet.Game
 
         // One form question each - short-answer questions, titled exactly as below so the plot script
         // finds the columns: Session, Map, Wave, Matched, Resisted, Outcome, Build.
+
+        /// <summary>The <c>Session</c> question: the id shared by every row of one page load.</summary>
         public const string EntrySession = "entry.1625959773";
+
+        /// <summary>The <c>Map</c> question: the map's name, as the campaign names it.</summary>
         public const string EntryMap = "entry.1512937499";
+
+        /// <summary>The <c>Wave</c> question: the wave's 1-based number on that map.</summary>
         public const string EntryWave = "entry.1565484819";
+
+        /// <summary>The <c>Matched</c> question: hits whose round was the target's weakness.</summary>
         public const string EntryMatched = "entry.1668272830";
+
+        /// <summary>The <c>Resisted</c> question: hits whose round was anything else.</summary>
         public const string EntryResisted = "entry.184452456";
+
+        /// <summary>The <c>Outcome</c> question: cleared, won, lost or abandoned.</summary>
         public const string EntryOutcome = "entry.1831195779";
+
+        /// <summary>The <c>Build</c> question: the <see cref="BuildLabel"/> the row came from.</summary>
         public const string EntryBuild = "entry.338387420";
 
         /// <summary>Which build a row came from, so one build's players can be compared with another's -
@@ -36,6 +50,9 @@ namespace Facet.Game
         /// sheet with developer runs: the Editor logs each row to the Console instead.</summary>
         public const bool SendFromEditor = false;
 
+        /// <summary>Whether a form is named. The reporter's own switch, and the one a build that must
+        /// collect nothing is pointed at: it returns before it builds a body, asks the browser or logs a
+        /// line, so an unconfigured build is silent rather than noisy about failing.</summary>
         public static bool Configured => FormResponseUrl.Length > 0;
     }
 }

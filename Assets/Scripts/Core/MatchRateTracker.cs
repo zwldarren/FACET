@@ -23,6 +23,8 @@ namespace Facet.Core
         /// <c>abandoned</c> (a restart or a map change mid-wave).</summary>
         public readonly string Outcome;
 
+        /// <summary>One wave's line, as it will be sent: the raw counts rather than the rate, so the sheet can
+        /// recompute whatever the plot script stops asking for, and the word the wave ended with.</summary>
         public WaveMatchRow(string map, int wave, int matched, int resisted, string outcome)
         {
             Map = map;
@@ -51,10 +53,12 @@ namespace Facet.Core
     /// and it reads only state the world already exposes, so the simulation does not know it exists and a
     /// run is identical with or without it. Plain C# with no engine reference, so it is tested in EditMode.
     ///
-    /// A wave opens when <see cref="WaveDirector.CurrentWave"/> turns non-zero and closes when it changes or
-    /// the run stops. The wave that ends a run says how: <c>won</c> or <c>lost</c>, so the sheet can tell a
-    /// finished attempt at a map from one the player walked away from. A restart (the tick count going backwards) or a different world (a map change) closes
-    /// an open wave as <c>abandoned</c>, with the counts last seen before the reset.
+    /// A wave is open while the clock says one is being fought (<see cref="WavePhase.Running"/>) and closes
+    /// when that stops being true or the number changes. The phase is what the director says to branch on;
+    /// the number is only what a reader prints. The wave that ends a run says how: <c>won</c> or <c>lost</c>,
+    /// so the sheet can tell a finished attempt at a map from one the player walked away from. A restart
+    /// (the tick count going backwards) or a different world (a map change) closes an open wave as
+    /// <c>abandoned</c>, with the counts last seen before the reset.
     /// </summary>
     public sealed class MatchRateTracker
     {
@@ -99,7 +103,12 @@ namespace Facet.Core
             _seenMatched = world.Enemies.MatchedHits;
             _seenResisted = world.Enemies.ResistedHits;
 
-            int current = world.Status == GameStatus.Playing ? world.Waves.CurrentWave : 0;
+            // Ask the clock what it is doing, and take the number only while a wave is being fought: the
+            // director documents CurrentWave as the number to print and Phase as the state to branch on.
+            // GameStatus is read as well because a Core that falls mid-wave ends the run without the clock
+            // noticing - its wave index is still set - and that wave has one more word to say: "lost".
+            bool fighting = world.Status == GameStatus.Playing && world.Waves.Phase == WavePhase.Running;
+            int current = fighting ? world.Waves.CurrentWave : 0;
 
             if (!emitted && _wave > 0 && current != _wave)
             {

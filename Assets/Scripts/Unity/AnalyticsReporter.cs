@@ -34,6 +34,9 @@ namespace Facet.Game
         private static extern void FacetAnalyticsPost(string url, string body);
 #endif
 
+        /// <summary>Point the reporter at the world it reads, once, from the driver's own <c>Awake</c>. The
+        /// session id is made here rather than in <c>Awake</c> so that binding again - a reload, a second
+        /// call - keeps the run's rows under one id instead of splitting one player's session in two.</summary>
         public void Bind(SimulationDriver driver)
         {
             _driver = driver;
