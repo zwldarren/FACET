@@ -93,13 +93,35 @@ namespace Facet.Game
         /// </summary>
         public const float InfoPickHeight = 66f;
 
-        /// <summary>The build bar: a centred strip, not a full-width shelf. 880 wide is enough for the
-        /// whole table at 720p on one row - eleven 73-unit keys - so the bar is a keyboard rather than a
-        /// two-level catalogue, and the map stays visible either side of it. 52 tall holds the 40-unit key
-        /// and its 6-unit air; the four units it gives back pay for the info card's third blurb line, so the
-        /// pair stays inside the 22 % the layout may spend.</summary>
-        public const float BarWidth = 880f;
+        /// <summary>One key's width, and the air either side of the row: the numbers that lay a bar out, so a
+        /// bar of any length is the same keys in a shorter strip rather than a different set of keys.</summary>
+        public const float BarTileWidth = 66.75f;
+        public const float BarPad = 12f;
+        public const float BarGap = 5f;
+
+        /// <summary>How many keys the shipped content table has - the bar's width at the end of a run. Eleven,
+        /// the ordinals <see cref="BuildKind.Belt"/> to <see cref="BuildKind.Sink"/>; a table that grows past it
+        /// widens the bar through <see cref="BarWidthFor"/> rather than laying keys over the card's edge.</summary>
+        public const int BarTiles = 11;
+
+        /// <summary>The build bar: a centred strip, not a full-width shelf. 808.25 wide is enough for the
+        /// whole table at 720p on one row - eleven 66.75-unit keys with their air - so the bar is a keyboard
+        /// rather than a two-level catalogue, and the map stays visible either side of it. 52 tall holds the
+        /// 40-unit key and its 6-unit air; the four units it gives back pay for the info card's third blurb
+        /// line, so the pair stays inside the 22 % the layout may spend.
+        ///
+        /// A bar with fewer keys is <em>narrower</em> rather than stretched, and it is
+        /// <see cref="BarWidthFor"/> that says so: a run whose tutorial has handed over one building is a bar
+        /// one key wide, not one key six hundred units wide or a wide card with an empty shelf in it. This
+        /// constant is the full table's width, spelled from the tile numbers so the two cannot drift.
+        /// </summary>
+        public const float BarWidth = 2f * BarPad + BarTiles * BarTileWidth + (BarTiles - 1) * BarGap;
         public const float BarHeight = 52f;
+
+        /// <summary>The width a bar of this many keys needs. A negative or zero count is a bar of no keys,
+        /// which is not a width at all - the caller that has nothing to draw draws nothing.</summary>
+        public static float BarWidthFor(int tiles)
+            => tiles <= 0 ? 0f : 2f * BarPad + tiles * BarTileWidth + (tiles - 1) * BarGap;
 
         /// <summary>The gap the info card floats above the bar with.</summary>
         public const float InfoGap = 8f;
@@ -183,10 +205,15 @@ namespace Facet.Game
 
         /// <summary>The build bar: a centred strip, narrower than the screen on purpose. A full-width
         /// shelf spent 17 % of the frame on its own; the same tiles fit in a strip the eye reads as a
-        /// control, with the map visible either side of it.</summary>
-        public static Rect Bar(float screenWidth, float screenHeight, float s)
+        /// control, with the map visible either side of it.
+        ///
+        /// <paramref name="tiles"/> is how many keys it carries, which is the run's to say and not the
+        /// table's: a tutorial hands buildings over one line at a time, so the bar starts one key wide and
+        /// grows. Left out, it is the shipped table's full row.</summary>
+        public static Rect Bar(float screenWidth, float screenHeight, float s, int tiles = BarTiles)
         {
-            float width = Mathf.Min(BarWidth * s, screenWidth - 2f * Margin * s);
+            float width = Mathf.Min(BarWidthFor(tiles) * s, screenWidth - 2f * Margin * s);
+
             return new Rect((screenWidth - width) * 0.5f,
                 screenHeight - (Margin + BarHeight) * s, width, BarHeight * s);
         }
@@ -229,16 +256,17 @@ namespace Facet.Game
         ///
         /// <paramref name="pickerUp"/> is the sorter picker's band on the info card, which the locator has
         /// to know about for the same reason it knows about the tutorial card: an arrow put under a panel
-        /// points at nothing the player can see.
-        /// </summary>
+        /// points at nothing the player can see. <paramref name="barTiles"/> is how many keys the bar carries
+        /// this frame - a tutorial's bar grows a key at a time, and a reader that measured the full shelf
+        /// would keep arrows clear of a strip that is not there.</summary>
         public static int Panels(float screenWidth, float screenHeight, float s, bool tutorialUp,
-            Rect[] into, bool pickerUp = false)
+            Rect[] into, bool pickerUp = false, int barTiles = BarTiles)
         {
             int n = 0;
             into[n++] = Status(s);
             if (tutorialUp) into[n++] = Tutorial(s);
             into[n++] = Controls(screenWidth, s);
-            into[n++] = Bar(screenWidth, screenHeight, s);
+            into[n++] = Bar(screenWidth, screenHeight, s, barTiles);
             into[n++] = Info(screenWidth, screenHeight, s, pickerUp);
             return n;
         }

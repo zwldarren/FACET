@@ -133,6 +133,59 @@ namespace Facet.Game
             "many exam waves, and -1 is ENDLESS - the generator never runs out of demands.")]
         public int GeneratedWaves = 0;
 
+        // ------------------------------------------------------------------ the tutorial
+
+        /// <summary>One line of the map's tutorial, as the Inspector edits it.</summary>
+        [Serializable]
+        public sealed class TutorialTaskRow
+        {
+            [Tooltip("What has to be true of the run for this line to tick: a drill standing, a complete shape " +
+                "really banked at the Core, a turret with a round in its chamber, a half anywhere, a turret " +
+                "chambering a half.")]
+            public TutorialStep Step = TutorialStep.PlaceDrill;
+
+            [Tooltip("The line as the HUD prints it, one or two short sentences. The HUD's font has no en or " +
+                "em dash - write a hyphen.")]
+            [TextArea(2, 3)]
+            public string Text = string.Empty;
+
+            [Tooltip("The second sentence, shown once the line has been current for half a minute without " +
+                "being ticked: what the rule actually asks for, said the long way round. Leave it empty for a " +
+                "line nobody gets stuck on.")]
+            [TextArea(2, 3)]
+            public string Hint = string.Empty;
+
+            [Tooltip("The one tile the guide arrow points at, or leave it negative for a line with no one " +
+                "right place to be.")]
+            public Vector2Int Target = new Vector2Int(-1, -1);
+
+            [Tooltip("The buildings this line hands over when it ticks. The last line hands over everything " +
+                "else whether or not it lists them.")]
+            public BuildKind[] Opens = new BuildKind[0];
+
+            [Tooltip("Does ticking this line call the next wave? A map with a tutorial holds every wave until a " +
+                "line releases it, so a wave arrives when the player has been taught what it asks for. A line " +
+                "ticked while the previous wave is still being fought calls the wave after it - which is what " +
+                "lets the cut a wave is weak to be taught during the wave before.")]
+            public bool StartsWave;
+        }
+
+        [Header("Tutorial")]
+        [Tooltip("The buildings the run opens with, before any line is ticked. Everything else waits for a line " +
+            "that opens it, so a one-tile bar is the lesson's first sentence. Ignored when the task list below " +
+            "is empty - a map with no lines has no tutorial.")]
+        public BuildKind[] TutorialStarting = new BuildKind[0];
+
+        [Tooltip("The lines this map teaches, in order. One at a time: each has to be really done before the " +
+            "next is shown. Empty - the shipped default - is a map without a tutorial. Validate() refuses a " +
+            "line with no text, a guide tile off the map, or a line about a building no earlier line hands " +
+            "over - the last one is a run that waits forever for a wave nothing can release.")]
+        public TutorialTaskRow[] TutorialTasks = new TutorialTaskRow[0];
+
+        /// <summary>The tile a problem is about when it is about the map as a whole, spelled as
+        /// <see cref="MapValidation"/> spells it.</summary>
+        private static readonly Int2 NoCell = new Int2(-1, -1);
+
         /// <summary>Whether a cell is one the asset holds - the one answer to "is this on the map",
         /// shared by every method here and the painting surfaces.</summary>
         public bool InBounds(int x, int y) => x >= 0 && y >= 0 && x < Width && y < Height;
@@ -260,7 +313,8 @@ namespace Facet.Game
                 coreCell: CoreCell.x < 0 || CoreCell.y < 0 ? (Int2?)null : new Int2(CoreCell.x, CoreCell.y),
                 unlocked: Unlocked,
                 seed: Seed,
-                generatedWaves: GeneratedWaves);
+                generatedWaves: GeneratedWaves,
+                tutorial: TutorialPlan());
         }
 
         /// <summary>Everything wrong with this map as the simulation would read it; pure, because it runs
@@ -285,8 +339,117 @@ namespace Facet.Game
                         "only the first entry counts - the mineral named after it is ignored"));
                 }
 
+            CheckTutorial(problems);
             return problems;
         }
+
+        /// <summary>
+        /// The tutorial's own authoring rules: what a lesson must say, and what it must be able to reach.
+        /// They live here beside the duplicate-ore rule for the same reason - once the runtime form exists, a
+        /// row is a line in a list and nothing remembers which fields were left blank. One of them is worse
+        /// than invisible: a line whose building no earlier line hands over can never tick, so the lesson never
+        /// completes and every wave it gates waits forever - a run that hangs with nothing said.
+        /// </summary>
+        private void CheckTutorial(List<MapProblem> into)
+        {
+            TutorialTaskRow[] rows = TutorialTasks ?? new TutorialTaskRow[0];
+            int width = Mathf.Max(1, Width);
+            int height = Mathf.Max(1, Height);
+
+            // What the run holds while each row is current: the starting set plus every earlier row's Opens.
+            // A row's own Opens pay out when it ticks, so they are added after the row has been judged -
+            // otherwise a line could open the building its own rule is about, which is a lesson that starts
+            // finished.
+            var opened = new List<BuildKind>(TutorialStarting ?? new BuildKind[0]);
+
+            for (int i = 0; i < rows.Length; i++)
+            {
+                TutorialTaskRow row = rows[i];
+                if (row == null)
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialLineWithoutText, NoCell,
+                        Name + ": tutorial line " + (i + 1) + " is a missing row, so the HUD prints a line " +
+                        "the player is told to act on"));
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(row.Text))
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialLineWithoutText, NoCell,
+                        Name + ": tutorial line " + (i + 1) + " has no text, so the HUD prints a blank line " +
+                        "the player is told to act on"));
+                }
+
+                // The card that prints a line is a fixed corner of micro type: the HUD shrinks to its floor
+                // and past the floor the sentence spills out of the card onto the map. Same rule for the hint,
+                // which the card pins under the line once the player has been stuck a while.
+                if (LongerThanCard(row.Text))
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialLineTooLong, NoCell,
+                        Name + ": tutorial line " + (i + 1) + " runs " + row.Text.Length + " characters - " +
+                        "the task card holds about " + TutorialTextBudget + " at its smallest type, so the " +
+                        "line would spill past the card onto the map"));
+                }
+
+                if (LongerThanCard(row.Hint))
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialLineTooLong, NoCell,
+                        Name + ": tutorial line " + (i + 1) + "'s hint runs " + row.Hint.Length +
+                        " characters - the task card holds about " + TutorialTextBudget + " at its smallest " +
+                        "type, so the hint would spill past the card onto the map"));
+                }
+
+                // A negative target is the authored "no place to point" - the Inspector shows (-1,-1) - so
+                // only the top of the grid is a fault.
+                if (row.Target.x >= width || row.Target.y >= height)
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialTargetOffMap,
+                        new Int2(row.Target.x, row.Target.y),
+                        Name + ": tutorial line " + (i + 1) + " points at (" + row.Target.x + "," +
+                        row.Target.y + "), which is outside the " + width + "x" + height + " map"));
+                }
+
+                BuildKind need;
+
+                if (!TutorialScript.TryRequiredBuilding(row.Step, out need))
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialStepUnknown, NoCell,
+                        Name + ": tutorial line " + (i + 1) + " asks for step " + (int)row.Step +
+                        ", which is not a lesson this build knows - the line can never tick, so every wave " +
+                        "it gates waits forever"));
+                }
+                else if (!MapAllows(need))
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialStepUnreachable, NoCell,
+                        Name + ": tutorial line " + (i + 1) + " is about a " + need + ", and this map's " +
+                        "operator set never unlocks one - the line can never tick, so every wave it gates " +
+                        "waits forever"));
+                }
+                else if (!opened.Contains(need))
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialStepUnreachable, NoCell,
+                        Name + ": tutorial line " + (i + 1) + " is about a " + need + ", and no earlier " +
+                        "line hands one over - the line can never tick, so every wave it gates waits forever"));
+                }
+
+                if (row.Opens != null) opened.AddRange(row.Opens);
+            }
+        }
+
+        /// <summary>The characters a task line or its hint may run to. The task card's column is 332 design
+        /// units of micro type whose shrink floor is 8 pt (HudView AutoFit) - about 88 average characters -
+        /// and past the floor the text overflows the card. Tools/check-maps.py holds the same number, because
+        /// a hand edit of the asset is judged by the same rules as the painting window.</summary>
+        private const int TutorialTextBudget = 88;
+
+        private static bool LongerThanCard(string line) => line != null && line.Length > TutorialTextBudget;
+
+        /// <summary>Does the map's own operator set admit a building? Asked of the shipped table, which is
+        /// what an asset validated in the Editor is played with; a kind the table does not define reads as
+        /// buildable, because a partial table is legal and this rule is about the tutorial, not the table.</summary>
+        private bool MapAllows(BuildKind kind)
+            => !ContentDatabase.Default.TryMachine(kind, out MachineDef machine) ||
+               (machine.Requires & ~Unlocked) == 0;
 
         /// <summary>The one canonical walk of what this map <em>draws</em> - ground, mineral, in-bounds
         /// doors with their table position, and the Core footprint - normalized as <see cref="ToCore"/>
@@ -648,6 +811,42 @@ namespace Facet.Game
                 waves[w] = rows[w] == null ? new WaveDefinition(0f) : rows[w].ToCore();
 
             return waves;
+        }
+
+        /// <summary>The tutorial this map teaches, or <see langword="null"/> for the map that teaches
+        /// nothing - an empty task list is the whole answer, so there is no second "has a tutorial" flag to
+        /// fall out of step with it. A code-null row becomes a line that can never tick rather than a hole in
+        /// the list, since the list's length is what the HUD counts against.
+        ///
+        /// The guide target is negative-or-not rather than a sentinel: the Inspector shows (-1,-1) for "no
+        /// place to point", and a map is never authored at a negative tile.</summary>
+        private TutorialScript TutorialPlan()
+        {
+            TutorialTaskRow[] rows = TutorialTasks ?? new TutorialTaskRow[0];
+            if (rows.Length == 0) return null;
+
+            var tasks = new TutorialTask[rows.Length];
+            for (int i = 0; i < rows.Length; i++)
+            {
+                TutorialTaskRow row = rows[i];
+                if (row == null)
+                {
+                    // A hole in the list is not a line: the step no rule answers can never tick, so a null
+                    // row stops the lesson on that line instead of ticking itself - which is what
+                    // PlaceDrill would do the moment any drill stands. The text says so rather than printing a
+                    // blank the player is told to act on; Validate() reports it as well.
+                    tasks[i] = new TutorialTask(TutorialScript.NoStep, "(task line missing)", null, null,
+                        false);
+                    continue;
+                }
+
+                bool placed = row.Target.x >= 0 && row.Target.y >= 0;
+                tasks[i] = new TutorialTask(row.Step, row.Text,
+                    placed ? new Int2(row.Target.x, row.Target.y) : (Int2?)null,
+                    row.Opens, row.StartsWave, row.Hint);
+            }
+
+            return new TutorialScript(TutorialStarting, tasks);
         }
     }
 }

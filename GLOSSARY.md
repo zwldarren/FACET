@@ -216,10 +216,12 @@ The project introduction is in [README.md](README.md); this is only the naming.
 ## The clock and the stream
 
 - **Wave phase** (`WavePhase`) - what the wave clock is doing right now, in one word: `Running`,
-  `Intermission` (a countdown is running), `Held` (the opening, before the player's first building arms
-  its clock - no time passes there), `Over`. Readers branch on the phase instead of recomposing it from
-  the `CurrentWave == 0` / `NextWave == 0` sentinels; `HasWaveToStart` is the one question the N key, the
-  HUD's button and a test's run-to-end all ask.
+  `Intermission` (a countdown is running), `Held` (a wait with no clock: the opening, before the player's
+  first building arms it, and on a teaching map every wait, until a **cue** line releases it - no time passes
+  there), `Over`. Readers branch on the phase instead of recomposing it from the `CurrentWave == 0` /
+  `NextWave == 0` sentinels; `HasWaveToStart` is the one question the N key, the HUD's button and a test's
+  run-to-end all ask - and it is false for a wait a lesson is holding, because there is no wave to start and
+  offering one would be a promise the key could not keep.
 - **Window** (in time) - a slice of the event stream at or after a given tick: `CountSince`,
   `TryLastWithin`, `DroppedSince`. The HUD's "last 1s" line and the refusal toast read these instead
   of hand-filtering the ring; drop honesty (`DroppedSince`, next to `Dropped` and `LastDropTick`)
@@ -251,6 +253,47 @@ The project introduction is in [README.md](README.md); this is only the naming.
 - **Endless** (`MapDefinition.GeneratedWaves`) - how a map sources waves past its authored table: 0 finishes
   the map when the table is cleared, a positive count hands over to the generator for that many exam waves,
   and -1 never runs out. Endless mode is this one number rather than a mode.
+
+## The lesson
+
+- **Lesson** (`TutorialScript`, `TutorialState`) - a map's optional tutorial: the buildings a run opens
+  with, and the lines it teaches in order. It belongs to the map rather than to the campaign, so a second
+  map can teach its own lesson without a second mechanism - and it changes exactly three things about a run:
+  which buildings the bar offers, when a wait is let go, and which line the card prints. The ground, the
+  waves and the economy are the map's own, which is what makes a lesson something laid *over* a level rather
+  than a different kind of level. A map with no script has no lesson at all (`null`, not an empty one), so
+  "this level teaches nothing" is one comparison and every reader of it can skip its work.
+- **Line** (`TutorialTask`) - one step of that lesson, and it is data: the text the card prints, the one tile
+  the guide arrow points at, the buildings it hands over, whether it is a **cue**, and the **hint** shown if
+  the line has stood unsolved too long. A line's rule is a **fact about the run** and never an action
+  performed - "a drill stands", not "the player pressed 2" - because a step that watched input could be
+  ticked by a click that built nothing, and a tutorial that ticks on the wrong thing is worse than none.
+  The hint is said once in the strip and then pinned under the line until it ticks: a stuck player is
+  exactly the one a one-shot sentence loses to a refusal or a glance away. Progress only goes forward: a ticked line stays ticked even if what satisfied it is dismantled, since a
+  wave already released cannot be un-released and a list that un-ticks under the player's hands contradicts
+  itself. Only the current line is read, so a player who satisfies a later one early is not credited early.
+- **Cue** (`TutorialTask.StartsWave`, `WaveDirector.ReleaseWait`) - the line that lets the next wave go. A
+  cue does not start the wave on the tick it is read: it releases the **hold**, and the wave then arrives
+  after its own intermission - a short, announced pause that puts the briefing on screen before the fight.
+  A line ticked while a wave is still being fought is not swallowed: the release is banked
+  (`WaveDirector._releaseGrants`) and the wait that follows the wave counts down instead of holding, which
+  is what lets the cut a wave is weak to be taught during the wave before it.
+- **Opening set** (`TutorialScript.Starting`) - the buildings a teaching map's bar carries before its first
+  line is ticked, and therefore the lesson's first sentence. Everything else waits for a line that opens it,
+  a key at a time: the bar is the run's row of keys rather than the table's, and it narrows to fit them
+  (`HudLayout.BarWidthFor`). Hiding replaced greying - a kind the run has never offered is not a locked key,
+  it is no key at all - so the campaign's ladder between maps is the shell's sentence rather than a row of
+  grey keys. A lesson's buildings still pass the map's own operator set: a tutorial is a lesson laid over a
+  level, not a permission to overrule the level.
+- **Teaching map** (`SimWorld.Tutorial`, `WaveDirector.HoldEveryWait`) - a run whose lesson is still being
+  taught holds *every* wait, not only the opening: no countdown runs, and `N` cannot call a wave, because a
+  gate a key can bypass is a gate the wave after it does not have. The lesson is the only cue, and its last
+  line releases whatever is left, so a finished lesson holds nothing. A map without a lesson keeps the
+  opening it always had - the first building arms it, and `N` skips it.
+- **Skip** (`TutorialState.Skip`) - the shell setting a lesson aside: a replay of a map the campaign has
+  already cleared is not taught again, because clearing it took finishing the lesson. The world then reads
+  as a map without one - the full bar from the first frame, the waves on the map's own clock - and a
+  restart does not bring the lesson back, because the skip is a call about the map, not about a run.
 
 ## Input
 

@@ -191,6 +191,12 @@ namespace Facet.Game
         public Layer ProjectileLayer = new Layer(-0.10f, 6);
         public Layer CursorLayer = new Layer(-0.2f, 10);
 
+        /// <summary>Where the tutorial's guide draws: over the map, under the placement ghost and under the
+        /// locator. It is an annotation of a tile rather than a thing on it, so it belongs above everything the
+        /// tile holds - a highlighted cell has to read over a belt, an item and an enemy alike - while staying
+        /// behind the two views that say where the player's own pointer and danger are.</summary>
+        public Layer GuideLayer = new Layer(-0.155f, 8);
+
         /// <summary>Where the off-screen locator draws: in front of the placement ghost, so the arrow is not
         /// hidden by it. It is the only view whose geometry is screen geometry, sitting at the open screen's
         /// edge whatever the map does, so it is never confused with a tile.</summary>

@@ -64,6 +64,30 @@ namespace Facet.Core
         /// <summary>The generator is asked for waves but no vein yields a mineral, so the closure it draws
         /// its demands from is empty and every generated wave arrives with nothing in it.</summary>
         GeneratorWithoutMineral = 17,
+
+        /// <summary>A tutorial line with no text: the case at the end of the tutorial list, a row added by
+        /// accident, prints a blank line the player is told to act on.</summary>
+        TutorialLineWithoutText = 18,
+
+        /// <summary>A tutorial line whose guide tile is outside the grid: the arrow points off the map at
+        /// nothing.</summary>
+        TutorialTargetOffMap = 19,
+
+        /// <summary>A tutorial line no rule can ever satisfy, because the building it is about is never
+        /// handed over - either no earlier line opens it, or the map's own operator set refuses it. The lesson
+        /// then never completes, so every wave it gates waits forever: a hung run with nothing said.</summary>
+        TutorialStepUnreachable = 20,
+
+        /// <summary>A tutorial line naming a step this build has no rule for - a row serialized before the
+        /// enum changed, or a hand-edited file. It is the same hung run as the entry above, and a validator has
+        /// to be able to say so rather than throwing at a designer who cannot act on a stack trace.</summary>
+        TutorialStepUnknown = 21,
+
+        /// <summary>A tutorial line (or its hint) too long for the card that prints it: the task card's body
+        /// is five micro lines in a fixed corner, so a sentence past the budget spills past the card's edge
+        /// onto the map. The HUD shrinks type to cope, but the shrink has a floor - past it, the answer is
+        /// shorter words, not smaller ones.</summary>
+        TutorialLineTooLong = 22,
     }
 
     /// <summary>One problem found in a map, with the sentence a designer can act on.</summary>

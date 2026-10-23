@@ -84,7 +84,7 @@ MonoBehaviour:
   - {x: 23, y: 70}
   - {x: 31, y: 70}
   Waves:
-  - Intermission: 60
+  - Intermission: 10
     Groups:
     - Kind: 0
       Count: 6
@@ -116,7 +116,7 @@ MonoBehaviour:
         NE: 1
         SE: 1
         SW: 1
-  - Intermission: 35
+  - Intermission: 25
     Groups:
     - Kind: 0
       Count: 8
@@ -138,7 +138,7 @@ MonoBehaviour:
         NE: 0
         SE: 1
         SW: 1
-  - Intermission: 35
+  - Intermission: 25
     Groups:
     - Kind: 0
       Count: 10
@@ -163,3 +163,46 @@ MonoBehaviour:
   Unlocked: 3
   Seed: 0
   GeneratedWaves: 0
+  TutorialStarting:
+  - 1
+  TutorialTasks:
+  - Step: 0
+    Text: Drill (2) the vein at the arrow. One drill, one line.
+    Hint: Press 2, then click a tile of the vein - a drill mines only the tile it stands on.
+    Target: {x: 34, y: 6}
+    Opens:
+    - 0
+    StartsWave: 0
+  - Step: 1
+    Text: Drag Belt (1) from the drill into the Core - full shapes bank coins.
+    Hint: Belts are dragged, one tile each - from the drill's front tile, west into the Core.
+    Target: {x: 26, y: 6}
+    Opens:
+    - 9
+    StartsWave: 0
+  - Step: 2
+    Text: Turret (0) on a second line, fed - wave 1 arrives when it has a round.
+    Hint: A drill has one outlet - the gun needs a second vein tile belted to it.
+    Target: {x: 30, y: 7}
+    Opens:
+    - 2
+    - 10
+    StartsWave: 1
+  - Step: 4
+    Text: Cutter (3) is two tiles across the line. Belt the front of both tiles.
+    Hint: Q/E turns the ghost - the second tile is the one beside it, across the line.
+    Target: {x: 32, y: 7}
+    Opens: []
+    StartsWave: 0
+  - Step: 3
+    Text: Feed the cutter's back and it cuts. Halves are what wave 2 is weak to.
+    Hint: A belt must point into the cutter's back - without an inlet it never cuts.
+    Target: {x: 32, y: 7}
+    Opens: []
+    StartsWave: 0
+  - Step: 5
+    Text: Run the halves to the turret (0) - wave 2 arrives when it chambers one.
+    Hint: Aim one front of the cutter into the turret - the gun eats what a belt hands it.
+    Target: {x: 30, y: 7}
+    Opens: []
+    StartsWave: 1

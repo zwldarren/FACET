@@ -70,6 +70,13 @@ namespace Facet.Game
         private bool _inspectPressed;
         private Int2 _cursor = new Int2(-1, -1);
 
+        /// <summary>The kind whose digit was pressed while the lesson keeps it locked, or null. Cleared at
+        /// the top of every <see cref="Sample"/>; the driver relays it to the HUD, whose strip answers the
+        /// press with one line - a dead key with no answer reads as a broken keyboard. Only lesson-locked
+        /// kinds land here (<see cref="SimWorld.LockedByTutorial"/>): a kind the map itself refuses is not
+        /// this run's to explain.</summary>
+        public BuildKind? LockedPressed { get; private set; }
+
         /// <summary>True exactly once after P was pressed. Cleared by the call.</summary>
         public bool ConsumePauseToggle()
         {
@@ -97,6 +104,8 @@ namespace Facet.Game
         /// buttons do not reach the world.</summary>
         public void Sample(Camera camera, SimWorld world, bool pointerOverHud = false)
         {
+            LockedPressed = null;
+
             var keyboard = Keyboard.current;
             if (keyboard != null)
             {
@@ -110,10 +119,16 @@ namespace Facet.Game
 
                 // A locked kind is not selectable at all - the world would refuse to place it
                 // (RejectionReason.Locked), so a ghost promising it would be a lie. The build bar's tiles
-                // ask the same question, so the digit key and the click agree.
+                // ask the same question, so the digit key and the click agree. A press refused by the lesson
+                // specifically is remembered for the HUD: the lesson hid the tile, so the lesson says why the
+                // key is dead.
                 for (int i = 0; i < BuildKeys.Length && i < BuildCatalog.Count; i++)
-                    if (keyboard[BuildKeys[i]].wasPressedThisFrame && world.IsUnlocked(BuildCatalog.All[i]))
-                        ToggleSelect(BuildCatalog.All[i]);
+                    if (keyboard[BuildKeys[i]].wasPressedThisFrame)
+                    {
+                        BuildKind kind = BuildCatalog.All[i];
+                        if (world.IsUnlocked(kind)) ToggleSelect(kind);
+                        else if (world.LockedByTutorial(kind)) LockedPressed = kind;
+                    }
 
                 // Q/E turn the ghost; rotation is latched, so two presses between ticks turn it twice.
                 if (keyboard.qKey.wasPressedThisFrame) _rotateSteps--;

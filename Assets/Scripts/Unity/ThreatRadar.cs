@@ -209,8 +209,11 @@ namespace Facet.Game
             /// <paramref name="infoGrown"/> are the two panels that are not always there - the tutorial card
             /// and the sorter picker's band on the info card - so they are the two the caller has to say:
             /// neither has a default, because a caller that forgot one would silently draw arrows under a
-            /// card that is on screen.</summary>
-            public Viewport Measure(Camera camera, bool tutorialUp, float marginPixels, bool infoGrown)
+            /// card that is on screen. <paramref name="barTiles"/> is how many keys the build bar carries this
+            /// frame: a tutorial's bar grows a key at a time, and the full shelf is only right for a run that
+            /// has been handed the whole table.</summary>
+            public Viewport Measure(Camera camera, bool tutorialUp, float marginPixels, bool infoGrown,
+                int barTiles = HudLayout.BarTiles)
             {
                 if (camera == null) return default;
 
@@ -225,7 +228,7 @@ namespace Facet.Game
                 float pixel = 2f * halfHeight / pixels;
 
                 int count = HudLayout.Panels(Screen.width, Screen.height,
-                    HudLayout.Scale(Screen.height), tutorialUp, _pixels, infoGrown);
+                    HudLayout.Scale(Screen.height), tutorialUp, _pixels, infoGrown, barTiles);
 
                 // Screen pixels grow down and world units up, so a panel's top edge in pixels is its bottom
                 // edge in the map - the same flip the cursor's arithmetic makes.

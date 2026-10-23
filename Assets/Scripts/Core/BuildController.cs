@@ -33,6 +33,11 @@ namespace Facet.Core
         private readonly TerrainField _terrain;
         private readonly MapDefinition _map;
 
+        /// <summary>The lesson this map teaches, or an inactive state for a map without one. It owns one half
+        /// of "may this be built here" - a tutorial hands its buildings over one line at a time - and the map's
+        /// operator set owns the other.</summary>
+        private readonly TutorialState _tutorial;
+
         /// <summary>The stream placements and removals are reported on. Derived telemetry: the
         /// controller's decisions are unchanged by it.</summary>
         private readonly SimEventBuffer _events;
@@ -74,7 +79,8 @@ namespace Facet.Core
                 : GhostDirection;
 
         public BuildController(TileGrid grid, TerrainField terrain, MapDefinition map, BeltField belts,
-            MachineField machines, EconomyState economy, ContentDatabase content, SimEventBuffer events)
+            MachineField machines, EconomyState economy, ContentDatabase content, SimEventBuffer events,
+            TutorialState tutorial = null)
         {
             _grid = grid ?? throw new ArgumentNullException(nameof(grid));
             _terrain = terrain ?? throw new ArgumentNullException(nameof(terrain));
@@ -84,6 +90,7 @@ namespace Facet.Core
             _economy = economy ?? throw new ArgumentNullException(nameof(economy));
             _content = content ?? throw new ArgumentNullException(nameof(content));
             _events = events ?? throw new ArgumentNullException(nameof(events));
+            _tutorial = tutorial;
             Reset();
         }
 
@@ -113,17 +120,29 @@ namespace Facet.Core
             => IsUnlocked(kind)
                && (kind == BuildKind.Belt ? _terrain.CanLayBelt(cell) : _machines.CanPlace(kind, cell, direction));
 
-        /// <summary>Has this map unlocked the operator this building needs? A map's progression is
-        /// the operator set (<see cref="MapDefinition.Unlocked"/>), so a map that has not handed the cutter
-        /// over refuses one outright rather than merely making it expensive - a locked machine is not a thing
-        /// the player should be able to buy and then find useless.
+        /// <summary>Has this map handed this building over? Two gates, and both have to agree: the map's
+        /// operator set (<see cref="MapDefinition.Unlocked"/>), which is the campaign's progression and a map
+        /// that has not taught the cutter refuses one outright rather than merely making it expensive; and the
+        /// map's tutorial (<see cref="TutorialState.Unlocks"/>), which opens a run with a bar of one and hands
+        /// the rest over a line at a time. A map that teaches nothing passes the second gate for every kind.
         ///
         /// A kind the run's own table does not define reads as locked, not as an error: the build bar offers
         /// the <em>shipped</em> kinds, a table may legitimately carry fewer rows than the enum has values,
         /// and a machine nothing defines could not be placed anyway.</summary>
         public bool IsUnlocked(BuildKind kind)
             => _content.TryMachine(kind, out MachineDef machine)
-               && (machine.Requires & ~_map.Unlocked) == 0;
+               && (machine.Requires & ~_map.Unlocked) == 0
+               && (_tutorial == null || _tutorial.Unlocks(kind));
+
+        /// <summary>Is the lesson the one gate this kind fails? True only while a tutorial is still teaching
+        /// and the kind is one the map itself would allow - the case a pressed-but-dead hotkey is worth
+        /// answering. A kind the map's own operator set refuses is not the lesson's business: it is not on
+        /// this run at all, and saying so would promise a hand-over that never comes.</summary>
+        public bool LockedByTutorial(BuildKind kind)
+            => _tutorial != null && _tutorial.Active && !_tutorial.Complete
+               && _content.TryMachine(kind, out MachineDef machine)
+               && (machine.Requires & ~_map.Unlocked) == 0
+               && !_tutorial.Unlocks(kind);
 
         /// <summary>Place one building and pay for it. A drag lays belts cell by cell through this, so a
         /// line simply stops growing when the stockpile runs dry - skipped like a blocked tile, not an

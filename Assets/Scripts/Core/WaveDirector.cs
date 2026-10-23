@@ -20,14 +20,17 @@ namespace Facet.Core
         Running = 0,
 
         /// <summary>Between two waves, with a clock running - the wave after this one starts itself when
-        /// the countdown ends. Every wait but the opening is one of these, and the opening becomes one the
-        /// moment the player's first building arms it.</summary>
+        /// the countdown ends. Every wait but a held one is one of these, and a held one becomes one the
+        /// moment it is released.</summary>
         Intermission = 1,
 
-        /// <summary>The opening, before its clock has been armed: the first wave waits for the player's
-        /// first building (<see cref="WaveDirector.ArmFirstWave"/>), and no time passes - so reading the map
-        /// and planning cost nothing. <see cref="WaveDirector.StartNextWave"/> ends the wait with no
-        /// building placed.</summary>
+        /// <summary>A wait the run is holding back, with no time passing at all. The opening is held until
+        /// the player's first building (<see cref="WaveDirector.ArmFirstWave"/>), so reading the map and
+        /// planning cost nothing; a level that scripts its own opening holds <em>every</em> wait until its
+        /// tutorial lets it go (<see cref="WaveDirector.HoldEveryWait"/>,
+        /// <see cref="WaveDirector.ReleaseWait"/>), so its waves arrive when the player has been taught what
+        /// they demand rather than when a countdown says so. <see cref="WaveDirector.StartNextWave"/> ends a
+        /// non-scripted wait with no building placed.</summary>
         Held = 2,
 
         /// <summary>Every wave this run has has been fought. The run's own end is
@@ -54,6 +57,12 @@ namespace Facet.Core
     /// building, so studying the map costs no time. Its countdown is the longest on the table, because the
     /// whole opening is built under it. It is a ceiling on the wait, not a floor: a player done early calls
     /// the wave with `N`.
+    ///
+    /// A level that teaches has a different arrangement, and it is the only other one: under
+    /// <see cref="HoldEveryWait"/> the clock is the tutorial's (<see cref="TutorialState"/>), and no wait
+    /// counts down until a line of the lesson is ticked, its own duration being the announced pause that
+    /// follows rather than the wait the player spends planning. `N` is refused while such a wait is held,
+    /// because a gate that a key can bypass is a gate the second wave does not have.
     ///
     /// It owns spawning and the definition of "this wave is over"; whether that wins the run is the
     /// world's business (<see cref="GameStatus"/>).
@@ -104,11 +113,21 @@ namespace Facet.Core
         /// countdown makes "60 seconds" exactly 1800 ticks, every run.</summary>
         private int _intermissionTicks;
 
-        /// <summary>The opening's clock is not armed yet: the first wave waits for the player's first
-        /// building (<see cref="ArmFirstWave"/>) rather than time. Only the opening behaves this way -
-        /// every later intermission is armed when the wave before it clears - so the bit is set once per run
-        /// by <see cref="Reset"/>, spent by whatever starts the opening, and never set again.</summary>
-        private bool _openingWaiting;
+        /// <summary>The wait's clock is not armed yet: it waits for whoever releases it rather than for
+        /// time, and no tick passes while it is held. The opening is held from <see cref="Reset"/> and
+        /// released by the player's first building (<see cref="ArmFirstWave"/>); a run with
+        /// <see cref="HoldEveryWait"/> set is held again at every wait and released by
+        /// <see cref="ReleaseWait"/>. Never set again after it is spent on a run that holds only the
+        /// opening.</summary>
+        private bool _waitHeld;
+
+        /// <summary>A release the lesson granted while no wait was held. A line can be satisfied in the middle
+        /// of a wave - the cut a later wave is weak to is often made during the one before it - and there is
+        /// then no wait to un-hold and nothing to count down. The grant is banked here and consumed by the wait
+        /// that follows the wave, so the cue calls the wave it was about instead of being swallowed by the
+        /// clearing. Counted rather than flagged because two lines can cue while one wave is being fought, and
+        /// each cue is worth one wait.</summary>
+        private int _releaseGrants;
 
         /// <summary>What the clock is doing (<see cref="WavePhase"/>), in one word. The sentinel readings
         /// it replaces - "CurrentWave == 0 is an intermission", "NextWave == 0 is over", "a non-zero total
@@ -120,15 +139,23 @@ namespace Facet.Core
             {
                 if (_waveIndex >= 0) return WavePhase.Running;
                 if (Finished || NextWave == 0) return WavePhase.Over;
-                return _openingWaiting ? WavePhase.Held : WavePhase.Intermission;
+                return _waitHeld ? WavePhase.Held : WavePhase.Intermission;
             }
         }
 
         /// <summary>Is there a wave the player can start right now? The question the N key, the HUD button
         /// and a test's "run to the end" all ask - the opening included, held or already counting down.
-        /// Starting is still a no-op while <see cref="WavePhase.Running"/> or <see cref="WavePhase.Over"/>,
-        /// but readers should not offer what they would have to swallow.</summary>
-        public bool HasWaveToStart => Phase == WavePhase.Held || Phase == WavePhase.Intermission;
+        /// A wait a tutorial is holding back is not startable: the lesson is what lets it go, and N must not
+        /// cut it short. Starting is still a no-op while <see cref="WavePhase.Running"/> or
+        /// <see cref="WavePhase.Over"/>, but readers should not offer what they would have to swallow.</summary>
+        public bool HasWaveToStart
+            => Phase == WavePhase.Intermission || (Phase == WavePhase.Held && !HoldEveryWait);
+
+        /// <summary>Does this run hold <b>every</b> wait, not just the opening? Set by the world from
+        /// <see cref="TutorialState.GatesWaves"/>: a level with a tutorial left to teach holds each wave back
+        /// until a line of it is ticked, so no countdown can arrive before the player has been told what the
+        /// wave will ask for. False for every ordinary map, whose waits are the opening's alone.</summary>
+        public bool HoldEveryWait { get; set; }
 
         /// <summary>1-based number of the wave being fought, or 0 during an intermission. For printing
         /// the number; for *branching*, read <see cref="Phase"/>.</summary>
@@ -142,7 +169,7 @@ namespace Facet.Core
         public int NextWave { get; private set; }
 
         /// <summary>Seconds until the next wave starts by itself: 0 while a wave runs, and 0 once the
-        /// run's waves are exhausted. While the opening is <see cref="WavePhase.Held"/> this is the countdown
+        /// run's waves are exhausted. While a wait is <see cref="WavePhase.Held"/> this is the countdown
         /// that will run once the first building arms it, not one already running - <see cref="Phase"/> says
         /// which of the two it is.</summary>
         public float IntermissionRemaining { get; private set; }
@@ -273,20 +300,54 @@ namespace Facet.Core
             Array.Clear(_memoWave, 0, _memoWave.Length);
 
             // A restart puts the opening back in the player's hands: the clock is armed by a building
-            // again, so a restarted run is not already late before the first thing is laid.
-            _openingWaiting = true;
+            // again, so a restarted run is not already late before the first thing is laid. Cues granted by
+            // the lesson that just ended are the old run's and do not survive it.
+            _waitHeld = true;
+            _releaseGrants = 0;
         }
 
         /// <summary>Is there a first wave at all? A map with no authored waves and no generator is a map
         /// error the validator names; this is the clock's own answer to it.</summary>
         private bool HasWaves => Table.Length > 0 || _map.GeneratesWaves;
 
-        /// <summary>Arm the opening: the first wave's countdown starts now, because the player has begun
-        /// to build. Called by the world on the tick a run's first building lands, and idempotent, so the
-        /// world may say it every tick after. A run where the player never builds never arms it - the point,
-        /// since reading the map costs no time. Calling the wave early (<see cref="StartNextWave"/>) ends the
-        /// opening without arming it.</summary>
-        public void ArmFirstWave() => _openingWaiting = false;
+        /// <summary>Arm the wait: the first wave's countdown starts now, because the player has begun to
+        /// build. Called by the world on the tick a run's first building lands, and idempotent, so the world
+        /// may say it every tick after. A run where the player never builds never arms it - the point, since
+        /// reading the map costs no time. Calling the wave early (<see cref="StartNextWave"/>) ends the wait
+        /// without arming it.
+        ///
+        /// Building is <b>not</b> what releases a wait on a run that <see cref="HoldEveryWait"/>: there the
+        /// tutorial's lines are the only cue, and a belt laid on the third tick is not a lesson learned.</summary>
+        public void ArmFirstWave()
+        {
+            if (HoldEveryWait) return;
+
+            _waitHeld = false;
+        }
+
+        /// <summary>Release a wait the run is holding back, so its countdown starts this tick. The tutorial's
+        /// verb: a line that <see cref="TutorialTask.StartsWave"/> calls this, and the wave then arrives after
+        /// its own intermission - a short, announced pause rather than the instant the lesson is read, which is
+        /// what gives the player a breath and the briefing a moment on screen.
+        ///
+        /// A line can tick while a wave is still being fought, so the verb does not require a held wait to
+        /// exist right now: the grant is banked and the wait after the wave counts down instead of holding
+        /// (<see cref="BeginIntermission"/>). A cue that arrives while a countdown already runs is spent -
+        /// the wave it named is on its way already - which is the one case this cannot recover.</summary>
+        public void ReleaseWait()
+        {
+            if (_waitHeld)
+            {
+                // A wait is held right now: this tick's countdown starts, and the cue is spent here rather
+                // than banked for a second wave the line never asked for.
+                _waitHeld = false;
+                return;
+            }
+
+            // Nothing held: the line's wave is not waiting yet. A wave in flight clears into the next wait on
+            // its own, and that wait is the one the line was about.
+            if (_waveIndex >= 0) _releaseGrants++;
+        }
 
         /// <summary>Arm the wait before the wave numbered <paramref name="waveNumber"/> (0 when there is
         /// none): the countdown every wave runs, the first included, so "this wave is coming" is one rule
@@ -299,6 +360,22 @@ namespace Facet.Core
             IntermissionTotal = wave?.Intermission ?? 0f;
             _intermissionTicks = SecondsToTicks(IntermissionTotal);
             IntermissionRemaining = IntermissionTotal;
+
+            // Every wait on a scripted run starts held, so the countdown that follows a wave is the lesson's
+            // to start rather than the clearing's - unless a line already granted this wait while the wave
+            // before it was still being fought (<see cref="ReleaseWait"/>), in which case the granting line is
+            // the one that called it and the countdown runs. The opening is held either way - Reset says so -
+            // so this only ever decides the waits after the first.
+            if (HoldEveryWait)
+            {
+                _waitHeld = _releaseGrants == 0;
+                if (_releaseGrants > 0) _releaseGrants--;
+            }
+            else
+            {
+                // A run that holds only its opening has nothing for a banked grant to release.
+                _releaseGrants = 0;
+            }
         }
 
         public void Step(float dt)
@@ -309,9 +386,9 @@ namespace Facet.Core
             {
                 if (NextWave == 0) return;
 
-                // The opening holds until the player builds something: no tick passes while it is Held,
-                // so the countdown the map declares is spent building, not reading.
-                if (_openingWaiting) return;
+                // A held wait lets no tick pass: the countdown a map declares is spent building (or being
+                // taught), not reading the clock.
+                if (_waitHeld) return;
 
                 if (_intermissionTicks > 0) _intermissionTicks--;
                 IntermissionRemaining = _intermissionTicks * SimConfig.TickDt;
@@ -335,6 +412,11 @@ namespace Facet.Core
         public void StartNextWave()
         {
             if (Finished || _waveIndex >= 0 || NextWave == 0) return;
+
+            // A tutorial's hold is the lesson's to release, so N cannot cut a teaching gate short. Every other
+            // held wait is the opening's, and skipping it is the point: a player ready sooner chooses "now".
+            if (_waitHeld && HoldEveryWait) return;
+
             StartWave(NextWave - 1);
         }
 
@@ -349,15 +431,15 @@ namespace Facet.Core
                 // the countdown directly rather than through Phase sees a finished run, not a stale one.
                 Finished = true;
                 NextWave = 0;
-                _openingWaiting = false;
+                _waitHeld = false;
                 IntermissionRemaining = 0f;
                 IntermissionTotal = 0f;
                 return;
             }
 
-            // However the wait ended - a countdown running out, or the player calling it - the opening is
-            // over, so the bit that held it is spent here rather than by the path that got here.
-            _openingWaiting = false;
+            // However the wait ended - a countdown running out, or the player calling it - the wait is over,
+            // so the bit that held it is spent here rather than by the path that got here.
+            _waitHeld = false;
 
             _waveIndex = index;
             CurrentWave = index + 1;

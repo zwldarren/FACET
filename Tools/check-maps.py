@@ -20,12 +20,18 @@ What is wrong in a map file is silent in a run, and every rule below is one of t
   * a map with no wave rows and no generator: nothing will ever arrive, so it can be neither won nor lost;
   * a map that hands its waves to the generator while no vein names a mineral: the generator roots its
     legal demands at the map's own minerals, so it would have nothing to ask for and every generated wave
-    would arrive empty.
+    would arrive empty;
+  * a tutorial row with no text, a guide tile off the map, a step this build has no rule for, or a line
+    about a building no earlier line hands over - the last one is the expensive mistake: the line can never
+    tick, so the lesson never completes and every wave it gates waits forever, on a screen with nothing
+    coming;
+  * a tutorial line or hint longer than the card that prints it: the HUD's type shrink has a floor, and
+    past it the sentence spills out of the task card's edge.
 
 The rules themselves are MapValidation's (`OreInTerrain`, `PatchWithoutMineral`, `GroupWithoutDemand`,
-`NoWaves`, `GeneratorWithoutMineral`) and MapAsset.Validate's (`DuplicateOre`): they run in the painting
-window and in the test suite, and this is the same answers for a file, which is where a hand edit - a
-script's, or an agent's - lands before either of those ever sees it.
+`NoWaves`, `GeneratorWithoutMineral`) and MapAsset.Validate's (`DuplicateOre`, and the four tutorial rules):
+they run in the painting window and in the test suite, and this is the same answers for a file, which is
+where a hand edit - a script's, or an agent's - lands before either of those ever sees it.
 
 One rule is deliberately not here: whether a named demand is one this map's minerals and unlocked
 operators can actually build. That is `DemandNotBuildable`, and answering it means walking the shape
@@ -52,23 +58,60 @@ INTERMISSION = re.compile(r'^\s+- Intermission:')
 WEAKNESS = re.compile(r'^\s+Weakness:\s*$')
 QUADRANT = re.compile(r'^\s+(NW|NE|SE|SW): (\d+)\s*$')
 GENERATED = re.compile(r'^  GeneratedWaves: (-?\d+)\s*$')
+UNLOCKED = re.compile(r'^  Unlocked: (\d+)\s*$')
+TUTORIAL_STARTING = re.compile(r'^  TutorialStarting:\s*$')
+TUTORIAL_TASKS = re.compile(r'^  TutorialTasks:\s*$')
+TASK_STEP = re.compile(r'^  - Step: (-?\d+)\s*$')
+TASK_TEXT = re.compile(r'^    Text: (.*)$')
+TASK_HINT = re.compile(r'^    Hint: (.*)$')
+TASK_TARGET = re.compile(r'^    Target: \{x: (-?\d+), y: (-?\d+)\}\s*$')
+TASK_OPENS = re.compile(r'^    Opens: (.*)$')
+TASK_OPENS_ROW = re.compile(r'^    - (\d+)\s*$')
+TASK_WAVE = re.compile(r'^    StartsWave: (\d+)\s*$')
+STARTING_ROW = re.compile(r'^  - (\d+)\s*$')
+TASK_NULL = re.compile(r'^  - \{fileID: 0\}\s*$')
 
 GROUND, ORE, ROCK, WATER, VOID = 0, 1, 2, 3, 4
 NAMES = {GROUND: 'Ground', ORE: 'Ore', ROCK: 'Rock', WATER: 'Water', VOID: 'Void'}
 
 CIRCLE, SQUARE = 1, 2
 
+# The lesson's own vocabulary, spelled as the runtime spells it. A step names the building whose presence
+# its rule reads (TutorialScript.TryRequiredBuilding), and a building names the operator a map has to have
+# handed over before it may be built at all (MachineDef.Requires, derived from the behaviour).
+BELT, DRILL, CUTTER, TURRET = 0, 1, 2, 9
+STEPS = {
+    0: ('PlaceDrill', DRILL),
+    1: ('BankShape', DRILL),
+    2: ('ArmTurret', TURRET),
+    3: ('MakeHalf', CUTTER),
+    4: ('BeltFork', CUTTER),
+    5: ('ArmTurretWithHalf', TURRET),
+}
+BUILDING_NAMES = {DRILL: 'drill', CUTTER: 'cutter', TURRET: 'turret'}
+REQUIRES = {DRILL: 0, TURRET: 0, CUTTER: 1}            # Operators.Cutter is the one flag a lesson can need
+OPERATORS_ALL = 7                                      # Operators.All, the field's own default
+
+# MapAsset.TutorialTextBudget, spelled a second time: the task card's column of micro type holds about this
+# many characters at its shrink floor, and a line past it spills past the card onto the map.
+TEXT_BUDGET = 88
+
 
 def read(path):
-    """What this check needs: the size, the array, the ore list, the waves and the generator's bound.
+    """What this check needs: the size, the array, the ore list, the waves, the generator's bound and the
+    lesson.
 
     The waves come back as one list per authored row, each holding one quadrant list per group, because
     "- Intermission:" is the only line that starts a row: it is the marker the panel's numbering and this
     check's messages both have to agree on.
+
+    The lesson comes back as one dict per row, with the fields a rule reads and the row's own position for
+    the messages - a line is named by its number, because that is what the HUD counts against.
     """
     width = height = None
     terrain = None
     generated = None
+    unlocked = None
     ore = []
     pending = None
 
@@ -77,9 +120,15 @@ def read(path):
     wave = None
     group = None
 
+    in_starting = False
+    starting = []
+    tutorial = []         # one dict per authored row; empty for a map that teaches nothing
+    row = None
+
     for line in path.read_text(encoding='utf-8').splitlines():
         size = SIZE.match(line)
         if size:
+            in_starting = False
             if size.group(1) == 'Width':
                 width = int(size.group(2))
             else:
@@ -88,13 +137,82 @@ def read(path):
 
         array = TERRAIN.match(line)
         if array:
+            in_starting = False
             terrain = array.group(1)
             continue
 
         bound = GENERATED.match(line)
         if bound:
+            in_starting = False
             generated = int(bound.group(1))
             continue
+
+        allowed = UNLOCKED.match(line)
+        if allowed:
+            in_starting = False
+            unlocked = int(allowed.group(1))
+            continue
+
+        if TUTORIAL_STARTING.match(line):
+            in_starting = True
+            continue
+
+        if TUTORIAL_TASKS.match(line):
+            in_starting = False
+            row = None
+            continue
+
+        # "- Step:" is a tutorial row's marker and "- <digit>" is a starting building, so the two are read
+        # apart by the word after the dash: a row is judged on its fields, a starting kind is a number.
+        step = TASK_STEP.match(line)
+        if step:
+            in_starting = False
+            row = {'step': int(step.group(1)), 'opens': []}
+            tutorial.append(row)
+            continue
+
+        if TASK_NULL.match(line):
+            in_starting = False
+            row = {}
+            tutorial.append(row)
+            continue
+
+        if row is not None:
+            text = TASK_TEXT.match(line)
+            if text:
+                row['text'] = text.group(1)
+                continue
+
+            hint = TASK_HINT.match(line)
+            if hint:
+                row['hint'] = hint.group(1)
+                continue
+
+            target = TASK_TARGET.match(line)
+            if target:
+                row['target'] = (int(target.group(1)), int(target.group(2)))
+                continue
+
+            opens = TASK_OPENS.match(line)
+            if opens:
+                row['opens'] = []          # "Opens: []" and "Opens:" followed by rows start the same way
+                continue
+
+            hand = TASK_OPENS_ROW.match(line)
+            if hand:
+                row['opens'].append(int(hand.group(1)))
+                continue
+
+            starts = TASK_WAVE.match(line)
+            if starts:
+                row['starts'] = starts.group(1) != '0'
+                continue
+
+        if in_starting:
+            opened = STARTING_ROW.match(line)
+            if opened:
+                starting.append(int(opened.group(1)))
+                continue
 
         if WAVES.match(line):
             in_waves = True
@@ -130,11 +248,70 @@ def read(path):
             ore.append((pending, int(mineral.group(1))))
             pending = None
 
-    return width, height, terrain, ore, waves, generated
+    return width, height, terrain, ore, waves, generated, unlocked, starting, tutorial
+
+
+def check_tutorial(rows, starting, unlocked, width, height):
+    """The lesson's authoring rules, against a file: what a line must say, and what it must be able to reach.
+
+    The reach rule is the one worth having here: a line whose building no earlier line hands over, or whose
+    building the map's own operator set refuses, can never tick - so the lesson never completes and every
+    wave it gates waits forever, on a screen with nothing coming. The row's own Opens do not count: they pay
+    out on the tick the line is satisfied, which is the lesson that starts finished.
+    """
+    problems = []
+    opened = list(starting)
+
+    for number, row in enumerate(rows, start=1):
+        text = row.get('text', '')
+        if not text.strip():
+            problems.append(f'tutorial line {number} has no text, so the HUD prints a blank line the player '
+                            f'is told to act on')
+        elif len(text) > TEXT_BUDGET:
+            problems.append(f'tutorial line {number} runs {len(text)} characters - the task card holds about '
+                            f'{TEXT_BUDGET} at its smallest type, so the line would spill past the card onto '
+                            f'the map')
+
+        hint = row.get('hint', '')
+        if len(hint) > TEXT_BUDGET:
+            problems.append(f'tutorial line {number}\'s hint runs {len(hint)} characters - the task card '
+                            f'holds about {TEXT_BUDGET} at its smallest type, so the hint would spill past '
+                            f'the card onto the map')
+
+        target = row.get('target')
+        if target is not None:
+            x, y = target
+            # A negative target is the authored "no place to point" - the Inspector shows (-1,-1) - so only
+            # the top of the grid is a fault.
+            if x >= width or y >= height:
+                problems.append(f'tutorial line {number} points at ({x},{y}), which is outside the '
+                                f'{width}x{height} map')
+
+        step = row.get('step')
+        if step is None:
+            pass                                    # the null row above, already reported as having no text
+        elif step not in STEPS:
+            problems.append(f'tutorial line {number} asks for step {step}, which is not a lesson this build '
+                            f'knows - the line can never tick, so every wave it gates waits forever')
+        else:
+            name, building = STEPS[step]
+            what = BUILDING_NAMES[building]
+            if REQUIRES[building] & ~unlocked:
+                problems.append(f'tutorial line {number} is a {name} line - it needs a {what}, and this '
+                                f'map\'s operator set (Unlocked: {unlocked}) never unlocks one, so the line '
+                                f'can never tick and every wave it gates waits forever')
+            elif building not in opened:
+                problems.append(f'tutorial line {number} is a {name} line - it needs a {what}, and no '
+                                f'earlier line hands one over (TutorialStarting: {starting}), so the line '
+                                f'can never tick and every wave it gates waits forever')
+
+        opened.extend(row.get('opens', []))
+
+    return problems
 
 
 def check(path):
-    width, height, terrain, ore, waves, generated = read(path)
+    width, height, terrain, ore, waves, generated, unlocked, starting, tutorial = read(path)
     problems = []
 
     if width is None or height is None:
@@ -197,6 +374,10 @@ def check(path):
                         f'ore entry names a mineral, so the generator has nothing to demand from and '
                         f'every generated wave arrives empty')
 
+    if tutorial:
+        problems.extend(check_tutorial(tutorial, starting, OPERATORS_ALL if unlocked is None else unlocked,
+                                       width, height))
+
     for problem in problems:
         print(f'  {problem}')
 
@@ -221,7 +402,8 @@ def main():
         problems = check(path)
         total += len(problems)
         if not problems:
-            print('  ok - the ore list is the only place a vein is written, and every group names a demand')
+            print('  ok - the ore list is the only place a vein is written, every group names a demand, and '
+                  'the lesson can be taught')
 
     print()
     print(f'{len(paths)} map(s), {total} problem(s)')

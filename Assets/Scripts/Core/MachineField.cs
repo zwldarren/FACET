@@ -509,6 +509,22 @@ namespace Facet.Core
         }
 
         /// <summary>
+        /// How many of one building stand on the map. Asked by a tutorial's "has the player drilled
+        /// anything yet" - a question about what exists rather than about what was placed, so tearing the
+        /// machine down answers differently from never having built one.
+        ///
+        /// Machines, not tiles: a cutter standing on two is one.
+        /// </summary>
+        public int CountOf(BuildKind build)
+        {
+            int found = 0;
+            for (int k = 0; k < _occupied.Count; k++)
+                if (_state[_occupied[k]].Build == build) found++;
+
+            return found;
+        }
+
+        /// <summary>
         /// How long a machine has to have had no outlet for the piece it holds before the HUD calls it
         /// stopped: one second at the fixed tick rate. Long enough that the tick a lane is laid on - or a
         /// machine rebuilt - is not news, short enough that a factory standing still says so while the player

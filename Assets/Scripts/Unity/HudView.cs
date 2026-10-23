@@ -111,6 +111,7 @@ namespace Facet.Game
         private ToastPanel _toast;
         private BannerPanel _banner;
         private TutorialPanel _tutorial;
+        private TaskPanel _tasks;
         private TooltipPanel _tooltip;
 
         private float _scale = -1f;
@@ -151,10 +152,15 @@ namespace Facet.Game
         private bool _bannerShown;
 
         private bool _toastShown;
-        private int _toastTick = -1;
         private string _toastText;
         private float _toastAlpha;
         private bool _toastTutorialUp;
+
+        /// <summary>The lesson's own sentence in that strip, and the window it lives in: null when the
+        /// lesson has nothing to say. Set by <see cref="Notice"/>, never by a refusal.</summary>
+        private string _noticeText;
+        private float _noticeFrom;
+        private float _noticeFor;
 
         private int _stockpileCount = int.MinValue;
         private float _stockpileAlpha = -1f;
@@ -203,6 +209,48 @@ namespace Facet.Game
 
         private bool _tutorialUp;
 
+        /// <summary>The line the task card last printed, and whether that was the completion line. The panel's
+        /// text is a string build, so it is rebuilt on the tick a line is ticked and on nothing else. Whether
+        /// the card is on screen is asked of the panel itself - a cached flag went stale across the rebuild a
+        /// finished lesson triggers (see <see cref="UpdateTasks"/>).</summary>
+        private int _seenTaskStep = -1;
+        private bool _seenTaskComplete;
+
+        /// <summary>When the lesson finished, in unscaled seconds, or -1 while it is still being taught. The
+        /// card says "tutorial complete" for <see cref="TaskDoneHold"/> and then gives the corner back - a
+        /// list that stayed up would hold a permanent strip of the screen for the rest of the run.</summary>
+        private float _tutorialDoneAt = -1f;
+
+        /// <summary>The world the lesson notices below belong to, and the number of lines ticked in it. A map
+        /// change is a new world and a restart rewinds this one, so both are read here as "a lesson with
+        /// nothing to report yet" rather than as a line ticked on the frame they happened.</summary>
+        private SimWorld _noticeWorld;
+        private int _noticedStep = -1;
+
+        /// <summary>When the current line became current, in the world's own ticks. The tick is what tells a
+        /// restart apart - the same world object, wound back to its first line, would otherwise keep a timer
+        /// that says this line has already been waited on - and being the world's clock, it stands still while
+        /// the run is paused: held time is not stuck time, and a player coming back from a pause is not met by
+        /// a hint that fired while they were away.</summary>
+        private int _stepTick = -1;
+
+        /// <summary>The step whose hint has been offered, so each line gets one offer and not one a
+        /// second.</summary>
+        private int _hintStep = -1;
+
+        /// <summary>Is the current line's hint pinned into the task card? Set when the offer fires: the toast
+        /// is the announcement, the pin is the answer staying where the line lives - a player who looked away
+        /// from the strip, or had it talked over by refusals, still has the help.</summary>
+        private bool _hintPinned;
+
+        /// <summary>What the pin state was the last time the task card's text was built - the card rebuilds
+        /// its body when the pin lands or lifts, not only when a line ticks.</summary>
+        private bool _seenHintPinned;
+
+        /// <summary>The word on the "how to play" card's hide button as last written - while a lesson is live
+        /// the button says where it goes back to, and the word only changes on the lesson's edge.</summary>
+        private string _hideWord;
+
         /// <summary>The player's own say over the "how to play" card: null until they press its hide button
         /// or <c>T</c>, after which their choice holds for the rest of the session - across restarts and map
         /// changes - instead of the campaign's first-map default. See <see cref="ShowTutorial"/>.</summary>
@@ -225,6 +273,15 @@ namespace Facet.Game
         private bool _helpOpen;
         private string _compKey;
 
+        /// <summary>The bar's kind set from before the current rebuild, so a rebuild that grew the bar can
+        /// light the tiles it added (a tutorial's hand-over is the one that happens mid-run). Empty is also
+        /// the first build's answer: no previous bar, nothing is news.</summary>
+        private readonly HashSet<BuildKind> _barBefore = new HashSet<BuildKind>();
+
+        /// <summary>Set when a rebuild comes from a world swap (<see cref="Initialize"/>): a new map's bar is
+        /// all new and none of it is news. Read once by the rebuild and cleared.</summary>
+        private bool _barSuppressPulse;
+
         /// <summary>What the player cannot see right now, as the locator's own summary. The status card's
         /// threat line and stripe read this, and the map's arrows are made from the same call: one rule about
         /// what counts as out of view, said in two registers.</summary>
@@ -238,7 +295,7 @@ namespace Facet.Game
             if (_radarMarkers.Length != look.MaxMarkers)
                 _radarMarkers = new ThreatRadar.Marker[Mathf.Max(1, look.MaxMarkers)];
 
-            var view = _screen.Measure(_camera, ShowTutorial, look.EdgeInsetPixels, _pickerUp);
+            var view = _screen.Measure(_camera, TutorialUp, look.EdgeInsetPixels, _pickerUp, BarTiles);
 
             _world.Enemies.GetEnemies(_radarEnemies);
 
@@ -271,20 +328,97 @@ namespace Facet.Game
             _world.Status == GameStatus.Playing && !_world.Paused && _world.Waves.HasWaveToStart;
 
         /// <summary>Is the info card taller than its base height right now, because a sorter's filter picker
-        /// is on it? The driver relays this to the locator, whose panel boxes are the same boxes the HUD
-        /// draws - see <see cref="ThreatRadarView.SetInfoGrown"/>.</summary>
+        /// is on it? The driver relays this to the locator and the tutorial's guide, whose panel boxes are the
+        /// same boxes the HUD draws - see <see cref="ThreatRadarView.SetInfoGrown"/>.</summary>
         public bool InfoGrown => _pickerUp;
 
-        /// <summary>Is the "how to play" card up? The one predicate the card's claim on the pointer, the
-        /// toast's clearance and the driver's camera rig all read, so no two pieces of the frame can disagree
-        /// about whether the card is there. Up by default on the campaign's first map; once the player has
-        /// hidden or shown it themselves, their choice wins on every map.</summary>
-        private bool ShowTutorial => _campaign != null && (_tutorialChoice ?? _campaign.IsFirstMap);
+        /// <summary>How many keys the build bar is carrying this frame. Relayed to the locator and the guide,
+        /// whose panel boxes have to be the boxes the HUD draws - a tutorial's bar grows a key at a time, so
+        /// this is the run's number rather than the table's. An empty bar is a bar of no keys and not a full
+        /// shelf: the fallback is for a HUD that has not built its panels yet, where the full row is the one
+        /// honest guess.</summary>
+        public int BarTiles => _bar != null ? _bar.Tiles.Count : HudLayout.BarTiles;
 
-        /// <summary>Is the "how to play" card on screen this frame? The driver relays it to the camera rig
-        /// and the locator, whose bounds give up the strip the card wears - the way it relays
-        /// <see cref="InfoGrown"/>.</summary>
-        public bool TutorialUp => ShowTutorial;
+        /// <summary>Is the "how to play" card up? Up by default on the campaign's first map - unless that map
+        /// brings a lesson, whose task list owns this corner for as long as it is being taught. Once the lesson
+        /// has had its moment the reference card comes back, so the five general rules are the last thing the
+        /// map says rather than the first: a player who has built the opening is the one ready to read about
+        /// the rotator and the weakness rule, and the last wave asks for exactly that. Once the player has
+        /// hidden or shown the card themselves, their choice wins on every map.</summary>
+        private bool ShowTutorial
+        {
+            get
+            {
+                if (_campaign == null) return false;
+                if (_tutorialChoice.HasValue) return _tutorialChoice.Value;
+
+                return _campaign.IsFirstMap && (!HasTutorial || LessonHandedOver);
+            }
+        }
+
+        /// <summary>Has the lesson finished and given the corner back? True once the task card's own completion
+        /// hold has expired, so the two cards are complements: one corner, one card, and it is the lesson's
+        /// until the lesson has nothing left to say.</summary>
+        private bool LessonHandedOver => HasTutorial && !TaskListWanted;
+
+        /// <summary>Does this run have a lesson to show? The one condition that puts the task list in the
+        /// corner the reference card otherwise wears.</summary>
+        private bool HasTutorial => _world != null && _world.Tutorial.Active;
+
+        /// <summary>Is the task list on screen this frame? Up while the lesson is being taught, and for
+        /// <see cref="TaskDoneHold"/> after its last line is ticked - so the player sees the final tick before
+        /// the corner goes quiet. Yielded to the reference card while the player has asked for it with
+        /// <c>T</c>: the two cards share one place under the status rail, and the corner belongs to whichever
+        /// one the player wanted to read.</summary>
+        private bool TaskListUp => TaskListWanted && !ShowTutorial;
+
+        private bool TaskListWanted
+        {
+            get
+            {
+                if (_world == null) return false;
+
+                TutorialState tutorial = _world.Tutorial;
+                if (!tutorial.Active) return false;
+                if (!tutorial.Complete) return true;
+
+                return _tutorialDoneAt >= 0f && Time.unscaledTime - _tutorialDoneAt < TaskDoneHold;
+            }
+        }
+
+        /// <summary>How long "tutorial complete" stays up. Long enough to be read after the last line flips,
+        /// short enough not to be a panel the player has to live with: the same order as a toast, which is the
+        /// HUD's other piece that answers a moment and then leaves.</summary>
+        private const float TaskDoneHold = 3f;
+
+        /// <summary>How many task lines the card prints at once, the oldest dropping off as the list grows. The
+        /// card is <see cref="HudLayout.TutorialHeight"/> tall and its body holds five micro lines - the same
+        /// budget the reference card's five steps spend, so the corner never grows.</summary>
+        private const int MaxTaskLines = 5;
+
+        /// <summary>How long a line has to stand unsolved before its hint is offered, in run ticks - thirty
+        /// seconds of the world's clock, not the wall's. Long enough that a player working through the step is
+        /// never talked over - laying the ten belts a line into the Core takes the better part of this - and
+        /// short enough that a player who is stuck reads the answer before they give up on a screen where
+        /// nothing is coming.</summary>
+        private static readonly int HintDelayTicks = (int)(SimConfig.TickRate * 30f);
+
+        /// <summary>How long a newly unlocked bar tile wears the accent outline. About one glance: long
+        /// enough to be seen wherever the eye is, short enough that the outline is gone before it reads as
+        /// a state the tile is in rather than a moment it had.</summary>
+        private const float FreshSeconds = 2.5f;
+
+        /// <summary>How long a lesson's own sentence - a line ticked, a hint - stays in the strip a refusal
+        /// uses, and the fraction of that which is the fade out. A tick is read in a glance, so it lives about
+        /// as long as a refusal does; a hint is a sentence, so it gets longer.</summary>
+        private const float NoticeSeconds = 4f;
+        private const float HintSeconds = 7f;
+        private const float NoticeFade = 0.3f;
+
+        /// <summary>Is either card - the task list or the reference card - on screen this frame? The one
+        /// predicate the cards' claim on the pointer, the toast's clearance and the driver's camera rig all
+        /// read, so no two pieces of the frame can disagree about whether that corner is taken.</summary>
+        public bool TutorialUp => ShowTutorial || TaskListUp;
 
         /// <summary>
         /// The coin this run is paid in, as a mark: the <em>complete</em> shape of the map's own mineral.
@@ -322,6 +456,8 @@ namespace Facet.Game
 
             if (!BarMatchesContent())
             {
+                // A world swap's rebuild lights nothing: the new map's bar is all new and none of it is news.
+                _barSuppressPulse = true;
                 RebuildPanels();
                 return;
             }
@@ -337,6 +473,16 @@ namespace Facet.Game
             if (_world == null || _palette == null || _canvasRoot == null) return;
 
             RefreshScale();
+
+            // A tutorial hands buildings over mid-run, so the bar's own tile set is a run's rather than the
+            // table's and can change between frames. The panels are rebuilt rather than patched - the same
+            // answer a resize gets - because this happens once a line, not once a frame.
+            if (!BarMatchesContent())
+            {
+                RebuildPanels();
+                return;
+            }
+
             UpdateMoneyMarks();
 
             // The HUD owns its panels: the pointer being over one is reported to the input source, so a
@@ -347,6 +493,7 @@ namespace Facet.Game
             PointerOverHud = ComputePointerOver();
 
             UpdateTutorial();
+            UpdateTasks();
             UpdateToast();
             UpdateBanner();
             UpdateStockpile();
@@ -393,6 +540,16 @@ namespace Facet.Game
             _screenWidth = Screen.width;
             _screenHeight = Screen.height;
 
+            // The bar's set before the teardown, so the rebuild can tell a tile the lesson just handed over
+            // from one that was always there. Read once on the far side, then the run moves on.
+            _barBefore.Clear();
+            if (_bar != null)
+                for (int i = 0; i < _bar.Tiles.Count; i++)
+                    _barBefore.Add(_bar.Tiles[i].Kind);
+
+            bool pulse = !_barSuppressPulse;
+            _barSuppressPulse = false;
+
             // Immediate, because the rebuild happens inside the same update that noticed the resize:
             // a deferred Destroy would leave both HUDs on screen for a frame, and the panels are pure
             // runtime objects with nothing an asset could lose.
@@ -401,12 +558,27 @@ namespace Facet.Game
 
             BuildPanels();
             MarkEverythingDirty();
+
+            if (pulse) MarkFreshTiles();
+        }
+
+        /// <summary>Light the tiles a rebuild just added to the bar. The toast that names the unlock is at the
+        /// top of the screen and the bar is at the bottom; the pulse is the thread between them. Only growth
+        /// lights anything: a restart's shrink or a resize's same-set rebuild is not news.</summary>
+        private void MarkFreshTiles()
+        {
+            if (_barBefore.Count == 0 || _bar.Tiles.Count <= _barBefore.Count) return;
+
+            for (int i = 0; i < _bar.Tiles.Count; i++)
+                if (!_barBefore.Contains(_bar.Tiles[i].Kind))
+                    _bar.Tiles[i].FreshUntil = Time.unscaledTime + FreshSeconds;
         }
 
         private void BuildPanels()
         {
             _status = BuildStatus();
             _tutorial = BuildTutorial();
+            _tasks = BuildTasks();
             _controls = BuildControls();
             _help = BuildHelp();
             _stockpile = BuildStockpile();
@@ -423,10 +595,12 @@ namespace Facet.Game
             _controlsDirty = true;
             _infoDirty = true;
             _toastShown = false;
-            _toastTick = -1;
+            _toastText = null;
             _toastAlpha = 0f;
+            _noticeText = null;
             _bannerText = null;
             _bannerShown = false;
+            _seenTaskStep = -1;
             _stockpileCount = int.MinValue;
             _stockpileAlpha = -1f;
             _infoBuildShown = false;
@@ -673,6 +847,58 @@ namespace Facet.Game
             return panel;
         }
 
+        /// <summary>
+        /// The lesson's card, in the corner the reference card wears: a heading, the position in the list, a
+        /// hairline, then the lines themselves. Same rect, same width and same height as the reference card, so
+        /// whichever one the player is reading hangs off the status rail in the same place and the layout's
+        /// top strip does not have to know which it is.
+        ///
+        /// No close button: the card is not a thing the player opens, so it is not a thing they dismiss - it goes
+        /// when the lesson does. <c>T</c> still swaps in the reference card, and its own hide button swaps
+        /// back.
+        /// </summary>
+        private TaskPanel BuildTasks()
+        {
+            Rect rect = HudLayout.Tutorial(_scale);
+            var panel = new TaskPanel { Root = BuildCard("tasks", rect, PlaceCorner.TopLeft) };
+            RectTransform root = panel.Root;
+
+            const float w = HudLayout.StatusWidth;
+            const float inner = w - CardInset * 2f;
+
+            panel.Title = Label(root, "title", HudType.Body, FontStyle.Bold, TextAnchor.MiddleLeft,
+                tracked: true);
+            At(panel.Title.Rect, CardInset, 4f, 190f, 22f);
+            panel.Title.Set("TUTORIAL", _palette.HudText);
+
+            panel.Count = Label(root, "count", HudType.Micro, FontStyle.Bold, TextAnchor.MiddleRight);
+            At(panel.Count.Rect, CardInset + inner - 44f, 8f, 44f, 14f);
+            panel.Count.Set(string.Empty, HudInk.Muted(_palette));
+
+            HudBox rule = HudUi.Box(root, "rule", HudInk.Rule(_palette));
+            At(rule.Rect, CardInset, 27f, inner, 1f);
+
+            // Five micro lines, the same budget the reference card's five steps spend: the lines are short by
+            // construction (the map authors them) and the card does not grow with the list. The AutoFit is the
+            // safety net under the asset's own length rule (MapProblemKind.TutorialLineTooLong): a line that
+            // slips past validation shrinks to its floor rather than spilling past the card onto the map.
+            panel.Body = Label(root, "body", HudType.Micro, FontStyle.Normal, TextAnchor.UpperLeft,
+                wrap: false, rich: true);
+            At(panel.Body.Rect, CardInset, 30f, inner, 74f);
+            AutoFit(panel.Body, 8f);
+
+            // The stuck-line hint, pinned under the list once the current line has stood unanswered for a
+            // while (UpdateLessonNotice): one label of its own, so its shrink never touches the task lines.
+            // While it is up the list cedes it a row (see TaskLines), so the card still never grows.
+            panel.Hint = Label(root, "hint", HudType.Micro, FontStyle.Italic, TextAnchor.UpperLeft);
+            At(panel.Hint.Rect, CardInset, 90f, inner, 14f);
+            AutoFit(panel.Hint, 8f);
+            panel.Hint.Show(false);
+
+            panel.Root.gameObject.SetActive(false);
+            return panel;
+        }
+
         /// <summary>The controls cluster: wave, pause, gear, menu and help, five small controls in the
         /// screen's top-right corner. The keyboard list is reference material and lives behind the help
         /// button, in <see cref="BuildHelp"/>. Pause stays out here - pausing is a mid-play act - while
@@ -829,25 +1055,46 @@ namespace Facet.Game
         /// only a second answer to "where is the cutter". The roles still exist, but as the info card's
         /// metadata, where a word is worth reading and costs the bar nothing.
         ///
-        /// Locked buildings stay on the bar and say LOCKED: the ladder is worth seeing, and a key that
-        /// vanished until a map handed its operator over would hide the progression. Eleven tiles at the
-        /// strip's 880 design units is 73 apiece, so a tile is a key rather than a row: name, then hotkey
-        /// and price, then the afford line.
+        /// <b>A tutorial hides rather than greys.</b> A run that opens with one building shows one key: the
+        /// ten it has not been taught are not on the bar at all (<see cref="VisibleKinds"/>), because a row of
+        /// grey LOCKED keys is the first thing a new player would read, and what it says is "there are eleven
+        /// things you are not allowed to do". The bar then grows a key at a time, which is the lesson's own
+        /// progress made visible without a line of text. The strip is narrowed to fit those keys
+        /// (<see cref="HudLayout.BarWidthFor"/>), so a one-key bar is a keyboard of one rather than a shelf with
+        /// an empty eleven-tenths.
+        ///
+        /// <b>No tile on this bar is ever locked.</b> Hiding replaced greying, so the set drawn here is the set
+        /// the run offers: a building the map has not handed over - a tutorial still teaching it, or a map
+        /// whose operator set stops short of it - is not a key the player cannot press, it is no key at all.
+        /// That is why there is no LOCKED state to dress, and why the level list keeps naming what clearing a
+        /// map grants: the shelf fills as the lesson hands things over, and the ladder between maps is the
+        /// shell's sentence rather than a row of grey keys.
+        ///
+        /// Eleven tiles at the strip's 808.25 design units is 66.75 apiece, so a tile is a key rather than a
+        /// row: name, then hotkey and price, then the afford line.
         /// </summary>
         private BarPanel BuildBar()
         {
-            Rect rect = HudLayout.Bar(Screen.width, Screen.height, _scale);
+            BuildKind[] kinds = VisibleKinds();
+            int count = kinds.Length;
+
+            Rect rect = HudLayout.Bar(Screen.width, Screen.height, _scale, count);
             var panel = new BarPanel { Root = BuildCard("bar", rect, PlaceCorner.BottomLeft) };
             RectTransform root = panel.Root;
 
-            const float w = HudLayout.BarWidth;
-            const float pad = 12f;
-            const float gap = 5f;
+            const float pad = HudLayout.BarPad;
+            const float gap = HudLayout.BarGap;
             const float tileHeight = 40f;
+            float tileWidth = HudLayout.BarTileWidth;
 
-            BuildKind[] kinds = _world.Content.BuildKinds;
-            int count = kinds.Length;
-            float tileWidth = (w - 2f * pad - (count - 1) * gap) / count;
+            // Derived from the width the card actually got, because HudLayout.Bar clamps it to the screen: a
+            // narrow viewport would otherwise lay the trailing keys over the card's edge. BarTileWidth is the
+            // ceiling, so the unclamped path reproduces the design number exactly.
+            if (count > 0)
+            {
+                float fit = (rect.width / _scale - 2f * pad - (count - 1) * gap) / count;
+                if (fit < tileWidth) tileWidth = fit;
+            }
 
             panel.TileWidth = tileWidth * _scale;
             panel.TileHeight = tileHeight * _scale;
@@ -866,9 +1113,9 @@ namespace Facet.Game
 
                 tile.Button = tile.Root.gameObject.AddComponent<HudButton>();
                 BuildKind captured = kind;
-                // A locked tile is refused here rather than by the simulation's rejection toast: the map
-                // has not handed that operator over (§7), so a ghost promising it would be a lie and a
-                // click that produced "NOT ON THIS MAP" would be a worse answer than no selection at all.
+                // The press selects through the same door the hotkey uses, which is what refuses a kind the
+                // run has not handed over. No tile here carries one - the bar is the run's own set - but the
+                // rule stays in one place rather than being restated per key.
                 tile.Button.Pressed = () => SelectKind(captured);
 
                 tile.Button.Fill = HudUi.Round(tile.Root, "back", HudInk.Raised(_palette), ControlRadius);
@@ -878,10 +1125,10 @@ namespace Facet.Game
                 // Name across the top, then the hotkey and the price on one line: a key you can read from
                 // its shape, its key and its cost without the pointer having to arrive first.
                 //
-                // The one place the HUD drops its tracking. Eleven keys across 880 units leave a name 51
-                // screen pixels wide at 960x600, and the widest name (SPLITTER, ROTATOR) is 49 untracked
-                // against those 51 - the +9 % the card labels wear would cost it a point of size in two
-                // keys out of eleven, which reads as two keys printed a little smaller rather than as air.
+                // The one place the HUD drops its tracking: a key is 66.75 units wide, and the widest name
+                // (SPLITTER, ROTATOR) only fits because the +9 % the card labels wear is left off here -
+                // spending it would cost the name a point of size, which reads as one key printed smaller
+                // rather than as air.
                 tile.Name = Label(tile.Root, "name", HudType.Label, FontStyle.Bold,
                     TextAnchor.MiddleLeft);
                 At(tile.Name.Rect, 6f, 3f, tileWidth - 12f, 16f);
@@ -896,10 +1143,12 @@ namespace Facet.Game
                 tile.Hotkey = Label(tile.Root, "hotkey", HudType.Micro, FontStyle.Bold,
                     TextAnchor.MiddleCenter);
                 At(tile.Hotkey.Rect, 6f, 21f, 16f, 14f);
-                tile.Hotkey.Set(BuildInput.HotkeyLabel(i), HudInk.Faint(_palette));
+                // The key is the kind's own ordinal, not this loop's position: a tutorial's bar skips the
+                // kinds it has not handed over, and a keycap that renumbered itself as the bar grew would be
+                // a label for a key that presses something else.
+                tile.Hotkey.Set(BuildInput.HotkeyLabel((int)kind), HudInk.Faint(_palette));
 
-                // The price is a number, not a word, so it carries no tracking either; LOCKED is the one
-                // word it can hold, and it has to fit the same 43 units a three-digit price does.
+                // The price is a number, not a word, so it carries no tracking either.
                 tile.Cost = Label(tile.Root, "cost", HudType.Micro, FontStyle.Bold,
                     TextAnchor.MiddleRight);
                 At(tile.Cost.Rect, 24f, 21f, tileWidth - 30f, 14f);
@@ -909,9 +1158,6 @@ namespace Facet.Game
                 tile.CostIcon = HudUi.Icon(tile.Root, "costIcon", _icons.Mark(MoneyShape));
                 At(tile.CostIcon.rectTransform, tileWidth - 22f, 23.5f, 9f, 9f);
                 tile.CostIcon.gameObject.SetActive(false);
-
-                tile.Locked = !_world.IsUnlocked(kind);
-                if (tile.Locked) tile.Cost.Set("LOCKED");
 
                 // The fraction of the price the bank covers, along the tile's floor: nine tenths of the
                 // way is a belt to lay now, a tenth is a plan for later.
@@ -1234,8 +1480,11 @@ namespace Facet.Game
 
             if (_helpOpen && Over(_help.Root, pointer)) return true;
 
-            return ShowTutorial && _tutorial != null && _tutorial.Root.gameObject.activeSelf &&
-                Over(_tutorial.Root, pointer);
+            if (ShowTutorial && _tutorial != null && _tutorial.Root.gameObject.activeSelf &&
+                Over(_tutorial.Root, pointer))
+                return true;
+
+            return _tasks != null && _tasks.Root.gameObject.activeSelf && Over(_tasks.Root, pointer);
         }
 
         /// <summary>The pointer in screen pixels, or (-1, -1) where there is no mouse to ask: a touch
@@ -1252,22 +1501,207 @@ namespace Facet.Game
         // ------------------------------------------------------------------ the tutorial card
 
         /// <summary>The one piece of the HUD that explains the game rather than reporting it: up only while
-        /// the run is on the map that first asks for the chain - the same predicate the camera rig is given,
-        /// so the card and the map's bound cannot disagree.</summary>
+        /// the run is on a map that asks for it - the same predicate the camera rig is given, so the card and
+        /// the map's bound cannot disagree. On a map that teaches, this is the reference card behind <c>T</c>;
+        /// the lesson itself is <see cref="UpdateTasks"/>.</summary>
         private void UpdateTutorial()
         {
             bool up = ShowTutorial;
-            if (up == _tutorialUp) return;
+            if (up != _tutorialUp)
+            {
+                _tutorialUp = up;
+                _tutorial.Root.gameObject.SetActive(up);
+            }
 
-            _tutorialUp = up;
-            _tutorial.Root.gameObject.SetActive(up);
+            // While the lesson is still teaching, this card is a detour the player may not have meant to take
+            // (T swaps the cards), so the button says where the same key goes back to. Once the corner is the
+            // reference card's own again, the word is the plain one.
+            string hide = HasTutorial && !_world.Tutorial.Complete ? "TASKS  T" : "HIDE  T";
+            if (hide != _hideWord)
+            {
+                _hideWord = hide;
+                _tutorial.Hide.Label.Set(hide, HudInk.Muted(_palette));
+            }
+        }
+
+        // ------------------------------------------------------------------ the task list
+
+        /// <summary>
+        /// The lesson's card: the line being taught, under the ones already ticked, in the corner the reference
+        /// card otherwise wears.
+        ///
+        /// It prints the <b>history and the present</b> and nothing else - the lines still to come are not
+        /// listed, so what the player reads is what they have been taught, not a syllabus. The ticked lines stay
+        /// up (muted) because they are the record of what the bar has already grown by: a line vanishing the
+        /// moment it was satisfied would take the answer to "why do I have a belt now" with it.
+        ///
+        /// The timestamp that retires the card is written here rather than in the tutorial state, because "how
+        /// long a card stays on screen" is the HUD's business and not a rule of the run - the simulation has no
+        /// opinion about a fade-out.
+        /// </summary>
+        private void UpdateTasks()
+        {
+            if (_tasks == null || _world == null) return;
+
+            TutorialState tutorial = _world.Tutorial;
+
+            if (tutorial.Complete)
+            {
+                if (_tutorialDoneAt < 0f) _tutorialDoneAt = Time.unscaledTime;
+            }
+            else
+            {
+                _tutorialDoneAt = -1f;
+            }
+
+            UpdateLessonNotice(tutorial);
+
+            bool up = TaskListUp;
+
+            // Asked of the panel rather than of a cached flag. The lesson's last line also changes the bar's
+            // key set, so this frame's update went through RebuildPanels and returned - and the panel that
+            // rebuild made is inactive, while the completion hold's timestamp is stamped here, on the frame
+            // after. A flag forced during the rebuild is therefore already wrong by the time the card is
+            // wanted; the object knows whether it is on screen.
+            if (up != _tasks.Root.gameObject.activeSelf) _tasks.Root.gameObject.SetActive(up);
+
+            if (!up) return;
+            if (tutorial.StepsCompleted == _seenTaskStep && tutorial.Complete == _seenTaskComplete &&
+                _hintPinned == _seenHintPinned) return;
+
+            _seenTaskStep = tutorial.StepsCompleted;
+            _seenTaskComplete = tutorial.Complete;
+            _seenHintPinned = _hintPinned;
+
+            _tasks.Title.Set(tutorial.Complete ? "TUTORIAL COMPLETE" : "TUTORIAL", _palette.HudText);
+            _tasks.Count.Set(tutorial.StepsCompleted + " / " + tutorial.Count, HudInk.Muted(_palette));
+            // With the lesson over there is no count left to print, and the heading has the row to itself.
+            _tasks.Count.Show(!tutorial.Complete);
+            _tasks.Body.Set(TaskLines(tutorial), HudInk.Blend(_palette.HudText, _palette.HudPanel, 0.18f));
+
+            // The pin is the card's own copy of what the toast said once: help that stays where the line
+            // lives. It wears the card's second voice - italic, muted - so it reads as an answer offered,
+            // not as another task.
+            bool hint = _hintPinned && !tutorial.Complete && !string.IsNullOrEmpty(tutorial.Current.Hint);
+            _tasks.Hint.Show(hint);
+            if (hint) _tasks.Hint.Set(tutorial.Current.Hint, HudInk.Muted(_palette));
+        }
+
+        /// <summary>
+        /// The lesson speaking for itself: a line ticked, the end of the lesson, and - for a line that has
+        /// stood unsolved too long - what the rule is actually asking for. The first two are one sentence in
+        /// the strip a refusal uses; the hint is said there once <em>and</em> pinned into the task card until
+        /// the line ticks, because a stuck player is exactly the one the strip talks over - refusals outrank
+        /// notices there, and a glance away costs a one-shot sentence. The pin survives both.
+        ///
+        /// The stuck timer runs on the world's own tick count rather than the wall clock: a paused or finished
+        /// run does not tick, so time spent away is never counted as time spent stuck.
+        /// </summary>
+        private void UpdateLessonNotice(TutorialState tutorial)
+        {
+            int steps = tutorial.StepsCompleted;
+
+            // A map change is a new world and a restart rewinds this one - the lesson has nothing to report on
+            // either, and the idle timer belongs to the line, not to the clock.
+            if (!ReferenceEquals(_noticeWorld, _world) || steps < _noticedStep || _world.TickCount < _stepTick)
+            {
+                _noticeWorld = _world;
+                _noticedStep = steps;
+                _stepTick = _world.TickCount;
+                _hintStep = -1;
+                _hintPinned = false;
+                return;
+            }
+
+            if (steps > _noticedStep)
+            {
+                _noticedStep = steps;
+                _stepTick = _world.TickCount;
+                _hintStep = -1;
+                _hintPinned = false;
+                Notice(TaskDoneNotice(tutorial, steps - 1), NoticeSeconds);
+                return;
+            }
+
+            if (tutorial.Complete || _hintStep == steps) return;
+            if (_world.TickCount - _stepTick < HintDelayTicks) return;
+
+            string hint = tutorial.Current.Hint;
+            if (string.IsNullOrEmpty(hint)) return;
+
+            _hintStep = steps;
+            _hintPinned = true;
+            Notice(hint, HintSeconds);
+        }
+
+        /// <summary>What a ticked line is worth saying out loud: its number, and the buildings it just put on
+        /// the bar. The last line's reward is the whole bar, so that is what it says.</summary>
+        private string TaskDoneNotice(TutorialState tutorial, int index)
+        {
+            if (tutorial.Complete) return "TUTORIAL COMPLETE - THE WHOLE BAR IS UNLOCKED";
+
+            var opened = new StringBuilder();
+            BuildKind[] hands = tutorial.TaskAt(index).Opens;
+            for (int i = 0; i < hands.Length; i++)
+            {
+                if (!_world.Content.TryMachine(hands[i], out MachineDef def)) continue;
+                if (opened.Length > 0) opened.Append(" + ");
+                opened.Append(def.Name.ToUpperInvariant());
+            }
+
+            string head = "TASK " + (index + 1) + " DONE";
+            return opened.Length == 0 ? head : head + " - " + opened + " UNLOCKED";
+        }
+
+        /// <summary>The card's body as rich text: one numbered line per ticked task and the current one, the
+        /// current bright and the rest muted. The current line owns the one accent numeral, the same rhythm the
+        /// reference card's five steps use - so the two cards, which share one corner, also share a voice - and a
+        /// ticked line's numeral is muted with its text, because a number that still looks live is the one thing
+        /// that would make the card read as a syllabus rather than as progress.
+        ///
+        /// Colour is set per run of text rather than by the label's own colour, because one label carries both
+        /// states; the label's colour is the base the ticks sit over.</summary>
+        private string TaskLines(TutorialState tutorial)
+        {
+            string accent = "#" + ColorUtility.ToHtmlStringRGB(_palette.HudAccent);
+            string done = "#" + ColorUtility.ToHtmlStringRGB(HudInk.Muted(_palette));
+            string live = "#" + ColorUtility.ToHtmlStringRGB(_palette.HudText);
+
+            // A pinned hint takes one row of the budget - four tasks and the answer rather than five tasks -
+            // because the corner's height is the invariant the hint is not allowed to move.
+            int budget = _hintPinned ? MaxTaskLines - 1 : MaxTaskLines;
+            int last = Mathf.Min(tutorial.StepsCompleted, tutorial.Count - 1);
+            int first = Mathf.Max(0, last - (budget - 1));
+
+            var lines = new StringBuilder();
+            for (int i = first; i <= last; i++)
+            {
+                if (lines.Length > 0) lines.Append('\n');
+
+                bool current = i == tutorial.StepsCompleted;
+                lines.Append("<color=").Append(current ? accent : done).Append('>').Append(i + 1)
+                    .Append("</color>  <color=").Append(current ? live : done).Append('>')
+                    .Append(tutorial.TaskAt(i).Text).Append("</color>");
+            }
+
+            return lines.ToString();
         }
 
         // ------------------------------------------------------------------ toast
 
+        /// <summary>
+        /// The strip under the controls, in two voices. A <b>refusal</b> is the answer to the click the player
+        /// just made, so it wins the strip and fades on the event's own window; a <b>notice</b> is the lesson
+        /// talking - a line ticked, a hint after a long wait - and expires by itself. One widget, because both
+        /// are a single sentence at the top of the screen for a few seconds, and two widgets would fight for
+        /// the same place.
+        /// </summary>
         private void UpdateToast()
         {
-            bool live = TryLastRefusal(out SimEvent refusal);
+            bool refused = TryLastRefusal(out SimEvent refusal);
+            bool noticed = !refused && NoticeLive;
+            bool live = refused || noticed;
+
             if (live != _toastShown)
             {
                 _toast.Root.gameObject.SetActive(live);
@@ -1281,28 +1715,67 @@ namespace Facet.Game
                 return;
             }
 
-            if (_toastTick != refusal.Tick || _toastTutorialUp != ShowTutorial)
+            string text = refused ? RefusalText(refusal) : _noticeText;
+            Color ink = refused ? _palette.HudWarn : _palette.HudAccent;
+            float fade = refused ? RefusalFadeOf(_world.TickCount - refusal.Tick) : NoticeFadeOf();
+
+            // Laid out when the sentence changes rather than every frame: its width comes from a measured
+            // preferred height, which is this method's expensive call. The strip above it moves with the
+            // task card, so that is the other thing a layout depends on.
+            if (_toastText != text || _toastTutorialUp != TutorialUp)
             {
-                _toastTick = refusal.Tick;
-                _toastTutorialUp = ShowTutorial;
-                _toastText = RefusalText(refusal);
+                _toastText = text;
+                _toastTutorialUp = TutorialUp;
 
                 float padding = 14f * _scale;
                 float width = Mathf.Min(_toast.Label.PreferredWidth + 2f * padding,
                     Screen.width - 2f * HudLayout.Margin * _scale);
                 float height = _toast.Label.PreferredHeight + 16f * _scale;
 
-                Rect toast = HudLayout.Toast(Screen.width, _scale, width, height, ShowTutorial);
+                Rect toast = HudLayout.Toast(Screen.width, _scale, width, height, TutorialUp);
                 HudUi.TopCentre(_toast.Root, toast.y, toast.width, toast.height);
                 HudUi.TopLeft(_toast.Label.Rect, padding, 8f * _scale, width - 2f * padding, height - 16f * _scale);
             }
 
-            float fade = RefusalFadeOf(_world.TickCount - refusal.Tick);
             _toastAlpha = fade;
             _toast.Group.alpha = fade;
             _toast.Back.Set(WithAlpha(_palette.HudPanel, fade));
-            _toast.Frame.Set(WithAlpha(_palette.HudWarn, fade));
-            _toast.Label.Set(_toastText, WithAlpha(_palette.HudWarn, fade));
+            _toast.Frame.Set(WithAlpha(ink, fade));
+            _toast.Label.Set(_toastText, WithAlpha(ink, fade));
+        }
+
+        /// <summary>Say one sentence in the strip for a few seconds. Replaced by the next notice and by
+        /// nothing else - except a refusal, which is the player's own click answered and outranks news the
+        /// lesson volunteered.</summary>
+        private void Notice(string text, float seconds)
+        {
+            _noticeText = text;
+            _noticeFrom = Time.unscaledTime;
+            _noticeFor = seconds;
+        }
+
+        /// <summary>The answer to a hotkey the lesson is keeping dead: the kind's name and whose move it is,
+        /// one sentence in the strip. Called by the driver when the input latch refuses a digit - silence
+        /// reads as a broken key, and the tile missing from the bar is the lesson's own doing, so the lesson
+        /// says so. A kind the map itself refuses never gets here (<see cref="SimWorld.LockedByTutorial"/>).
+        /// </summary>
+        public void NoticeLocked(BuildKind kind)
+        {
+            if (_world == null || !_world.Content.TryMachine(kind, out MachineDef def)) return;
+
+            Notice("NOT YET - the " + def.Name + " is the lesson's to hand over", NoticeSeconds);
+        }
+
+        /// <summary>Is a notice still inside the window it is shown for?</summary>
+        private bool NoticeLive => _noticeText != null && Time.unscaledTime - _noticeFrom < _noticeFor;
+
+        /// <summary>Full strength for most of the notice's life, then out: the sentence was not asked for, so
+        /// it leaves rather than waiting to be dismissed.</summary>
+        private float NoticeFadeOf()
+        {
+            float elapsed = Time.unscaledTime - _noticeFrom;
+            float holding = _noticeFor * (1f - NoticeFade);
+            return elapsed <= holding ? 1f : Mathf.Clamp01((_noticeFor - elapsed) / (_noticeFor * NoticeFade));
         }
 
         /// <summary>The last refused placement, if it is still inside the window it is shown for -
@@ -1341,9 +1814,10 @@ namespace Facet.Game
                     return "A DOORWAY - waves walk in at " + refusal.Cell +
                            ", and nothing solid may stand there";
                 case RejectionReason.Locked:
-                    // The map has not handed this operator over yet (§7's unlock ladder). The build bar
-                    // greys the tile out, so this is the keyboard's version of the same answer.
-                    return "NOT ON THIS MAP - " + def.Name + " is an operator this map has not unlocked";
+                    // The run has not handed this building over yet - a map's operator set, or a tutorial
+                    // line still to be taught. The bar does not carry it at all, so this is the keyboard's
+                    // answer to a key the bar no longer offers.
+                    return "NOT ON THIS MAP - " + def.Name + " is an operator this run has not unlocked";
                 default:
                     return "OFF THE MAP - nothing can be built on " + refusal.Cell;
             }
@@ -1896,10 +2370,13 @@ namespace Facet.Game
                     return "no waves left";
 
                 case WavePhase.Held:
-                    // The opening's clock is the player's to start: it begins on the tick their first building
-                    // lands, so its bar is empty and this line says what fills it. The button below, or N, is
-                    // the other way to begin.
-                    return "wave " + waves.NextWave + " starts when you build   ·   N calls it now";
+                    // Two waits look the same and answer to different people. On a teaching map every wait is
+                    // the lesson's, so neither building nor N begins it - saying so would put this line in
+                    // contradiction with the task card beside it. On an ordinary map only the opening is held,
+                    // and the first building (or N) is exactly what fills it.
+                    return waves.HoldEveryWait
+                        ? "wave " + waves.NextWave + " arrives when the lesson lets it go   ·   N waits too"
+                        : "wave " + waves.NextWave + " starts when you build   ·   N calls it now";
 
                 case WavePhase.Intermission:
                     return "next wave in " + Mathf.CeilToInt(waves.IntermissionRemaining) + "s"
@@ -2011,37 +2488,39 @@ namespace Facet.Game
 
                 bool selectedTile = tile.Kind == selected;
                 bool affordable = _world.Economy.CanAfford(tile.Kind);
-                bool locked = !_world.IsUnlocked(tile.Kind);
 
                 if (tile.Selected != selectedTile || tile.Hovered != hovered ||
-                    tile.Affordable != affordable || tile.Locked != locked)
+                    tile.Affordable != affordable)
                 {
-                    bool wasLocked = tile.Locked;
                     tile.Selected = selectedTile;
                     tile.Hovered = hovered;
                     tile.Affordable = affordable;
-                    tile.Locked = locked;
-
-                    // The one label the lock owns: put the price back the moment the map hands the operator
-                    // over, which is what a campaign's map change does. The cost mark is placed from the
-                    // cost's measured width, so a lock change makes it place itself again.
-                    if (wasLocked != locked)
-                    {
-                        // The tile's second line is its cost, or LOCKED where the map has not handed the
-                        // operator over. The role is the info card's word, so the tile does not repeat it.
-                        tile.Cost.Set(locked
-                            ? "LOCKED"
-                            : _world.Content.Machine(tile.Kind).Cost.ToString());
-                        tile.CostPlaced = false;
-                    }
 
                     DressBuildTile(tile);
                 }
 
+                // The tile the lesson just handed over keeps the accent outline for a glance. The player's
+                // own marks win outright - selected or hovered, the tile has been seen - and the fade runs
+                // from the everyday hairline (DressBuildTile's quiet case) so the outline dissolves rather
+                // than popping off.
+                if (tile.FreshUntil > 0f)
+                {
+                    float fresh = tile.FreshUntil - Time.unscaledTime;
+                    if (fresh <= 0f || tile.Selected || tile.Hovered)
+                    {
+                        tile.FreshUntil = 0f;
+                        DressBuildTile(tile);
+                    }
+                    else
+                    {
+                        tile.Border.Set(HudInk.Blend(HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.18f),
+                            _palette.HudAccent, Mathf.Clamp01(fresh / FreshSeconds)));
+                    }
+                }
+
                 // The line along the tile's bottom says how far from affordable the bank is: nine tenths of
-                // the way is a belt to lay now, a tenth of the way is a plan for later. A locked tile has no
-                // cost to save toward, so its line stays empty.
-                if (!tile.Locked && !tile.Affordable && _world.Content.Machine(tile.Kind).Cost > 0)
+                // the way is a belt to lay now, a tenth of the way is a plan for later.
+                if (!tile.Affordable && _world.Content.Machine(tile.Kind).Cost > 0)
                     tile.Afford.Set(Mathf.Clamp01(_world.Economy.Shapes / (float)_world.Content.Machine(tile.Kind).Cost),
                         _palette.CursorNoFunds);
                 else tile.Afford.Set(0f, Color.clear);
@@ -2058,26 +2537,12 @@ namespace Facet.Game
         /// amber, and the pointer lightens the tile. A click selects the kind through the input latch - it
         /// never places anything, so a stray click can only change what is selected.
         ///
-        /// A kind this map has not unlocked is drawn as a locked tile: grey, its role replaced by LOCKED,
-        /// and no cost. It stays on the bar rather than disappearing because the ladder is worth seeing -
-        /// "the rotator exists and some map hands it over" is the progression - but it cannot
-        /// be selected, and <see cref="SelectKind"/> is where that is enforced for the click as well as the
-        /// key.
+        /// Its set is the run's, not the map's: a kind the run has not handed over is not on the bar at all
+        /// (<see cref="VisibleKinds"/>), so there is no locked state to dress. A press for one still has a
+        /// door - the hotkeys outlive the bar - and <see cref="SelectKind"/> is where that is refused.
         /// </summary>
         private void DressBuildTile(BuildTile tile)
         {
-            if (tile.Locked)
-            {
-                tile.Button.Fill.Set(HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.03f));
-                tile.Keycap.Set(HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.05f));
-                tile.Border.Show(true);
-                tile.Border.Set(HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.08f));
-                tile.Hotkey.SetColour(HudInk.Faint(_palette));
-                tile.Cost.SetColour(HudInk.Faint(_palette));
-                tile.Name.SetColour(HudInk.Muted(_palette));
-                return;
-            }
-
             // The tile wears one of the ink levels plus the one focus colour; roles are words on the card,
             // not hues on the keys, so a bar of eleven tiles does not look like a paint chart.
             Color fill = HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.11f);
@@ -2124,17 +2589,10 @@ namespace Facet.Game
         // ------------------------------------------------------------------ the bar's keys
 
         /// <summary>The cost's shape, once the cost's own width is known: the picture just outside the
-        /// number's left edge, where a cost is a mark rather than a sentence. A locked tile has no price to
-        /// pay yet, so it draws no cost mark.</summary>
+        /// number's left edge, where a cost is a mark rather than a sentence.</summary>
         private void PlaceCostIcon(BuildTile tile)
         {
             if (tile.CostIcon == null) return;
-
-            if (tile.Locked)
-            {
-                tile.CostIcon.gameObject.SetActive(false);
-                return;
-            }
 
             if (tile.CostPlaced) return;
             float textWidth = tile.Cost.PreferredWidth;
@@ -2159,12 +2617,15 @@ namespace Facet.Game
         /// see <see cref="RefreshInspect"/>.</summary>
         private void UpdateInfo()
         {
-            BuildKind[] kinds = _world.Content.BuildKinds;
-            bool hovered = _hoveredTile >= 0 && _hoveredTile < kinds.Length;
+            // The hover index is a position on the bar, and the bar is the run's row of tiles - not the whole
+            // content table: a tutorial hides the buildings it has not handed over yet, so the two arrays
+            // stop agreeing the moment one is hidden. Read the tile's own kind, the mapping the bar and the
+            // hotkeys already use.
+            bool hovered = _bar != null && _hoveredTile >= 0 && _hoveredTile < _bar.Tiles.Count;
 
             if (hovered || _world.SelectedKind.HasValue)
             {
-                BuildKind kind = hovered ? kinds[_hoveredTile] : _world.SelectedKind.Value;
+                BuildKind kind = hovered ? _bar.Tiles[_hoveredTile].Kind : _world.SelectedKind.Value;
 
                 if (!_infoBuildShown || _infoKind != kind || _infoDirty)
                 {
@@ -3175,16 +3636,68 @@ namespace Facet.Game
             RebuildPanels();
         }
 
+        /// <summary>The buildings this run offers, in the table's own (hotkey) order. Every kind on a map that
+        /// has handed everything over, which is every map but a tutorial's opening: the filter is
+        /// <see cref="SimWorld.IsUnlocked"/>, the same rule the hotkeys and the click both obey, so a hidden tile
+        /// is a dead key.
+        ///
+        /// No allocation on the ordinary path - the table's own array is handed back when nothing is hidden,
+        /// which is every frame of every run that is not being taught.
+        ///
+        /// A kind the table does not define is left out here rather than failing later: the bar asks the table
+        /// for each tile's name and price, and a partial table is legal.
+        ///
+        /// <b>What this means for the ladder.</b> Because hiding replaced greying, a kind the run never offers
+        /// is a kind the bar never shows at all - the stacker on a map whose veins yield one mineral and whose
+        /// operator set therefore stops at the cutter. That is the trade the hidden bar makes, and it is why the
+        /// level list keeps naming what clearing a map grants: the shelf fills as the lesson hands things over,
+        /// and the ladder between maps is the shell's sentence rather than a row of grey keys.</summary>
+        private BuildKind[] VisibleKinds()
+        {
+            BuildKind[] all = _world.Content.BuildKinds;
+
+            int shown = 0;
+            for (int i = 0; i < all.Length; i++)
+            {
+                if (!_world.IsUnlocked(all[i])) continue;
+                shown++;
+            }
+
+            if (shown == all.Length) return all;
+
+            var visible = new BuildKind[shown];
+            shown = 0;
+            for (int i = 0; i < all.Length; i++)
+            {
+                if (!_world.IsUnlocked(all[i])) continue;
+                visible[shown++] = all[i];
+            }
+
+            return visible;
+        }
+
+        /// <summary>Does the bar's row of tiles still match the buildings this run offers? Asked every frame,
+        /// not only on a rebind: a map's set is fixed for the run, but a tutorial's grows with its lines, so the
+        /// bar's length is a run's state. A mismatch rebuilds the panels rather than re-laying twelve tiles - it
+        /// happens once a lesson line, where a resize happens once a display change.
+        ///
+        /// Compared by walking the table and skipping what is hidden, so the answer costs no array.</summary>
         private bool BarMatchesContent()
         {
             if (_bar == null) return false;
+
             BuildKind[] kinds = _world.Content.BuildKinds;
-            if (_bar.Tiles.Count != kinds.Length) return false;
+            int shown = 0;
 
             for (int i = 0; i < kinds.Length; i++)
-                if (_bar.Tiles[i].Kind != kinds[i]) return false;
+            {
+                if (!_world.IsUnlocked(kinds[i])) continue;
+                if (shown >= _bar.Tiles.Count || _bar.Tiles[shown].Kind != kinds[i]) return false;
 
-            return true;
+                shown++;
+            }
+
+            return shown == _bar.Tiles.Count;
         }
 
         // ------------------------------------------------------------------ the panels as widgets
@@ -3293,6 +3806,18 @@ namespace Facet.Game
             public HudButton Hide;
         }
 
+        /// <summary>The lesson's card: a heading, the position in the list, the lines themselves as one
+        /// rich-text label, and the stuck-line hint pinned under them. No button - there is nothing to dismiss,
+        /// because the card goes when the lesson does.</summary>
+        private sealed class TaskPanel
+        {
+            public RectTransform Root;
+            public HudText Title;
+            public HudText Count;
+            public HudText Body;
+            public HudText Hint;
+        }
+
         private sealed class BarPanel
         {
             public RectTransform Root;
@@ -3322,8 +3847,12 @@ namespace Facet.Game
             public bool Selected;
             public bool Hovered;
             public bool Affordable;
-            public bool Locked;
             public bool CostPlaced;
+
+            /// <summary>A rebuild that grew the bar (a tutorial's hand-over) stamps the added tiles with the
+            /// unscaled time their accent outline fades at; 0 is no pulse. The player's own marks - selected,
+            /// hovered - end it early: a tile in hand has been seen.</summary>
+            public float FreshUntil;
         }
 
         private sealed class InfoPanel

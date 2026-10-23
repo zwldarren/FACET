@@ -91,10 +91,21 @@ namespace Facet.Core
         /// every map had before the field existed.</summary>
         public readonly Int2 CoreCell;
 
+        /// <summary>
+        /// The lesson this map teaches, or <see langword="null"/> for a map that teaches nothing.
+        ///
+        /// A tutorial is the map's, not the campaign's: it is a handful of lines laid over a level that is
+        /// otherwise an ordinary level, and which buildings the run opens with is part of those lines
+        /// (<see cref="TutorialScript.Starting"/>). Keeping it here rather than on the campaign is what lets
+        /// the second map teach its own lesson without a second mechanism.
+        /// </summary>
+        public readonly TutorialScript Tutorial;
+
         public MapDefinition(string name, int width, int height, int startShapes,
             ShapePatch[] patches, Int2[] spawnPoints, WaveDefinition[] waves,
             TerrainKind[] terrain = null, Int2? coreCell = null,
-            Operators unlocked = Operators.All, int seed = 0, int generatedWaves = 0)
+            Operators unlocked = Operators.All, int seed = 0, int generatedWaves = 0,
+            TutorialScript tutorial = null)
         {
             Name = name;
             Width = width;
@@ -108,6 +119,7 @@ namespace Facet.Core
             Unlocked = unlocked;
             Seed = seed;
             GeneratedWaves = generatedWaves;
+            Tutorial = tutorial;
 
             // The money, named off the map's own veins rather than authored beside them: the first mineral
             // the patch list yields, which is the one a drill on this map will first put on a belt.
@@ -148,7 +160,7 @@ namespace Facet.Core
         /// is carried over as-is; the run's seed remains the host's per-run decision.</summary>
         public MapDefinition WithEndless()
             => new MapDefinition(Name, Width, Height, StartShapes, Patches, SpawnPoints, Waves,
-                Terrain, CoreCell, Unlocked, Seed, -1);
+                Terrain, CoreCell, Unlocked, Seed, -1, Tutorial);
 
         /// <summary>Centre of a spawn point in world units, where enemies are created. The index is
         /// resolved by <see cref="ResolveSpawn"/> like every other reader, so the entry tile is the one the

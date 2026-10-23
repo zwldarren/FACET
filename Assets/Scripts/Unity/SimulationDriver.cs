@@ -89,6 +89,10 @@ namespace Facet.Game
         /// on every map change with the rig.</summary>
         private ThreatRadarView _radar;
 
+        /// <summary>The tutorial's guide arrow, which needs the same camera the locator does - it folds its
+        /// marker onto the open edge when the tile a task names is off screen.</summary>
+        private TutorialGuideView _guide;
+
         /// <summary>The HUD, for its panels' claim on the mouse. Null until the views are built (and
         /// for a driver that never built any).</summary>
         private HudView _hud;
@@ -220,17 +224,37 @@ namespace Facet.Game
             // the mouse, so pressing a panel button cannot also drop a belt under it.
             _input.Sample(_camera, World, _hud != null && _hud.PointerOverHud);
 
-            // The info card grows while a sorter's filter picker is on it, and the locator has to know:
-            // the panel boxes it folds arrows past are the boxes the HUD draws, so a card the arrows do
-            // not know about is a place an enemy can stand unseen. One frame of lag, like the pointer's.
-            if (_radar != null && _hud != null) _radar.SetInfoGrown(_hud.InfoGrown);
+            // A digit the lesson keeps dead gets a word rather than silence: the bar the kind is missing
+            // from is the lesson's doing, so the lesson says so.
+            if (_hud != null && _input.LockedPressed.HasValue)
+                _hud.NoticeLocked(_input.LockedPressed.Value);
+
+            // The info card grows while a sorter's filter picker is on it, and both arrow views have to know:
+            // the panel boxes they fold arrows past are the boxes the HUD draws, so a card the arrows do not
+            // know about is a place an enemy can stand unseen. One frame of lag, like the pointer's.
+            if (_hud != null)
+            {
+                if (_radar != null) _radar.SetInfoGrown(_hud.InfoGrown);
+                if (_guide != null) _guide.SetInfoGrown(_hud.InfoGrown);
+            }
 
             // The "how to play" card is the player's to hide and bring back (its button, or T), so the strip
             // it wears is relayed the same way: the rig's pan bound and the locator's arrows follow the card.
+            // The bar's own length goes with it - a tutorial hands buildings over a key at a time, and an arrow
+            // folded past the full shelf would be dodging a strip that is not drawn.
             if (_hud != null)
             {
                 if (_rig != null) _rig.SetTutorialUp(_hud.TutorialUp);
-                if (_radar != null) _radar.SetTutorialUp(_hud.TutorialUp);
+                if (_radar != null)
+                {
+                    _radar.SetTutorialUp(_hud.TutorialUp);
+                    _radar.SetBarTiles(_hud.BarTiles);
+                }
+                if (_guide != null)
+                {
+                    _guide.SetTutorialUp(_hud.TutorialUp);
+                    _guide.SetBarTiles(_hud.BarTiles);
+                }
             }
 
             // N means "go on" in every run state there is: start the next wave mid-map, carry on to the
@@ -391,6 +415,13 @@ namespace Facet.Game
             World = NewWorld(map);
             ReportMapProblems(World.Map);
 
+            // A map the campaign has already cleared has already been taught: clearing it took finishing its
+            // lesson. A replay of it lays the whole bar out from the start and lets the waves run on the
+            // map's own clock - the card, the gates and the guide all read Tutorial.Active, which the skip
+            // takes down, and a restart does not bring the lesson back (Skip is the shell's opening call
+            // about the map, not a run's state).
+            if (Campaign.ClearedCount > Campaign.MapIndex) World.Tutorial.Skip();
+
             // The frame the views are about to draw must describe the new world: no leftover tick backlog,
             // no cursor on a tile that may not exist.
             Clock.ResetBacklog();
@@ -405,6 +436,7 @@ namespace Facet.Game
             // The locator follows the rig: its Core marker points at the same focus point, and the tutorial
             // card is up on this map or it is not.
             if (_radar != null) _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
+            if (_guide != null) _guide.InitializeGuide(_camera);
             if (_hud != null)
                 _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,
                     _input.RequestFilter, Clock, OpenMenu);
@@ -479,6 +511,11 @@ namespace Facet.Game
             // about to move, and draws over everything the map can put on screen.
             _radar = AddMeshView<ThreatRadarView>("ThreatRadar");
             _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
+
+            // The tutorial's guide under the cursor's ghost: an annotation of a tile, so it goes over the map
+            // and under the one thing that says what the next click would do.
+            _guide = AddMeshView<TutorialGuideView>("TutorialGuide");
+            _guide.InitializeGuide(_camera);
 
             _hud = AddView<HudView>("Hud");
             _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,

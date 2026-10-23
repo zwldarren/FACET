@@ -510,6 +510,225 @@ namespace Facet.Tests
             Assert.AreEqual(Quad.Empty, drawn.MineralAt(0, 0), "plain ground carries no mineral");
         }
 
+        // ------------------------------------------------------------------ the tutorial rows
+
+        [Test]
+        public void Tutorial_AnEmptyTaskList_IsAMapWithoutATutorial()
+        {
+            // An empty list is the whole answer, so there is no second "has a tutorial" flag to fall out of
+            // step with it - and a Starting set on its own teaches nothing.
+            _asset.TutorialStarting = new[] { BuildKind.Belt };
+            _asset.TutorialTasks = new MapAsset.TutorialTaskRow[0];
+
+            Assert.IsNull(_asset.ToCore().Tutorial);
+            AssertNoProblem(_asset.Validate(), MapProblemKind.TutorialStepUnreachable);
+        }
+
+        [Test]
+        public void Tutorial_ARow_KeepsItsLineAndOnlyAPositiveTargetPointsSomewhere()
+        {
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.PlaceDrill, Text = "Drill the vein.",
+                    Target = new Vector2Int(3, 4), Opens = new[] { BuildKind.Belt }, StartsWave = true,
+                },
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.BankShape, Text = "Bank a shape.",
+                    Target = new Vector2Int(-1, -1),
+                },
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.BeltFork, Text = "Fork the lane.", Target = new Vector2Int(-1, 4),
+                },
+            };
+
+            TutorialScript script = _asset.ToCore().Tutorial;
+            Assert.IsNotNull(script);
+            Assert.AreEqual(3, script.Count);
+            Assert.AreEqual("Drill the vein.", script[0].Text);
+            Assert.AreEqual(new Int2(3, 4), script[0].Target.Value);
+            Assert.AreEqual(1, script[0].Opens.Length);
+            Assert.AreEqual(BuildKind.Belt, script[0].Opens[0], "the line hands the belt over when it ticks");
+            Assert.IsTrue(script[0].StartsWave);
+            Assert.IsNull(script[1].Target, "(-1,-1) is the Inspector's no place to point");
+            Assert.IsNull(script[2].Target, "and a half-negative cell is no place either");
+            Assert.IsFalse(script[2].StartsWave);
+        }
+
+        [Test]
+        public void Tutorial_ANullRow_IsALineThatCanNeverTick()
+        {
+            // A hole is not a PlaceDrill line: that would tick the moment any drill stands, which is what a
+            // broken row must not be allowed to do.
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow { Step = TutorialStep.PlaceDrill, Text = "Drill." },
+                null,
+                new MapAsset.TutorialTaskRow { Step = TutorialStep.BankShape, Text = "Bank." },
+            };
+
+            TutorialScript script = _asset.ToCore().Tutorial;
+            Assert.AreEqual(3, script.Count, "the list's length is what the HUD counts against");
+            Assert.AreEqual(TutorialScript.NoStep, script[1].Step);
+            Assert.IsFalse(string.IsNullOrEmpty(script[1].Text), "and the missing line is not silent");
+
+            AssertProblem(_asset.Validate(), MapProblemKind.TutorialLineWithoutText, new Int2(-1, -1));
+        }
+
+        [Test]
+        public void Validate_ATutorialLineWithNoText_IsReported()
+        {
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow { Step = TutorialStep.PlaceDrill, Text = "  " },
+            };
+
+            AssertProblem(_asset.Validate(), MapProblemKind.TutorialLineWithoutText, new Int2(-1, -1));
+        }
+
+        [Test]
+        public void Validate_ALineLongerThanTheCard_IsReported()
+        {
+            // The task card's micro type shrinks to a floor, and past it the sentence would spill past the
+            // card onto the map - so the painting window says so, once for an over-long line and once for an
+            // over-long hint. The line at exactly the budget is the boundary the rule must not trip on.
+            _asset.Unlocked = Operators.All;
+            _asset.TutorialStarting = new[] { BuildKind.Drill };
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow { Step = TutorialStep.PlaceDrill, Text = new string('x', 89) },
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.BankShape, Text = new string('x', 88), Hint = new string('x', 89),
+                },
+            };
+
+            List<MapProblem> problems = _asset.Validate();
+            AssertProblem(problems, MapProblemKind.TutorialLineTooLong, new Int2(-1, -1));
+
+            int reported = 0;
+            for (int i = 0; i < problems.Count; i++)
+                if (problems[i].Kind == MapProblemKind.TutorialLineTooLong) reported++;
+            Assert.AreEqual(2, reported,
+                "the over-long text and the over-long hint are two sentences, so they are two problems - " +
+                "and the at-budget line is not one");
+        }
+
+        [Test]
+        public void Validate_AGuideTargetOffTheMap_IsReported()
+        {
+            // The asset is 12 wide, so column 12 is the first tile off it - an arrow pointing at nothing.
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.PlaceDrill, Text = "Drill.", Target = new Vector2Int(12, 3),
+                },
+            };
+
+            AssertProblem(_asset.Validate(), MapProblemKind.TutorialTargetOffMap, new Int2(12, 3));
+        }
+
+        [Test]
+        public void Validate_ALineAboutABuildingNoEarlierLineOpens_IsReported()
+        {
+            // The soft lock: the line can never tick, so the lesson never completes and every wave it holds
+            // waits forever. Its own Opens cannot count - they pay out on the tick the line is satisfied.
+            _asset.Unlocked = Operators.All;
+            _asset.TutorialStarting = new[] { BuildKind.Drill };
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.BeltFork, Text = "Fork the lane.",
+                    Opens = new[] { BuildKind.Cutter },
+                },
+            };
+
+            AssertProblem(_asset.Validate(), MapProblemKind.TutorialStepUnreachable, new Int2(-1, -1));
+        }
+
+        [Test]
+        public void Validate_ALineWhoseBuildingTheMapNeverUnlocks_IsReported()
+        {
+            // The bar hands the cutter over, and the map's operator set still refuses one: the second gate is
+            // not a permission to overrule the first.
+            _asset.Unlocked = Operators.Rotator;
+            _asset.TutorialStarting = new[] { BuildKind.Cutter };
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow { Step = TutorialStep.BeltFork, Text = "Fork the lane." },
+            };
+
+            AssertProblem(_asset.Validate(), MapProblemKind.TutorialStepUnreachable, new Int2(-1, -1));
+        }
+
+        [Test]
+        public void Tutorial_ARowCarriesItsHint_ForThePlayerWhoCannotSeeTheWay()
+        {
+            // The hint is the second sentence: the rule the line assumes, said the long way round. It lives
+            // with the text because it is the map's own words about the map's own machine, and an empty one is
+            // a line nobody gets stuck on rather than a missing field.
+            _asset.Unlocked = Operators.All;
+            _asset.TutorialStarting = new[] { BuildKind.Drill };
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.PlaceDrill, Text = "Drill the vein.",
+                    Hint = "Press 2, then click a tile of the vein.",
+                },
+                new MapAsset.TutorialTaskRow { Step = TutorialStep.BankShape, Text = "Bank a shape." },
+            };
+
+            TutorialScript script = _asset.ToCore().Tutorial;
+            Assert.AreEqual("Press 2, then click a tile of the vein.", script[0].Hint);
+            Assert.AreEqual(string.Empty, script[1].Hint, "a line with no hint says nothing extra");
+        }
+
+        [Test]
+        public void Validate_ALineWithAStepThisBuildDoesNotKnow_IsReported()
+        {
+            // A row serialized before a step was renamed, or a hand-edited file: the line can never tick, so
+            // the lesson never completes and every wave it gates waits forever. It is a problem to report, not
+            // an exception to raise where the designer cannot act on it.
+            _asset.Unlocked = Operators.All;
+            _asset.TutorialStarting = new[] { BuildKind.Drill };
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow { Step = (TutorialStep)99, Text = "A lesson from a newer build." },
+            };
+
+            AssertProblem(_asset.Validate(), MapProblemKind.TutorialStepUnknown, new Int2(-1, -1));
+        }
+
+        [Test]
+        public void Validate_ATutorialThatCanBeTaught_HasNoTutorialProblems()
+        {
+            _asset.Unlocked = Operators.All;
+            _asset.TutorialStarting = new[] { BuildKind.Drill };
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.PlaceDrill, Text = "Drill the vein.", Target = new Vector2Int(7, 7),
+                    Opens = new[] { BuildKind.Belt, BuildKind.Cutter },
+                },
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.BeltFork, Text = "Fork the lane.", Target = new Vector2Int(7, 7),
+                },
+            };
+
+            List<MapProblem> problems = _asset.Validate();
+            AssertNoProblem(problems, MapProblemKind.TutorialLineWithoutText);
+            AssertNoProblem(problems, MapProblemKind.TutorialTargetOffMap);
+            AssertNoProblem(problems, MapProblemKind.TutorialStepUnreachable);
+        }
+
         /// <summary>The problem of that kind at that cell, so a test asks about the one rule it broke rather
         /// than the whole list - these maps carry other problems on purpose.</summary>
         private static void AssertProblem(List<MapProblem> problems, MapProblemKind kind, Int2 cell)

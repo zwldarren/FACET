@@ -56,6 +56,7 @@ namespace Facet.Game
         private Camera _camera;
         private bool _tutorialUp;
         private bool _infoGrown;
+        private int _barTiles = HudLayout.BarTiles;
 
         /// <summary>The window's panel boxes, measured fresh each frame: the same boxes the HUD draws, so a
         /// walker under one is out of view for the arrows and for the card alike.</summary>
@@ -87,6 +88,18 @@ namespace Facet.Game
             MarkDirty();
         }
 
+        /// <summary>Say how many keys the build bar is carrying this frame. The panel boxes the arrows fold
+        /// past have to be the boxes the HUD draws, and a tutorial's bar starts one key wide and grows - a
+        /// reader that measured the full shelf would keep arrows clear of a strip that is not there. Cheap to
+        /// call every frame - a compare and a flag.</summary>
+        public void SetBarTiles(int tiles)
+        {
+            if (_barTiles == tiles) return;
+
+            _barTiles = tiles;
+            MarkDirty();
+        }
+
         /// <summary>Say whether the HUD's "how to play" card is up this frame. The player can hide or show it
         /// at any time, so the driver relays it every frame rather than only on a map change; the arrows
         /// give the strip back the moment the card goes. Cheap to call every frame - a compare and a flag.</summary>
@@ -114,7 +127,7 @@ namespace Facet.Game
             if (_markers.Length != look.MaxMarkers)
                 _markers = new ThreatRadar.Marker[Mathf.Max(1, look.MaxMarkers)];
 
-            var view = _screen.Measure(_camera, _tutorialUp, look.EdgeInsetPixels, _infoGrown);
+            var view = _screen.Measure(_camera, _tutorialUp, look.EdgeInsetPixels, _infoGrown, _barTiles);
 
             world.Enemies.GetEnemies(_enemies);
             world.Belts.GetJammed(_jams);

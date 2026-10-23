@@ -71,6 +71,16 @@ namespace Facet.Core
         /// </summary>
         public bool IsFull => FilledCount == QuadrantCount;
 
+        /// <summary>
+        /// Is this exactly the half one cut of a complete item makes: two quadrants filled that share an
+        /// edge. A diagonal pair also fills two - a stacker can build one - but no cut makes it, so it is
+        /// not a half, and a lesson about cutting must not tick on one. Stated here rather than in the
+        /// reader because <see cref="Name"/> already words the same distinction ("top half" against
+        /// "diagonal half"), and two answers to "is that a half" is one answer too many.
+        /// </summary>
+        public bool IsHalf
+            => FilledCount == 2 && !((Has(NW) && Has(SE)) || (Has(NE) && Has(SW)));
+
         /// <summary>Is there content at this quadrant? The question the cut mask and the stack test both
         /// ask, so neither compares against <see cref="Quad.Empty"/> on its own.</summary>
         public bool Has(int quadrant) => At(quadrant) != Quad.Empty;
@@ -291,12 +301,13 @@ namespace Facet.Core
 
                 case 2:
                     // Two filled quadrants of one mineral: a true half when they share an edge, a
-                    // diagonal pair when they meet only at the centre.
+                    // diagonal pair when they meet only at the centre. The four names below are the
+                    // cases <see cref="IsHalf"/> admits, so the words and the rule are one statement.
+                    if (!IsHalf) return "diagonal half-" + name;
                     if (Has(NW) && Has(NE)) return "top half-" + name;
                     if (Has(SW) && Has(SE)) return "bottom half-" + name;
                     if (Has(NW) && Has(SW)) return "left half-" + name;
-                    if (Has(NE) && Has(SE)) return "right half-" + name;
-                    return "diagonal half-" + name;
+                    return "right half-" + name;
 
                 case 3:
                     return "three-quarter " + name;

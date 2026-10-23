@@ -32,6 +32,12 @@ namespace Facet.Core
         public readonly SimConfig Config;
         public readonly EconomyState Economy;
 
+        /// <summary>The lesson this map teaches and how far the player has got through it. Always present - a
+        /// map without a script has an inactive one - so every reader can ask it a question without a null
+        /// check, and the two things it gates (which buildings exist, and when a wave is allowed) are asked
+        /// through <see cref="IsUnlocked"/> and <see cref="Waves"/> rather than of it directly.</summary>
+        public readonly TutorialState Tutorial;
+
         /// <summary>The content this run reads: every cost, machine stat, gun number and enemy profile.
         /// Injected rather than read from a static, so a test or a replay can run a different table and
         /// stay reproducible.</summary>
@@ -109,17 +115,23 @@ namespace Facet.Core
             Projectiles = new ProjectileField();
             Waves = new WaveDirector(Enemies, map, Events, Config.FreshSeed);
             Economy = new EconomyState(Content, map.StartShapes);
+            Tutorial = new TutorialState(map.Tutorial, Machines, Belts, Economy, Waves);
 
             _machineSystem = new MachineSystem(TileGrid, Terrain, Belts, Machines, Enemies, Projectiles,
                 Content, Events);
             _sink = new CoreSinkSystem(TileGrid, Belts, Economy, Events);
-            _build = new BuildController(TileGrid, Terrain, map, Belts, Machines, Economy, Content, Events);
+            _build = new BuildController(TileGrid, Terrain, map, Belts, Machines, Economy, Content, Events,
+                Tutorial);
 
             // The Core first, then the ground: a map's terrain may not bury the thing the player
             // defends, so the Core's tiles are already claimed by the time the ground is stamped.
             PlaceCore(Map.CoreCell);
             Terrain.Stamp(map);
             Status = GameStatus.Playing;
+
+            // The clock's gate has to agree with the lesson from the first frame, not from the first tick: the
+            // HUD reads "is there a wave to start" between them.
+            Waves.HoldEveryWait = Tutorial.GatesWaves;
         }
 
         /// <summary>Advance one fixed step. Call at exactly SimConfig.TickRate Hz.</summary>
@@ -157,7 +169,8 @@ namespace Facet.Core
 
             // The opening countdown starts on the tick the player's first building lands, so planning
             // costs nothing and building costs time. Said every tick once they have built - the clock
-            // decides that only the first one means anything.
+            // decides that only the first one means anything. A run whose waits belong to its tutorial is not
+            // armed this way at all (<see cref="WaveDirector.HoldEveryWait"/>); the lesson releases them.
             if (_build.HasBuilt) Waves.ArmFirstWave();
 
             Belts.Step(SimConfig.TickDt, Config.BeltSpeed);
@@ -166,6 +179,19 @@ namespace Facet.Core
             Projectiles.Step(SimConfig.TickDt, Enemies);
             _paths.Sync();
             Enemies.Step(SimConfig.TickDt, ref Core);
+
+            // The lesson reads the tick that just finished - a drill standing, a shape really banked, a round
+            // in a chamber, a half off a cutter - and releases the wave it is waiting on there and then, before
+            // the clock step gets to look at the gate. Read after the machines, because the question "is that
+            // turret loaded" is the machine system's answer and not the previous tick's.
+            Tutorial.Step();
+
+            // The gate is said here and only here - after the lesson has had its say and before the clock can
+            // open a wait - so a line ticked on the same tick a wave is cleared cannot leave the run holding a
+            // wait nobody is left to release. Between this tick's opening and here the field still carries last
+            // tick's answer, which is the same answer: the lesson only ever changes inside the step above.
+            Waves.HoldEveryWait = Tutorial.GatesWaves;
+
             Waves.Step(SimConfig.TickDt);
 
             // The N key and the HUD's button, applied *after* the wave step: step 8 ends a wave on the
@@ -208,6 +234,7 @@ namespace Facet.Core
             Terrain.Stamp(Map);
 
             Waves.Reset();
+            Tutorial.Reset();
             _machineSystem.Reset();
             _build.Reset();
             Economy.Reset(Map.StartShapes);
@@ -219,6 +246,10 @@ namespace Facet.Core
             _restartRequested = false;
             Events.Tick = 0;
             Events.Clear();
+
+            // A restart is a new run, so the lesson starts over and holds the clock again from the first
+            // frame rather than from the first tick.
+            Waves.HoldEveryWait = Tutorial.GatesWaves;
         }
 
         /// <summary>Ask for the next wave on the next tick. The HUD's button calls this because a click
@@ -234,9 +265,16 @@ namespace Facet.Core
         /// ghost's, because for a cutter it is what decides which tile the machine's second half needs.</summary>
         public bool CanPlace(BuildKind kind, Int2 cell, Dir direction) => _build.CanPlace(kind, cell, direction);
 
-        /// <summary>Has this run unlocked the operator that building needs? The build bar greys the rest
-        /// out; the campaign's progression is this set and nothing else.</summary>
+        /// <summary>Has this run handed this building over? The build bar hides the rest and the hotkeys ignore
+        /// them; the campaign's progression is a map's operator set, and a map that teaches has its tutorial's
+        /// lines on top of it. Both are asked of the one rule owner
+        /// (<see cref="BuildController.IsUnlocked"/>), so a hidden tile and a dead hotkey cannot drift apart.</summary>
         public bool IsUnlocked(BuildKind kind) => _build.IsUnlocked(kind);
+
+        /// <summary>Is the tutorial the one gate this kind fails right now? The distinction a dead hotkey's
+        /// answer needs: a lesson-locked kind deserves a word ("the lesson hands it over"), a map-locked one
+        /// is not part of this run and gets silence. One rule owner again - <see cref="BuildController.LockedByTutorial"/>.</summary>
+        public bool LockedByTutorial(BuildKind kind) => _build.LockedByTutorial(kind);
 
         /// <summary>Re-route the sorter standing on a cell - the picker's verb. False when there is no
         /// sorter there or the filter would route nothing.</summary>
