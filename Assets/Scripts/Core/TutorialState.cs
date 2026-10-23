@@ -48,10 +48,10 @@ namespace Facet.Core
 
         private int _index;
 
-        /// <summary>Has the shell set the lesson aside for this world? True on a replay of a map the
-        /// campaign has already cleared - clearing it took finishing the lesson, so the lesson has nothing
-        /// left to prove. Sticky across <see cref="Reset"/>: the skip is the shell's opening decision about
-        /// this map, and a restart re-opens the same opening rather than reversing it.</summary>
+        /// <summary>Has a caller set the lesson aside for this world? A world is told this before its first
+        /// tick when something other than the player's map pick owns the entry - a scripted scene, a test,
+        /// a future lessonless replay door. Sticky across <see cref="Reset"/>: the skip is a call about this
+        /// map, and a restart re-opens the same opening rather than reversing it.</summary>
         private bool _skipped;
 
         public TutorialState(TutorialScript script, MachineField machines, BeltField belts,
@@ -67,7 +67,7 @@ namespace Facet.Core
         }
 
         /// <summary>Does this run have a lesson at all? False for every map that brings no script and for a
-        /// run the shell has <see cref="Skip">skipped</see> - and the answer that makes the whole tutorial
+        /// world a caller has <see cref="Skip">skipped</see> - and the answer that makes the whole tutorial
         /// free: no script, no gate, no bar filtering, no extra line in the HUD.</summary>
         public bool Active => _script != null && _script.Count > 0 && !_skipped;
 
@@ -138,8 +138,9 @@ namespace Facet.Core
         }
 
         /// <summary>Set the lesson aside: nothing is taught, nothing is held, and the bar is the map's own
-        /// from the first frame. The shell's verb for a replay of a cleared map - a world is told this once,
-        /// before its first tick, and <see cref="Reset"/> does not hear it.</summary>
+        /// from the first frame. A caller's verb for a world it does not want taught - a world is told this
+        /// once, before its first tick, and <see cref="Reset"/> does not hear it. The driver does not call
+        /// it: every map entry, a replay of a cleared one included, teaches that map's lesson.</summary>
         public void Skip()
         {
             _skipped = true;

@@ -415,12 +415,12 @@ namespace Facet.Game
             World = NewWorld(map);
             ReportMapProblems(World.Map);
 
-            // A map the campaign has already cleared has already been taught: clearing it took finishing its
-            // lesson. A replay of it lays the whole bar out from the start and lets the waves run on the
-            // map's own clock - the card, the gates and the guide all read Tutorial.Active, which the skip
-            // takes down, and a restart does not bring the lesson back (Skip is the shell's opening call
-            // about the map, not a run's state).
-            if (Campaign.ClearedCount > Campaign.MapIndex) World.Tutorial.Skip();
+            // Every entry builds a fresh run of a map, so every entry teaches that map's lesson - picking a
+            // cleared map from the list is a replay of the level, not a resumption of the run that cleared
+            // it. Skipping the lesson because the campaign had already cleared the map made the tutorial
+            // unreachable the moment the frontier moved past it, and lost it entirely for a save cleared
+            // before the lesson was authored. A caller that really wants a lessonless world can still say
+            // Tutorial.Skip() before the first tick; the driver itself does not.
 
             // The frame the views are about to draw must describe the new world: no leftover tick backlog,
             // no cursor on a tile that may not exist.

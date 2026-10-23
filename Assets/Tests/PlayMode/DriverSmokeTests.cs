@@ -111,12 +111,13 @@ namespace Facet.PlayTests
         /// The campaign the smoke tests run, built here instead of read from
         /// <c>Assets/Data/Campaign.asset</c>. Two maps, because a swap needs two: the first wears rock,
         /// water and a void corner and carries one vein, and the second is a different size - what the
-        /// ground view's rebind is proved against.
+        /// ground view's rebind is proved against. A third teaches one line, so the driver's own decision
+        /// about a cleared map's lesson has a map with a lesson to make it on.
         /// </summary>
         private static MapSet TestCampaign()
         {
             var set = ScriptableObject.CreateInstance<MapSet>();
-            set.Maps = new[] { GroundMap(), WideMap() };
+            set.Maps = new[] { GroundMap(), WideMap(), LessonMap() };
             return set;
         }
 
@@ -150,6 +151,30 @@ namespace Facet.PlayTests
             map.StartShapes = 80;
             map.SpawnPoints = new[] { new Vector2Int(45, 2) };
             map.Waves = new[] { OneWave() };
+            return map;
+        }
+
+        /// <summary>The third map: a plain field that teaches one line, so a test can ask whether a run of
+        /// an already-cleared map is taught again.</summary>
+        private static MapAsset LessonMap()
+        {
+            var map = ScriptableObject.CreateInstance<MapAsset>();
+            map.Name = "test lesson";
+            map.Width = 32;
+            map.Height = 20;
+            map.StartShapes = 80;
+            map.SpawnPoints = new[] { new Vector2Int(2, 18) };
+            map.Waves = new[] { OneWave() };
+            map.TutorialStarting = new[] { BuildKind.Drill };
+            map.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.PlaceDrill,
+                    Text = "Stand a drill on the vein.",
+                    Target = new Vector2Int(6, 12),
+                },
+            };
             return map;
         }
 
@@ -730,6 +755,33 @@ namespace Facet.PlayTests
             int ticks = driver.World.TickCount;
             yield return new WaitForSeconds(0.3f);
             Assert.Greater(driver.World.TickCount, ticks, "and the clock runs on the new map too");
+        }
+
+        /// <summary>
+        /// A map the campaign has cleared is still taught when it is played again. The driver used to set the
+        /// lesson aside whenever <c>ClearedCount &gt; MapIndex</c> - reading "cleared" as "was taught" - so
+        /// the maps list's first row opened a lessonless Quarry for anyone whose frontier had moved past it,
+        /// and a save cleared before the lesson was authored could never see it. Entering a map is a fresh run
+        /// of that map, so the lesson runs from its first line.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator AReplayOfAClearedMap_StillTeachesItsLesson()
+        {
+            yield return null;
+            BeginRun();
+
+            var driver = Driver;
+            driver.Campaign.StartMap(2);
+            driver.Campaign.MarkCleared();   // the save now says this map, at least, has been cleared
+            Assert.Greater(driver.Campaign.ClearedCount, driver.Campaign.MapIndex,
+                "the state the old skip read: cleared, at the index being entered");
+
+            driver.LoadMap();
+            yield return null;
+
+            Assert.AreEqual(driver.Catalog.At(2).Name, driver.World.Map.Name, "the world is the cleared map");
+            Assert.IsTrue(driver.World.Tutorial.Active, "and it teaches, a replay of a cleared map or not");
+            Assert.AreEqual(0, driver.World.Tutorial.StepsCompleted, "from the first line");
         }
 
         /// <summary>

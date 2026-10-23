@@ -290,10 +290,11 @@ The project introduction is in [README.md](README.md); this is only the naming.
   gate a key can bypass is a gate the wave after it does not have. The lesson is the only cue, and its last
   line releases whatever is left, so a finished lesson holds nothing. A map without a lesson keeps the
   opening it always had - the first building arms it, and `N` skips it.
-- **Skip** (`TutorialState.Skip`) - the shell setting a lesson aside: a replay of a map the campaign has
-  already cleared is not taught again, because clearing it took finishing the lesson. The world then reads
-  as a map without one - the full bar from the first frame, the waves on the map's own clock - and a
-  restart does not bring the lesson back, because the skip is a call about the map, not about a run.
+- **Skip** (`TutorialState.Skip`) - a caller setting a lesson aside before its first tick: the world then
+  reads as a map without one - the full bar from the first frame, the waves on the map's own clock - and a
+  restart does not bring the lesson back, because the skip is a call about the map, not about a run. The
+  driver does not call it: every map entry is a fresh run and teaches that map's lesson, so picking an
+  already-cleared map from the maps list replays its tutorial rather than skipping it.
 
 ## Input
 

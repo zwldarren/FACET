@@ -303,15 +303,15 @@ namespace Facet.Tests
             Assert.AreEqual(0, world.Tutorial.StepsCompleted, "a full circle is not the half wave 2 is weak to");
         }
 
-        // ---------------------------------------------------------------- the shell's skip
+        // ---------------------------------------------------------------- the caller's skip
 
         [Test]
         public void ASkippedLesson_TeachesAndHoldsNothing_EvenAcrossARestart()
         {
-            // The shell sets a lesson aside on a replay of a cleared map: clearing it took finishing it. The
-            // world then reads as a map without one - the bar is the map's own, the opening waits for a
-            // building rather than for a line - and a restart does not bring the lesson back, because the
-            // skip is the shell's call about the map, not a run's state.
+            // A caller may set a lesson aside before the world's first tick - a scripted scene, or a future
+            // door that offers a lessonless replay. The world then reads as a map without one - the bar is
+            // the map's own, the opening waits for a building rather than for a line - and a restart does
+            // not bring the lesson back, because the skip is a call about the map, not a run's state.
             SimWorld world = new SimWorld(LessonMap(Script(
                 Line(TutorialStep.PlaceDrill, new[] { BuildKind.Belt }, startsWave: true),
                 Line(TutorialStep.BeltFork))), new SimConfig());
