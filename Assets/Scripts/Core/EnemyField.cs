@@ -130,7 +130,19 @@ namespace Facet.Core
             _count = 0;
             _slotById.Clear();
             _nextId = 1;
+            MatchedHits = 0;
+            ResistedHits = 0;
         }
+
+        /// <summary>Shots this run that landed with the round the target was weak to (full damage), and
+        /// shots that landed with any other round (half damage). Derived telemetry for the matched-round
+        /// analytics metric: nothing in the simulation reads them back, so counting cannot change a run.
+        /// Counted where the match is decided - on impact, against the enemy actually hit - rather than at
+        /// the muzzle, where the round's target is only a preference.</summary>
+        public int MatchedHits { get; private set; }
+
+        /// <inheritdoc cref="MatchedHits"/>
+        public int ResistedHits { get; private set; }
 
         /// <summary>Create one enemy, weak to <paramref name="weakness"/>. Returns its id, which is what
         /// shots home in on. The field is synced here rather than trusted to have been stepped this tick: a
@@ -456,9 +468,13 @@ namespace Facet.Core
         private void ApplyDamageAtSlot(int slot, float baseDamage, Shape ammo)
         {
             // Weakness is exact identity now: the round is the shape the briefing named, or it is not.
-            float damage = baseDamage * (ammo == _enemies[slot].Weakness
+            bool matched = ammo == _enemies[slot].Weakness;
+            float damage = baseDamage * (matched
                 ? Balance.WeaknessDamageMultiplier
                 : Balance.ResistantDamageMultiplier);
+
+            if (matched) MatchedHits++;
+            else ResistedHits++;
 
             _enemies[slot].Hp -= damage;
 
