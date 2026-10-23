@@ -9,9 +9,10 @@ using UnityEngine.Networking;
 namespace Facet.Game
 {
     /// <summary>
-    /// The data collection half of the matched-round analytics pipeline: once a frame it lets a
-    /// <see cref="MatchRateTracker"/> read the driver's world, and every finished wave becomes one form
-    /// submission to the Google Form in <see cref="AnalyticsConfig"/>.
+    /// The data collection half of the analytics pipeline: once a frame it lets a
+    /// <see cref="MatchRateTracker"/> and a <see cref="StoppageTracker"/> read the driver's world, and every
+    /// finished wave becomes one form submission per metric - matched rounds to one Google Form, line
+    /// stoppages to another - both named in <see cref="AnalyticsConfig"/>.
     ///
     /// A view-side reader like every other: it reads the world after the frame's ticks and never writes to
     /// it, so a run plays identically with analytics on or off. In the WebGL player the submission goes out
@@ -24,6 +25,7 @@ namespace Facet.Game
     {
         private SimulationDriver _driver;
         private readonly MatchRateTracker _tracker = new MatchRateTracker();
+        private readonly StoppageTracker _stoppages = new StoppageTracker();
 
         /// <summary>One id per page load, so the rows of one player's session can be told apart from
         /// another's without knowing anything about who they are.</summary>
@@ -47,6 +49,7 @@ namespace Facet.Game
         {
             if (_driver == null || _driver.World == null) return;
             if (_tracker.Poll(_driver.World, out WaveMatchRow row)) Report(row);
+            if (_stoppages.Poll(_driver.World, out WaveStoppageRow stops)) Report(stops);
         }
 
         private void Report(WaveMatchRow row)
@@ -65,7 +68,34 @@ namespace Facet.Game
                 return;
             }
 
-            StartCoroutine(Post(body));
+            StartCoroutine(Post(AnalyticsConfig.FormResponseUrl, body));
+#endif
+        }
+
+        private void Report(WaveStoppageRow row)
+        {
+            if (!AnalyticsConfig.StoppagesConfigured) return;
+
+            var body = new StringBuilder();
+            Append(body, AnalyticsConfig.EntryStopSession, _session);
+            Append(body, AnalyticsConfig.EntryStopMap, row.Map);
+            Append(body, AnalyticsConfig.EntryStopWave, row.Wave.ToString());
+            Append(body, AnalyticsConfig.EntryStopJammed, row.Jammed.ToString());
+            Append(body, AnalyticsConfig.EntryStopBlocked, row.Blocked.ToString());
+            Append(body, AnalyticsConfig.EntryStopStalled, row.Stalled.ToString());
+            Append(body, AnalyticsConfig.EntryStopOutcome, row.Outcome);
+            Append(body, AnalyticsConfig.EntryStopBuild, AnalyticsConfig.BuildLabel);
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            FacetAnalyticsPost(AnalyticsConfig.StoppageFormResponseUrl, body.ToString());
+#else
+            if (Application.isEditor && !AnalyticsConfig.SendFromEditor)
+            {
+                Debug.Log("FACET analytics (not sent from the Editor): " + row, this);
+                return;
+            }
+
+            StartCoroutine(Post(AnalyticsConfig.StoppageFormResponseUrl, body.ToString()));
 #endif
         }
 
@@ -89,9 +119,9 @@ namespace Facet.Game
             body.Append(entry).Append('=').Append(UnityWebRequest.EscapeURL(value ?? string.Empty));
         }
 
-        private static IEnumerator Post(string body)
+        private static IEnumerator Post(string url, string body)
         {
-            using (var request = new UnityWebRequest(AnalyticsConfig.FormResponseUrl, UnityWebRequest.kHttpVerbPOST))
+            using (var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST))
             {
                 request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));
                 request.downloadHandler = new DownloadHandlerBuffer();

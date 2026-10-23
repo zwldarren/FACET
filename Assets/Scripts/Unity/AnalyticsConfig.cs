@@ -54,5 +54,41 @@ namespace Facet.Game
         /// collect nothing is pointed at: it returns before it builds a body, asks the browser or logs a
         /// line, so an unconfigured build is silent rather than noisy about failing.</summary>
         public static bool Configured => FormResponseUrl.Length > 0;
+
+        // ------------------------------------------------------------------ line stoppages (Metric 2)
+
+        /// <summary>The line-stoppage form's submit address, ending in <c>/formResponse</c> - a second form,
+        /// set up exactly like the one above, with short-answer questions titled Session, Map, Wave, Jammed,
+        /// Blocked, Stalled, Outcome, Build. Empty switches this metric off without touching the other.</summary>
+        public const string StoppageFormResponseUrl = "";
+
+        /// <summary>The <c>Session</c> question: the same per-page-load id the matched-round rows carry, so
+        /// the two sheets can be joined row for row.</summary>
+        public const string EntryStopSession = "";
+
+        /// <summary>The <c>Map</c> question.</summary>
+        public const string EntryStopMap = "";
+
+        /// <summary>The <c>Wave</c> question: the wave the row ends with, 0 for a stretch abandoned between waves.</summary>
+        public const string EntryStopWave = "";
+
+        /// <summary>The <c>Jammed</c> question: belts a machine refused the shape on.</summary>
+        public const string EntryStopJammed = "";
+
+        /// <summary>The <c>Blocked</c> question: lines that ended on bare ground, the map's edge or a wall.</summary>
+        public const string EntryStopBlocked = "";
+
+        /// <summary>The <c>Stalled</c> question: machines whose piece had nowhere to go.</summary>
+        public const string EntryStopStalled = "";
+
+        /// <summary>The <c>Outcome</c> question: cleared, won, lost or abandoned.</summary>
+        public const string EntryStopOutcome = "";
+
+        /// <summary>The <c>Build</c> question: <see cref="BuildLabel"/>.</summary>
+        public const string EntryStopBuild = "";
+
+        /// <summary>Whether the line-stoppage form is named - its own switch, so either metric can be sent
+        /// without the other.</summary>
+        public static bool StoppagesConfigured => StoppageFormResponseUrl.Length > 0;
     }
 }
