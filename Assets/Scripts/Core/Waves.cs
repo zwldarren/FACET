@@ -42,7 +42,12 @@ namespace Facet.Core
     {
         /// <summary>Countdown before this wave, in seconds; 0 means "the moment the wait is armed" (a
         /// test rig's opening, never a shipped map's first wave, since the player must mine, cut and shoot
-        /// first). A design rule maps are authored to, not one the simulation holds them to.</summary>
+        /// first). A design rule maps are authored to, not one the simulation holds them to.
+        ///
+        /// It paces the waits the <em>clock</em> arms: the opening of a map with no lesson, and every wait of
+        /// a run whose lesson is over. A wait a tutorial releases is never counted down - the ticked line is
+        /// the wave's start (<see cref="WaveDirector.ReleaseWait"/>) - so a teaching map's authored numbers
+        /// say nothing about the waves its lines call.</summary>
         public readonly float Intermission;
         public readonly SpawnGroup[] Groups;
 

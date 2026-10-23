@@ -79,13 +79,19 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void ACueLine_ReleasesTheHeldWait_SoItsOwnCountdownRuns()
+        public void ACueLine_StartsItsWaveOnTheTickItIsRead()
         {
-            // A cue does not start the wave on the tick it is read: the line's own intermission is the pause
-            // between being taught and being attacked, which is what puts the briefing on screen for a moment.
+            // A cue does not start a countdown: the line that says what the wave will ask for is the wave's
+            // announcement, so the enemies it warned about arrive with the sentence rather than ten seconds
+            // after it. The authored intermission is not spent here - it paces the waits the clock arms
+            // itself, which after a taught run's last line is the next one.
             SimWorld world = new SimWorld(LessonMap(
                 Script(Line(TutorialStep.PlaceDrill, startsWave: true)),
-                new[] { new WaveDefinition(10f) }), new SimConfig());
+                new[]
+                {
+                    new WaveDefinition(10f,
+                        new SpawnGroup(EnemyKind.Runner, 1, 0, 0f, 1f, Sim.TopHalfCircle)),
+                }), new SimConfig());
 
             Assert.AreEqual(WavePhase.Held, world.Waves.Phase, "the opening is the lesson's to release");
 
@@ -94,24 +100,19 @@ namespace Facet.Tests
 
             Assert.IsTrue(world.Tutorial.Complete, "the only line is ticked");
             Assert.IsFalse(world.Waves.HoldEveryWait, "and the run is nobody's lesson any more");
-            Assert.AreEqual(WavePhase.Intermission, world.Waves.Phase, "the cue starts the announced pause");
-            Assert.Greater(world.Waves.IntermissionRemaining, 0f);
-            Assert.Less(world.Waves.IntermissionRemaining, 10f, "a countdown, not the whole wait");
-
-            int ticks = (int)MathF.Ceiling(10f * SimConfig.TickRate);
-            Sim.Tick(world, ticks - 2);
-            Assert.AreEqual(0, world.Waves.CurrentWave, "the pause is not over yet");
-
-            Sim.Tick(world, 1);
-            Assert.AreEqual(1, world.Waves.CurrentWave, "and then the wave the line called arrives");
+            Assert.AreEqual(WavePhase.Running, world.Waves.Phase, "the cue starts the wave it called");
+            Assert.AreEqual(1, world.Waves.CurrentWave, "on the tick it was read");
+            Assert.AreEqual(0f, world.Waves.IntermissionRemaining, Sim.Tol, "with no countdown left to run");
+            Assert.AreEqual(0f, world.Waves.IntermissionTotal, Sim.Tol);
         }
 
         [Test]
-        public void ACueTickedDuringAWave_ReleasesTheWaitThatFollows()
+        public void ACueTickedDuringAWave_StartsTheWaveThatFollows()
         {
             // A line is often satisfied in the middle of a wave - the cut the next wave is weak to is made
             // during the one before. There is no wait to release then, so the cue has to be banked for the wait
-            // the clearing arms; otherwise the wave it was about stays held and N is refused with it.
+            // the clearing arms; and because a cue starts the wave it names, that wave is out on the tick the
+            // one before it ends, not after a pause the lesson has already justified.
             SimWorld world = new SimWorld(LessonMap(Script(
                     Line(TutorialStep.PlaceDrill, startsWave: true),
                     Line(TutorialStep.BankShape, startsWave: true),
@@ -120,11 +121,11 @@ namespace Facet.Tests
                 {
                     new WaveDefinition(0.05f,
                         new SpawnGroup(EnemyKind.Runner, 1, 0, 0f, 1f, Sim.TopHalfCircle)),
-                    new WaveDefinition(10f),
+                    new WaveDefinition(10f,
+                        new SpawnGroup(EnemyKind.Runner, 1, 0, 0f, 1f, Sim.TopHalfCircle)),
                 }), new SimConfig());
 
-            // The first line calls wave 1 with a countdown shorter than a blink, so the wave is in flight long
-            // before the second line can be ticked.
+            // The first line calls wave 1, so the wave is in flight long before the second line can be ticked.
             Sim.Place(world, BuildKind.Drill, Vein, Dir.West);
             world.Tick(InputCommand.None);
             Sim.Tick(world, 5);
@@ -139,7 +140,7 @@ namespace Facet.Tests
             Assert.AreEqual(WavePhase.Running, world.Waves.Phase,
                 "releasing a wait nobody holds cannot change the wave in flight");
 
-            // Kill the wave the way a turret would: what this test measures is the wait after it, not the
+            // Kill the wave the way a turret would: what this test measures is the wave after it, not the
             // fight. (An enemy left alive would keep hammering the Core until the run was lost, and a lost
             // run's clock never moves again, so the wave would read as running forever.)
             Sim.Tick(world, 2);
@@ -152,47 +153,66 @@ namespace Facet.Tests
 
             world.Tick(InputCommand.None);
 
-            Assert.AreEqual(WavePhase.Intermission, world.Waves.Phase,
-                "the wait after the wave counts down instead of being held again");
-            Assert.AreEqual(2, world.Waves.NextWave);
-            Assert.Greater(world.Waves.IntermissionRemaining, 0f);
-            Assert.IsTrue(world.Waves.HasWaveToStart, "and the player may cut its countdown short");
+            Assert.AreEqual(WavePhase.Running, world.Waves.Phase,
+                "the banked cue starts wave 2 as wave 1 ends, instead of arming a pause");
+            Assert.AreEqual(2, world.Waves.CurrentWave);
+            Assert.AreEqual(0f, world.Waves.IntermissionRemaining, Sim.Tol, "with no gap between them");
         }
 
         [Test]
-        public void ACueTickedWhileACountdownRuns_IsSpent()
+        public void ACueThatArrivesWhileTheClockOwnsTheWait_IsSpent()
         {
-            // A cue names the wave that is waiting. If one is already counting down, an earlier cue is calling
-            // it - so a second cue must not be banked for the wait after it, or one line would call two waves.
+            // The lesson's verb moves only a wait the lesson holds. Once the last line is ticked the clock is
+            // the map's own again, so a cue arriving during one of its countdowns names a wave that is already
+            // on its way: it must not be banked for the one after it, or one line would call two waves.
             SimWorld world = new SimWorld(LessonMap(Script(
-                Line(TutorialStep.PlaceDrill, startsWave: true),
-                Line(TutorialStep.BeltFork))), new SimConfig());
+                    Line(TutorialStep.PlaceDrill, startsWave: true)),
+                new[]
+                {
+                    new WaveDefinition(10f,
+                        new SpawnGroup(EnemyKind.Runner, 1, 0, 0f, 1f, Sim.TopHalfCircle)),
+                    new WaveDefinition(10f),
+                }), new SimConfig());
 
             Sim.Place(world, BuildKind.Drill, Vein, Dir.West);
             world.Tick(InputCommand.None);
-            Assert.AreEqual(WavePhase.Intermission, world.Waves.Phase, "the line's cue called this wave");
+            Assert.AreEqual(1, world.Waves.CurrentWave, "the cue called wave 1");
+
+            // End the wave so the clock opens the wait after it - a wait nobody's lesson is any more.
+            Sim.Tick(world, 2);
+            var enemies = new List<EnemySnapshot>();
+            world.Enemies.GetEnemies(enemies);
+            Assert.AreEqual(1, enemies.Count, "wave 1 has its runner in it");
+            for (int i = 0; i < enemies.Count; i++)
+                world.Enemies.ApplyDamage(enemies[i].Id, 1000f, enemies[i].Weakness);
+
+            world.Tick(InputCommand.None);
+            Assert.AreEqual(WavePhase.Intermission, world.Waves.Phase, "the clock counts down wave 2 now");
+            Assert.AreEqual(2, world.Waves.NextWave);
+            float remaining = world.Waves.IntermissionRemaining;
+            Assert.Greater(remaining, 0f);
 
             world.Waves.ReleaseWait();
 
-            int ticks = (int)MathF.Ceiling(10f * SimConfig.TickRate);
-            Sim.Tick(world, ticks - 1);
-            Assert.AreEqual(1, world.Waves.CurrentWave, "wave 1 arrives on its own countdown");
-
-            Sim.Tick(world, 1);
-            Assert.AreEqual(WavePhase.Held, world.Waves.Phase,
-                "and the wait after it belongs to the lesson again - the extra cue bought nothing");
-            Assert.IsFalse(world.Waves.HasWaveToStart);
+            Assert.AreEqual(WavePhase.Intermission, world.Waves.Phase, "the countdown is the clock's own");
+            Assert.AreEqual(remaining, world.Waves.IntermissionRemaining, Sim.Tol, "and was not cut short");
+            Assert.AreEqual(2, world.Waves.NextWave, "nor did the cue buy the wave after it");
         }
 
         [Test]
-        public void TheLastLine_ReleasesTheHold_EvenWithNoCue()
+        public void TheLastLine_StartsTheWaveNobodyElseWouldCall()
         {
             // A script whose final line is not the one that calls a wave would otherwise leave the run waiting
-            // forever for a clock nobody is left to arm.
+            // forever for a clock nobody is left to arm - so the last line calls it, and the wave arrives there
+            // and then rather than after a countdown nobody promised.
             SimWorld world = new SimWorld(LessonMap(Script(
                     Line(TutorialStep.PlaceDrill),
                     Line(TutorialStep.BankShape)),
-                new[] { new WaveDefinition(10f) }), new SimConfig());
+                new[]
+                {
+                    new WaveDefinition(10f,
+                        new SpawnGroup(EnemyKind.Runner, 1, 0, 0f, 1f, Sim.TopHalfCircle)),
+                }), new SimConfig());
 
             Sim.Place(world, BuildKind.Drill, Vein, Dir.West);
             world.Tick(InputCommand.None);
@@ -203,8 +223,43 @@ namespace Facet.Tests
 
             Assert.IsTrue(world.Tutorial.Complete);
             Assert.IsFalse(world.Waves.HoldEveryWait, "the lesson holds nothing once it is done");
-            Assert.AreEqual(WavePhase.Intermission, world.Waves.Phase, "a finished lesson leaves nothing held");
-            Assert.Greater(world.Waves.IntermissionRemaining, 0f);
+            Assert.AreEqual(WavePhase.Running, world.Waves.Phase, "the finished lesson's wave is out");
+            Assert.AreEqual(1, world.Waves.CurrentWave);
+            Assert.AreEqual(0f, world.Waves.IntermissionRemaining, Sim.Tol);
+        }
+
+        [Test]
+        public void ARestart_DropsACueTheOldRunBanked()
+        {
+            // A cue banked mid-wave belongs to the wave it was about, not to the run a restart begins. It is
+            // dropped before the opening is armed, or the new run would be under attack before its first line
+            // was read.
+            SimWorld world = new SimWorld(LessonMap(Script(
+                    Line(TutorialStep.PlaceDrill, startsWave: true),
+                    Line(TutorialStep.BankShape, startsWave: true),
+                    Line(TutorialStep.BeltFork)),
+                new[]
+                {
+                    new WaveDefinition(0.05f,
+                        new SpawnGroup(EnemyKind.Runner, 1, 0, 0f, 1f, Sim.TopHalfCircle)),
+                    new WaveDefinition(10f),
+                }), new SimConfig());
+
+            Sim.Place(world, BuildKind.Drill, Vein, Dir.West);
+            world.Tick(InputCommand.None);
+            Sim.Tick(world, 5);
+
+            world.Economy.Bank(1);
+            world.Tick(InputCommand.None);
+            Assert.AreEqual(WavePhase.Running, world.Waves.Phase, "the second line banked its cue mid-wave");
+
+            world.RequestRestart();
+            world.Tick(InputCommand.None);
+
+            Assert.AreEqual(0, world.Tutorial.StepsCompleted, "a restart is a new run");
+            Assert.AreEqual(WavePhase.Held, world.Waves.Phase,
+                "and its opening is held for the lesson, not armed by the last run's cue");
+            Assert.AreEqual(1, world.Waves.NextWave);
         }
 
         // ---------------------------------------------------------------- the two rules the first map teaches

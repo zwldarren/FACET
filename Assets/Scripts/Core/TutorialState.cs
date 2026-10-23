@@ -32,8 +32,9 @@ namespace Facet.Core
         private readonly EconomyState _economy;
 
         /// <summary>The clock the run's waves come from. A line that
-        /// <see cref="TutorialTask.StartsWave"/> releases its held wait - the tutorial says when a wave
-        /// arrives, which is the whole point of gating it.</summary>
+        /// <see cref="TutorialTask.StartsWave"/> releases its held wait, and the wave it names starts on that
+        /// tick: the tutorial says when a wave arrives, which is the whole point of gating it - and the line
+        /// is the announcement, so there is no countdown between the sentence and the wave.</summary>
         private readonly WaveDirector _waves;
 
         /// <summary>The buildings the run offers right now: the script's starting set plus every ticked
@@ -112,11 +113,12 @@ namespace Facet.Core
             RebuildOpen();
 
             // The line is ticked before the wave is released, so the bar it just widened and the wave it
-            // just called agree on what the player has. A finished lesson holds nothing back, whatever its last
-            // line said: a script whose final line was not the one that starts a wave would otherwise leave the
-            // run waiting forever for a clock nobody is left to arm. The clock banks a release granted while a
-            // wave is still being fought (<see cref="WaveDirector.ReleaseWait"/>), so a cue ticked mid-wave
-            // calls the wave that follows it rather than being swallowed.
+            // just called agree on what the player has - and the wave starts on this tick rather than after a
+            // countdown. A finished lesson holds nothing back, whatever its last line said: a script whose
+            // final line was not the one that starts a wave would otherwise leave the run waiting forever for
+            // a clock nobody is left to arm. The clock banks a release granted while a wave is still being
+            // fought (<see cref="WaveDirector.ReleaseWait"/>), so a cue ticked mid-wave calls the wave that
+            // follows it rather than being swallowed.
             if (task.StartsWave || Complete) _waves.ReleaseWait();
         }
 

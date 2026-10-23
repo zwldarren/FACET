@@ -60,9 +60,11 @@ namespace Facet.Core
     ///
     /// A level that teaches has a different arrangement, and it is the only other one: under
     /// <see cref="HoldEveryWait"/> the clock is the tutorial's (<see cref="TutorialState"/>), and no wait
-    /// counts down until a line of the lesson is ticked, its own duration being the announced pause that
-    /// follows rather than the wait the player spends planning. `N` is refused while such a wait is held,
-    /// because a gate that a key can bypass is a gate the second wave does not have.
+    /// counts down at all - it is held until a line of the lesson is ticked, and that tick <em>is</em> the
+    /// wave's start. The lesson is the announcement, so a taught run is paced by what the player has been
+    /// taught and not by seconds; the wave's own intermission is the pause of the waits the clock arms itself
+    /// (the opening of a map with no lesson, and the waits after a lesson is over). `N` is refused while such
+    /// a wait is held, because a gate that a key can bypass is a gate the second wave does not have.
     ///
     /// It owns spawning and the definition of "this wave is over"; whether that wins the run is the
     /// world's business (<see cref="GameStatus"/>).
@@ -293,6 +295,11 @@ namespace Facet.Core
             // leans on, since its maps carry no waves at all. Marking it finished here won the run on tick 1
             // and froze the tick loop with it, so nothing advanced at all.
             Finished = false;
+
+            // Cues granted by the lesson that just ended are the old run's and do not survive it - dropped
+            // before the opening is armed, so a grant left over cannot start the new run's first wave on its
+            // first tick.
+            _releaseGrants = 0;
             BeginIntermission(NextWave);
             Array.Clear(_groupTimer, 0, _groupTimer.Length);
             Array.Clear(_groupSpawned, 0, _groupSpawned.Length);
@@ -300,10 +307,8 @@ namespace Facet.Core
             Array.Clear(_memoWave, 0, _memoWave.Length);
 
             // A restart puts the opening back in the player's hands: the clock is armed by a building
-            // again, so a restarted run is not already late before the first thing is laid. Cues granted by
-            // the lesson that just ended are the old run's and do not survive it.
+            // again, so a restarted run is not already late before the first thing is laid.
             _waitHeld = true;
-            _releaseGrants = 0;
         }
 
         /// <summary>Is there a first wave at all? A map with no authored waves and no generator is a map
@@ -325,22 +330,26 @@ namespace Facet.Core
             _waitHeld = false;
         }
 
-        /// <summary>Release a wait the run is holding back, so its countdown starts this tick. The tutorial's
-        /// verb: a line that <see cref="TutorialTask.StartsWave"/> calls this, and the wave then arrives after
-        /// its own intermission - a short, announced pause rather than the instant the lesson is read, which is
-        /// what gives the player a breath and the briefing a moment on screen.
+        /// <summary>Release a wait the run is holding back. The tutorial's verb: a line that
+        /// <see cref="TutorialTask.StartsWave"/> calls this, and the wave it names starts on that tick - the
+        /// lesson's cue is the wave's announcement, so the clock has nothing left to announce and no countdown
+        /// follows it. A taught run is paced by lessons rather than seconds: the player has just been told what
+        /// the wave asks for, and a pause between the sentence and the enemies it warned about is dead time.
+        /// (The wave's own <see cref="WaveDefinition.Intermission"/> is the pause of a wait the clock arms
+        /// itself - the opening on an ordinary map, and the waits of a run whose lesson is over.)
         ///
         /// A line can tick while a wave is still being fought, so the verb does not require a held wait to
-        /// exist right now: the grant is banked and the wait after the wave counts down instead of holding
-        /// (<see cref="BeginIntermission"/>). A cue that arrives while a countdown already runs is spent -
-        /// the wave it named is on its way already - which is the one case this cannot recover.</summary>
+        /// exist right now: the grant is banked and the wave that follows the clearing starts with it
+        /// (<see cref="BeginIntermission"/>).</summary>
         public void ReleaseWait()
         {
             if (_waitHeld)
             {
-                // A wait is held right now: this tick's countdown starts, and the cue is spent here rather
-                // than banked for a second wave the line never asked for.
+                // A wait is held right now: the cue is this wave's, and the wave is due here rather than
+                // after a countdown the lesson has just made pointless. A held wait on a map that has no
+                // wave at all (a broken map the validator names) is only released.
                 _waitHeld = false;
+                if (NextWave > 0) StartWave(NextWave - 1);
                 return;
             }
 
@@ -361,21 +370,26 @@ namespace Facet.Core
             _intermissionTicks = SecondsToTicks(IntermissionTotal);
             IntermissionRemaining = IntermissionTotal;
 
-            // Every wait on a scripted run starts held, so the countdown that follows a wave is the lesson's
-            // to start rather than the clearing's - unless a line already granted this wait while the wave
-            // before it was still being fought (<see cref="ReleaseWait"/>), in which case the granting line is
-            // the one that called it and the countdown runs. The opening is held either way - Reset says so -
-            // so this only ever decides the waits after the first.
-            if (HoldEveryWait)
-            {
-                _waitHeld = _releaseGrants == 0;
-                if (_releaseGrants > 0) _releaseGrants--;
-            }
-            else
+            if (!HoldEveryWait)
             {
                 // A run that holds only its opening has nothing for a banked grant to release.
                 _releaseGrants = 0;
+                return;
             }
+
+            // Every wait on a scripted run starts held, so the countdown that follows a wave is the lesson's
+            // to start rather than the clearing's - unless a line already granted this wait while the wave
+            // before it was still being fought (<see cref="ReleaseWait"/>). Then the cue is this wave's start
+            // and there is nothing left to count down: the wave begins as the one before it ends rather than
+            // after a pause nobody asked for.
+            if (_releaseGrants > 0)
+            {
+                _releaseGrants--;
+                StartWave(waveNumber - 1);
+                return;
+            }
+
+            _waitHeld = true;
         }
 
         public void Step(float dt)
