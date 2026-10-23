@@ -1070,6 +1070,12 @@ namespace Facet.Game
         /// map grants: the shelf fills as the lesson hands things over, and the ladder between maps is the
         /// shell's sentence rather than a row of grey keys.
         ///
+        /// <b>The current lesson line points here too.</b> Every kind its ghost blueprint names wears a slow
+        /// accent pulse for as long as the line is current (<see cref="BuildTile.Lesson"/>), which is the
+        /// thread from the card's sentence and the map's picture to the key that builds it. A line with no
+        /// blueprint, a finished lesson and the player's own selected or hovered mark all leave the outline
+        /// alone.
+        ///
         /// Eleven tiles at the strip's 808.25 design units is 66.75 apiece, so a tile is a key rather than a
         /// row: name, then hotkey and price, then the afford line.
         /// </summary>
@@ -2488,13 +2494,15 @@ namespace Facet.Game
 
                 bool selectedTile = tile.Kind == selected;
                 bool affordable = _world.Economy.CanAfford(tile.Kind);
+                bool lesson = LessonWants(tile.Kind);
 
                 if (tile.Selected != selectedTile || tile.Hovered != hovered ||
-                    tile.Affordable != affordable)
+                    tile.Affordable != affordable || tile.Lesson != lesson)
                 {
                     tile.Selected = selectedTile;
                     tile.Hovered = hovered;
                     tile.Affordable = affordable;
+                    tile.Lesson = lesson;
 
                     DressBuildTile(tile);
                 }
@@ -2518,6 +2526,17 @@ namespace Facet.Game
                     }
                 }
 
+                // The lesson's own tile wears a slow pulse for as long as the line is current: the card says
+                // what to do, the map shows where, and this is the one thread from the sentence to the key
+                // that does it. The player's own marks still win - selected or hovered has been seen.
+                if (tile.Lesson && !tile.Selected && !tile.Hovered)
+                {
+                    float pulse = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 4.5f);
+                    tile.Border.Set(HudInk.Blend(
+                        HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.18f),
+                        _palette.HudAccent, pulse));
+                }
+
                 // The line along the tile's bottom says how far from affordable the bank is: nine tenths of
                 // the way is a belt to lay now, a tenth of the way is a plan for later.
                 if (!tile.Affordable && _world.Content.Machine(tile.Kind).Cost > 0)
@@ -2529,6 +2548,24 @@ namespace Facet.Game
             // The cost's shape sits glued to the number's left edge, and the number's width is known
             // only once the text has laid itself out - so the first frames place it as they learn it.
             for (int i = 0; i < _bar.Tiles.Count; i++) PlaceCostIcon(_bar.Tiles[i]);
+        }
+
+        /// <summary>
+        /// Does the current lesson line's blueprint use this building? The bar highlights every kind the
+        /// ghost plan names, which is the one thread from the map's picture to the key that puts it there.
+        /// A line with no blueprint highlights nothing; a finished lesson highlights nothing even on its
+        /// last frame, because there is no next thing to press.
+        /// </summary>
+        private bool LessonWants(BuildKind kind)
+        {
+            TutorialState tutorial = _world.Tutorial;
+            if (!tutorial.Active || tutorial.Complete) return false;
+
+            TutorialGhost[] ghost = tutorial.Current.Ghost;
+            for (int i = 0; i < ghost.Length; i++)
+                if (ghost[i].Build == kind) return true;
+
+            return false;
         }
 
         /// <summary>
@@ -3848,6 +3885,10 @@ namespace Facet.Game
             public bool Hovered;
             public bool Affordable;
             public bool CostPlaced;
+
+            /// <summary>Is this kind part of the current lesson line's blueprint? The update pass pulses its
+            /// outline while the line is current, so the bar points at the key the map is asking for.</summary>
+            public bool Lesson;
 
             /// <summary>A rebuild that grew the bar (a tutorial's hand-over) stamps the added tiles with the
             /// unscaled time their accent outline fades at; 0 is no pulse. The player's own marks - selected,

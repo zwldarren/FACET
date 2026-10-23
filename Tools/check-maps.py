@@ -21,15 +21,15 @@ What is wrong in a map file is silent in a run, and every rule below is one of t
   * a map that hands its waves to the generator while no vein names a mineral: the generator roots its
     legal demands at the map's own minerals, so it would have nothing to ask for and every generated wave
     would arrive empty;
-  * a tutorial row with no text, a guide tile off the map, a step this build has no rule for, or a line
-    about a building no earlier line hands over - the last one is the expensive mistake: the line can never
-    tick, so the lesson never completes and every wave it gates waits forever, on a screen with nothing
-    coming;
+  * a tutorial row with no text, a guide tile off the map, a ghost cell off the map, a step this build has
+    no rule for, or a line about a building no earlier line hands over - the last one is the expensive
+    mistake: the line can never tick, so the lesson never completes and every wave it gates waits forever,
+    on a screen with nothing coming;
   * a tutorial line or hint longer than the card that prints it: the HUD's type shrink has a floor, and
     past it the sentence spills out of the task card's edge.
 
 The rules themselves are MapValidation's (`OreInTerrain`, `PatchWithoutMineral`, `GroupWithoutDemand`,
-`NoWaves`, `GeneratorWithoutMineral`) and MapAsset.Validate's (`DuplicateOre`, and the four tutorial rules):
+`NoWaves`, `GeneratorWithoutMineral`) and MapAsset.Validate's (`DuplicateOre`, and the tutorial rules):
 they run in the painting window and in the test suite, and this is the same answers for a file, which is
 where a hand edit - a script's, or an agent's - lands before either of those ever sees it.
 
@@ -65,6 +65,9 @@ TASK_STEP = re.compile(r'^  - Step: (-?\d+)\s*$')
 TASK_TEXT = re.compile(r'^    Text: (.*)$')
 TASK_HINT = re.compile(r'^    Hint: (.*)$')
 TASK_TARGET = re.compile(r'^    Target: \{x: (-?\d+), y: (-?\d+)\}\s*$')
+TASK_GHOST = re.compile(r'^    Ghost:\s*$')
+TASK_GHOST_BUILD = re.compile(r'^    - Build: (-?\d+)\s*$')
+TASK_GHOST_CELL = re.compile(r'^      Cell: \{x: (-?\d+), y: (-?\d+)\}\s*$')
 TASK_OPENS = re.compile(r'^    Opens: (.*)$')
 TASK_OPENS_ROW = re.compile(r'^    - (\d+)\s*$')
 TASK_WAVE = re.compile(r'^    StartsWave: (\d+)\s*$')
@@ -79,7 +82,7 @@ CIRCLE, SQUARE = 1, 2
 # The lesson's own vocabulary, spelled as the runtime spells it. A step names the building whose presence
 # its rule reads (TutorialScript.TryRequiredBuilding), and a building names the operator a map has to have
 # handed over before it may be built at all (MachineDef.Requires, derived from the behaviour).
-BELT, DRILL, CUTTER, TURRET = 0, 1, 2, 9
+BELT, DRILL, CUTTER, ROTATOR, TURRET = 0, 1, 2, 3, 9
 STEPS = {
     0: ('PlaceDrill', DRILL),
     1: ('BankShape', DRILL),
@@ -87,9 +90,11 @@ STEPS = {
     3: ('MakeHalf', CUTTER),
     4: ('BeltFork', CUTTER),
     5: ('ArmTurretWithHalf', TURRET),
+    6: ('TwoTurretsLoaded', TURRET),
+    7: ('TwoTurretsLoadedAcross', TURRET),
 }
-BUILDING_NAMES = {DRILL: 'drill', CUTTER: 'cutter', TURRET: 'turret'}
-REQUIRES = {DRILL: 0, TURRET: 0, CUTTER: 1}            # Operators.Cutter is the one flag a lesson can need
+BUILDING_NAMES = {DRILL: 'drill', CUTTER: 'cutter', ROTATOR: 'rotator', TURRET: 'turret'}
+REQUIRES = {DRILL: 0, TURRET: 0, CUTTER: 1, ROTATOR: 2}  # Operators.Cutter / Operators.Rotator
 OPERATORS_ALL = 7                                      # Operators.All, the field's own default
 
 # MapAsset.TutorialTextBudget, spelled a second time: the task card's column of micro type holds about this
@@ -124,6 +129,8 @@ def read(path):
     starting = []
     tutorial = []         # one dict per authored row; empty for a map that teaches nothing
     row = None
+    in_ghost = False
+    ghost_build = None
 
     for line in path.read_text(encoding='utf-8').splitlines():
         size = SIZE.match(line)
@@ -167,15 +174,37 @@ def read(path):
         step = TASK_STEP.match(line)
         if step:
             in_starting = False
-            row = {'step': int(step.group(1)), 'opens': []}
+            row = {'step': int(step.group(1)), 'opens': [], 'ghost': []}
             tutorial.append(row)
+            in_ghost = False
+            ghost_build = None
             continue
 
         if TASK_NULL.match(line):
             in_starting = False
             row = {}
             tutorial.append(row)
+            in_ghost = False
+            ghost_build = None
             continue
+
+        if row is not None and TASK_GHOST.match(line):
+            row['ghost'] = []
+            in_ghost = True
+            ghost_build = None
+            continue
+
+        if row is not None and in_ghost:
+            build = TASK_GHOST_BUILD.match(line)
+            if build:
+                ghost_build = int(build.group(1))
+                continue
+
+            cell = TASK_GHOST_CELL.match(line)
+            if cell and ghost_build is not None:
+                row['ghost'].append((ghost_build, int(cell.group(1)), int(cell.group(2))))
+                ghost_build = None
+                continue
 
         if row is not None:
             text = TASK_TEXT.match(line)
@@ -285,6 +314,11 @@ def check_tutorial(rows, starting, unlocked, width, height):
             # the top of the grid is a fault.
             if x >= width or y >= height:
                 problems.append(f'tutorial line {number} points at ({x},{y}), which is outside the '
+                                f'{width}x{height} map')
+
+        for _build, x, y in row.get('ghost', ()):
+            if not (0 <= x < width and 0 <= y < height):
+                problems.append(f'tutorial line {number} draws a ghost at ({x},{y}), which is outside the '
                                 f'{width}x{height} map')
 
         step = row.get('step')

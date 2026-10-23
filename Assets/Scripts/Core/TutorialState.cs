@@ -191,7 +191,13 @@ namespace Facet.Core
                     return HasHalf();
 
                 case TutorialStep.ArmTurretWithHalf:
-                    return HasTurretHalf();
+                    return LoadedTurrets() > 0;
+
+                case TutorialStep.TwoTurretsLoaded:
+                    return LoadedTurrets() >= 2;
+
+                case TutorialStep.TwoTurretsLoadedAcross:
+                    return AcrossHalfTurrets() >= 2;
 
                 case TutorialStep.BeltFork:
                     return HasWiredFork();
@@ -238,21 +244,45 @@ namespace Facet.Core
             return false;
         }
 
-        /// <summary>Is a turret holding a half? The chamber is the snapshot's <see cref="MachineSnapshot.Shape"/>
-        /// and no other behaviour's answer counts: a half on a belt is a cut made (<see cref="HasHalf"/>), but
-        /// only a chambered one is a defence. Between intake and the shot the round sits in the chamber for a
-        /// whole fire interval, so a tick reading the world after the machines cannot miss it - and a turret
-        /// with nothing to shoot at never fires it at all.</summary>
-        private bool HasTurretHalf()
+        /// <summary>How many turrets hold a half - the count behind both the single-gun line
+        /// (<see cref="TutorialStep.ArmTurretWithHalf"/>) and its pair (<see cref="TutorialStep.TwoTurretsLoaded"/>).
+        /// A cutter forks into two lanes, so "one" and "both" are the two answers a battery lesson can ask
+        /// for, and they read the same walk.</summary>
+        private int LoadedTurrets()
         {
             _machines.GetMachines(_machineScratch);
+            int loaded = 0;
             for (int i = 0; i < _machineScratch.Count; i++)
             {
                 MachineSnapshot machine = _machineScratch[i];
-                if (machine.Behavior == BehaviorKind.Turret && machine.Shape.IsHalf) return true;
+                if (machine.Behavior == BehaviorKind.Turret && machine.Shape.IsHalf) loaded++;
             }
 
-            return false;
+            return loaded;
+        }
+
+        /// <summary>How many turrets hold a half cut across the lane - a top or a bottom half. The other
+        /// two halves (left/right) are the ones a cutter flowing north or south makes; a cutter turned a
+        /// quarter to flow east or west makes these, which is why the line about turning a cutter is judged
+        /// by the orientation in the chamber rather than by the count of machines on the map.</summary>
+        private int AcrossHalfTurrets()
+        {
+            _machines.GetMachines(_machineScratch);
+            int loaded = 0;
+            for (int i = 0; i < _machineScratch.Count; i++)
+            {
+                MachineSnapshot machine = _machineScratch[i];
+                if (machine.Behavior != BehaviorKind.Turret) continue;
+                if (!machine.Shape.IsHalf) continue;
+
+                // Top and bottom share an edge across the vertical axis (NW+NE, SW+SE); left and right
+                // share one across the horizontal axis and are the cut a north/south flow already made.
+                bool across = (machine.Shape.Has(Shape.NW) && machine.Shape.Has(Shape.NE))
+                              || (machine.Shape.Has(Shape.SW) && machine.Shape.Has(Shape.SE));
+                if (across) loaded++;
+            }
+
+            return loaded;
         }
 
         /// <summary>

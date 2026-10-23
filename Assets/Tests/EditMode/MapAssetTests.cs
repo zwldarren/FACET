@@ -559,6 +559,54 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void Tutorial_ARowCarriesItsGhostBlueprint_AndOffMapGhostsAreReported()
+        {
+            // The ghost is the standard answer drawn on the map: several tiles, each with its own facing.
+            // The conversion keeps the order - the first entry is the line's primary piece - and a cell off
+            // the grid is the same authoring mistake as an arrow off it.
+            _asset.TutorialStarting = new[] { BuildKind.Drill };
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.PlaceDrill, Text = "Drill.", Target = new Vector2Int(3, 4),
+                    Opens = new[] { BuildKind.Belt },
+                    Ghost = new[]
+                    {
+                        new MapAsset.TutorialGhostRow
+                        {
+                            Build = BuildKind.Drill, Cell = new Vector2Int(3, 4), Facing = Dir.West,
+                        },
+                        new MapAsset.TutorialGhostRow
+                        {
+                            Build = BuildKind.Belt, Cell = new Vector2Int(4, 4), Facing = Dir.West,
+                        },
+                    },
+                },
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.BankShape, Text = "Bank.",
+                    Ghost = new[]
+                    {
+                        new MapAsset.TutorialGhostRow
+                        {
+                            Build = BuildKind.Belt, Cell = new Vector2Int(12, 4), Facing = Dir.West,
+                        },
+                    },
+                },
+            };
+
+            TutorialScript script = _asset.ToCore().Tutorial;
+            Assert.AreEqual(2, script[0].Ghost.Length, "both pieces of the blueprint survive the conversion");
+            Assert.AreEqual(BuildKind.Drill, script[0].Ghost[0].Build);
+            Assert.AreEqual(new Int2(3, 4), script[0].Ghost[0].Cell);
+            Assert.AreEqual(Dir.West, script[0].Ghost[0].Direction);
+            Assert.AreEqual(BuildKind.Belt, script[0].Ghost[1].Build);
+
+            AssertProblem(_asset.Validate(), MapProblemKind.TutorialTargetOffMap, new Int2(12, 4));
+        }
+
+        [Test]
         public void Tutorial_ANullRow_IsALineThatCanNeverTick()
         {
             // A hole is not a PlaceDrill line: that would tick the moment any drill stands, which is what a

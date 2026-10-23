@@ -40,6 +40,49 @@ namespace Facet.Core
         /// the turret, for the same reason <see cref="BankShape"/> reads the bank: a line aimed at the gun
         /// that never arrives is not a defence.</summary>
         ArmTurretWithHalf = 5,
+
+        /// <summary>Two turrets stand, each holding a half: a full shape cut in two, one piece per gun.
+        /// A cutter forks into two lanes, and a lesson that taught a single armed gun would let the player
+        /// wire one lane and leave the fork's other half on a dead end - so the pair is its own fact. It
+        /// implies <see cref="ArmTurretWithHalf"/> and is the line a two-lane battery is released on.</summary>
+        TwoTurretsLoaded = 6,
+
+        /// <summary>Two turrets stand, each holding a half cut <em>across</em> the lane - a top or a bottom
+        /// half. <see cref="TwoTurretsLoaded"/> counts any halves; this one counts the orientation, which is
+        /// the fact the line about turning a cutter is really about: a cutter flowing north/south makes
+        /// left/right halves, and one turned a quarter to flow east/west makes top/bottom. The lesson is
+        /// placed by turning the cutter, so the proof is the cut that reached the gun and not a machine
+        /// standing somewhere on the map.</summary>
+        TwoTurretsLoadedAcross = 7,
+    }
+
+    /// <summary>One piece of a line's blueprint: where a building or belt goes, which way it faces, and what
+    /// it is. The guide draws these as transparent ghosts on the map, so the lesson can show a finished
+    /// layout - several tiles, two-tile machines included - rather than one arrow pointing at a cell.
+    ///
+    /// It is data for the same reason the line is: the standard answer is the map's, not the HUD's. A ghost
+    /// is a <em>picture</em> and never a placement - nothing is built, and the player may put the real
+    /// building anywhere the rules allow. Its only promise is the one the lesson makes: do it here and this
+    /// is what the result looks like.</summary>
+    public readonly struct TutorialGhost
+    {
+        /// <summary>The building or belt this ghost stands for.</summary>
+        public readonly BuildKind Build;
+
+        /// <summary>The tile it stands on. A two-tile machine's second tile is derived from
+        /// <see cref="Build"/> and <see cref="Direction"/>, exactly as the placement rule derives it.</summary>
+        public readonly Int2 Cell;
+
+        /// <summary>The way the ghost faces. A belt's arrow and a machine's body read it, so the blueprint
+        /// says "this way" as well as "here".</summary>
+        public readonly Dir Direction;
+
+        public TutorialGhost(BuildKind build, Int2 cell, Dir direction)
+        {
+            Build = build;
+            Cell = cell;
+            Direction = direction;
+        }
     }
 
     /// <summary>One line of a map's tutorial: what to do, where to look, what it hands over, and what to say
@@ -49,9 +92,11 @@ namespace Facet.Core
     /// teaches something else should not need a new build. <see cref="Text"/> is written in the map asset and
     /// printed by the HUD verbatim, so the lesson reads the way its designer wrote it.
     ///
-    /// <see cref="Target"/> is the tile the guide arrow points at - one cell, chosen by the designer, not
+    /// <see cref="Target"/> is the tile the guide points at - one cell, chosen by the designer, not
     /// computed from the player's pointer. A tutorial's job is to narrow the map to one answer; an arrow that
-    /// picked the nearest legal cell would jump around under a moving mouse.</summary>
+    /// picked the nearest legal cell would jump around under a moving mouse. <see cref="Ghost"/> is the richer
+    /// half of the same idea: the standard layout drawn on the map, so a line about a cutter or a belt run can
+    /// show its whole shape instead of asking the player to infer it from one tile.</summary>
     public readonly struct TutorialTask
     {
         /// <summary>The rule that ticks this line.</summary>
@@ -60,9 +105,14 @@ namespace Facet.Core
         /// <summary>The line as the HUD prints it.</summary>
         public readonly string Text;
 
-        /// <summary>Where the guide arrow points, or <see langword="null"/> for a line with no one right
-        /// place to be.</summary>
+        /// <summary>Where the guide points, or <see langword="null"/> for a line with no one right place to
+        /// be. It is the primary cell - the one the edge marker folds toward when the layout is off screen -
+        /// and the first ghost is normally the same tile.</summary>
         public readonly Int2? Target;
+
+        /// <summary>The standard answer, drawn as transparent buildings on the map. Empty for a line with no
+        /// one right layout: a lesson about a fact ("bank a shape") can say everything in its sentence.</summary>
+        public readonly TutorialGhost[] Ghost;
 
         /// <summary>The buildings this line hands over when it is ticked. Emptied by
         /// <see cref="TutorialScript"/>'s last line, whose reward is everything
@@ -85,11 +135,12 @@ namespace Facet.Core
         public readonly bool StartsWave;
 
         public TutorialTask(TutorialStep step, string text, Int2? target, BuildKind[] opens,
-            bool startsWave, string hint = null)
+            bool startsWave, string hint = null, TutorialGhost[] ghost = null)
         {
             Step = step;
             Text = text ?? string.Empty;
             Target = target;
+            Ghost = ghost ?? new TutorialGhost[0];
             Opens = opens ?? new BuildKind[0];
             StartsWave = startsWave;
             Hint = hint ?? string.Empty;
@@ -116,10 +167,11 @@ namespace Facet.Core
         /// on that line and says so, instead of a blank line deciding the lesson is over.</summary>
         public const TutorialStep NoStep = (TutorialStep)byte.MaxValue;
 
-        /// <summary>An empty line, normalized like every other one: empty text rather than null, and a step no
-        /// rule answers rather than <see cref="TutorialStep.PlaceDrill"/>, which would tick the moment any drill
-        /// stands. Readers walking a script they have been told the length of get this instead of a default
-        /// struct, so <see cref="TutorialTask"/>'s invariants hold for every task handed out.</summary>
+        /// <summary>An empty line, normalized like every other one: empty text rather than null, an empty
+        /// blueprint rather than a null one, and a step no rule answers rather than
+        /// <see cref="TutorialStep.PlaceDrill"/>, which would tick the moment any drill stands. Readers
+        /// walking a script they have been told the length of get this instead of a default struct, so
+        /// <see cref="TutorialTask"/>'s invariants hold for every task handed out.</summary>
         public static readonly TutorialTask Empty =
             new TutorialTask(NoStep, string.Empty, null, null, false, string.Empty);
 
@@ -178,6 +230,8 @@ namespace Facet.Core
 
                 case TutorialStep.ArmTurret:
                 case TutorialStep.ArmTurretWithHalf:
+                case TutorialStep.TwoTurretsLoaded:
+                case TutorialStep.TwoTurretsLoadedAcross:
                     building = BuildKind.Turret;
                     return true;
 
@@ -185,6 +239,7 @@ namespace Facet.Core
                 case TutorialStep.BeltFork:
                     building = BuildKind.Cutter;
                     return true;
+
                 default:
                     building = default;
                     return false;

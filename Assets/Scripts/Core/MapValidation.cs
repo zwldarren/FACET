@@ -69,8 +69,8 @@ namespace Facet.Core
         /// accident, prints a blank line the player is told to act on.</summary>
         TutorialLineWithoutText = 18,
 
-        /// <summary>A tutorial line whose guide tile is outside the grid: the arrow points off the map at
-        /// nothing.</summary>
+        /// <summary>A tutorial line whose guide tile or one of its ghost cells is outside the grid: the
+        /// picture points off the map at nothing.</summary>
         TutorialTargetOffMap = 19,
 
         /// <summary>A tutorial line no rule can ever satisfy, because the building it is about is never

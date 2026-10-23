@@ -135,6 +135,22 @@ namespace Facet.Game
 
         // ------------------------------------------------------------------ the tutorial
 
+        /// <summary>One piece of a tutorial line's blueprint: the building, the tile and the facing the
+        /// guide draws as a ghost. A cutter's second tile is not written here - the footprint rule derives
+        /// it, the same rule the real placement uses.</summary>
+        [Serializable]
+        public struct TutorialGhostRow
+        {
+            [Tooltip("What stands on this tile. Belts are drawn as belt beds; machines as their bodies.")]
+            public BuildKind Build;
+
+            [Tooltip("The tile the ghost stands on. A two-tile machine's second tile follows its facing.")]
+            public Vector2Int Cell;
+
+            [Tooltip("The way the ghost faces: a belt's arrow, a machine's body and barrel.")]
+            public Dir Facing;
+        }
+
         /// <summary>One line of the map's tutorial, as the Inspector edits it.</summary>
         [Serializable]
         public sealed class TutorialTaskRow
@@ -155,9 +171,13 @@ namespace Facet.Game
             [TextArea(2, 3)]
             public string Hint = string.Empty;
 
-            [Tooltip("The one tile the guide arrow points at, or leave it negative for a line with no one " +
+            [Tooltip("The one tile the guide points at, or leave it negative for a line with no one " +
                 "right place to be.")]
             public Vector2Int Target = new Vector2Int(-1, -1);
+
+            [Tooltip("The standard layout drawn as transparent ghosts on the map: every building and belt " +
+                "the line wants, with its facing. Empty draws only the target marker.")]
+            public TutorialGhostRow[] Ghost = new TutorialGhostRow[0];
 
             [Tooltip("The buildings this line hands over when it ticks. The last line hands over everything " +
                 "else whether or not it lists them.")]
@@ -407,6 +427,18 @@ namespace Facet.Game
                         new Int2(row.Target.x, row.Target.y),
                         Name + ": tutorial line " + (i + 1) + " points at (" + row.Target.x + "," +
                         row.Target.y + "), which is outside the " + width + "x" + height + " map"));
+                }
+
+                TutorialGhostRow[] ghost = row.Ghost ?? new TutorialGhostRow[0];
+                for (int g = 0; g < ghost.Length; g++)
+                {
+                    Vector2Int cell = ghost[g].Cell;
+                    if (cell.x >= 0 && cell.y >= 0 && cell.x < width && cell.y < height) continue;
+
+                    into.Add(new MapProblem(MapProblemKind.TutorialTargetOffMap,
+                        new Int2(cell.x, cell.y),
+                        Name + ": tutorial line " + (i + 1) + " draws a " + ghost[g].Build + " ghost at (" +
+                        cell.x + "," + cell.y + "), which is outside the " + width + "x" + height + " map"));
                 }
 
                 BuildKind need;
@@ -843,10 +875,25 @@ namespace Facet.Game
                 bool placed = row.Target.x >= 0 && row.Target.y >= 0;
                 tasks[i] = new TutorialTask(row.Step, row.Text,
                     placed ? new Int2(row.Target.x, row.Target.y) : (Int2?)null,
-                    row.Opens, row.StartsWave, row.Hint);
+                    row.Opens, row.StartsWave, row.Hint, GhostOf(row.Ghost));
             }
 
             return new TutorialScript(TutorialStarting, tasks);
+        }
+
+        /// <summary>Convert a row's authored ghosts to the engine-free blueprint, preserving order: the
+        /// first entry is the line's primary building, which is what the bar highlights first. A null list
+        /// is no blueprint rather than a null array, the same normalization every other row field gets.</summary>
+        private static TutorialGhost[] GhostOf(TutorialGhostRow[] rows)
+        {
+            if (rows == null || rows.Length == 0) return new TutorialGhost[0];
+
+            var ghost = new TutorialGhost[rows.Length];
+            for (int i = 0; i < rows.Length; i++)
+                ghost[i] = new TutorialGhost(rows[i].Build,
+                    new Int2(rows[i].Cell.x, rows[i].Cell.y), rows[i].Facing);
+
+            return ghost;
         }
     }
 }

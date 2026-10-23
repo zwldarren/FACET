@@ -264,14 +264,24 @@ The project introduction is in [README.md](README.md); this is only the naming.
   than a different kind of level. A map with no script has no lesson at all (`null`, not an empty one), so
   "this level teaches nothing" is one comparison and every reader of it can skip its work.
 - **Line** (`TutorialTask`) - one step of that lesson, and it is data: the text the card prints, the one tile
-  the guide arrow points at, the buildings it hands over, whether it is a **cue**, and the **hint** shown if
-  the line has stood unsolved too long. A line's rule is a **fact about the run** and never an action
-  performed - "a drill stands", not "the player pressed 2" - because a step that watched input could be
-  ticked by a click that built nothing, and a tutorial that ticks on the wrong thing is worse than none.
+  the guide points at, the **blueprint** of transparent ghosts drawn on the map, the buildings it hands over,
+  whether it is a **cue**, and the **hint** shown if the line has stood unsolved too long. A line's rule is a
+  **fact about the run** and never an action performed - "a drill stands", not "the player pressed 2" -
+  because a step that watched input could be ticked by a click that built nothing, and a tutorial that ticks
+  on the wrong thing is worse than none. The blueprint is the standard answer as a picture: every belt and
+  building with its facing, a cutter across both its tiles, a turret with its range ring. It is never a
+  placement - the player may build anywhere the rules allow - and the build bar pulses the keys that answer
+  the current line, so the card, the map and the keyboard all point at the same thing.
   The hint is said once in the strip and then pinned under the line until it ticks: a stuck player is
   exactly the one a one-shot sentence loses to a refusal or a glance away. Progress only goes forward: a ticked line stays ticked even if what satisfied it is dismantled, since a
   wave already released cannot be un-released and a list that un-ticks under the player's hands contradicts
   itself. Only the current line is read, so a player who satisfies a later one early is not credited early.
+- **Lesson camera** (`TutorialCamera`) - the rig's automatic half: when a line changes it glides to the
+  line's blueprint (the whole layout, not only the one target tile), and when a wave starts it glances at
+  the most advanced enemy for a few seconds before drifting back to the view the player had. It is still the
+  free camera - a pan, a wheel or `C` ends the glide and stands it down for a couple of seconds, and a held
+  mouse or a fresh placement defers it - so the lesson never takes the map away from the player. Only a
+  teaching map runs it.
 - **Cue** (`TutorialTask.StartsWave`, `WaveDirector.ReleaseWait`) - the line that lets the next wave go. A
   cue does not start the wave on the tick it is read: it releases the **hold**, and the wave then arrives
   after its own intermission - a short, announced pause that puts the briefing on screen before the fight.

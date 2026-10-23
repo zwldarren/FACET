@@ -167,42 +167,201 @@ MonoBehaviour:
   - 1
   TutorialTasks:
   - Step: 0
-    Text: Drill (2) the vein at the arrow. One drill, one line.
-    Hint: Press 2, then click a tile of the vein - a drill mines only the tile it stands on.
+    Text: Drill (2) the vein tile at the ghost - one drill, one line.
+    Hint: Press 2, then click the ghost tile; Q/E turns it before you place it.
     Target: {x: 34, y: 6}
+    Ghost:
+    - Build: 1
+      Cell: {x: 34, y: 6}
+      Facing: 3
     Opens:
     - 0
     StartsWave: 0
   - Step: 1
-    Text: Drag Belt (1) from the drill into the Core - full shapes bank coins.
-    Hint: Belts are dragged, one tile each - from the drill's front tile, west into the Core.
+    Text: Drag Belt (1) west from the drill into the Core - full shapes bank coins.
+    Hint: Start on the tile in front of the drill and drag west, one belt per tile.
     Target: {x: 26, y: 6}
+    Ghost:
+    - Build: 0
+      Cell: {x: 33, y: 6}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 32, y: 6}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 31, y: 6}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 30, y: 6}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 29, y: 6}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 28, y: 6}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 27, y: 6}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 26, y: 6}
+      Facing: 3
     Opens:
     - 9
-    StartsWave: 0
-  - Step: 2
-    Text: Turret (0) on a second line, fed - wave 1 arrives when it has a round.
-    Hint: A drill has one outlet - the gun needs a second vein tile belted to it.
-    Target: {x: 30, y: 7}
-    Opens:
     - 2
     - 10
-    StartsWave: 1
-  - Step: 4
-    Text: Cutter (3) is two tiles across the line. Belt the front of both tiles.
-    Hint: Q/E turns the ghost - the second tile is the one beside it, across the line.
-    Target: {x: 32, y: 7}
+    StartsWave: 0
+  - Step: 2
+    Text: Turret (0) at the ghost - the right vein feeds it a full round.
+    Hint: Drill the vein tile above the first, belt west, then north and west into the turret.
+    Target: {x: 25, y: 13}
+    Ghost:
+    - Build: 1
+      Cell: {x: 34, y: 7}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 33, y: 7}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 32, y: 7}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 31, y: 7}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 30, y: 7}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 29, y: 7}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 29, y: 8}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 29, y: 9}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 29, y: 10}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 29, y: 11}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 29, y: 12}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 29, y: 13}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 28, y: 13}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 27, y: 13}
+      Facing: 3
+    - Build: 0
+      Cell: {x: 26, y: 13}
+      Facing: 3
+    - Build: 9
+      Cell: {x: 25, y: 13}
+      Facing: 3
     Opens: []
     StartsWave: 0
   - Step: 3
-    Text: Feed the cutter's back and it cuts. Halves are what wave 2 is weak to.
-    Hint: A belt must point into the cutter's back - without an inlet it never cuts.
-    Target: {x: 32, y: 7}
+    Text: Cutter (3) on the left line - turn it to flow east so the cut is top/bottom.
+    Hint: Drill the left vein, belt east, jog up one tile, then Q/E the cutter to flow east.
+    Target: {x: 17, y: 8}
+    Ghost:
+    - Build: 1
+      Cell: {x: 11, y: 7}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 12, y: 7}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 13, y: 7}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 14, y: 7}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 15, y: 7}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 16, y: 7}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 16, y: 8}
+      Facing: 1
+    - Build: 2
+      Cell: {x: 17, y: 8}
+      Facing: 1
     Opens: []
     StartsWave: 0
-  - Step: 5
-    Text: Run the halves to the turret (0) - wave 2 arrives when it chambers one.
-    Hint: Aim one front of the cutter into the turret - the gun eats what a belt hands it.
-    Target: {x: 30, y: 7}
+  - Step: 4
+    Text: Belt both fronts of the cutter east - one lane per half, then up to the guns.
+    Hint: The cutter only feeds a side with a belt leaving it; wire both tiles' fronts.
+    Target: {x: 18, y: 8}
+    Ghost:
+    - Build: 0
+      Cell: {x: 18, y: 8}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 19, y: 8}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 20, y: 8}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 20, y: 9}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 20, y: 10}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 20, y: 11}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 20, y: 12}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 18, y: 7}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 19, y: 7}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 20, y: 7}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 21, y: 7}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 21, y: 8}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 21, y: 9}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 21, y: 10}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 21, y: 11}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 21, y: 12}
+      Facing: 0
+    Opens: []
+    StartsWave: 0
+  - Step: 7
+    Text: Turret (0) on each lane - one gun per half, top and bottom.
+    Hint: Each lane ends at a gun; both risers run up the west side of the Core.
+    Target: {x: 20, y: 13}
+    Ghost:
+    - Build: 9
+      Cell: {x: 20, y: 13}
+      Facing: 0
+    - Build: 9
+      Cell: {x: 21, y: 13}
+      Facing: 0
     Opens: []
     StartsWave: 1

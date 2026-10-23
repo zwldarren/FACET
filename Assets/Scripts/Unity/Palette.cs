@@ -192,8 +192,8 @@ namespace Facet.Game
         public Layer CursorLayer = new Layer(-0.2f, 10);
 
         /// <summary>Where the tutorial's guide draws: over the map, under the placement ghost and under the
-        /// locator. It is an annotation of a tile rather than a thing on it, so it belongs above everything the
-        /// tile holds - a highlighted cell has to read over a belt, an item and an enemy alike - while staying
+        /// locator. It is an annotation of the map rather than a thing on it, so it belongs above everything
+        /// the tiles hold - a ghost has to read over a belt, an item and an enemy alike - while staying
         /// behind the two views that say where the player's own pointer and danger are.</summary>
         public Layer GuideLayer = new Layer(-0.155f, 8);
 

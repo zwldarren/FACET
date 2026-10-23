@@ -89,9 +89,14 @@ namespace Facet.Game
         /// on every map change with the rig.</summary>
         private ThreatRadarView _radar;
 
-        /// <summary>The tutorial's guide arrow, which needs the same camera the locator does - it folds its
-        /// marker onto the open edge when the tile a task names is off screen.</summary>
+        /// <summary>The tutorial's guide, which needs the same camera the locator does - it folds its marker
+        /// onto the open edge when the layout a task draws is off screen.</summary>
         private TutorialGuideView _guide;
+
+        /// <summary>The lesson's camera: glides to the tile a line asks for and to a wave that has just
+        /// arrived. Null until the views are built, and reset on every map because each map teaches its own
+        /// lesson.</summary>
+        private TutorialCamera _tutorialCamera;
 
         /// <summary>The HUD, for its panels' claim on the mouse. Null until the views are built (and
         /// for a driver that never built any).</summary>
@@ -296,6 +301,16 @@ namespace Facet.Game
                 ? 1f
                 : Clock.Alpha(SimConfig.TickDt);
 
+            // The lesson's camera reads the frame that just ticked: a line that advanced or a wave that
+            // started is already in World, and the glide must begin from the view the player has now. Paused,
+            // the view is the player's to inspect - the tutorial should not move it.
+            if (_tutorialCamera != null && !World.Paused)
+            {
+                _tutorialCamera.Tick(World, _hud != null && _hud.TutorialUp,
+                    _hud != null && _hud.InfoGrown, _hud != null ? _hud.BarTiles : HudLayout.BarTiles,
+                    cmd.BuildHeld, Time.unscaledTime);
+            }
+
             // Publish the frame views draw in, written once after the tick loop and the WorldPerPixel
             // refresh, so every view reads the same value.
             Frames.Frame = new ViewFrame(Alpha, WorldPerPixel, CursorCell);
@@ -387,6 +402,9 @@ namespace Facet.Game
             _shell.Close();
             SetRunHeld(false);
             World.RequestRestart();
+            // A restart reopens the lesson from its first line, so the camera's memory of the last one goes
+            // with it - otherwise the first target of the new run would look already visited.
+            if (_tutorialCamera != null) _tutorialCamera.Reset();
         }
 
         /// <summary>The pause menu's far door: leave the run for the title, the main menu. The run behind
@@ -437,6 +455,7 @@ namespace Facet.Game
             // card is up on this map or it is not.
             if (_radar != null) _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
             if (_guide != null) _guide.InitializeGuide(_camera);
+            if (_tutorialCamera != null) _tutorialCamera.Reset();
             if (_hud != null)
                 _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,
                     _input.RequestFilter, Clock, OpenMenu);
@@ -524,6 +543,11 @@ namespace Facet.Game
             _rig = _camera.GetComponent<CameraRig>();
             if (_rig == null) _rig = _camera.gameObject.AddComponent<CameraRig>();
             _rig.Initialize(World.TileGrid, World.Core.Center, Campaign.IsFirstMap);
+
+            // The lesson's camera rides the rig the driver just made: the tutorial's targets are the places
+            // a player would otherwise have to pan to find, and the wave's arrival is the one event a lesson
+            // cannot narrate from a fixed view.
+            _tutorialCamera = new TutorialCamera(_rig, _camera);
 
             // The shell last: it draws over the run and asks the driver for every transition, so it is
             // handed the doors only once the HUD and the rig it will hold while it is open exist.

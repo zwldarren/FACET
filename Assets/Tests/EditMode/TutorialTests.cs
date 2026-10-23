@@ -303,6 +303,65 @@ namespace Facet.Tests
             Assert.AreEqual(0, world.Tutorial.StepsCompleted, "a full circle is not the half wave 2 is weak to");
         }
 
+        [Test]
+        public void TwoTurretsHoldingHalves_TickThePairLine_AndOneIsNotEnough()
+        {
+            // The fork's two lanes end in two guns. A single armed gun is the older line's fact; the pair is
+            // its own because a player who wired one lane has left half the cutter's output on a dead end.
+            var script = new TutorialScript(
+                new[] { BuildKind.Belt, BuildKind.Turret },
+                new[] { Line(TutorialStep.TwoTurretsLoaded) });
+
+            SimWorld one = new SimWorld(LessonMap(script), new SimConfig());
+            Sim.LayRun(one, new Int2(1, 2), Dir.East, 1);
+            Sim.Place(one, BuildKind.Turret, new Int2(2, 2), Dir.East);
+            Assert.IsTrue(one.Belts.TrySpawnItem(new Int2(1, 2), Sim.TopHalfCircle));
+            Sim.Tick(one, (int)(5 * SimConfig.TickRate));
+            Assert.AreEqual(0, one.Tutorial.StepsCompleted, "one loaded gun is not the fork's pair");
+
+            SimWorld two = new SimWorld(LessonMap(script), new SimConfig());
+            Sim.LayRun(two, new Int2(1, 2), Dir.East, 1);
+            Sim.Place(two, BuildKind.Turret, new Int2(2, 2), Dir.East);
+            Sim.LayRun(two, new Int2(3, 2), Dir.East, 1);
+            Sim.Place(two, BuildKind.Turret, new Int2(4, 2), Dir.East);
+            Assert.IsTrue(two.Belts.TrySpawnItem(new Int2(1, 2), Sim.TopHalfCircle));
+            Assert.IsTrue(two.Belts.TrySpawnItem(new Int2(3, 2), Sim.TopHalfCircle));
+            Sim.Tick(two, (int)(5 * SimConfig.TickRate));
+            Assert.AreEqual(1, two.Tutorial.StepsCompleted, "both guns chambered: the pair is armed");
+        }
+
+        [Test]
+        public void TwoTurretsHoldingAcrossHalves_TickTheTurnedCutterLine_AndLeftRightDoNot()
+        {
+            // A north/south cutter makes left/right halves; the demand asks for top/bottom. The line is about
+            // the cut that reaches the chamber, so it is judged by the halves the guns hold - a player who
+            // never turned the cutter before placing it fails here, and no rotator has to stand anywhere.
+            var script = new TutorialScript(
+                new[] { BuildKind.Belt, BuildKind.Turret },
+                new[] { Line(TutorialStep.TwoTurretsLoadedAcross) });
+
+            SimWorld across = new SimWorld(LessonMap(script), new SimConfig());
+            Sim.LayRun(across, new Int2(1, 2), Dir.East, 1);
+            Sim.Place(across, BuildKind.Turret, new Int2(2, 2), Dir.East);
+            Sim.LayRun(across, new Int2(3, 2), Dir.East, 1);
+            Sim.Place(across, BuildKind.Turret, new Int2(4, 2), Dir.East);
+            Assert.IsTrue(across.Belts.TrySpawnItem(new Int2(1, 2), Sim.TopHalfCircle));
+            Assert.IsTrue(across.Belts.TrySpawnItem(new Int2(3, 2), Sim.BottomHalfCircle));
+            Sim.Tick(across, (int)(5 * SimConfig.TickRate));
+            Assert.AreEqual(1, across.Tutorial.StepsCompleted, "a top and a bottom half are across the lane");
+
+            SimWorld sideways = new SimWorld(LessonMap(script), new SimConfig());
+            Sim.LayRun(sideways, new Int2(1, 2), Dir.East, 1);
+            Sim.Place(sideways, BuildKind.Turret, new Int2(2, 2), Dir.East);
+            Sim.LayRun(sideways, new Int2(3, 2), Dir.East, 1);
+            Sim.Place(sideways, BuildKind.Turret, new Int2(4, 2), Dir.East);
+            Assert.IsTrue(sideways.Belts.TrySpawnItem(new Int2(1, 2), Sim.TopHalfCircle));
+            Assert.IsTrue(sideways.Belts.TrySpawnItem(new Int2(3, 2), Sim.LeftHalfCircle));
+            Sim.Tick(sideways, (int)(5 * SimConfig.TickRate));
+            Assert.AreEqual(0, sideways.Tutorial.StepsCompleted,
+                "a left half is the cut the north flow already made, not the turn");
+        }
+
         // ---------------------------------------------------------------- the caller's skip
 
         [Test]
@@ -432,6 +491,7 @@ namespace Facet.Tests
             Assert.AreEqual(TutorialScript.NoStep, script[script.Count].Step);
             Assert.AreEqual(string.Empty, script[script.Count].Text);
             Assert.AreEqual(0, script[script.Count].Opens.Length, "normalized, not null");
+            Assert.AreEqual(0, script[script.Count].Ghost.Length, "the empty line has no blueprint");
 
             SimWorld world = new SimWorld(LessonMap(script, new[] { new WaveDefinition(10f) }), new SimConfig());
             Sim.Place(world, BuildKind.Drill, Vein, Dir.West);
