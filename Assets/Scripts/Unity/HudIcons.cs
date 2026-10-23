@@ -38,15 +38,19 @@ namespace Facet.Game
         }
 
         /// <summary>Rasterised once and drawn scaled: 32 px reads round at the largest HUD size and is
-        /// nothing to build.</summary>
-        private const int Size = 32;
+        /// nothing to build. Public so the tests measure in the same pixels the rasteriser writes.</summary>
+        public const int Size = 32;
 
         /// <summary>The figure is built at this item radius - the half-extent of the item's own square -
         /// then fitted into the icon with a margin so the outline has room to be drawn inside the box.</summary>
         private const float SilhouetteRadius = 0.5f;
 
-        /// <summary>The outline's width as a fraction of the icon, matched to the map's own 2 px outline.</summary>
-        private const float OutlineFraction = 0.11f;
+        /// <summary>The outline's width as a fraction of the icon. 0.09 of a figure drawn at
+        /// <see cref="HudLayout.DemandFigure"/> is about a pixel and a half at 720p, which leaves at least
+        /// twelve pixels of shape inside it (issue #12). It was 0.11: on a quarter, the figure the outline
+        /// cap does not reach, that drew a 2 px ring around 12 px of shape on the old 16 px chip, and most of
+        /// the ink was edge.</summary>
+        public const float OutlineFraction = 0.09f;
 
         private readonly Palette _palette;
 
@@ -254,15 +258,18 @@ namespace Facet.Game
                 }
             }
 
-            var texture = new Texture2D(Size, Size, TextureFormat.RGBA32, false)
+            // Mipmapped and trilinear: the figure is drawn at 13 to 35 px from a 32 px picture, and a plain
+            // bilinear sample skips texels below half size - at 50 % the thin outline would flicker in and
+            // out instead of averaging into an edge. The pyramid of a 32 px texture is 1.3 KB.
+            var texture = new Texture2D(Size, Size, TextureFormat.RGBA32, true)
             {
                 name = (fit ? "FACET/HudIcon/" : "FACET/HudCanvas/") + shape,
                 hideFlags = HideFlags.DontSave,
-                filterMode = UnityEngine.FilterMode.Bilinear,
+                filterMode = UnityEngine.FilterMode.Trilinear,
                 wrapMode = TextureWrapMode.Clamp,
             };
             texture.SetPixels32(_pixels);
-            texture.Apply(false);
+            texture.Apply(true);
 
             return new Icon(texture, new Rect(0f, 0f, 1f, 1f));
         }

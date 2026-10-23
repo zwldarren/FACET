@@ -21,7 +21,7 @@ namespace Facet.Tests
     {
         /// <summary>The icon edge the rasteriser builds at: <see cref="HudIcons"/>'s own Size, which is not
         /// public, so it is restated here as the number these assertions are measured in.</summary>
-        private const int IconSize = 32;
+        private const int IconSize = HudIcons.Size;
 
         /// <summary>Where a figure's pixels are, and how many of them there are, in icon pixels with (0,0) at
         /// the bottom-left corner - the same frame the rasteriser writes in.</summary>
@@ -225,6 +225,133 @@ namespace Facet.Tests
                 Assert.Greater(seam, 0, "and so is the vertical seam at its middle");
                 Assert.Less(seam, rim, "the seam is thinner than the rim, as it is on the map");
             });
+        }
+
+        // ---------------------------------------------------------------- issue #12: the demand figure
+
+        [Test]
+        public void TheDemandFigure_IsAtLeastFifteenPixels_At720p()
+        {
+            // The figure a player reads first each wave was the smallest thing on screen: 11 design units in
+            // the briefing. One size now, for every HUD mark that means "build this".
+            Assert.GreaterOrEqual(HudLayout.DemandFigure * HudLayout.Scale(720f), 15f,
+                "the demand figure is at least 15 px at 720p");
+        }
+
+        [Test]
+        public void TheOutline_IsAboutAPixelAndAHalf_AndLeavesTwelvePixelsOfShape()
+        {
+            // Measured on square figures, whose left edge is a straight vertical line, so a row's leading run
+            // of outline pixels is exactly the outline's thickness. The full square is the case the outline cap
+            // reaches; the quarter is the one it does not, and the one whose ring used to be most of the ink.
+            float toScreen = HudLayout.DemandFigure / HudIcons.Size;
+
+            WithIcons((palette, icons) =>
+            {
+                foreach (Shape shape in new[] { Shape.Full(Quad.Square), Shape.Quarter(Shape.NW, Quad.Square) })
+                {
+                    HudIcons.Icon icon = icons.Mark(shape);
+                    Ink ink = InkOf(icon);
+                    int rim = LeadingRun(icon, (Color32)palette.Outline, HudIcons.Size / 2 + 5);
+
+                    Assert.Greater(rim, 0, shape.Describe() + " has an outline");
+                    Assert.LessOrEqual(rim * toScreen, 1.75f,
+                        shape.Describe() + "'s outline is about 1.5 px at the demand size, not " + rim * toScreen);
+                    Assert.GreaterOrEqual((ink.Width - 2 * rim) * toScreen, 12f,
+                        shape.Describe() + " keeps at least 12 px of shape inside its outline");
+                }
+            });
+        }
+
+        [Test]
+        public void AMixedFigure_ShowsWhichHalfIsWhichMineral_WithoutColour()
+        {
+            // Asked of the alpha channel alone: a circle quadrant is a quarter disc and a square quadrant is a
+            // square cell, so the corner of a circle half is empty and the corner of a square half is filled.
+            // The colour says the same thing, but the colour is already carrying other news.
+            int near = 1, far = HudIcons.Size - 2;
+
+            WithIcons((palette, icons) =>
+            {
+                HudIcons.Icon circleOverSquare = icons.Mark(Shape.Of(Quad.Circle, Quad.Circle, Quad.Square, Quad.Square));
+                Assert.AreEqual(0, AlphaAt(circleOverSquare, near, far), "the circle half's corner is rounded off");
+                Assert.Greater(AlphaAt(circleOverSquare, near, near), 0, "the square half's corner is filled");
+
+                HudIcons.Icon squareOverCircle = icons.Mark(Shape.Of(Quad.Square, Quad.Square, Quad.Circle, Quad.Circle));
+                Assert.Greater(AlphaAt(squareOverCircle, near, far), 0, "upside down, the square half is on top");
+                Assert.AreEqual(0, AlphaAt(squareOverCircle, near, near), "and the circle half below it");
+            });
+        }
+
+        [Test]
+        public void AtHalfSize_AQuarterCircle_AQuarterSquare_AndAHalf_StayApart()
+        {
+            // The demand figure at 50 %: eight pixels. Each figure is box-averaged down to an 8 x 8 coverage
+            // mask - roughly what the mip chain hands the screen - and any two of the three must still differ
+            // in enough cells to be told apart.
+            WithIcons((palette, icons) =>
+            {
+                var figures = new[]
+                {
+                    ("a quarter-circle", Mask(icons.Mark(Shape.Quarter(Shape.NW, Quad.Circle)))),
+                    ("a quarter-square", Mask(icons.Mark(Shape.Quarter(Shape.NW, Quad.Square)))),
+                    ("a half", Mask(icons.Mark(Shape.Of(Quad.Circle, Quad.Circle, Quad.Empty, Quad.Empty)))),
+                };
+
+                for (int i = 0; i < figures.Length; i++)
+                for (int j = i + 1; j < figures.Length; j++)
+                {
+                    int differ = 0;
+                    for (int k = 0; k < figures[i].Item2.Length; k++)
+                        if (figures[i].Item2[k] != figures[j].Item2[k]) differ++;
+
+                    Assert.GreaterOrEqual(differ, 6,
+                        figures[i].Item1 + " and " + figures[j].Item1 + " read the same at half size");
+                }
+            });
+        }
+
+        /// <summary>How many pixels of <paramref name="colour"/> a row starts with, counting from the first
+        /// pixel that has any ink.</summary>
+        private static int LeadingRun(HudIcons.Icon icon, Color32 colour, int row)
+        {
+            Color32[] pixels = icon.Texture.GetPixels32();
+            int x = 0;
+            while (x < HudIcons.Size && pixels[row * HudIcons.Size + x].a == 0) x++;
+
+            int run = 0;
+            while (x < HudIcons.Size && pixels[row * HudIcons.Size + x].Equals(colour))
+            {
+                run++;
+                x++;
+            }
+
+            return run;
+        }
+
+        private static byte AlphaAt(HudIcons.Icon icon, int x, int y)
+            => icon.Texture.GetPixels32()[y * HudIcons.Size + x].a;
+
+        /// <summary>The figure at an eighth of its picture's edge, as covered / not covered per cell.</summary>
+        private static bool[] Mask(HudIcons.Icon icon)
+        {
+            const int cells = 8;
+            int block = HudIcons.Size / cells;
+            Color32[] pixels = icon.Texture.GetPixels32();
+            var mask = new bool[cells * cells];
+
+            for (int cy = 0; cy < cells; cy++)
+            for (int cx = 0; cx < cells; cx++)
+            {
+                int sum = 0;
+                for (int y = 0; y < block; y++)
+                for (int x = 0; x < block; x++)
+                    sum += pixels[(cy * block + y) * HudIcons.Size + cx * block + x].a;
+
+                mask[cy * cells + cx] = sum >= 255 * block * block / 2;
+            }
+
+            return mask;
         }
     }
 }

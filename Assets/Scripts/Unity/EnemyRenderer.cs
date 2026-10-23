@@ -60,10 +60,11 @@ namespace Facet.Game
                 _points[(int)kind] = VisualShapes.Points(_styles[(int)kind], Colors.CircleSides);
             }
 
-            // Same per-mineral override as the belt items, so a weakness figure and the round that
-            // counters it read as the same item; no outline, since an outlined figure inside an outlined
-            // body is noise.
-            _weakness = Colors.ShapeIcons(Colors.Enemies.WeaknessRadius, 0f);
+            // Same per-mineral override, radius and outline as the round in a turret's chamber, so the
+            // weakness an enemy carries and the round that counters it are one picture (issue #12). The
+            // outline is what keeps a gold quarter readable on a red body, and what tells a round quadrant
+            // from a square one when the colours are close.
+            _weakness = Colors.ShapeIcons(Colors.DemandFigureRadius, Colors.OutlinePixels);
 
             _nextWaveSpawns = new bool[World.Map.SpawnPoints.Length];
         }
@@ -125,7 +126,7 @@ namespace Facet.Game
 
             float left = at.x - width * 0.5f;
             float bottom = at.y
-                + Mathf.Max(look.BodyRadius, look.WeaknessRadius)
+                + Mathf.Max(look.BodyRadius, Colors.DemandFigureRadius)
                 + OutlineWidth
                 + gap;
 

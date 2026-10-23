@@ -10,8 +10,8 @@ namespace Facet.Game
     /// persistent pieces - status, tutorial, build bar, info - must spend no more than 22 % of it with the
     /// tutorial up. The old table spent 48 %: two 470-wide cards down the left edge, a full-width 126-unit
     /// bar, and a 392-wide info card floating over it. Here the left column is one 360-wide rail, the bar
-    /// is a centred 880 x 56 strip, and the info card is 300 x 126; the four together are 179,240 of the
-    /// 829,440 units, 21.6 %. A table rather than fields on <see cref="HudView"/> because two views need
+    /// is a centred 880 x 52 strip, and the info card is 300 x 138; the four together are 181,120 of the
+    /// 829,440 units, 21.8 %. A table rather than fields on <see cref="HudView"/> because two views need
     /// the same answer: the HUD draws the pieces, and the camera rig must not leave a tile hidden behind
     /// one. Panel sizes are unscaled and multiplied by <see cref="Scale"/> - the same scale the HUD's
     /// fonts use - so the layout keeps the same fraction of the screen at every resolution.
@@ -25,11 +25,22 @@ namespace Facet.Game
         // strips are measured from it (see Insets).
         public const float StatusWidth = 360f;
 
+        /// <summary>
+        /// The demand figure's edge, in design units: the one size every HUD mark that means "build this"
+        /// is drawn at - the briefing's chips and the stockpile's coin. 16 at 720p is 16 px, and 13 px in
+        /// the 960x600 published frame; it was 11 in the chips and 24 beside the stockpile, and the 11 was
+        /// the smallest thing on screen while being the first thing a player has to read (issue #12).
+        /// The map's own badges are in tiles rather than pixels and zoom with the map, so they share
+        /// <see cref="Palette.DemandFigureRadius"/> instead.
+        /// </summary>
+        public const float DemandFigure = 16f;
+
         /// <summary>The rail after the quieting: the event feed and the always-on diagnostic sentences
         /// are gone - a line that only ever says "all clear" trains the player to stop reading it -
         /// leaving a wave news line, two rows of the bill of materials (the wave coming and the one after
-        /// it: §5 previews both), the two diagnostic lines and the seed.</summary>
-        public const float StatusHeight = 148f;
+        /// it: §5 previews both), the two diagnostic lines and the seed. Five units taller than it was so
+        /// each briefing row is tall enough for a <see cref="DemandFigure"/>.</summary>
+        public const float StatusHeight = 153f;
 
         /// <summary>The controls cluster collapsed: the wave, pause, speed-gear, help and menu buttons, a
         /// small cluster in the screen's top-right corner (a 54-unit wave, three 34-unit squares, a 44-unit
