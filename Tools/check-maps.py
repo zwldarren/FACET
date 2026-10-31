@@ -92,9 +92,15 @@ STEPS = {
     5: ('ArmTurretWithHalf', TURRET),
     6: ('TwoTurretsLoaded', TURRET),
     7: ('TwoTurretsLoadedAcross', TURRET),
+    8: ('SelectDrill', DRILL),
+    9: ('SelectBelt', BELT),
+    10: ('SelectTurret', TURRET),
+    11: ('SelectCutter', CUTTER),
+    12: ('PlaceTurret', TURRET),
+    13: ('ClearFirstWave', TURRET),
 }
-BUILDING_NAMES = {DRILL: 'drill', CUTTER: 'cutter', ROTATOR: 'rotator', TURRET: 'turret'}
-REQUIRES = {DRILL: 0, TURRET: 0, CUTTER: 1, ROTATOR: 2}  # Operators.Cutter / Operators.Rotator
+BUILDING_NAMES = {BELT: 'belt', DRILL: 'drill', CUTTER: 'cutter', ROTATOR: 'rotator', TURRET: 'turret'}
+REQUIRES = {BELT: 0, DRILL: 0, TURRET: 0, CUTTER: 1, ROTATOR: 2}  # Operators.Cutter / Operators.Rotator
 OPERATORS_ALL = 7                                      # Operators.All, the field's own default
 
 # MapAsset.TutorialTextBudget, spelled a second time: the task card's column of micro type holds about this

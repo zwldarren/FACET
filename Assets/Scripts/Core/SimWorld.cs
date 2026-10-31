@@ -115,7 +115,7 @@ namespace Facet.Core
             Projectiles = new ProjectileField();
             Waves = new WaveDirector(Enemies, map, Events, Config.FreshSeed);
             Economy = new EconomyState(Content, map.StartShapes);
-            Tutorial = new TutorialState(map.Tutorial, Machines, Belts, Economy, Waves);
+            Tutorial = new TutorialState(map.Tutorial, Machines, Belts, Economy, Waves, () => _build?.Selected);
 
             _machineSystem = new MachineSystem(TileGrid, Terrain, Belts, Machines, Enemies, Projectiles,
                 Content, Events);

@@ -37,6 +37,11 @@ namespace Facet.Core
         /// is the announcement, so there is no countdown between the sentence and the wave.</summary>
         private readonly WaveDirector _waves;
 
+        /// <summary>What the build bar has in hand, read for the Select* lines. Asked rather than held, because
+        /// the selection belongs to the build controller, which is built after this state and reads it back.
+        /// Null on a state built without one (a test's), where every Select* line simply never ticks.</summary>
+        private readonly Func<BuildKind?> _selected;
+
         /// <summary>The buildings the run offers right now: the script's starting set plus every ticked
         /// line's <see cref="TutorialTask.Opens"/>. Rebuilt on the tick a line is ticked and read every frame
         /// by the HUD, so the rebuild happens once and the read stays a walk of a handful of entries.</summary>
@@ -56,8 +61,9 @@ namespace Facet.Core
         private bool _skipped;
 
         public TutorialState(TutorialScript script, MachineField machines, BeltField belts,
-            EconomyState economy, WaveDirector waves)
+            EconomyState economy, WaveDirector waves, Func<BuildKind?> selected = null)
         {
+            _selected = selected;
             _script = script;
             _machines = machines ?? throw new ArgumentNullException(nameof(machines));
             _belts = belts ?? throw new ArgumentNullException(nameof(belts));
@@ -204,6 +210,28 @@ namespace Facet.Core
                 case TutorialStep.BeltFork:
                     return HasWiredFork();
 
+                case TutorialStep.SelectDrill:
+                    return Holding(BuildKind.Drill);
+
+                case TutorialStep.SelectBelt:
+                    return Holding(BuildKind.Belt);
+
+                case TutorialStep.SelectTurret:
+                    return Holding(BuildKind.Turret);
+
+                case TutorialStep.SelectCutter:
+                    return Holding(BuildKind.Cutter);
+
+                case TutorialStep.PlaceTurret:
+                    _machines.CountTurrets(out int standing, out _);
+                    return standing > 0;
+
+                case TutorialStep.ClearFirstWave:
+                    // Between waves with the second one next (held or counting down), or out of waves.
+                    return _waves.Finished ||
+                           (_waves.Phase != WavePhase.Running && _waves.NextWave >= 2) ||
+                           _waves.Phase == WavePhase.Over;
+
                 default:
                     // A line carrying <see cref="TutorialScript.NoStep"/> is broken data, reported by the map
                     // validator where a designer can act on it: it never ticks, and saying so every tick would
@@ -299,6 +327,11 @@ namespace Facet.Core
         /// and it is asked with the machine's own outlet rule (<see cref="MachineDelivery.IsOutput"/>), so the
         /// line that ticks and the badge that reads STOPPED cannot disagree about whether a lane is wired.
         /// </summary>
+        /// <summary>Is this building the one in the player's hand right now?
+        /// Only a building the lesson has handed over counts: the bar hides the rest, and a selection the
+        /// simulation would refuse to place is not one the line should credit.</summary>
+        private bool Holding(BuildKind kind) => _selected != null && _selected() == kind && Unlocks(kind);
+
         private bool HasWiredFork()
         {
             _machines.GetMachines(_machineScratch);

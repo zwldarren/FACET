@@ -54,6 +54,32 @@ namespace Facet.Core
         /// placed by turning the cutter, so the proof is the cut that reached the gun and not a machine
         /// standing somewhere on the map.</summary>
         TwoTurretsLoadedAcross = 7,
+
+        /// <summary>The Drill is in the player's hand: the build bar's selection is the drill. The first
+        /// half of a placement, taught on its own so a first-time player learns where the key is before being
+        /// asked where the building goes - the step-by-step opening of the training map. Selection is world
+        /// state (<see cref="SimWorld.SelectedKind"/>), set by a command on a tick like every other input,
+        /// so this is still a fact about the run rather than a watched keypress.</summary>
+        SelectDrill = 8,
+
+        /// <summary>Belts are in the player's hand. See <see cref="SelectDrill"/>.</summary>
+        SelectBelt = 9,
+
+        /// <summary>A turret is in the player's hand. See <see cref="SelectDrill"/>.</summary>
+        SelectTurret = 10,
+
+        /// <summary>A cutter is in the player's hand. See <see cref="SelectDrill"/>.</summary>
+        SelectCutter = 11,
+
+        /// <summary>A turret stands anywhere, loaded or not: placing the gun and feeding it are two separate
+        /// lessons on the training map, because "it shoots nothing" is the commonest confusion a new player
+        /// reports. <see cref="ArmTurret"/> is the feeding half.</summary>
+        PlaceTurret = 12,
+
+        /// <summary>The first wave has been fought and cleared: the run is between waves with the second
+        /// one next, or out of waves. The lesson's pause for the player to watch the line they built do its
+        /// job before the next idea is introduced.</summary>
+        ClearFirstWave = 13,
     }
 
     /// <summary>One piece of a line's blueprint: where a building or belt goes, which way it faces, and what
@@ -225,9 +251,21 @@ namespace Facet.Core
             {
                 case TutorialStep.PlaceDrill:
                 case TutorialStep.BankShape:
+                case TutorialStep.SelectDrill:
                     building = BuildKind.Drill;
                     return true;
 
+                case TutorialStep.SelectBelt:
+                    building = BuildKind.Belt;
+                    return true;
+
+                case TutorialStep.SelectCutter:
+                    building = BuildKind.Cutter;
+                    return true;
+
+                case TutorialStep.SelectTurret:
+                case TutorialStep.PlaceTurret:
+                case TutorialStep.ClearFirstWave:
                 case TutorialStep.ArmTurret:
                 case TutorialStep.ArmTurretWithHalf:
                 case TutorialStep.TwoTurretsLoaded:

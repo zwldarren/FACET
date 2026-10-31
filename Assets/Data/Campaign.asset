@@ -13,5 +13,6 @@ MonoBehaviour:
   m_Name: Campaign
   m_EditorClassIdentifier: FACET.Game::Facet.Game.MapSet
   Maps:
+  - {fileID: 11400000, guid: caea3876513440c0806a0a6fd789291a, type: 2}
   - {fileID: 11400000, guid: cdc4a00272f992248b121303bc333c42, type: 2}
   - {fileID: 11400000, guid: 235de7ca6a8246aab7c38717d7031601, type: 2}
