@@ -6,6 +6,7 @@
         "FACET.Game",
         "Unity.InputSystem",
         "Unity.InputSystem.TestFramework",
+        "Unity.TextMeshPro",
         "UnityEngine.TestRunner"
     ],
     "includePlatforms": [],

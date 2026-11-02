@@ -5,17 +5,9 @@ using UnityEngine.InputSystem;
 
 namespace Facet.Game
 {
-    /// <summary>The free camera the design doc's controls call for: WASD or arrows pan, the wheel zooms, and
-    /// the pan is bounded by the map - by as much of the screen as the HUD leaves, so an edge tile can be
-    /// brought out from under the panels, plus a little slack. The bound itself is <see cref="PanLimits"/>;
-    /// the rig only feeds it the screen, the zoom and the slack.
-    ///
-    /// <c>C</c> puts the Core back in the middle of the screen: a map can be taller than a window, and once
-    /// the locator has told the player their Core is off view, the next thing they need is the way back. The
-    /// Core is one keypress from anywhere.
-    ///
-    /// It reads input itself rather than going through the simulation: panning is a view concern, nothing
-    /// replays it, and routing it through the tick would make the camera step at 30 Hz for no reason.</summary>
+    /// <summary>The free camera: WASD or arrows pan, the wheel zooms, <c>C</c> recentres the Core, and the
+    /// pan is bounded by <see cref="PanLimits"/> so an edge tile can be dragged out from under the HUD. It
+    /// reads input itself - panning is a view concern and nothing replays it.</summary>
     [DefaultExecutionOrder(-50)]
     public sealed class CameraRig : MonoBehaviour
     {
@@ -49,28 +41,21 @@ namespace Facet.Game
         private float _zoomVelocity;
         private bool _tutorialUp;
 
-        /// <summary>Is the view currently travelling to a point nobody asked for? Only then does the longer
-        /// <see cref="glideSmoothTime"/> apply; a player's pan stays immediate, and a pan or zoom ends the
-        /// glide at once.</summary>
+        /// <summary>Only an automatic move glides slowly; the player's own pan stays immediate, and a pan or
+        /// a zoom ends the glide at once.</summary>
         private bool _autoGlide;
 
-        /// <summary>When the player last panned or zoomed, in unscaled seconds. The tutorial's camera reads
-        /// it to stand aside for a while: a player who has just moved the view is looking at something, and
-        /// an automatic pan at that moment would take the map away from under them.</summary>
+        /// <summary>When the player last panned or zoomed, in unscaled seconds. The tutorial's camera stands
+        /// aside for a while after it: they are looking at something.</summary>
         public float LastManualInputTime { get; private set; } = float.NegativeInfinity;
 
-        /// <summary>The point a map is played around - the Core's centre, which <see cref="Initialize"/> is handed
-        /// and <see cref="focusCoreKey"/> returns to.</summary>
+        /// <summary>The Core's centre, which <see cref="Initialize"/> is handed and <c>C</c> returns to.</summary>
         private Vector2 _home;
 
-        /// <summary><paramref name="tutorialUp"/> is whether the HUD's "how to play" card is on screen - a solid
-        /// panel on the first map, so the map has to get out from under it. Passed in rather than read here: the
-        /// rig knows the map, not the campaign.
-        /// <paramref name="focus"/> is the point each map opens looking at - the Core in the driver's call, which
-        /// runs again on every map swap, not just the first. It used to be the map's own middle; on a map small
-        /// enough to fit the screen the two are the same view, but on one that is not, the middle is empty
-        /// corridor. The campaign's first map is a strip three screens tall with its Core at the south end, and
-        /// the thing a player must be watching on the first frame is that Core.</summary>
+        /// <summary><paramref name="tutorialUp"/> is the HUD's card being up: a solid panel on the first map,
+        /// so the map has to get out from under it. <paramref name="focus"/> is the point each map opens
+        /// looking at - the Core, not the map's middle, which on a tall map is empty corridor. Both are
+        /// passed in because the rig knows the map, not the campaign.</summary>
         public void Initialize(TileGrid grid, Vec2 focus, bool tutorialUp = false)
         {
             _camera = GetComponent<Camera>();
@@ -81,7 +66,6 @@ namespace Facet.Game
 
             _home = new Vector2(focus.X, focus.Y);
 
-            // Start on the focus point rather than wherever the scene happened to author the camera.
             _target = Clamp(new Vector3(focus.X, focus.Y, transform.position.z), _targetZoom);
             transform.position = _target;
             _camera.orthographicSize = _targetZoom;
@@ -110,16 +94,13 @@ namespace Facet.Game
             transform.position = Vector3.SmoothDamp(
                 transform.position, Clamp(_target, _camera.orthographicSize), ref _panVelocity, smooth);
 
-            // The glide is over once the view has arrived (or the player has taken it, which clears the
-            // flag in Pan/Zoom/Focus); the next player pan then gets its immediate smoothing back.
+            // The glide is over once the view has arrived; a player's pan or zoom clears the flag in
+            // Pan/Zoom/Focus and the next pan gets its immediate smoothing back.
             if (_autoGlide && ((Vector2)(_target - transform.position)).sqrMagnitude < 0.01f) _autoGlide = false;
         }
 
-        /// <summary>Put <paramref name="point"/> in the middle of the view, through the rig's own smoothing
-        /// and pan bound. The tutorial's camera is the caller: a lesson whose next tile is off screen is
-        /// asking the player to pan before they can even see what it means, and this is the one view
-        /// operation the rig already knows how to do. A player's own pan still wins - this sets the target
-        /// once rather than holding it.</summary>
+        /// <summary>Put <paramref name="point"/> in the middle of the view through the rig's own smoothing and
+        /// pan bound. Sets the target once rather than holding it, so a player's own pan still wins.</summary>
         public void GlideTo(Vector2 point)
         {
             if (_camera == null || _grid == null) return;
@@ -128,9 +109,9 @@ namespace Facet.Game
             _autoGlide = true;
         }
 
-        /// <summary><c>C</c>: put the Core in the middle of the view. The pan bound is applied to the destination,
-        /// so the key cannot shove the map off the open screen any more than a drag can, and the glide uses the
-        /// rig's smoothing rather than a cut - a hard cut leaves the player no idea which way they went.</summary>
+        /// <summary><c>C</c>: put the Core in the middle of the view, through the pan bound so the key cannot
+        /// shove the map off the open screen, and gliding rather than cutting so the player keeps their
+        /// bearings.</summary>
         private void Focus()
         {
             var keyboard = Keyboard.current;
@@ -189,13 +170,11 @@ namespace Facet.Game
             return Mathf.Clamp(notches, -3f, 3f);
         }
 
-        /// <summary>Say whether the HUD's "how to play" card is up. The player can hide or show it mid-map, so
-        /// the driver relays it every frame; the pan bound follows on the next smoothing step, which clamps
-        /// against it anew.</summary>
+        /// <summary>The player can hide or show the card mid-map, so the driver relays it every frame; the pan
+        /// bound clamps against the new value on the next smoothing step.</summary>
         public void SetTutorialUp(bool up) => _tutorialUp = up;
 
-        /// <summary>The pan bound for a given zoom; the rule is <see cref="PanLimits"/>. The rig only hands it the
-        /// screen, the zoom and <see cref="edgeSlackScreens"/>.</summary>
+        /// <summary>The pan bound for a given zoom; the rule is <see cref="PanLimits"/>.</summary>
         private Vector3 Clamp(Vector3 position, float zoom)
         {
             return PanLimits.Clamp(position, zoom, _camera.aspect, Screen.width, Screen.height,
@@ -205,79 +184,50 @@ namespace Facet.Game
         }
     }
 
-    /// <summary>
-    /// Moves the camera for a lesson: to the tile a line is asking for, and to the wave when one arrives.
-    ///
-    /// <b>Why it exists.</b> A tutorial narrows the map to one answer, but a map can be several screens
-    /// tall: the drill a line names is off to the right, the cutter at the corridor mouth, and wave 1 walks
-    /// in from a door at the far end. The guide's edge chevron says <em>which way</em>, but the player still
-    /// has to pan before the sentence and the ghost make sense. The camera is the cheapest way to put the
-    /// lesson where the player is looking - one glide on the frame the line changes, not a cut, so the view
-    /// keeps its bearings.
-    ///
-    /// <b>What moves it.</b> Three edges, and no continuous following:
-    /// a line changes (after <see cref="TaskSettleSeconds"/>, so the card is read first), a wave starts
-    /// running (to the most advanced enemy, after <see cref="WaveSettleSeconds"/>), and the Core is first
-    /// hit in a streak (to the Core, so the one losing object is on screen). A new line always pulls the
-    /// view to its layout - the tour is the lesson - while a wave or a Core hit only moves when it is not
-    /// already visible: the picture is what the player needs, not the pan. A wave's look is a <em>glance</em>:
-    /// after <see cref="WaveGlanceSeconds"/> the view drifts back to the one the player had, unless they
-    /// have taken the camera themselves in the meantime.
-    ///
-    /// <b>What it never does.</b> It does not fight the player: panning or zooming is remembered by
-    /// <see cref="CameraRig.LastManualInputTime"/>, and a scheduled glide inside
-    /// <see cref="ManualQuietSeconds"/> of that input is dropped rather than queued. It also only runs on a
-    /// map that teaches (<see cref="TutorialState.Active"/>), so a normal level's camera is exactly the free
-    /// camera it always was.
-    ///
-    /// It is a plain class rather than a view: it reads the world's facts and asks the rig to glide, and the
-    /// driver calls it once per frame after the tick loop - the same order the HUD and the guide see.
-    /// </summary>
+    /// <summary>Moves the camera for a lesson: to a line's layout, and to a wave or a Core hit. Three edges,
+    /// no continuous following, and a glide rather than a cut so the view keeps its bearings. A line always
+    /// moves the view; a wave or a Core hit only when the thing is off the open screen, and a wave's look is a
+    /// glance that drifts back. It never fights the player: a scheduled glide within
+    /// <see cref="ManualQuietSeconds"/> of a pan or zoom is dropped rather than queued. Runs only on a map that
+    /// teaches (<see cref="TutorialState.Active"/>), so a normal level's camera is the free camera.</summary>
     public sealed class TutorialCamera
     {
-        /// <summary>How long a new line is left alone before the camera moves. One sentence of reading time,
-        /// and long enough that a drag of belts which ticked the last line is finished.</summary>
+        /// <summary>One sentence of reading time, and long enough for a drag of belts that tipped the last line
+        /// to finish.</summary>
         private const float TaskSettleSeconds = 1.1f;
 
-        /// <summary>How long a wave is left alone before the camera looks at it: enough for the first
-        /// walker to be on the field rather than a spawn point with nothing on it yet.</summary>
+        /// <summary>Enough for the first walker to be on the field.</summary>
         private const float WaveSettleSeconds = 0.5f;
 
-        /// <summary>The Core is the urgent one: a shorter settle than the other two, because the health bar
-        /// moving is the news.</summary>
+        /// <summary>Shorter than the other two: the health bar moving is the news.</summary>
         private const float CoreSettleSeconds = 0.15f;
 
-        /// <summary>How long a pan or zoom stands the automatic camera down. Longer than a glance - the
-        /// player who just moved the view is mid-thought.</summary>
+        /// <summary>Longer than a glance: a player who just moved the view is mid-thought.</summary>
         private const float ManualQuietSeconds = 2.5f;
 
         /// <summary>A scheduled move older than this is dropped: the moment it belonged to has passed.</summary>
         private const float PendingLifetime = 8f;
 
-        /// <summary>How long after a wave starts to wait for its first enemy before giving up.</summary>
+        /// <summary>How long after a wave starts to wait for its first enemy.</summary>
         private const float WaveSearchSeconds = 6f;
 
-        /// <summary>How long the camera lingers on a wave before drifting back to the view the player had.
-        /// "Go and look" is a glance, not a new home: the player's own view is where the building is.</summary>
+        /// <summary>"Go and look" is a glance, not a new home: the player's own view is where the building
+        /// is.</summary>
         private const float WaveGlanceSeconds = 5f;
 
-        /// <summary>At most one Core focus per this many seconds, so a Core under sustained fire does not
-        /// hold the camera hostage.</summary>
+        /// <summary>At most one Core focus per this many seconds, so sustained fire cannot make the camera a
+        /// leash.</summary>
         private const float CoreRepeatSeconds = 12f;
 
-        /// <summary>How far inside the screen a point counts as visible. The same arithmetic the locator
-        /// uses, so a tile the arrows call visible is a tile the camera will not move away from.</summary>
+        /// <summary>How far inside the screen a point counts as visible - the locator's arithmetic, so a tile
+        /// the arrows call visible is one the camera will not move away from.</summary>
         private const float VisibleMarginPixels = 10f;
 
         private readonly CameraRig _rig;
         private readonly Camera _camera;
 
-        /// <summary>The locator's own viewport reader, reused so "is it on screen" means the same thing
-        /// here as it does for the edge arrows - panels included.</summary>
         private readonly ThreatRadar.ScreenReader _screen = new ThreatRadar.ScreenReader();
 
-        /// <summary>Scratch for the enemy walk; owned here so a wave focus asks its question without
-        /// allocating every frame.</summary>
         private readonly List<EnemySnapshot> _enemies = new List<EnemySnapshot>(64);
 
         private int _seenStep = -1;
@@ -297,9 +247,8 @@ namespace Facet.Game
         private float _pendingAt;
         private float _pendingUntil;
 
-        /// <summary>The glance back: where the camera was when it went to look at a wave, and when it may
-        /// drift home. Armed only by a wave focus and disarmed by anything else the player or the lesson
-        /// does, so it can never fight a newer request.</summary>
+        /// <summary>Where the camera was when it went to look at a wave, and when it may drift home. Armed
+        /// only by a wave focus and disarmed by anything else, so it cannot fight a newer request.</summary>
         private bool _returnArmed;
         private float _returnAt;
         private Vector2 _returnPoint;
@@ -314,8 +263,8 @@ namespace Facet.Game
             _camera = camera;
         }
 
-        /// <summary>Forget the run the director was watching - a map swap is a new lesson, and a line from
-        /// the old one must not be mistaken for the new one's.</summary>
+        /// <summary>A map swap is a new lesson: a line from the old one must not be mistaken for the new
+        /// one's.</summary>
         public void Reset()
         {
             _seenStep = -1;
@@ -327,12 +276,8 @@ namespace Facet.Game
             _lastCoreFocus = float.NegativeInfinity;
         }
 
-        /// <summary>One frame of looking. Called after the tick loop, so a line or a wave that changed this
-        /// frame is already visible in the world; <paramref name="tutorialUp"/>, <paramref name="infoGrown"/>
-        /// and <paramref name="barTiles"/> are the HUD's own panel facts, which decide whether a point is
-        /// hidden under a card. <paramref name="interacting"/> is the mouse being down on the map: a glide
-        /// under a drag would move the tile the player is aiming at, so it waits for the hand to come up.</summary>
-        public void Tick(SimWorld world, bool tutorialUp, bool infoGrown, int barTiles, bool interacting, float now)
+        public void Tick(SimWorld world, bool tutorialUp, bool infoGrown, float infoExtra, int barTiles,
+            bool interacting, float now)
         {
             if (world == null || _rig == null || _camera == null) return;
 
@@ -343,20 +288,19 @@ namespace Facet.Game
             TrackWave(world, now);
             TrackCoreHit(world, now);
 
-            // A placement the player just made is the same kind of signal as a held button: they are working
-            // where the view is. The glide waits for a second and a half of quiet rather than moving the map
-            // under their next click.
+            // A placement is the same signal as a held button: the player is working where the view is. Wait
+            // for a second and a half of quiet rather than moving the map under their next click.
             bool busy = interacting ||
                         world.Events.TryLastWithin(SimEventKind.Built,
                             world.TickCount - (int)(1.5f * SimConfig.TickRate), out _);
 
-            Resolve(tutorialUp, infoGrown, barTiles, busy, now);
+            Resolve(tutorialUp, infoGrown, infoExtra, barTiles, busy, now);
             UpdateReturn(now, busy);
         }
 
-        /// <summary>A line is a place on the map: when the lesson advances, frame the layout it draws - the
-        /// whole run of belts, not just the one tile the card points at, because the player has to build all
-        /// of it. A line with no one place - "bank a shape" - moves nothing.</summary>
+        /// <summary>A line is a place on the map: frame the whole layout it draws, not just the tile the card
+        /// points at, because the player has to build all of it. A line with no one place - "bank a shape" -
+        /// moves nothing.</summary>
         private void TrackTask(TutorialState tutorial, float now)
         {
             int step = tutorial.Complete ? -1 : tutorial.StepsCompleted;
@@ -371,9 +315,8 @@ namespace Facet.Game
             Schedule(at, min, max, now + TaskSettleSeconds, now, force: true);
         }
 
-        /// <summary>What a line is asking the camera to show: the centre of its blueprint, with the
-        /// rectangle that has to be visible for the picture to be complete. A line with no blueprint falls
-        /// back to its one target tile; a line with neither has nothing to show.</summary>
+        /// <summary>What a line is asking the camera to show: the centre of its blueprint and the rectangle
+        /// that has to be visible. A line with no blueprint falls back to its one target tile.</summary>
         private static bool TryFocusOf(in TutorialTask task, out Vector2 at, out Vector2 min, out Vector2 max)
         {
             if (task.Ghost.Length > 0)
@@ -410,8 +353,8 @@ namespace Facet.Game
         }
 
         /// <summary>A wave is an event: when the phase turns to <see cref="WavePhase.Running"/>, look at the
-        /// walker closest to the Core. The first frame of a wave can be before the first walker exists, so
-        /// the search retries for <see cref="WaveSearchSeconds"/> rather than aiming at an empty doorway.</summary>
+        /// walker closest to the Core. The first frame can be before the first walker exists, so the search
+        /// retries rather than aiming at an empty doorway.</summary>
         private void TrackWave(SimWorld world, float now)
         {
             WavePhase phase = world.Waves.Phase;
@@ -436,9 +379,7 @@ namespace Facet.Game
             Schedule(at, at, at, now + WaveSettleSeconds, now, wave: true);
         }
 
-        /// <summary>The Core being hit is the one piece of news the player must not miss. It is shown once
-        /// per hit streak, and at most once per <see cref="CoreRepeatSeconds"/>, so sustained fire cannot make
-        /// the camera a leash.</summary>
+        /// <summary>Shown once per hit streak, and at most once per <see cref="CoreRepeatSeconds"/>.</summary>
         private void TrackCoreHit(SimWorld world, float now)
         {
             bool hit = ThreatRadar.CoreIsBeingHit(world, 2);
@@ -458,8 +399,7 @@ namespace Facet.Game
             Schedule(core, core, core, now + CoreSettleSeconds, now);
         }
 
-        /// <summary>The enemy nearest the Core: the one whose arrival is the news, and the one a player
-        /// watching the lane would be looking at.</summary>
+        /// <summary>The enemy nearest the Core: the one whose arrival is the news.</summary>
         private bool TryLeadingEnemy(SimWorld world, out Vector2 at)
         {
             world.Enemies.GetEnemies(_enemies);
@@ -507,7 +447,8 @@ namespace Facet.Game
 
         /// <summary>Run the one scheduled move when it is due, unless the player has taken the camera, the
         /// moment has gone, they are still building, or the point is already in front of them.</summary>
-        private void Resolve(bool tutorialUp, bool infoGrown, int barTiles, bool busy, float now)
+        private void Resolve(bool tutorialUp, bool infoGrown, float infoExtra, int barTiles, bool busy,
+            float now)
         {
             if (!_hasPending) return;
             if (now > _pendingUntil)
@@ -522,9 +463,9 @@ namespace Facet.Game
             if (now - _rig.LastManualInputTime < ManualQuietSeconds) return;
 
             // A line is the lesson's own beat, so it moves the view even when the layout happens to be on
-            // screen: the tour is the point, and the player's next move is the ghost in the middle. A wave
-            // or a Core hit only asks for a look when the player cannot already see it.
-            if (!_pendingForced && IsVisible(tutorialUp, infoGrown, barTiles, _pendingMin, _pendingMax)) return;
+            // screen; a wave or a Core hit only asks for a look when the player cannot already see it.
+            if (!_pendingForced && IsVisible(tutorialUp, infoGrown, infoExtra, barTiles, _pendingMin,
+                    _pendingMax)) return;
 
             _rig.GlideTo(_pending);
 
@@ -536,8 +477,8 @@ namespace Facet.Game
             _returnAt = now + WaveGlanceSeconds;
         }
 
-        /// <summary>After the glance at a wave, drift back to the view the player had - unless they have
-        /// taken the camera themselves in the meantime, or a newer lesson beat has something to show.</summary>
+        /// <summary>After the glance at a wave, drift back to where the player was - unless they took the
+        /// camera themselves or a newer beat has something to show.</summary>
         private void UpdateReturn(float now, bool busy)
         {
             if (!_returnArmed || now < _returnAt) return;
@@ -550,12 +491,13 @@ namespace Facet.Game
         }
 
         /// <summary>Is the whole rectangle on the open part of the screen? The locator's question, asked the
-        /// same way, so the camera and the edge arrows cannot disagree about what the player can see. A
-        /// blueprint that is partly off screen pulls the view to its middle; one already whole does not.</summary>
-        private bool IsVisible(bool tutorialUp, bool infoGrown, int barTiles, Vector2 min, Vector2 max)
+        /// same way, so the camera and the edge arrows cannot disagree. A blueprint partly off screen pulls
+        /// the view to its middle; one already whole does not.</summary>
+        private bool IsVisible(bool tutorialUp, bool infoGrown, float infoExtra, int barTiles, Vector2 min,
+            Vector2 max)
         {
             ThreatRadar.Viewport view =
-                _screen.Measure(_camera, tutorialUp, VisibleMarginPixels, infoGrown, barTiles);
+                _screen.Measure(_camera, tutorialUp, VisibleMarginPixels, infoGrown, barTiles, infoExtra);
             return view.IsOpen(min) && view.IsOpen(max);
         }
     }

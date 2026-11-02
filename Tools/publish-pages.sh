@@ -1,26 +1,6 @@
 #!/usr/bin/env bash
 #
 # Publishes the playable WebGL build to GitHub Pages, so the assignment is a link and not a zip.
-#
-# Pages serves one folder out of the repository, and the folder it serves has to be committed:
-# Builds/ is git-ignored (it is an artefact and it is 13 MB), so this script mirrors the build into
-# docs/ and lets the repository carry that instead. docs/ is a generated mirror - never edit it,
-# every run replaces it wholesale so a file the build stopped emitting cannot linger and be served.
-# The one exception is version snapshots (Tools/snapshot-pages.sh): frozen builds under their own
-# subfolder - docs/ root stays the latest, a snapshot keeps a past build playable at its own URL.
-#
-# Usage:  bash Tools/publish-pages.sh [--no-build]
-#
-#   --no-build   publish the Builds/WebGL already on disk instead of rebuilding first
-#
-# The build itself is Tools/build-webgl.sh; this script only adds the mirror and the commit. Run
-# Tools/build-webgl.sh directly when you want the player without publishing it.
-#
-# One setting the build fixes and this script depends on: Brotli with Unity's decompression fallback.
-# Pages sends no Content-Encoding header and rejects a repository trying to set one, so a compressed
-# payload has to be decompressed by the loader in JavaScript. Without the fallback the player
-# downloads and then fails to start, which looks like a broken game rather than a misconfigured host.
-#
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -40,15 +20,6 @@ if [ ! -f "$BUILD_DIR/index.html" ]; then
     exit 1
 fi
 
-# ---------------------------------------------------------------- mirror
-# Replaced wholesale: a stale file is the one failure mode of a mirror that costs nothing to avoid,
-# and `cp -R` alone would leave behind whatever a renamed build output used to be called.
-#
-# Version snapshots are directories under docs/ carrying a .snapshot marker (written by
-# Tools/snapshot-pages.sh). The clear below takes them with everything else, so each one is
-# re-materialized from the last commit first - the mirror stays wholesale-replaceable and a
-# committed snapshot survives every publish. A snapshot taken but not yet committed has no
-# protection: snapshot, commit, then publish.
 snapshot_names="$(git -C "$PROJECT_ROOT" ls-tree --name-only HEAD:docs 2>/dev/null || true)"
 preserved=""
 for name in $snapshot_names; do

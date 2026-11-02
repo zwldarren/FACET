@@ -5,59 +5,38 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// Where the map is bigger than the screen, the fight leaves the player's view: a wave walks in at a
-    /// door nobody is looking at, a belt jams three screens away, and the Core is chewed on out of sight.
-    /// This is the answer to "where?", in the one form that does not need a second map: everything out of
-    /// view is pointed at from the edge of the view the player already has.
+    /// <summary>Where the map is bigger than the screen, the fight leaves the player's view: a wave walks in at
+    /// a door nobody is looking at, a belt jams three screens away. Everything out of view is pointed at from
+    /// the edge of the view the player already has.
     ///
-    /// It is arithmetic on a rectangle, not a renderer. <see cref="Viewport"/> is the part of the screen no
-    /// HUD panel covers, <see cref="Collect"/> folds the world's snapshots outside it onto that rectangle's
-    /// edge, and the result's two readers are <see cref="ThreatRadarView"/> (which draws the arrows) and
-    /// <see cref="HudView"/> (which says the same numbers). One rule, stated once: what counts as out of
-    /// view, what makes one arrow rather than six, and which arrow is urgent cannot disagree between the
-    /// picture and the sentence, because both ask this class.
-    ///
-    /// Three subjects are worth locating, and no fourth: a <see cref="Subject.Threat"/> (enemies out of
-    /// view, because the wave decides the run), a <see cref="Subject.Jam"/> (a line that has stopped - a
-    /// jammed or blocked segment, or a stalled machine - whose fix is a right-click, or one more belt, on a
-    /// tile the player cannot see), and the <see cref="Subject.Core"/> (because everything else is only
-    /// worth getting back to).
-    ///
-    /// Pure and camera-free on purpose (<see cref="HudLayout"/> and <see cref="PanLimits"/> are the same
-    /// kind of module): the geometry is pinned from EditMode, where a viewport is four numbers and a wave
-    /// is a list of snapshots, rather than by a scene and a resolution.
-    /// </summary>
+    /// Arithmetic on a rectangle, not a renderer: <see cref="Viewport"/> is the part of the screen no HUD panel
+    /// covers, <see cref="Collect"/> folds the world's snapshots outside it onto its edge, and the two readers
+    /// (<see cref="ThreatRadarView"/> draws the arrows, <see cref="HudView"/> says the same numbers) ask this
+    /// class, so the picture and the sentence cannot disagree. Pure and camera-free on purpose: the geometry is
+    /// pinned from EditMode rather than by a scene and a resolution.</summary>
     public static class ThreatRadar
     {
-        /// <summary>
-        /// The screen the camera is showing, in world units, and the HUD panels drawn over it.
+        /// <summary>The screen the camera is showing, in world units, and the HUD panels drawn over it. The
+        /// <b>ring</b> - the screen less the arrows' margin - is where an arrow goes; a <b>panel</b> is a box
+        /// the map can be neither seen nor clicked through, and it decides whether something is out of view at
+        /// all.
         ///
-        /// The <b>ring</b> - the screen with the markers' own margin off every side - is where an arrow is
-        /// put. A <b>panel</b> is a box the map can be neither seen nor clicked through, and it decides
-        /// whether something is out of view at all: a walker under the status card is as unfindable as one
-        /// off the display, while the free ground below that card needs no arrow.
-        ///
-        /// So this reads <see cref="HudLayout.Panels"/> and not <see cref="HudLayout.Insets"/>: the insets
-        /// are one number per side, right for a camera bound but wrong for a question about a tile - taken
-        /// as a rectangle they would call most of the screen out of view.
-        /// </summary>
+        /// Reads <see cref="HudLayout.Panels"/> and not <see cref="HudLayout.Insets"/>: insets are one number
+        /// per side, right for a camera bound but wrong for a question about a single tile.</summary>
         public readonly struct Viewport
         {
-            /// <summary>How many times an arrow steps back along its own sight line to get clear of a
-            /// panel before it is accepted where it stands. Two is the ordinary case; the rest is room for a
-            /// layout that grows.</summary>
+            /// <summary>How many times an arrow steps back along its own sight line to get clear of a panel
+            /// before it is accepted where it stands. Two is the ordinary case; the rest is room for a layout
+            /// that grows.</summary>
             private const int MaxClearanceSteps = 6;
 
-            /// <summary>Where the camera is looking.</summary>
             public readonly Vector2 Centre;
 
-            /// <summary>The screen's own edges.</summary>
             public readonly float Left, Right, Bottom, Top;
 
-            /// <summary>The ring: the screen with <see cref="Margin"/> off every side, never past the centre
-            /// it is measured from. A subject outside it is out of view, and it is the rectangle an arrow is
-            /// folded onto.</summary>
+            /// <summary>The screen with <see cref="Margin"/> off every side, never past the centre it is
+            /// measured from. A subject outside it is out of view, and it is the rectangle an arrow is folded
+            /// onto.</summary>
             public readonly float RingLeft, RingRight, RingBottom, RingTop;
 
             /// <summary>How far a marker's body keeps from the screen's edge and from any panel's.</summary>
@@ -86,7 +65,6 @@ namespace Facet.Game
                 _count = panels != null ? Mathf.Min(count, panels.Length) : 0;
             }
 
-            /// <summary>Is this world point somewhere the player can both see and click?</summary>
             public bool IsOpen(Vector2 p)
                 => p.x >= RingLeft && p.x <= RingRight && p.y >= RingBottom && p.y <= RingTop
                    && !Covers(p);
@@ -95,7 +73,6 @@ namespace Facet.Game
             /// readout prints and the arrow fades by, so "18 tiles north-east" is the same 18 in both.</summary>
             public float Distance(Vector2 p) => Vector2.Distance(p, Centre);
 
-            /// <summary>Is a HUD panel drawn over this point?</summary>
             public bool Covers(Vector2 p)
             {
                 for (int i = 0; i < _count; i++)
@@ -108,12 +85,9 @@ namespace Facet.Game
             }
 
             /// <summary>Where to put the arrow that points at a subject out of view: on the ring, on the line
-            /// from the camera through the subject, backed up until it is clear of any card it would sit
-            /// under. The sight line is what the arrow <em>means</em>, so it slides in along it and never
-            /// sideways off it.
-            ///
-            /// A subject exactly on the centre (<see cref="IsOpen"/> has refused it, but arithmetic does not
-            /// know that) points east rather than dividing by zero.</summary>
+            /// from the camera through the subject, backed up until it is clear of any card it would sit under.
+            /// The sight line is what the arrow <em>means</em>, so it slides in along it and never sideways.
+            /// A subject exactly on the centre points east rather than dividing by zero.</summary>
             public Vector2 EdgeTowards(Vector2 p, out Vector2 direction)
             {
                 Vector2 d = p - Centre;
@@ -163,7 +137,6 @@ namespace Facet.Game
                 }
             }
 
-            /// <summary>The ring, along a unit ray out of the camera's centre.</summary>
             private float RayToRing(Vector2 direction)
             {
                 float u = float.MaxValue;
@@ -196,24 +169,20 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>One reader's handle on the window. It owns the two scratch arrays the panel boxes need -
-        /// screen pixels as <see cref="HudLayout"/> lays them out, and the same boxes in world units - so
-        /// the two readers can ask their question every frame without allocating.</summary>
+        /// <summary>One reader's handle on the window. Owns the scratch arrays the panel boxes need, in screen
+        /// pixels and in world units, so the two readers can ask every frame without allocating.</summary>
         public sealed class ScreenReader
         {
             private readonly Rect[] _pixels = new Rect[HudLayout.PanelCount];
             private readonly Rect[] _world = new Rect[HudLayout.PanelCount];
 
-            /// <summary>Measure the window <paramref name="camera"/> is showing, with the HUD's panels in it
-            /// and the arrows' margin off its edge. <paramref name="tutorialUp"/> and
-            /// <paramref name="infoGrown"/> are the two panels that are not always there - the tutorial card
-            /// and the sorter picker's band on the info card - so they are the two the caller has to say:
-            /// neither has a default, because a caller that forgot one would silently draw arrows under a
-            /// card that is on screen. <paramref name="barTiles"/> is how many keys the build bar carries this
-            /// frame: a tutorial's bar grows a key at a time, and the full shelf is only right for a run that
-            /// has been handed the whole table.</summary>
+            /// <summary>Measure the window <paramref name="camera"/> is showing, with the HUD's panels in it and
+            /// the arrows' margin off its edge. <paramref name="tutorialUp"/>, <paramref name="infoGrown"/>,
+            /// <paramref name="barTiles"/> and <paramref name="infoExtra"/> are the panels that are not always
+            /// there, so the caller has to say them: a forgotten one would silently draw arrows under a card
+            /// that is on screen.</summary>
             public Viewport Measure(Camera camera, bool tutorialUp, float marginPixels, bool infoGrown,
-                int barTiles = HudLayout.BarTiles)
+                int barTiles = HudLayout.BarTiles, float infoExtra = 0f)
             {
                 if (camera == null) return default;
 
@@ -228,7 +197,7 @@ namespace Facet.Game
                 float pixel = 2f * halfHeight / pixels;
 
                 int count = HudLayout.Panels(Screen.width, Screen.height,
-                    HudLayout.Scale(Screen.height), tutorialUp, _pixels, infoGrown, barTiles);
+                    HudLayout.Scale(Screen.height), tutorialUp, _pixels, infoGrown, barTiles, infoExtra);
 
                 // Screen pixels grow down and world units up, so a panel's top edge in pixels is its bottom
                 // edge in the map - the same flip the cursor's arithmetic makes.
@@ -245,16 +214,14 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>What one arrow stands for.</summary>
         public enum Subject : byte
         {
             /// <summary>Enemies out of view. The count says how many, the colour says what they are.</summary>
             Threat = 0,
 
-            /// <summary>A stopped line out of view - a jammed segment, a segment whose line ends in the air,
-            /// or a machine holding a piece it cannot pass on: the mark says where the right-click (or the
-            /// missing belt) has to go. The name is the belt's first way of stopping, because that was the
-            /// subject before the other two joined it; to the locator all three are one piece of news.</summary>
+            /// <summary>A stopped line out of view - a jammed segment, a segment whose line ends in the air, or a
+            /// machine holding a piece it cannot pass on: one subject because to the locator all three are one
+            /// piece of news. The card's production line is where they are told apart.</summary>
             Jam = 1,
 
             /// <summary>The Core, off the screen. Navigation rather than warning - nothing is lost by
@@ -262,31 +229,26 @@ namespace Facet.Game
             Core = 2,
         }
 
-        /// <summary>One arrow: a place on the edge of the open screen - the ring, stepped in clear of any
-        /// card it would otherwise sit under - and what it is standing for.</summary>
         public readonly struct Marker
         {
             public readonly Subject What;
 
-            /// <summary>World position: on the ring, on the line from the camera to the subject.</summary>
             public readonly Vector2 At;
 
             /// <summary>Unit vector from the camera out toward everything this arrow stands for.</summary>
             public readonly Vector2 Direction;
 
-            /// <summary>How many of the subject it stands for. 1 for the Core, which is one thing.</summary>
             public readonly int Count;
 
             /// <summary>Tiles from the camera to the <em>nearest</em> thing it stands for: what the arrow
             /// fades with, and what the card prints.</summary>
             public readonly float Distance;
 
-            /// <summary>Is one of them hitting something right now? The urgent arrow is the one the player
-            /// has to look at, so it is the one drawn loud.</summary>
+            /// <summary>Is one of them hitting something right now? The urgent arrow is drawn loud.</summary>
             public readonly bool Urgent;
 
-            /// <summary>Which enemy the arrow wears: the nearest one it stands for. A cluster of two kinds is
-            /// drawn in the nearer one's colour and counts both.</summary>
+            /// <summary>The nearest enemy's: a cluster of two kinds is drawn in the nearer one's colour and
+            /// counts both.</summary>
             public readonly EnemyKind Kind;
 
             public Marker(Subject what, Vector2 at, Vector2 direction, int count, float distance,
@@ -301,9 +263,8 @@ namespace Facet.Game
                 Kind = kind;
             }
 
-            /// <summary>This arrow plus one more subject at the same place. The cluster keeps the nearer
-            /// thing's distance and colour and gains the other's count and urgency, because an arrow that
-            /// stops shouting when a second enemy joins hides the fact it exists for.</summary>
+            /// <summary>Keeps the nearer thing's distance and colour and gains the other's count and urgency,
+            /// because an arrow that stops shouting when a second enemy joins hides the fact it exists for.</summary>
             public Marker Fold(in Marker other)
             {
                 bool nearer = other.Distance <= Distance;
@@ -314,33 +275,27 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>What the walk found, in the few numbers a sentence needs. The arrows are the same
-        /// answer drawn; this is the same answer read.</summary>
+        /// <summary>What the walk found, in the few numbers a sentence needs. The arrows are the same answer
+        /// drawn; this is the same answer read.</summary>
         public readonly struct Summary
         {
-            /// <summary>Enemies out of view, whether or not they got an arrow of their own.</summary>
             public readonly int Threats;
 
             /// <summary>Tiles to the nearest enemy out of view, or <see cref="float.MaxValue"/> when there
             /// is none to be near.</summary>
             public readonly float Nearest;
 
-            /// <summary>Is something out of view hitting the Core or a building right now?</summary>
             public readonly bool Urgent;
 
-            /// <summary>Is the Core off the screen?</summary>
             public readonly bool CoreIsOut;
 
-            /// <summary>How many places have stopped out of view: a jammed segment, a segment whose line ends
-            /// in the air, or a machine holding a piece it cannot pass on. One number, because to a player all
-            /// three are one piece of news - something has stopped out there, on a tile they cannot see - and
-            /// the card's production line is where the three are told apart.</summary>
+            /// <summary>How many places have stopped out of view. One number, because to a player all three
+            /// are one piece of news - something has stopped out there, on a tile they cannot see.</summary>
             public readonly int Stops;
 
             public bool HasThreats => Threats > 0;
             public bool HasStops => Stops > 0;
 
-            /// <summary>Anything worth an arrow at all.</summary>
             public bool HasAnything => HasThreats || HasStops || CoreIsOut;
 
             public Summary(int threats, int stops, float nearest, bool urgent, bool coreIsOut)
@@ -353,29 +308,18 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>An empty summary: nothing out of view, nothing to point at.</summary>
         public static readonly Summary None = new Summary(0, 0, float.MaxValue, false, false);
 
-        /// <summary>
-        /// Walk the world's own snapshots and put everything outside <paramref name="view"/>'s open area on
-        /// its edge.
+        /// <summary>Walk the world's own snapshots and put everything outside <paramref name="view"/>'s open
+        /// area on its edge.
         ///
         /// Enemies are clustered by where their arrow would land, not by where they are: a wave of sixteen
-        /// walking in from the north-west is one arrow with sixteen behind it, because six arrows on one
-        /// edge is noise that buries the useful part - that the north-west is where the wave is.
-        /// <paramref name="mergeDistance"/> is that clustering, in world units, derived by the caller from
-        /// pixels so the arrows stay the same density at every zoom.
-        ///
-        /// Markers are folded in the order the snapshots arrive, the field's stable slot order, so the same
-        /// state always draws the same arrows. Nothing is allocated: the markers go into a caller-owned
-        /// array, and the lists are the ones the views already reuse.
-        /// </summary>
-        /// <param name="stops">Every place a line has stopped - jammed and blocked belt cells
-        /// (<see cref="BeltField.GetJammed"/> and <see cref="BeltField.GetBlocked"/>) together with the stalled
-        /// machines (<see cref="MachineField.GetStalled"/>), or empty. All three are one subject because all
-        /// three are one piece of news out of view: a line has stopped, on a tile the player has to go and look
-        /// at. The caller builds the one list, so the arrows and the card's "N stopped" cannot count different
-        /// sets.</param>
+        /// walking in from the north-west is one arrow with sixteen behind it, because six arrows on one edge
+        /// bury the useful part. Markers are folded in the snapshots' own order, so the same state always draws
+        /// the same arrows, and nothing is allocated: the markers go into a caller-owned array.</summary>
+        /// <param name="stops">Every place a line has stopped - jammed and blocked belt cells together with the
+        /// stalled machines, or empty. The caller builds the one list, so the arrows and the card's "N stopped"
+        /// cannot count different sets.</param>
         /// <param name="core">The Core's centre, in world units.</param>
         /// <param name="into">Where the arrows go; at most <see cref="Array.Length"/> of them.</param>
         /// <param name="summary">What was found, including what no arrow had room for.</param>
@@ -436,10 +380,9 @@ namespace Facet.Game
             return written;
         }
 
-        /// <summary>Add a marker, or grow the one already standing where it would. A full array does not
-        /// drop the subject - it merges into the nearest marker of the same kind, so the count stays true
-        /// while the arrows stay a handful; silently losing enemies would be the same lie as a card saying
-        /// "nothing out of view" while six walkers march.</summary>
+        /// <summary>Add a marker, or grow the one already standing where it would. A full array merges into the
+        /// nearest marker of the same kind rather than dropping the subject, so the count stays true while the
+        /// arrows stay a handful.</summary>
         private static int FoldOrAdd(Marker[] into, int written, in Marker marker, float mergeSq)
         {
             int nearestSlot = -1;
@@ -473,11 +416,10 @@ namespace Facet.Game
             return written;
         }
 
-        /// <summary>Was the Core hit inside the locator's window, what did it cost, and how many ticks ago?
-        /// The event stream's own window question (<see cref="SimEventBuffer.TryLastWithin"/>), which lets
-        /// the danger frame, the health bar's flash and the number beside it say "the Core is being hurt"
-        /// off one beat and fade off one age, rather than each watching for an edge. Paused, no new events
-        /// arrive and the window closes by itself: nothing left pulsing after a restart.</summary>
+        /// <summary>Was the Core hit inside the locator's window, what did it cost, and how many ticks ago? The
+        /// event stream's own window question (<see cref="SimEventBuffer.TryLastWithin"/>), so the danger frame,
+        /// the health bar's flash and the number beside it say "the Core is being hurt" off one beat and fade
+        /// off one age. Paused, no new events arrive and the window closes by itself.</summary>
         public static bool TryCoreHit(SimWorld world, int windowTicks, out float damage, out int age)
         {
             damage = 0f;
@@ -492,15 +434,12 @@ namespace Facet.Game
         }
 
         /// <summary>How many ticks ago the Core was last hit, or -1 when the last hit is older than
-        /// <paramref name="windowTicks"/>. The same window question in the one number a fade works from.</summary>
+        /// <paramref name="windowTicks"/>: the same window question in the one number a fade works from.</summary>
         public static int CoreHitAge(SimWorld world, int windowTicks)
             => TryCoreHit(world, windowTicks, out _, out int age) ? age : -1;
 
-        /// <summary>Is the Core being hit inside the locator's window? The frame's and the card's one answer,
-        /// in the <see cref="CoreHitAge"/> terms both readers work in.</summary>
         public static bool CoreIsBeingHit(SimWorld world, int windowTicks) => CoreHitAge(world, windowTicks) >= 0;
 
-        /// <summary>The Core's centre in world units, for a reader that wants the point rather than the cell.</summary>
         public static Vector2 CoreCentre(SimWorld world)
         {
             Vec2 c = world.Core.Center;

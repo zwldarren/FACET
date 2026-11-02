@@ -470,8 +470,7 @@ namespace Facet.Game
 
         /// <summary>The characters a task line or its hint may run to. The task card's column is 332 design
         /// units of micro type whose shrink floor is 8 pt (HudView AutoFit) - about 88 average characters -
-        /// and past the floor the text overflows the card. Tools/check-maps.py holds the same number, because
-        /// a hand edit of the asset is judged by the same rules as the painting window.</summary>
+        /// and past the floor the text overflows the card.</summary>
         private const int TutorialTextBudget = 88;
 
         private static bool LongerThanCard(string line) => line != null && line.Length > TutorialTextBudget;

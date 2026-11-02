@@ -5,8 +5,6 @@ builds is what your guns fire. Unity 6 (`6000.3.23f1`), 2D, built for WebGL.
 
 **Playable build:** <https://zwldarren.github.io/FACET/>
 
-The names this codebase uses for its own concepts are in [GLOSSARY.md](GLOSSARY.md).
-
 ## Getting started
 
 Open the project in Unity `6000.3.23f1` and press Play with `Assets/Scenes/Main.unity` open. The
@@ -16,24 +14,6 @@ behind the title is held until then, so no time passes or keys reach it. In a ru
 list, how to play, and main menu. The two doors that throw the run away - restart and main menu - each
 take a second press on that button: the first arms it and says so, because the run is not saved;
 cleared maps are kept either way.
-
-The scene holds a `Main Camera` and one object with `SimulationDriver`; the driver builds every view at
-runtime (terrain, machines, belts, items, enemies, shots, cursor, HUD), so there are no prefabs to wire.
-`SimulationDriver`'s **Start Map Index** boots straight into any map for testing and skips the title.
-
-## Development
-
-```bash
-bash Tools/test.sh                 # EditMode + PlayMode, headless (Tools/test.sh EditMode is the fast loop)
-bash Tools/check.sh                # compile Core, Game and Editor without the Editor at all
-python Tools/check-maps.py         # the map assets' own format, without opening the Editor
-bash Tools/publish-pages.sh        # build the WebGL player and mirror it into docs/, for GitHub Pages
-```
-
-Results land in `Logs/editmode.xml` and `Logs/playmode.xml`; each run deletes its own file first, so
-a suite that never ran reports "no results" instead of reading as a pass. The EditMode suite draws
-its own maps and reads no shipped map data, so repainting a map cannot turn it red — the files in
-`Assets/Data/Maps` are held to their format by `Tools/check-maps.py` instead.
 
 ### Where things live
 

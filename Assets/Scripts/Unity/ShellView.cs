@@ -8,62 +8,23 @@ using UnityEngine.UI;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// The game's shell: the title screen (the main menu the scene boots on), the pause menu that stands
-    /// over a run, the level select that lists the campaign's maps, and the help card. Built and wired by
-    /// the driver like every other view - no prefabs, no scene authoring - out of the same
-    /// <see cref="HudUi"/> widgets the HUD is made of, dressed in the palette's HUD colours rather than
-    /// colours of its own.
+    /// <summary>The game's shell: the title screen, the pause menu that stands over a run, the level select and
+    /// the help card. States of one runtime-built canvas rather than separate scenes, made in code from the same
+    /// <see cref="HudUi"/> widgets the HUD uses, with the screens' card geometry authored as prefabs under
+    /// <c>Resources/Hud</c>.
     ///
-    /// The shell owns the screen while it is open: it covers it with one full-screen panel, the driver
-    /// stops sampling the devices and ticking the run for as long as <see cref="Open"/> stands, and the
-    /// HUD and the camera rig are stood down with it - so no click or key aimed at the menu can reach the
-    /// simulation, and no second of the run is spent inside it.
+    /// The shell owns the screen while it is open: the driver stops sampling the devices and ticking the run for as
+    /// long as <see cref="Open"/> stands, and the HUD and camera rig are stood down with it, so no click or key
+    /// aimed at the menu reaches the simulation. The run behind is held, not rebuilt, and a map picked from the
+    /// list is a fresh run.
     ///
-    /// What the shell decides, on purpose (issue §5's questions, answered here rather than by accident):
+    /// The pause menu is the in-run hub (Esc, M, and the HUD's menu button); the map list opened from it goes back
+    /// to it. The two doors that throw a run away - the title and restart - are armed by one press and taken by the
+    /// next, and Escape disarms before either leaves: the unsaved factory is what a misfire would cost, not progress,
+    /// which is written when a map is cleared.
     ///
-    /// - One scene, one driver: the title, the pause menu and the level list are states of the same
-    ///   runtime-built canvas, not a second scene, so the WebGL build and
-    ///   <c>Tools/publish-pages.sh</c> are untouched.
-    /// - The pause menu is the in-run hub, and Esc and M both open it (as does the HUD's menu button):
-    ///   resume, restart this run, the map list, how to play, and the two ways out - plus, in the web
-    ///   player while it is fullscreen, the way back to a window, because the page has taken the
-    ///   browser's own Escape in exchange for giving the game its menu key (<see cref="PlayerPage"/>).
-    ///   The map list opened from it goes back to it, not to the run, so every in-run destination has
-    ///   one parent.
-    /// - The two doors that throw a run away - leaving for the title and restarting this run - are
-    ///   armed by one press and taken by the next, and Escape always disarms before either leaves.
-    ///   Progress is not at risk either way: cleared maps were written when they were cleared and the
-    ///   title reads that count; it is the unsaved factory that a misfire would cost, which is why the
-    ///   two buttons that cost it ask twice.
-    /// - The run behind the shell is held, not rebuilt: the driver builds its world at boot as it always
-    ///   has, and stops sampling the devices and ticking it for as long as <see cref="Open"/> stands, so
-    ///   no second of a run is spent in a menu and no key aimed at the menu reaches the simulation. A map
-    ///   picked from the list is built as a fresh run - a run is one run.
-    /// - "Continue" opens the campaign's frontier map - the first one not yet cleared - as a fresh run.
-    ///   A run is never carried across a menu; the maps are what persist, not a factory.
-    /// - Progress is <see cref="CampaignState.ClearedCount"/>, seeded from <see cref="CampaignProgress"/>
-    ///   and written back by the driver when it grows. A map is open when it is cleared, or when it is
-    ///   the frontier; a cleared map stays open for good, so the ladder is kept, not re-walked. A locked
-    ///   row says why in the campaign's own currency: the map standing in the way, and the operators
-    ///   that map is there to hand over - the unlock ladder, not the map's ordinal.
-    /// - The level list shows a map's own facts - size, starting budget, its unlocked operators, how
-    ///   many waves its table holds (or "endless") and a pinned seed - and never the waves themselves:
-    ///   the demands are the run's surprises, and the run is where they are met.
-    /// - Endless mode is the last map played unbounded, and it is reached the way it always was - the
-    ///   post-run N - plus one more door: the title's play button becomes endless once every map is
-    ///   cleared. The level list lists authored maps only; endless is a mode of the last one, not a map.
-    /// - The tutorial card and the opening camera strip belong to map 0 itself, whoever reaches it and
-    ///   however (<see cref="CampaignState.IsFirstMap"/> stays the map's own number, not the entry path),
-    ///   and the player's own hide/show choice outranks the default from their first press on.
-    /// - No screen is torn down inside the press that asked for it. uGUI is still walking the widget it
-    ///   dispatched the press to when the button's callback returns, and the input module has not yet
-    ///   finished the press either; destroying that widget there throws out of both, and the press it
-    ///   never finished comes back on the next frame - now aimed at whatever the new screen put under the
-    ///   pointer. Every change of screen therefore goes through <see cref="RequestRebuild"/>, which builds
-    ///   a press's new screen in this frame's own <see cref="Update"/> (after the dispatch) and builds
-    ///   anywhere else immediately.
-    /// </summary>
+    /// No screen is torn down inside the press that asked for it: every change goes through
+    /// <see cref="RequestRebuild"/> - see <see cref="HudButton.Dispatching"/> for why.</summary>
     [DefaultExecutionOrder(210)]   // after the HUD (200): the shell's keys are read with the run already held
     public sealed class ShellView : MonoBehaviour
     {
@@ -73,9 +34,8 @@ namespace Facet.Game
         private MapCatalog _catalog;
         private CampaignState _campaign;
 
-        /// <summary>The shell's four doors back into the driver: play a map (endless or not), close the
-        /// pause menu back to the run, restart the run on this map, and leave a run for the title. Handed
-        /// in by the driver, which owns every transition - the shell only asks.</summary>
+        /// <summary>The shell's four doors back into the driver. The driver owns every transition; the shell only
+        /// asks.</summary>
         private Action<int, bool> _play;
         private Action _resume;
         private Action _restart;
@@ -85,63 +45,56 @@ namespace Facet.Game
 
         private Mode _mode = Mode.Title;
 
-        /// <summary>The frame the current mode was built in. The keys that opened the shell are still
-        /// "pressed this frame" when the shell's own update runs - the HUD's M opens the menu, and the
-        /// shell's M would close it again the same frame - so a mode just built ignores its keys until
-        /// the next one. One frame of silence, and only on the frame something changed.</summary>
+        /// <summary>The frame the current mode was built in. The keys that opened the shell are still "pressed this
+        /// frame" when its own update runs - the HUD's M opens the menu, and the shell's M would close it again the
+        /// same frame - so a mode just built ignores its keys until the next one.</summary>
         private int _shownAtFrame = -1;
 
-        /// <summary>Is a rebuild waiting for this frame's update? Set by a button's press, which may not
-        /// tear the card down while uGUI is still walking it (see <see cref="RequestRebuild"/>).</summary>
+        /// <summary>Is a rebuild waiting for this frame's update? Set by a button's press, which may not tear the
+        /// card down while uGUI is still walking it.</summary>
         private bool _rebuildPending;
 
-        /// <summary>Is the shell on screen? The driver's one question: while it stands the devices are
-        /// the shell's, the run is held, and nothing ticks.</summary>
+        /// <summary>Is the shell on screen? While it stands the devices are the shell's, the run is held, and
+        /// nothing ticks.</summary>
         public bool Open { get; private set; }
 
-        /// <summary>Which face the shell is showing, in the one word a caller outside it needs: is this
-        /// the main menu (the title), or a screen standing over a run? The pause menu, its map list and
-        /// its help card all answer false; the title answers true.</summary>
+        /// <summary>Which face the shell is showing: the main menu (the title) answers true; the pause menu, its map
+        /// list and its help card all answer false.</summary>
         public bool AtTitle => _mode == Mode.Title;
 
-        /// <summary>Whether the shell was opened over a run - the pause menu, its map list and its help
-        /// card - rather than at the boot or a return to the title. It decides what the back button does
-        /// and says, and which state word a level row wears.</summary>
+        /// <summary>Whether the shell was opened over a run rather than at boot or a return to the title. It decides
+        /// what the back button does and says, and which state word a level row wears.</summary>
         private bool _inRun;
 
-        /// <summary>Is the main-menu door armed? The first press asks ("abandon this run?"), the second
-        /// takes it; anything else that changes the screen cancels. Every irreversible press on this
-        /// card is therefore always two.</summary>
+        /// <summary>Is the main-menu door armed? The first press asks ("abandon this run?"), the second takes it;
+        /// anything else that changes the screen cancels. Every irreversible press on this card is therefore always
+        /// two.</summary>
         private bool _confirmQuit;
 
-        /// <summary>Is the restart door armed? Same discipline as the main-menu door, and the same
-        /// reason: restart is the world's own reset, so it discards the run as completely as leaving
-        /// does. Only one door can be armed at a time - arming one disarms the other.</summary>
+        /// <summary>Is the restart door armed? Same discipline as the main-menu door, and for the same reason: a
+        /// restart discards the run as completely as leaving does. Only one door can be armed at a time.</summary>
         private bool _confirmRestart;
 
         private float _scale = -1f;
         private int _screenWidth = -1;
         private int _screenHeight = -1;
 
-        /// <summary>The buttons dressed for hover each open frame, gathered as built: the shell's
-        /// buttons are the HUD's generic one - a fill that lightens under the pointer and an accent
-        /// edge - so one dressing pass covers every one of them.</summary>
+        /// <summary>The buttons dressed for hover each open frame, gathered as built: the shell's buttons are the
+        /// HUD's generic one, so one dressing pass covers every one of them.</summary>
         private readonly List<HudButton> _buttons = new List<HudButton>();
 
-        /// <summary>Locked rows dress themselves dim and take no press; they are remembered apart so
-        /// the hover pass can skip them without a flag on the row.</summary>
+        /// <summary>Locked rows dress themselves dim and take no press; remembered apart so the hover pass can skip
+        /// them without a flag on the row.</summary>
         private readonly List<HudButton> _locked = new List<HudButton>();
 
-        /// <summary>The title's one filled action: the accent is the shell's "this is the door" colour,
-        /// and a title with three identical buttons has no door at all.</summary>
+        /// <summary>The title's one filled action: a title with three identical buttons has no door at all.</summary>
         private readonly List<HudButton> _primary = new List<HudButton>();
 
         // ------------------------------------------------------------------ wiring and lifecycle
 
-        /// <summary>Point the shell at the palette, the campaign and its catalog, and hand it the four
-        /// doors back into the driver. The canvas is built once; every open rebuilds the content against
-        /// the progress of the moment, which is what keeps a level list honest after a run has cleared
-        /// something.</summary>
+        /// <summary>Point the shell at the palette, the campaign and its catalog, and hand it the four doors back
+        /// into the driver. The canvas is built once; every open rebuilds the content against the progress of the
+        /// moment, which is what keeps a level list honest after a run has cleared something.</summary>
         public void Initialize(Palette palette, MapCatalog catalog, CampaignState campaign,
             Action<int, bool> play, Action resume, Action restart, Action toTitle)
         {
@@ -160,9 +113,9 @@ namespace Facet.Game
         {
             if (_palette == null || _canvasRoot == null || !Open) return;
 
-            // The screen a press asked for is built here, not inside the press: by now the event system
-            // has finished walking the card that was clicked, so replacing it costs no exception and
-            // leaves no half-finished press to land on the new screen's widgets.
+            // The screen a press asked for is built here, not inside the press: the event system has finished
+            // walking the card that was clicked, so replacing it costs no exception and leaves no half-finished
+            // press to land on the new screen's widgets.
             if (_rebuildPending) Rebuild();
 
             RefreshScale();
@@ -172,13 +125,9 @@ namespace Facet.Game
 
         private void OnDestroy()
         {
-            // The shared font and pixel sprite are the HUD's lifecycle (see HudView.OnDestroy): the
-            // shell owns nothing of theirs and releases nothing of theirs.
+            // The shared font and pixel sprite are the HUD's lifecycle (see HudView.OnDestroy).
             _canvasRoot = null;
 
-            // The canvas children died with the object, so the lists would be holding destroyed widgets
-            // until the next rebuild replaced them. Cleared here so teardown is symmetric with Rebuild and
-            // a late dress pass cannot walk a destroyed component.
             _buttons.Clear();
             _locked.Clear();
             _primary.Clear();
@@ -186,17 +135,15 @@ namespace Facet.Game
 
         // ------------------------------------------------------------------ the driver's doors
 
-        /// <summary>Open on the title screen - the main menu, where the pause menu's far door lands.
-        /// Everything on it is rebuilt from the progress of this moment.</summary>
+        /// <summary>Open on the title screen, rebuilt from the progress of this moment.</summary>
         public void ShowTitle()
         {
             _inRun = false;
             SetMode(Mode.Title);
         }
 
-        /// <summary>Open the pause menu over a running world: resume, restart, the map list, how to play,
-        /// and the two ways out (the title, and quit where the host has one). This is the one in-run screen
-        /// - Esc and M both open it, and the HUD's menu button asks for the same door.</summary>
+        /// <summary>Open the pause menu over a running world: resume, restart, the map list, how to play, and the two
+        /// ways out. Esc, M and the HUD's menu button all ask for this door.</summary>
         public void ShowPause()
         {
             _inRun = true;
@@ -204,10 +151,9 @@ namespace Facet.Game
         }
 
         /// <summary>
-        /// The main-menu door, armed by one press and taken by the next. The run behind the shell is not
-        /// saved - a world is one run - so the two clicks that throw one away are deliberately as far
-        /// from the resume button as the card allows, and need saying twice. Progress is not at stake:
-        /// cleared maps were written when they were cleared, and the title reads that count.
+        /// The main-menu door, armed by one press and taken by the next: the two clicks that throw a run away are
+        /// deliberately as far from the resume button as the card allows. Progress is not at stake - cleared maps
+        /// were written when they were cleared.
         /// </summary>
         public void RequestMainMenu()
         {
@@ -226,9 +172,8 @@ namespace Facet.Game
         }
 
         /// <summary>
-        /// The restart door, armed the same way and for the same reason: a restart is the world's own
-        /// reset, so it discards the run - every belt, machine and spent shape - as completely as the
-        /// main-menu door does. The first press asks, the second starts the map over.
+        /// The restart door, armed the same way and for the same reason: a restart is the world's own reset, so it
+        /// discards the run as completely as the main-menu door does.
         /// </summary>
         public void RequestRestart()
         {
@@ -246,13 +191,12 @@ namespace Facet.Game
             RequestRebuild();
         }
 
-        /// <summary>Close the shell. The run behind a pause menu is the driver's to hand back - it held
-        /// the run and it is the one that knows how - so the shell only goes away.</summary>
+        /// <summary>Close the shell. The run behind a pause menu is the driver's to hand back; the shell only goes
+        /// away.</summary>
         public void Close()
         {
             Open = false;
-            // A screen change still queued belongs to a shell that is no longer on screen; the next open
-            // rebuilds for whatever mode it opens in.
+            // A screen change still queued belongs to a shell that is no longer on screen.
             _rebuildPending = false;
             if (_canvasRoot != null) _canvasRoot.gameObject.SetActive(false);
         }
@@ -269,20 +213,15 @@ namespace Facet.Game
         }
 
         /// <summary>
-        /// Build the screen of the moment, or queue it for this frame's update when the ask came from a
-        /// press. The rule and its reason are one: a button's press is dispatched from inside the event
-        /// system's walk of the card, and both uGUI and the input module still hold the widget it was
-        /// delivered to when the callback returns.
+        /// Build the screen of the moment, or queue it for this frame's update when the ask came from a press. A press
+        /// is dispatched from inside the event system's walk of the card, and both uGUI and the input module still
+        /// hold the widget it was delivered to when the callback returns: tearing it down there throws out of
+        /// <c>ExecuteEvents.ExecuteHierarchy</c> and out of <c>InputSystemUIInputModule.ProcessPointer</c>, and the
+        /// unfinished press is dispatched again next frame - at whatever the new screen put under the pointer.
         ///
-        /// Tearing that card down there throws <c>MissingReferenceException</c> out of
-        /// <c>ExecuteEvents.ExecuteHierarchy</c> and out of <c>InputSystemUIInputModule.ProcessPointer</c>,
-        /// which is also the call that finishes the press. The press therefore stays "pressed" into the
-        /// next frame and is dispatched again - to the level list's first row, say, which is exactly where
-        /// the title's "the maps" button was - and the campaign starts a map the player never picked.
-        ///
-        /// Deferring is free: this update runs after the event system's, before anything is drawn, so the
-        /// new screen is the one on screen in the frame the button was pressed. A rebuild asked for
-        /// anywhere else - the driver's doors, a key, a resize, a test - still happens immediately.
+        /// Deferring is free: this update runs after the event system's and before anything is drawn, so the new
+        /// screen is the one on screen in the frame the button was pressed. A rebuild asked for anywhere else - the
+        /// driver's doors, a key, a resize, a test - still happens immediately.
         /// </summary>
         private void RequestRebuild()
         {
@@ -313,10 +252,8 @@ namespace Facet.Game
             _canvasRoot = (RectTransform)canvasGo.transform;
         }
 
-        /// <summary>Tear the content down and build it again for the mode and progress of the moment.
-        /// The one heavy pass the shell has, asked for by an open, a mode switch or a resize - the same
-        /// trade the HUD's rebuild makes, and for the same reason: the fonts need the scale inside their
-        /// point size to stay crisp.</summary>
+        /// <summary>Tear the content down and build it again for the mode and progress of the moment. The one heavy
+        /// pass the shell has - the fonts need the scale inside their point size to stay crisp.</summary>
         private void Rebuild()
         {
             _rebuildPending = false;
@@ -346,97 +283,97 @@ namespace Facet.Game
 
         private void BuildBackdrop()
         {
-            // Opaque, not the panel's 96.5 %: the shell is a place, not a veil, and at 3.5 % of a bright
-            // map the cards and the Core's square showed through the title exactly where the eye was
-            // trying to read the wordmark.
+            // Opaque, not the panel's 96.5 %: at 3.5 % of a bright map the cards and the Core showed through the
+            // title exactly where the eye was trying to read the wordmark.
             Color ink = _palette.HudPanel;
             ink.a = 1f;
 
-            HudBox backdrop = HudUi.Box(_canvasRoot, "backdrop", ink);
-            HudUi.StretchFull(backdrop.Rect);
-            // The one panel that does take clicks: the shell owns the screen while it is up, and a
-            // click that misses every button lands here rather than on the map behind it.
+            HudBox backdrop = HudUi.AdoptBox(InstantiatePanel(BackdropPrefab, "backdrop"), ink);
+            // The one panel that does take clicks: a click that misses every button lands here rather than on the
+            // map behind it.
             backdrop.Image.raycastTarget = true;
         }
 
         // ------------------------------------------------------------------ the title screen
 
-        /// <summary>The wordmark's size in design units: a title is an identity, not a line of HUD - the
-        /// four-step scale stops at the stockpile's 28, and a title set at a data size was the smallest
-        /// thing on its own screen.</summary>
+        /// <summary>A title is an identity, not a line of HUD: the four-step scale stops at the stockpile's 28, and a
+        /// title set at a data size was the smallest thing on its own screen.</summary>
         private const float WordmarkSize = 64f;
 
+        /// <summary>
+        /// The main menu: the game's name, its one figure, the doors and the footer. <see cref="TitlePrefab"/> owns
+        /// the band, the column, the subtitle and the footer; what stays here is the words, the wiring and the figure.
+        /// The band is a fraction of the screen's height, which an anchor can say and a design unit cannot
+        /// (<see cref="TitleNameTop"/>).
+        /// </summary>
         private void BuildTitle()
         {
-            RectTransform root = HudUi.Node(_canvasRoot, "title");
-            // The children below speak in screen coordinates measured from the canvas's top edge, so the
-            // root they hang off has to span the canvas rather than sit unsized at its centre.
-            HudUi.StretchFull(root);
+            RectTransform root = InstantiatePanel(TitlePrefab, "title");
+            HudUi.ScaleDesignUnits(root, _scale);
 
             BuildTitleMotif(root);
 
-            HudText name = Label(root, "name", WordmarkSize, FontStyle.Bold, TextAnchor.MiddleCenter);
+            HudText name = AdoptLabel(root, "name", WordmarkSize, FontStyle.Bold, TextAnchor.MiddleCenter);
             // The one place the HUD's tracking rule widens: a wordmark is drawn, not set, and 64-point type
             // at the labels' 9 % reads as a line of text that happens to be big.
             name.Text.characterSpacing = 16f;
-            HudUi.TopCentre(name.Rect, Screen.height * TitleNameTop, Screen.width, 80f * _scale);
             name.Set("FACET", _palette.HudText);
 
-            HudText subtitle = Label(root, "subtitle", HudType.Body, FontStyle.Normal,
+            HudText subtitle = AdoptLabel(root, "subtitle", HudType.Body, FontStyle.Normal,
                 TextAnchor.UpperCenter, wrap: true);
-            HudUi.TopCentre(subtitle.Rect, Screen.height * TitleNameTop + 86f * _scale,
-                Mathf.Min(680f, Screen.width / _scale - 40f) * _scale, 40f * _scale);
             subtitle.Set("an enemy's weakness is a shape, and what your factory builds is what your guns fire",
                 _palette.MachineIdle);
 
-            int row = 0;
-            AddMenuButton(root, "play", TitleButtonTop(Screen.height, _scale, row++), PlayLabel(), PressPlay,
-                primary: true);
-            AddMenuButton(root, "maps", TitleButtonTop(Screen.height, _scale, row++), "the maps  ·  M",
-                ShowLevelScreen);
-            AddMenuButton(root, "howto", TitleButtonTop(Screen.height, _scale, row++), "how to play  ·  T",
-                OpenHelp);
+            BindMenuButton(root, "play", PlayLabel(), PressPlay, primary: true);
+            BindMenuButton(root, "maps", "the maps  ·  M", ShowLevelScreen);
+            BindMenuButton(root, "howto", "how to play  ·  T", OpenHelp);
 
 #if !UNITY_WEBGL || UNITY_EDITOR
             // A quit is a host's luxury: a WebGL build has no tab to close from inside, so the button
             // is a desktop one and says nothing where it cannot mean it.
-            AddMenuButton(root, "quit", TitleButtonTop(Screen.height, _scale, row), "quit", Application.Quit);
+            BindMenuButton(root, "quit", "quit", Application.Quit);
+#else
+            HudUi.Child(root, "quit").gameObject.SetActive(false);
 #endif
 
-            HudText footer = Label(root, "footer", HudType.Micro, FontStyle.Normal, TextAnchor.LowerCenter);
-            HudUi.TopCentre(footer.Rect, Screen.height - 30f * _scale, Screen.width - 40f, 18f * _scale);
+            HudText footer = AdoptLabel(root, "footer", HudType.Micro, FontStyle.Normal, TextAnchor.LowerCenter);
             footer.Set("a factory-defence prototype  ·  github.com/zwldarren/FACET",
                 HudInk.Blend(_palette.HudText, _palette.HudPanel, 0.45f));
         }
 
         /// <summary>
-        /// The title's ground: a square and the diamond inside it, drawn in the world's own ink at a
-        /// watermark. It is the game's one figure and the game's own name - a facet is a square seen at the
-        /// angle its cut makes - and it costs two generated outlines rather than an asset or a ring whose
-        /// corner radius would have to be generated at the size of the screen.
+        /// The title's ground: a square and the diamond inside it, drawn in the world's own ink at a watermark. It is
+        /// the game's one figure and the game's own name - a facet is a square seen at the angle its cut makes - and
+        /// it costs two generated outlines rather than an asset.
+        ///
+        /// It is the one thing on the title an asset cannot place: the square is 62 % of the screen's short side, a
+        /// fraction of a fraction. <see cref="TitlePrefab"/> carries the two outlines and the diamond's rotation;
+        /// the square it is drawn in is this call's.
         /// </summary>
         private void BuildTitleMotif(RectTransform root)
         {
             float side = Mathf.Min(Screen.width, Screen.height) * 0.62f;
-            float y = (0.44f - 0.5f) * Screen.height;
+            float y = (TitleMotifCentre - 0.5f) * Screen.height;
             Color ink = new Color(_palette.HudText.r, _palette.HudText.g, _palette.HudText.b, 0.05f);
 
-            RectTransform square = HudUi.Node(root, "motif.square");
+            RectTransform square = HudUi.Child(root, "motif.square");
             HudUi.Place(square, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(0f, y), new Vector2(side, side));
-            HudUi.Border(square, "line", ink, 6f, 1f);
+            HudUi.AdoptBorder(HudUi.Child(square, "line"), ink, 6f, 1f);
 
-            RectTransform diamond = HudUi.Node(root, "motif.diamond");
+            RectTransform diamond = HudUi.Child(root, "motif.diamond");
             float inner = side * 0.70f;
             HudUi.Place(diamond, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(0f, y), new Vector2(inner, inner));
-            diamond.localRotation = Quaternion.Euler(0f, 0f, 45f);
-            HudUi.Border(diamond, "line", ink, 4f, 1f);
+            HudUi.AdoptBorder(HudUi.Child(diamond, "line"), ink, 4f, 1f);
         }
 
-        /// <summary>The play button's words, from where the campaign stands: a fresh profile plays,
-        /// a started campaign continues at its frontier map, and a finished one has nothing left but
-        /// the last map played endless - which is the same button's honest answer by then.</summary>
+        /// <summary>As a fraction of the screen's height from its bottom edge: a little under the middle, so the
+        /// wordmark above it and the column below it are both in its field.</summary>
+        private const float TitleMotifCentre = 0.44f;
+
+        /// <summary>From where the campaign stands: a fresh profile plays, a started campaign continues at its
+        /// frontier map, and a finished one has nothing left but the last map played endless.</summary>
         private string PlayLabel()
         {
             if (_campaign.ClearedCount >= _campaign.MapCount)
@@ -446,12 +383,12 @@ namespace Facet.Game
             return "continue, map " + (_campaign.ClearedCount + 1) + " of " + _campaign.MapCount + "  ·  Enter";
         }
 
-        private HudButton AddMenuButton(RectTransform parent, string name, float yFromTop, string label,
-            Action pressed, bool primary = false)
+        /// <summary>One of the title's doors: the asset's place, the run's words.</summary>
+        private HudButton BindMenuButton(RectTransform parent, string name, string label, Action pressed,
+            bool primary = false)
         {
-            HudButton button = HudUi.Button(parent, name, 320f * _scale, TitleButtonHeight * _scale, label,
-                FontSize(HudType.Label), primary ? _palette.HudPanel : _palette.HudText, pressed);
-            HudUi.TopCentre(button.Root, yFromTop, 320f * _scale, TitleButtonHeight * _scale);
+            HudButton button = HudUi.AdoptButton(HudUi.Child(parent, name), label, FontSize(HudType.Label),
+                primary ? _palette.HudPanel : _palette.HudText, pressed);
             _buttons.Add(button);
             if (primary) _primary.Add(button);
             return button;
@@ -472,112 +409,115 @@ namespace Facet.Game
 
         // ------------------------------------------------------------------ the pause menu
 
-        /// <summary>The pause card's width and the top of its button column, in design units. The width
-        /// is the title's column plus the card's own insets, so both screens put their buttons where the
-        /// eye already expects them.</summary>
+        /// <summary>In design units: the width is the title's column plus the card's own insets, so both screens put
+        /// their buttons where the eye already expects them.</summary>
         private const float PauseCardWidth = 380f;
         private const float PauseFirstButton = 66f;
 
         /// <summary>
-        /// The in-run screen and the game's one hub: resume, restart, the map list, how to play, and the
-        /// two ways out - plus, in a fullscreen web player, the way back to a window (see
-        /// <see cref="PlayerPage"/>). It is built out of the same card and buttons as the title, so the
-        /// shell reads as one place with two faces rather than as a menu bolted onto a game.
+        /// The in-run screen and the game's one hub: resume, restart, the map list, how to play, and the two ways out
+        /// - plus, in a fullscreen web player, the way back to a window (see <see cref="PlayerPage"/>).
+        /// <see cref="PausePrefab"/> is the card and its column of doors; this says which doors are up, what the
+        /// armed ones say, and where the run is.
         ///
-        /// The run behind it is held by the driver, not paused in the world: the shell does not touch
-        /// <c>World.Paused</c>, so a player who paused before opening the menu gets their pause back on
-        /// resume exactly as they left it. The two doors that cost the run - restart and the title - are
-        /// each armed by a press and taken by the next, and say so where they stand.
+        /// The run behind it is held by the driver, not paused in the world: the shell never touches
+        /// <c>World.Paused</c>, so a player who paused before opening the menu gets their pause back on resume.
+        /// A window too short to carry the authored column compacts the step rather than clipping the two ways out.
         /// </summary>
         private void BuildPause()
         {
-            RectTransform root = HudUi.Node(_canvasRoot, "pause");
-            HudUi.StretchFull(root);
+            RectTransform root = InstantiatePanel(PausePrefab, "pause");
+            HudUi.ScaleDesignUnits(root, _scale);
+            RectTransform card = HudUi.Child(root, "card");
 
 #if !UNITY_WEBGL || UNITY_EDITOR
-            const int fixedButtons = 6;   // resume, restart, maps, how to play, main menu, quit
+            const int fixedDoors = 6;   // resume, restart, maps, how to play, main menu, quit
 #else
-            const int fixedButtons = 5;   // a WebGL build has no tab to close from inside
+            const int fixedDoors = 5;   // a WebGL build has no tab to close from inside
 #endif
-            // ...plus the one row that exists on one screen only: the way out of the browser's
-            // fullscreen. The page hands Escape to the game while the frame is fullscreen (see
-            // PlayerPage), so the browser's own "Escape leaves fullscreen" is gone, and a player who
-            // cannot find this row has no way back to a window.
+            // ...plus the one row that exists on one screen only: the way out of the browser's fullscreen. The page
+            // hands Escape to the game while the frame is fullscreen (see PlayerPage), so a player who cannot find
+            // this row has no way back.
             bool fullscreen = PlayerPage.InFullscreen;
-            int buttons = fixedButtons + (fullscreen ? 1 : 0);
+            int doors = fixedDoors + (fullscreen ? 1 : 0);
 
             float cardWidth = Mathf.Min(PauseCardWidth, Screen.width / _scale - 2f * HudLayout.Margin);
 
-            // The column must fit the screen: a short window compacts the step between buttons rather
-            // than centring a card taller than the frame, which would clip the two ways out. The step
-            // never goes below a button's own height, so the extreme case overlaps nothing that a
-            // player can still reach anyway.
+            // The step never goes below a door's own height, so the extreme case overlaps nothing a player can still
+            // reach.
             float available = Mathf.Max(0f, Screen.height / _scale - 2f * HudLayout.Margin);
-            float step = Mathf.Min(ButtonStep, Mathf.Max(34f, (available - PauseFirstButton - 8f) / buttons));
-            float cardHeight = Mathf.Min(PauseFirstButton + buttons * step + 8f, available);
+            float step = Mathf.Min(ButtonStep, Mathf.Max(34f, (available - PauseFirstButton - 8f) / doors));
+            float cardHeight = Mathf.Min(PauseFirstButton + doors * step + 8f, available);
 
-            RectTransform card = HudUi.Node(root, "card");
             HudUi.TopCentre(card, (Screen.height - cardHeight * _scale) * 0.5f, cardWidth * _scale,
                 cardHeight * _scale);
 
-            HudUi.Shadow(card, "shadow", 12f, _palette.HudShadow);
-            HudBox back = HudUi.Round(card, "back", _palette.HudPanel, 12f);
-            HudUi.StretchFull(back.Rect);
-            HudUi.Border(card, "frame", PanelBorder(), 12f, 1f);
+            AdoptCard(card, "card", CardRadius);
 
-            HudText header = Label(card, "header", HudType.Body, FontStyle.Bold, TextAnchor.UpperLeft,
+            HudText header = AdoptLabel(card, "header", HudType.Body, FontStyle.Bold, TextAnchor.UpperLeft,
                 tracked: true);
-            HudUi.TopLeft(header.Rect, 16f * _scale, 10f * _scale, (cardWidth - 32f) * _scale, 20f * _scale);
             header.Set("PAUSED", _palette.HudText);
 
             MapDefinition map = _catalog.At(_campaign.MapIndex);
-            HudText where = Label(card, "where", HudType.Micro, FontStyle.Normal, TextAnchor.UpperLeft);
-            HudUi.TopLeft(where.Rect, 16f * _scale, 34f * _scale, (cardWidth - 32f) * _scale, 16f * _scale);
+            HudText where = AdoptLabel(card, "where", HudType.Micro, FontStyle.Normal, TextAnchor.UpperLeft);
             where.Set("map " + (_campaign.MapIndex + 1) + " of " + _campaign.MapCount + "  ·  " + map.Name,
                 HudInk.Muted(_palette));
 
-            float y = PauseFirstButton;
-            AddCardButton(card, "resume", y, cardWidth, "resume  ·  Esc", () => _resume?.Invoke(), primary: true);
-            y += step;
-
             // Armed is a state of one button, not a second screen: the label says what the next press
             // would do, in the warning ink, and every other key or door on the card disarms it.
-            AddCardButton(card, "restart", y, cardWidth,
+            BindCardButton(card, "resume", "resume  ·  Esc", () => _resume?.Invoke(), primary: true);
+            BindCardButton(card, "restart",
                 _confirmRestart ? "restart this run?  ·  click again" : "restart this run", RequestRestart,
                 labelColour: _confirmRestart ? HudInk.Warning(_palette) : null);
-            y += step;
-            AddCardButton(card, "maps", y, cardWidth, "the maps", ShowLevelScreen);
-            y += step;
-            AddCardButton(card, "howto", y, cardWidth, "how to play", OpenHelp);
-            y += step;
-
-            AddCardButton(card, "mainmenu", y, cardWidth,
+            BindCardButton(card, "maps", "the maps", ShowLevelScreen);
+            BindCardButton(card, "howto", "how to play", OpenHelp);
+            BindCardButton(card, "mainmenu",
                 _confirmQuit ? "abandon this run?  ·  click again" : "main menu", RequestMainMenu,
                 labelColour: _confirmQuit ? HudInk.Warning(_palette) : null);
-            y += step;
 
             if (fullscreen)
             {
-                AddCardButton(card, "windowed", y, cardWidth, "leave fullscreen", PlayerPage.LeaveFullscreen);
-                y += step;
+                HudUi.Child(card, "windowed").gameObject.SetActive(true);
+                BindCardButton(card, "windowed", "leave fullscreen", PlayerPage.LeaveFullscreen);
             }
 
 #if !UNITY_WEBGL || UNITY_EDITOR
-            AddCardButton(card, "quit", y, cardWidth, "quit", Application.Quit);
+            BindCardButton(card, "quit", "quit", Application.Quit);
+#else
+            HudUi.Child(card, "quit").gameObject.SetActive(false);
 #endif
+
+            if (fullscreen || step < ButtonStep || cardWidth < PauseCardWidth)
+                LayoutPauseColumn(card, cardWidth, step, fullscreen);
         }
 
-        /// <summary>One button in a card's column, inset by the card's 16-unit padding and wide enough
-        /// to reach the other inset. Returns the button so a caller can remember it in a dressing list.
-        /// </summary>
-        private HudButton AddCardButton(RectTransform card, string name, float yFromTop, float cardWidth,
-            string label, Action pressed, bool primary = false, Color? labelColour = null)
+        /// <summary>Laid out here for the two cases the asset cannot have authored: a compacted step and the
+        /// fullscreen page's extra row. Only the doors that are up are stepped, so a WebGL build's missing quit leaves
+        /// no gap in the column.</summary>
+        private void LayoutPauseColumn(RectTransform card, float cardWidth, float step, bool fullscreen)
         {
             float width = (cardWidth - 32f) * _scale;
-            HudButton button = HudUi.Button(card, name, width, 34f * _scale, label,
-                FontSize(HudType.Label),
+            float y = PauseFirstButton;
+            string[] doors = fullscreen
+                ? new[] { "resume", "restart", "maps", "howto", "mainmenu", "windowed", "quit" }
+                : new[] { "resume", "restart", "maps", "howto", "mainmenu", "quit" };
+
+            for (int i = 0; i < doors.Length; i++)
+            {
+                Transform door = card.Find(doors[i]);
+                if (door == null || !door.gameObject.activeSelf) continue;
+
+                HudUi.TopLeft((RectTransform)door, 16f * _scale, y * _scale, width, 34f * _scale);
+                y += step;
+            }
+        }
+
+        /// <summary>One door in a card's column: the asset's place and width, the run's words.</summary>
+        private HudButton BindCardButton(RectTransform card, string name, string label, Action pressed,
+            bool primary = false, Color? labelColour = null)
+        {
+            HudButton button = HudUi.AdoptButton(HudUi.Child(card, name), label, FontSize(HudType.Label),
                 labelColour ?? (primary ? _palette.HudPanel : _palette.HudText), pressed);
-            HudUi.TopLeft(button.Root, 16f * _scale, yFromTop * _scale, width, 34f * _scale);
             _buttons.Add(button);
             if (primary) _primary.Add(button);
             return button;
@@ -587,62 +527,55 @@ namespace Facet.Game
 
         private void BuildLevels()
         {
-            RectTransform levels = HudUi.Node(_canvasRoot, "levels");
-            // The card below is placed in screen coordinates measured from the canvas's top edge, so the
-            // root it hangs off has to span the canvas rather than sit unsized at its centre.
-            HudUi.StretchFull(levels);
+            RectTransform levels = InstantiatePanel(LevelsPrefab, "levels");
+            HudUi.ScaleDesignUnits(levels, _scale);
+            RectTransform card = HudUi.Child(levels, "card");
 
-            // The rows must all fit: a campaign longer than the screen shrinks its rows rather than
-            // clipping the tail off, because a map the list cannot show is a map the player cannot pick.
-            // Everything below is in design units and scaled once, at the card - a pixel term that rode
-            // through the final * _scale would make the card _scale times taller than the screen.
-            float header = 44f;
-            float foot = 16f;
+            // The rows must all fit: a campaign longer than the screen shrinks its rows rather than clipping the
+            // tail off, because a map the list cannot show is a map the player cannot pick. Everything below is in
+            // design units and scaled once, at the card - a pixel term that rode through the final * _scale would
+            // make the card _scale times taller than the screen.
+            float header = LevelsHeader;
+            float foot = LevelsFoot;
             float available = Screen.height / _scale - 2f * HudLayout.Margin - header - foot;
             float rows = Mathf.Max(1, _catalog.Count);
             float fit = (available - (rows - 1) * LevelRowGap) / rows;
             float rowHeight = Mathf.Min(LevelRowHeight, Mathf.Max(LevelRowFloor, fit));
 
-            // The gap shrinks with the rows once they reach the floor, so the floor is reachable and a
-            // campaign long enough to bind it still fits the screen instead of overflowing the card.
+            // The gap shrinks with the rows once they reach the floor, so a campaign long enough to bind it still
+            // fits the screen instead of overflowing the card.
             float rowGap = fit < LevelRowFloor && rows > 1
                 ? Mathf.Max(0f, (available - rows * rowHeight) / (rows - 1))
                 : LevelRowGap;
 
-            float cardWidthDesign = Mathf.Min(660f, Screen.width / _scale - 2f * HudLayout.Margin);
+            float cardWidthDesign = Mathf.Min(LevelsWidth, Screen.width / _scale - 2f * HudLayout.Margin);
             float cardWidth = cardWidthDesign * _scale;
             float rowsBottom = header + _catalog.Count * rowHeight
                 + Mathf.Max(0, _catalog.Count - 1) * rowGap;
             float cardHeight = (rowsBottom + foot) * _scale;
 
-            RectTransform card = HudUi.Node(levels, "card");
             HudUi.TopCentre(card, (Screen.height - cardHeight) * 0.5f, cardWidth, cardHeight);
+            AdoptCard(card, "card", CardRadius);
 
-            HudUi.Shadow(card, "shadow", 12f, _palette.HudShadow);
-            HudBox back = HudUi.Round(card, "back", _palette.HudPanel, 12f);
-            HudUi.StretchFull(back.Rect);
-            HudUi.Border(card, "frame", PanelBorder(), 12f, 1f);
-
-            HudText title = Label(card, "title", HudType.Body, FontStyle.Bold, TextAnchor.UpperLeft,
+            HudText title = AdoptLabel(card, "title", HudType.Body, FontStyle.Bold, TextAnchor.UpperLeft,
                 tracked: true);
-            HudUi.TopLeft(title.Rect, 14f * _scale, 9f * _scale, 200f * _scale, 22f * _scale);
             title.Set("MAPS", _palette.HudText);
 
-            HudText count = Label(card, "count", HudType.Micro, FontStyle.Normal, TextAnchor.UpperRight);
-            HudUi.TopLeft(count.Rect, 14f * _scale, 12f * _scale,
-                cardWidth - (14f + (InRun ? 180f : 100f)) * _scale, 16f * _scale);
+            HudText count = AdoptLabel(card, "count", HudType.Micro, FontStyle.Normal, TextAnchor.UpperRight);
             count.Set(_campaign.ClearedCount + " of " + _campaign.MapCount + " cleared",
                 HudInk.Blend(_palette.HudText, _palette.HudPanel, 0.45f));
 
-            // The one way out, top-right where the help card's close button sits. Over a run it goes
-            // back to the pause menu it was opened from; from the title's level list it goes back to
-            // the title.
-            HudButton backButton = HudUi.Button(card, "back", (InRun ? 170f : 90f) * _scale, 22f * _scale,
-                InRun ? "back to the menu  ·  Esc" : "title  ·  Esc", FontSize(HudType.Micro), _palette.HudText,
+            // The one way out, top-right where the help card's close button sits. Over a run it goes back to the
+            // pause menu it was opened from; from the title's level list it goes back to the title. A run's screen
+            // widens the button because the door there says where it goes.
+            float backWidth = InRun ? 170f : 90f;
+            var back = (RectTransform)card.Find("back");
+            back.sizeDelta = new Vector2(backWidth * _scale, back.sizeDelta.y);
+            count.Rect.sizeDelta = new Vector2(-(CardInset + (InRun ? 180f : 100f)) * _scale,
+                count.Rect.sizeDelta.y);
+
+            BindCardButton(card, "back", InRun ? "back to the menu  ·  Esc" : "title  ·  Esc",
                 InRun ? (Action)(() => SetMode(Mode.Pause)) : () => SetMode(Mode.Title));
-            HudUi.TopRight(backButton.Root, 10f * _scale, 9f * _scale, (InRun ? 170f : 90f) * _scale,
-                22f * _scale);
-            _buttons.Add(backButton);
 
             float rowTop = header;
             for (int i = 0; i < _catalog.Count; i++)
@@ -652,36 +585,35 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>One map as a row: its name and the facts that choose between maps on the left, its
-        /// state on the right - CLEARED, NEXT for the frontier, PLAYING for the run behind an in-run
-        /// menu, or LOCKED with the reason. An open row is a button that asks the driver for the map; a
-        /// locked one is drawn dim and presses nothing, the honest read-only answer.
+        /// <summary>
+        /// One map as a row: its name and the facts that choose between maps on the left, its state on the right. An
+        /// open row is a button that asks the driver for the map; a locked one is drawn dim and presses nothing.
         ///
-        /// Everything here is in design units, scaled at the widget: the row's height is the caller's
-        /// fit, and both the row and its contents have to shrink together.</summary>
+        /// The row is <see cref="MapRowPrefab"/>, repeated: one asset for every map in the list, placed and sized by
+        /// the card's own fit. Everything inside it is design units, scaled once at bind.
+        /// </summary>
         private void BuildRow(RectTransform card, int index, float yFromTop, float rowHeight,
             float cardWidth)
         {
             MapDefinition map = _catalog.At(index);
             bool locked = index > _campaign.ClearedCount;
 
-            // A shrunk row cannot carry the facts line and the reason under it as well: at less than a
-            // full row they run into the next row's name. The name and the state word are what a picker
-            // has to read; the facts are the first thing to go.
+            // A shrunk row cannot carry the facts line and the reason under it as well: at less than a full row they
+            // run into the next row's name. The name and the state word are what a picker has to read.
             bool roomy = rowHeight >= LevelRowHeight - 0.01f;
 
-            RectTransform root = HudUi.Node(card, "map" + index);
-            HudUi.TopLeft(root, 14f * _scale, yFromTop * _scale,
-                (cardWidth - 28f) * _scale, rowHeight * _scale);
+            RectTransform root = InstantiatePanel(card, MapRowPrefab, "map" + index);
+            HudUi.ScaleDesignUnits(root, _scale);
+            HudUi.TopLeft(root, CardInset * _scale, yFromTop * _scale,
+                (cardWidth - 2f * CardInset) * _scale, rowHeight * _scale);
 
             HudButton button = root.gameObject.AddComponent<HudButton>();
-            button.Fill = HudUi.Round(root, "back", _palette.HudPanel, 8f);
-            HudUi.StretchFull(button.Fill.Rect);
+            button.Fill = HudUi.AdoptRound(HudUi.Child(root, "back"), _palette.HudPanel, RowRadius);
             button.Fill.Image.raycastTarget = true;
-            button.Border = HudUi.Border(root, "frame", Color.clear, 8f, 1f);
+            button.Border = HudUi.AdoptBorder(HudUi.Child(root, "frame"), Color.clear, RowRadius, 1f);
 
-            // An open row asks for its map; a locked one presses nothing, and is dressed dim by the
-            // hover pass's locked list - the honest read-only answer, like the read-only picker's.
+            // An open row asks for its map; a locked one presses nothing, and is dressed dim by the hover pass's
+            // locked list.
             if (!locked)
             {
                 int captured = index;
@@ -690,38 +622,30 @@ namespace Facet.Game
             }
             else _locked.Add(button);
 
-            HudText name = Label(root, "name", HudType.Body, FontStyle.Bold, TextAnchor.UpperLeft,
+            HudText name = AdoptLabel(root, "name", HudType.Body, FontStyle.Bold, TextAnchor.UpperLeft,
                 tracked: true);
-            HudUi.TopLeft(name.Rect, 12f * _scale, 7f * _scale, 300f * _scale, 20f * _scale);
             name.Set(map.Name, locked ? LockedText() : _palette.HudText);
 
-            if (roomy)
-            {
-                HudText facts = Label(root, "facts", HudType.Micro, FontStyle.Normal, TextAnchor.UpperLeft);
-                HudUi.TopLeft(facts.Rect, 12f * _scale, 29f * _scale, (cardWidth - 184f) * _scale,
-                    16f * _scale);
-                facts.Set(Facts(map), locked ? LockedText() : _palette.MachineIdle);
-            }
+            HudText facts = AdoptLabel(root, "facts", HudType.Micro, FontStyle.Normal, TextAnchor.UpperLeft);
+            facts.Set(Facts(map), locked ? LockedText() : _palette.MachineIdle);
+            facts.Show(roomy);
 
-            HudText state = Label(root, "state", HudType.Micro, FontStyle.Bold, TextAnchor.UpperRight,
+            HudText state = AdoptLabel(root, "state", HudType.Micro, FontStyle.Bold, TextAnchor.UpperRight,
                 tracked: true);
-            HudUi.TopRight(state.Rect, 12f * _scale, 8f * _scale, 120f * _scale, 17f * _scale);
             state.Set(StateWord(index), StateColour(index));
 
-            if (!locked || !roomy) return;
-
-            // The reason, under the state word: the map standing in the way, and - when the map on the
-            // way is the one that teaches something new - the operator it is there to hand over. That
-            // is the unlock ladder said out loud, not a bare ordinal.
-            HudText reason = Label(root, "reason", HudType.Micro, FontStyle.Normal, TextAnchor.UpperRight,
+            // The reason, under the state word: the map standing in the way, and - when that map is the one that
+            // teaches something new - the operator it is there to hand over. The unlock ladder said out loud, not a
+            // bare ordinal.
+            HudText reason = AdoptLabel(root, "reason", HudType.Micro, FontStyle.Normal, TextAnchor.UpperRight,
                 wrap: true);
-            HudUi.TopRight(reason.Rect, 12f * _scale, 27f * _scale, 260f * _scale, 24f * _scale);
             reason.Set(LockedReason(), LockedText());
+            reason.Show(locked && roomy);
         }
 
-        /// <summary>The row's state word, in the priority the run itself would name: the map behind the
-        /// pause menu is playing, a cleared map stays cleared for good, the frontier is the campaign's
-        /// next step, and anything past it is locked.</summary>
+        /// <summary>In the priority the run itself would name: the map behind the pause menu is playing, a cleared
+        /// map stays cleared for good, the frontier is the campaign's next step, and anything past it is
+        /// locked.</summary>
         private string StateWord(int index)
         {
             if (index == _campaign.MapIndex && InRun) return "PLAYING";
@@ -738,10 +662,9 @@ namespace Facet.Game
             return LockedText();
         }
 
-        /// <summary>Why a row past the frontier is closed, in the campaign's own currency - the same answer
-        /// for every locked row, because the gate is the campaign's, not the row's. The frontier map is what
-        /// stands in the way; when it is the map that hands the campaign an operator it has never held, the
-        /// reason names it - the unlock ladder, not "map 3 of 6".</summary>
+        /// <summary>Why a row past the frontier is closed: the same answer for every locked row, because the gate is
+        /// the campaign's. The frontier map stands in the way, and when it hands the campaign an operator it has never
+        /// held, the reason names it - the unlock ladder, not "map 3 of 6".</summary>
         private string LockedReason()
         {
             int frontier = Mathf.Min(_campaign.ClearedCount, _campaign.MapCount - 1);
@@ -753,8 +676,8 @@ namespace Facet.Game
                 : "clear " + gate.Name;
         }
 
-        /// <summary>The operators map <paramref name="index"/> is the campaign's first to carry - the
-        /// part of the unlock ladder clearing it buys - or the empty string when it teaches nothing new.</summary>
+        /// <summary>The part of the unlock ladder clearing map <paramref name="index"/> buys, or the empty string when
+        /// it teaches nothing new.</summary>
         private string FreshOperatorNames(int index)
         {
             Operators granted = Operators.None;
@@ -763,8 +686,8 @@ namespace Facet.Game
             return OperatorNames(_catalog.At(index).Unlocked & ~granted);
         }
 
-        /// <summary>The operator names, every flag named: the dispatch the HUD's cards and the badge
-        /// keep, so a fourth operator cannot slip into a map and ride out nameless.</summary>
+        /// <summary>Every flag named: the dispatch the HUD's cards and the badge keep, so a fourth operator cannot slip
+        /// into a map and ride out nameless.</summary>
         private static string OperatorNames(Operators unlocked)
         {
             var names = new StringBuilder();
@@ -782,9 +705,9 @@ namespace Facet.Game
             names.Append(name);
         }
 
-        /// <summary>A map's own facts, one line: the size a route is planned on, the budget it starts
-        /// with, its wave count (or "endless"), the operators it hands over, and the seed only when the
-        /// map pins one. Deliberately no wave table here: the demands are the run's surprises.</summary>
+        /// <summary>A map's own facts, one line: the size a route is planned on, the budget it starts with, its wave
+        /// count (or "endless"), the operators it hands over, and the seed only when the map pins one. Deliberately no
+        /// wave table here: the demands are the run's surprises.</summary>
         private static string Facts(MapDefinition map)
         {
             var text = new StringBuilder();
@@ -804,73 +727,60 @@ namespace Facet.Game
 
         // ------------------------------------------------------------------ the help card
 
-        /// <summary>The shell's help card: the keyboard, the same list the run's help card prints -
-        /// one keyboard, one list, which is why the HUD's is shared rather than copied. Built here
-        /// because at boot there is no HUD yet to open its own.</summary>
+        private const string HelpPrefab = "Hud/ShellHelp";
+
+        /// <summary>
+        /// The shell's help card: the keyboard, the same list the run's help card prints - one keyboard, one list, which
+        /// is why <see cref="HudView.KeyLines"/> is shared. Built here because at boot there is no HUD yet to open
+        /// its own.
+        ///
+        /// It takes the wider 300 (a card centred on an empty screen has room to breathe) and has no restart button,
+        /// because a menu is not a run.
+        /// </summary>
         private void BuildHelp()
         {
-            RectTransform root = HudUi.Node(_canvasRoot, "help");
-            // The card is centred in screen coordinates, so the root it hangs off spans the canvas.
-            HudUi.StretchFull(root);
-
+            RectTransform card = InstantiatePanel(HelpPrefab, "help");
             float width = 300f * _scale;
             string[] lines = HudView.KeyLines();
-            // The card is as tall as the HUD's own help card, off the same numbers: one keyboard, one list,
-            // and one place the line step, the inset and the height live (HudLayout).
             float height = HudLayout.HelpHeightFor(lines.Length) * _scale;
 
-            RectTransform card = HudUi.Node(root, "card");
+            // The card is centred: the canvas root already spans the screen, so the card hangs off its top edge.
             HudUi.TopCentre(card, (Screen.height - height) * 0.5f, width, height);
+            HudUi.ScaleDesignUnits(card, _scale);
 
-            HudUi.Shadow(card, "shadow", 12f, _palette.HudShadow);
-            HudBox back = HudUi.Round(card, "back", _palette.HudPanel, 12f);
-            HudUi.StretchFull(back.Rect);
-            HudUi.Border(card, "frame", PanelBorder(), 12f, 1f);
+            HudUi.AdoptShadow(HudUi.Child(card, "shadow"), 12f, _palette.HudShadow);
+            HudUi.AdoptRound(HudUi.Child(card, "back"), _palette.HudPanel, 12f);
+            HudUi.AdoptBorder(HudUi.Child(card, "frame"), PanelBorder(), 12f, 1f);
 
-            HudText header = Label(card, "header", HudLayout.HelpLineSize, FontStyle.Bold,
-                TextAnchor.MiddleLeft, tracked: true);
-            HudUi.TopLeft(header.Rect, HudLayout.HelpInset * _scale, HudLayout.HelpHeaderTop * _scale,
-                width - 60f * _scale, HudLayout.HelpLineHeight * _scale);
-            header.Set("CONTROLS", _palette.HudText);
+            AdoptLabel(card, "header", HudLayout.HelpLineSize, FontStyle.Bold, TextAnchor.MiddleLeft,
+                tracked: true).Set("CONTROLS", _palette.HudText);
+            HudUi.AdoptBox(HudUi.Child(card, "rule"), HudInk.Rule(_palette));
 
-            HudBox rule = HudUi.Box(card, "rule", HudInk.Rule(_palette));
-            HudUi.TopLeft(rule.Rect, HudLayout.HelpInset * _scale, 23f * _scale,
-                width - 2f * HudLayout.HelpInset * _scale, 1f);
-
-            float y = HudLayout.HelpLineTop;
-            foreach (string line in lines)
+            for (int i = 0; i < lines.Length; i++)
             {
-                HudText lineText = Label(card, "key" + y, HudLayout.HelpLineSize, FontStyle.Normal,
+                HudText row = AdoptLabel(card, "key" + i, HudLayout.HelpLineSize, FontStyle.Normal,
                     TextAnchor.MiddleLeft);
-                HudUi.TopLeft(lineText.Rect, HudLayout.HelpInset * _scale, y * _scale,
-                    width - 2f * HudLayout.HelpInset * _scale, HudLayout.HelpLineHeight * _scale);
-                lineText.Set(line, HudInk.Muted(_palette));
-                y += HudLayout.HelpLineStep;
+                row.Set(lines[i], HudInk.Muted(_palette));
             }
 
-            HudButton close = HudUi.Button(card, "close", 20f * _scale, 20f * _scale, "×", FontSize(HudType.Label),
+            HudButton close = HudUi.AdoptButton(HudUi.Child(card, "close"), "×", FontSize(HudType.Label),
                 _palette.HudText, () => SetMode(_inRun ? Mode.Pause : Mode.Title));
-            HudUi.TopRight(close.Root, 8f * _scale, 7f * _scale, 22f * _scale, 22f * _scale);
             _buttons.Add(close);
         }
 
         // ------------------------------------------------------------------ keys, scale, dressing
 
-        /// <summary>The keys the shell itself answers, read only while it is open - the run is held and
-        /// unsampled, so these cannot collide with a run key by sharing a frame with one.
+        /// <summary>The keys the shell itself answers, read only while it is open - the run is held and unsampled, so
+        /// these cannot collide with a run key.
         ///
-        /// Back is one step, whatever the screen: Escape or M closes the help card and the map list
-        /// onto whichever screen opened them, and closes the pause menu onto the run. On the title,
-        /// Escape has no screen behind it - in a fullscreen page it leaves fullscreen instead, the one
-        /// step that is behind the title itself, and in a window it has nothing to do (see
-        /// <see cref="PlayerPage"/>).
-        /// Inside the pause menu, Escape first disarms an armed door rather than leaving: the irreversible
-        /// presses are always cancellable by the key that means "back".
+        /// Back is one step, whatever the screen: Escape or M closes the help card and the map list onto whichever
+        /// screen opened them, and closes the pause menu onto the run. On the title Escape has no screen behind it - in
+        /// a fullscreen page it leaves fullscreen instead, and in a window it does nothing (see
+        /// <see cref="PlayerPage"/>). Inside the pause menu, Escape disarms an armed door rather than leaving.
         ///
-        /// The branches are exclusive on purpose: one key takes one step per frame. A frame that read two
-        /// doors would let a mode change - which reopens the shell and spends the frame's keys - carry on
-        /// into the old mode's checks, so Enter and M together could start a run and then open the map
-        /// list over it.</summary>
+        /// The branches are exclusive on purpose: one key takes one step per frame. A mode change reopens the shell
+        /// and spends the frame's keys, so a frame that read two doors could start a run and then open the map list
+        /// over it.</summary>
         private void ReadKeys()
         {
             if (_shownAtFrame == Time.frameCount) return;   // the keys that opened this mode already spent themselves
@@ -885,11 +795,10 @@ namespace Facet.Game
             switch (_mode)
             {
                 case Mode.Title:
-                    // M opens the map list here. Escape has no screen behind it to go back to, so it
-                    // takes the one step that is behind the title itself: out of fullscreen, where the
-                    // page is holding the key for the game (see PlayerPage). In a windowed page - or a
-                    // build with no page at all - there is no step to take and the key does nothing,
-                    // which is why the title's map button advertises M and not Esc.
+                    // M opens the map list here. Escape has no screen behind it, so it takes the one step that is behind
+                    // the title itself: out of fullscreen, where the page is holding the key for the game (see
+                    // PlayerPage). In a windowed page there is no step to take, which is why the title's map button
+                    // advertises M and not Esc.
                     if (menu) SetMode(Mode.Levels);
                     else if (confirm) PressPlay();
                     else if (keyboard.tKey.wasPressedThisFrame) SetMode(Mode.Help);
@@ -937,11 +846,9 @@ namespace Facet.Game
             for (int i = 0; i < _locked.Count; i++) _locked[i].Border.Set(LockedText());
         }
 
-        /// <summary>The HUD's generic button look, said once here as the HUD says it once: a fill that
-        /// lightens under the pointer and an edge that takes the accent - the shell's buttons are the
-        /// HUD's buttons, and a menu that dressed differently would read as a different game. The title's
-        /// play button is the exception the rule exists for: the one filled accent surface on the screen,
-        /// because "start here" is the only thing a first-time player has to find.</summary>
+        /// <summary>The HUD's generic button look, said once here as the HUD says it once: a menu that dressed
+        /// differently would read as a different game. The title's play button is the one filled accent surface on the
+        /// screen, because "start here" is the only thing a first-time player has to find.</summary>
         private void Dress(HudButton button)
         {
             bool hovered = button.Hovered;
@@ -957,15 +864,55 @@ namespace Facet.Game
             button.Border.Set(hovered ? _palette.HudAccent : PanelBorder());
         }
 
-        /// <summary>Is the shell open over a run? The header's back button and the rows' PLAYING mark
-        /// both read it; the boot's shell has no run behind it to go back to.</summary>
+        /// <summary>The header's back button and the rows' PLAYING mark both read it; the boot's shell has no run
+        /// behind it to go back to.</summary>
         private bool InRun => _inRun;
 
         private int FontSize(float design) => Mathf.Max(8, Mathf.CeilToInt(design * _scale));
 
-        private HudText Label(RectTransform parent, string name, float design, FontStyle style,
-            TextAnchor anchor, bool wrap = false, bool tracked = false)
-            => HudUi.Text(parent, name, FontSize(design), style, anchor, wrap, tracked);
+        /// <summary>A screen from its prefab, under the shell's canvas and ready to be placed: authored in design units
+        /// and scaled once with <see cref="HudUi.ScaleDesignUnits"/>, the same pass the HUD's panels take.</summary>
+        private RectTransform InstantiatePanel(string resourcePath, string name)
+            => InstantiatePanel(_canvasRoot, resourcePath, name);
+
+        /// <summary>The shell's screens, one asset each: the shell is made in code by the driver and has no scene to
+        /// wire a reference into. One per screen, so a diff touches the screen it changed; the map list's rows are one
+        /// row asset repeated.</summary>
+        private const string BackdropPrefab = "Hud/ShellBackdrop";
+        private const string TitlePrefab = "Hud/ShellTitle";
+        private const string PausePrefab = "Hud/ShellPause";
+        private const string LevelsPrefab = "Hud/ShellLevels";
+        private const string MapRowPrefab = "Hud/ShellMapRow";
+
+        /// <summary>A screen's piece from its prefab, under <paramref name="parent"/>: a rebuild takes the level
+        /// list's rows with the card.</summary>
+        private RectTransform InstantiatePanel(Transform parent, string resourcePath, string name)
+        {
+            GameObject prefab = Resources.Load<GameObject>(resourcePath);
+            if (prefab == null)
+                throw new InvalidOperationException(
+                    "shell prefab 'Assets/Resources/" + resourcePath + ".prefab' is missing");
+
+            GameObject instance = Instantiate(prefab, parent, false);
+            instance.name = name;
+            return (RectTransform)instance.transform;
+        }
+
+        /// <summary>A label the prefab places, at the size its design unit names: the rule <see cref="Label"/> gives
+        /// one it made, so an authored label and a built one cannot disagree.</summary>
+        private HudText AdoptLabel(RectTransform parent, string name, float design, FontStyle style,
+            TextAnchor anchor, bool tracked = false, bool wrap = false)
+            => HudUi.AdoptText(HudUi.Child(parent, name), FontSize(design), style, anchor, wrap, tracked);
+
+        /// <summary>A card's three surfaces, adopted: the cast shadow, the fill and the milled edge. The card's name is
+        /// spelled once here, the one thing an asset's node names and this builder agree on by convention
+        /// (<c>card.back</c>). Every card in the shell is the same object at the same radius.</summary>
+        private void AdoptCard(RectTransform root, string name, float radius)
+        {
+            HudUi.AdoptShadow(HudUi.Child(root, name + ".shadow"), radius, _palette.HudShadow);
+            HudUi.AdoptRound(HudUi.Child(root, name + ".back"), _palette.HudPanel, radius);
+            HudUi.AdoptBorder(HudUi.Child(root, name + ".frame"), PanelBorder(), radius, 1f);
+        }
 
         private Color PanelBorder() => HudInk.Edge(_palette);
 
@@ -973,41 +920,47 @@ namespace Facet.Game
 
         // ------------------------------------------------------------------ geometry
 
-        /// <summary>Rebuild once the screen has scaled this far from the built size - the HUD's own
-        /// rule, for the same reason: the fonts keep the scale inside their point size.</summary>
+        /// <summary>The HUD's own rule: the fonts keep the scale inside their point size.</summary>
         private const float RebuildFraction = 0.02f;
 
-        /// <summary>Where the game's name starts, as a fraction of the screen height from the top.</summary>
-        private const float TitleNameTop = 0.14f;
+        /// <summary>A screen's card takes the larger radius the HUD's overlay cards share: a menu is a place rather
+        /// than a strip.</summary>
+        private const float CardRadius = 12f;
 
-        /// <summary>Where the title column starts, in design units below the name's band.</summary>
-        private const float TitleFirstButtonTop = 150f;
+        /// <summary>The one value the shell's cards put their words and their doors at, so the pause menu and the map
+        /// list read as the same card.</summary>
+        private const float CardInset = 16f;
 
-        /// <summary>One title button's height, in design units. The column's step is this plus its gap,
-        /// so a step below it stacks the buttons on each other - see <see cref="TitleButtonTop"/>.</summary>
-        public const float TitleButtonHeight = 36f;
-
-        /// <summary>The title column's step: one button's height and the gap to the next, in design
-        /// units - the caller scales it once, with the height it steps past.</summary>
-        public const float ButtonStep = 46f;
+        /// <summary>A row is a control inside a card, so it takes the smaller cut.</summary>
+        private const float RowRadius = 8f;
 
         /// <summary>
-        /// Where the title column's <paramref name="index"/>-th button starts, measured from the
-        /// screen's top edge: the name's band, then one step per button. Both terms are design units
-        /// scaled once by <paramref name="scale"/>.
-        ///
-        /// The column used to step in screen pixels while its buttons scaled, which is invisible until
-        /// the scale passes 46/36 (a canvas taller than 920 pixels): a fullscreen 1080 - scale 1.5 -
-        /// drew three 54-pixel buttons 46 pixels apart and stacked them on each other, and the shorter
-        /// the window the wider the gap looked. The gap is a constant fraction of a button at every
-        /// size, which is what reads as a column.
+        /// The one number on the title that is a fraction rather than a design unit, because a wordmark's band is a
+        /// share of the screen. <see cref="TitlePrefab"/> says it with an anchor: the name's top edge sits at 86 %
+        /// height.
         /// </summary>
-        public static float TitleButtonTop(float screenHeight, float scale, int index)
-            => screenHeight * TitleNameTop + (TitleFirstButtonTop + index * ButtonStep) * scale;
+        public const float TitleNameTop = 0.14f;
 
-        /// <summary>A level row's height and the gap between rows, in design units, before the
-        /// fit-into-the-screen shrink; the floor is the shortest row that still carries a name and a
-        /// state word legibly, past which the list would rather run off the screen than lie.</summary>
+
+        /// <summary>Where the title's column starts, in design units below the name's band, and one door's height in
+        /// design units. The column's step is <see cref="ButtonStep"/>, this height plus its gap, so a step below it
+        /// would stack the doors on each other - <c>ShellLayoutTests</c> holds the asset to that.</summary>
+        public const float TitleFirstButtonTop = 150f;
+        public const float TitleButtonHeight = 36f;
+
+        /// <summary>One door's height and the gap to the next, in design units. The pause menu is the one that
+        /// compacts it, on a window too short to carry the column.</summary>
+        public const float ButtonStep = 46f;
+
+        /// <summary>The map list's card width and the header band above the rows and foot under them, in design units.
+        /// The card's own height is the fit's rather than the asset's; these two bands are what the fit is measured
+        /// against.</summary>
+        private const float LevelsWidth = 660f;
+        private const float LevelsHeader = 44f;
+        private const float LevelsFoot = 16f;
+
+        /// <summary>A level row's height and the gap between rows, before the fit-into-the-screen shrink; the floor is
+        /// the shortest row that still carries a name and a state word legibly.</summary>
         private const float LevelRowHeight = 54f;
         private const float LevelRowGap = 8f;
         private const float LevelRowFloor = 30f;

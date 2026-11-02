@@ -5,68 +5,52 @@ using UnityEngine;
 
 namespace Facet.Game
 {
-    /// <summary>
-    /// Draws the out-of-view locator: the arrows and marks <see cref="ThreatRadar"/> folds onto the edge of
-    /// the open screen, plus the danger frame the screen wears while the Core is chewed on somewhere out of
+    /// <summary>Draws the out-of-view locator: the arrows and marks <see cref="ThreatRadar"/> folds onto the
+    /// edge of the open screen, plus the danger frame the screen wears while the Core is chewed on out of
     /// view.
     ///
-    /// A view and not a HUD panel because it is a mark on the window, not a card to read: the arrow points
-    /// the way the map lies, so it sits on the edge of the map's viewport, and it has to be seen in the
-    /// periphery. The HUD's threat line reports the same summary the arrows were made from, so the two are
-    /// one answer in two registers rather than two rules that can drift.
-    ///
-    /// One shape carries each kind of news: a <b>chevron</b> is something moving and coming at you, a
-    /// <b>mark</b> is a place to go. The two marks are told apart by their fill, because both are the same
-    /// four corners: a stopped line's is hollow, in the amber a blocked segment wears, and the Core's is
-    /// filled in its own pale. Colours are the game's existing ones - an enemy's body colour, the stop's
-    /// amber, the Core's pale - so an arrow needs no legend, and red means a wave and nothing else.
-    /// Everything is measured in screen pixels, multiplying a palette number by
-    /// <see cref="MeshView.WorldPerPixel"/>, so an arrow is not a speck at the wide zoom or a blob at the
-    /// close one.
-    ///
-    /// Like every other view it reads the simulation and never writes to it; its only extra input is the
-    /// camera, which the driver hands it with the map, since the driver owns the rig.
-    /// </summary>
+    /// A view and not a card because it is a mark on the window: the arrow points the way the map lies, so it
+    /// sits on the map's viewport edge and has to read in the periphery. A <b>chevron</b> is something coming
+    /// at you, a <b>mark</b> is a place to go - told apart by fill, because both are the same four corners. Red
+    /// is the wave's and nothing else. Everything is measured in screen pixels times
+    /// <see cref="MeshView.WorldPerPixel"/>, so an arrow is not a speck at the wide zoom.</summary>
     [DefaultExecutionOrder(114)]
     public sealed class ThreatRadarView : MeshView
     {
         private readonly List<EnemySnapshot> _enemies = new List<EnemySnapshot>();
         private readonly List<Int2> _jams = new List<Int2>();
 
-        /// <summary>Segments whose item has nowhere to go - a dead end rather than a refusal. They mark the
-        /// same way a jam does, because to a player both are one piece of news ("something has stopped out
-        /// there, and it is on a tile you cannot see"); the card's line is where the two are told apart.</summary>
+        /// <summary>Segments whose item has nowhere to go. They mark the same way a jam does - to a player both
+        /// are "something has stopped out there, on a tile you cannot see"; the card's line is where the two are
+        /// told apart.</summary>
         private readonly List<Int2> _blocked = new List<Int2>();
 
         /// <summary>Machines holding a piece with no outlet to hand it on to - the third way a line stops, and
-        /// the third mark on the same list: the machine has eaten its item, so nothing upstream of it is ever
-        /// "blocked" and the stoppage has no other way of showing. A full outlet is not here: that is a loaded
-        /// line, and it stops nothing.</summary>
+        /// the third mark on the same list. A full outlet is not here: that is a loaded line, and it stops
+        /// nothing.</summary>
         private readonly List<Int2> _stalled = new List<Int2>();
 
-        /// <summary>Marker scratch, sized to the palette's cap: the arrows are folded into it and drawn
-        /// straight out of it, so a wave off-screen costs no allocation per frame.</summary>
+        /// <summary>Marker scratch, sized to the palette's cap, so a wave off-screen costs no allocation per
+        /// frame.</summary>
         private ThreatRadar.Marker[] _markers = new ThreatRadar.Marker[0];
 
-        /// <summary>Point scratch, one per shape, reused for every marker this frame - a view drawing thirty
-        /// marks must not allocate thirty point lists to do it.</summary>
+        /// <summary>Point scratch, one per shape, reused for every marker this frame.</summary>
         private readonly Vector2[] _chevron = new Vector2[3];
         private readonly Vector2[] _mark = new Vector2[4];
 
         private Camera _camera;
         private bool _tutorialUp;
         private bool _infoGrown;
+        private float _infoExtra;
         private int _barTiles = HudLayout.BarTiles;
 
-        /// <summary>The window's panel boxes, measured fresh each frame: the same boxes the HUD draws, so a
-        /// walker under one is out of view for the arrows and for the card alike.</summary>
+        /// <summary>The window's panel boxes, measured fresh each frame: the same boxes the HUD draws.</summary>
         private readonly ThreatRadar.ScreenReader _screen = new ThreatRadar.ScreenReader();
 
         protected override Palette.Layer Layer => Colors.RadarLayer;
 
-        /// <summary>Point the locator at the camera whose view it is locating things out of, and say whether
-        /// the tutorial card is up. The driver calls this on build and on every map change - the camera
-        /// outlives a map, the card does not, and the arrows give up the strip the card wears.</summary>
+        /// <summary>Point the locator at the camera whose view it is locating things out of. The driver calls this
+        /// on build and on every map change: the camera outlives a map, the card does not.</summary>
         public void InitializeLocator(Camera camera, bool tutorialUp)
         {
             _camera = camera;
@@ -75,10 +59,8 @@ namespace Facet.Game
         }
 
         /// <summary>
-        /// Say whether the HUD's info card is wearing its taller sorter-picker band this frame. The driver
-        /// relays it, because the card's state is the HUD's and the panel boxes are the locator's: without
-        /// it an arrow would be placed on a strip the picker is drawn over, which is exactly the "out of
-        /// view" the arrow exists to answer. Cheap to call every frame - a compare and a flag.
+        /// Say whether the HUD's info card is wearing its taller sorter-picker band this frame. An arrow placed
+        /// on a strip the picker is drawn over points at nothing the player can see. Cheap to call every frame.
         /// </summary>
         public void SetInfoGrown(bool grown)
         {
@@ -88,10 +70,19 @@ namespace Facet.Game
             MarkDirty();
         }
 
-        /// <summary>Say how many keys the build bar is carrying this frame. The panel boxes the arrows fold
-        /// past have to be the boxes the HUD draws, and a tutorial's bar starts one key wide and grows - a
-        /// reader that measured the full shelf would keep arrows clear of a strip that is not there. Cheap to
-        /// call every frame - a compare and a flag.</summary>
+        /// <summary>How much taller the read card is than its base size because its rows wrapped, in design
+        /// units. Relayed with <see cref="SetInfoGrown"/>: a card the arrows do not know about is a place an
+        /// enemy can stand unseen.</summary>
+        public void SetInfoExtra(float extra)
+        {
+            if (Mathf.Approximately(_infoExtra, extra)) return;
+
+            _infoExtra = extra;
+            MarkDirty();
+        }
+
+        /// <summary>Say how many keys the build bar is carrying this frame: a tutorial's bar starts one key wide
+        /// and grows, and the arrows fold past the strip the HUD actually drew.</summary>
         public void SetBarTiles(int tiles)
         {
             if (_barTiles == tiles) return;
@@ -100,9 +91,8 @@ namespace Facet.Game
             MarkDirty();
         }
 
-        /// <summary>Say whether the HUD's "how to play" card is up this frame. The player can hide or show it
-        /// at any time, so the driver relays it every frame rather than only on a map change; the arrows
-        /// give the strip back the moment the card goes. Cheap to call every frame - a compare and a flag.</summary>
+        /// <summary>The player can hide or show the "how to play" card at any time, so the driver relays it
+        /// every frame rather than only on a map change.</summary>
         public void SetTutorialUp(bool up)
         {
             if (_tutorialUp == up) return;
@@ -112,7 +102,7 @@ namespace Facet.Game
         }
 
         /// <summary>The camera moved, the wave moved, the zoom moved: any of the three moves an arrow, so this
-        /// view rebuilds every frame like the enemies it points at.</summary>
+        /// view rebuilds every frame.</summary>
         protected override void Observe(in ViewFrame frame) => MarkDirty();
 
         protected override void AppendFrame(in ViewFrame frame)
@@ -127,7 +117,8 @@ namespace Facet.Game
             if (_markers.Length != look.MaxMarkers)
                 _markers = new ThreatRadar.Marker[Mathf.Max(1, look.MaxMarkers)];
 
-            var view = _screen.Measure(_camera, _tutorialUp, look.EdgeInsetPixels, _infoGrown, _barTiles);
+            var view = _screen.Measure(_camera, _tutorialUp, look.EdgeInsetPixels, _infoGrown, _barTiles,
+                _infoExtra);
 
             world.Enemies.GetEnemies(_enemies);
             world.Belts.GetJammed(_jams);
@@ -142,23 +133,20 @@ namespace Facet.Game
             // The danger frame first, so an arrow that grazes the band draws over it rather than being tinted
             // by a translucent warning.
             //
-            // The run's one losing condition, said at the screen's edge because the thing being lost is off
-            // it: it holds while the Core is hit out of view, and only then - a Core the player is watching
-            // already has its hit flashes and its shrinking bar.
+            // Holds while the Core is hit out of view and only then: a Core the player is watching already has
+            // its hit flashes and its shrinking bar.
             int age = ThreatRadar.CoreHitAge(world, look.DangerTicks);
             if (age >= 0 && summary.CoreIsOut) AppendDangerFrame(view, look, pixel, age);
 
             for (int i = 0; i < arrows; i++) AppendMarker(in _markers[i], look, pixel, world.TickCount);
         }
 
-        /// <summary>One marker: a chevron pointing out along the way the subject lies, with as many pips as
-        /// the cluster has members (up to the palette's cap), or a mark where the subject is a place rather
-        /// than a threat.
+        /// <summary>One marker: a chevron pointing out along the way the subject lies, with as many pips as the
+        /// cluster has members, or a mark where the subject is a place rather than a threat.
         ///
-        /// An enemy cluster wears its nearest member's colour and shouts when any of them is hitting
-        /// something; anything merely far away fades. A stop is never drawn in that colour, however loud it
-        /// gets: red is the player's shorthand for "the wave", and a red mark on the edge of a quiet map
-        /// sends them looking for something that is not there.</summary>
+        /// An enemy cluster wears its nearest member's colour and shouts when any of them is hitting something;
+        /// anything merely far away fades. A stop is never drawn in that colour, however loud it gets: red is
+        /// the player's shorthand for "the wave".</summary>
         private void AppendMarker(in ThreatRadar.Marker marker, Palette.RadarLook look, float pixel, int tick)
         {
             Color colour;
@@ -174,17 +162,14 @@ namespace Facet.Game
                     return;
 
                 case ThreatRadar.Subject.Jam:
-                    // A stopped line is a place to go and not a body, so it is a hole with an edge rather
-                    // than a dot - and amber, the colour a blocked segment wears on the bed, rather than
-                    // the jam's red. The bed itself is where the three ways a line stops are told apart;
-                    // the mark only has to say "somewhere out there, on this bearing".
+                    // A stopped line is a hole with an edge rather than a dot, in the amber a blocked segment
+                    // wears on the bed: the mark only has to say "somewhere out there, on this bearing".
                     AppendStopMark(marker.At, look.StopMarkHalfPixels * pixel,
                         WithAlpha(Colors.BeltBlocked, Fade(marker.Distance, look)), look.StopMarkPixels * pixel);
                     return;
 
                 case ThreatRadar.Subject.Core:
-                    // The way home: the Core's own pale, its dark outline, and the quietest thing on the
-                    // edge. Nothing is lost by not looking at it; a lot is lost by not being able to find it.
+                    // The way home: the Core's own pale, its dark outline, and the quietest thing on the edge.
                     AppendMark(marker.At, look.MarkerHalfWidthPixels * look.CoreMarkerScale * 1.6f * pixel,
                         WithAlpha(Colors.Core, look.CoreAlpha), Colors.OutlinePixels * pixel);
                     return;
@@ -195,9 +180,8 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>The chevron: base in from the edge, tip pointing out along the way the subject lies. Tip
-        /// last and the two base corners first, so the winding stays counter-clockwise the way the belt's own
-        /// chevrons do it.</summary>
+        /// <summary>The chevron: base in from the edge, tip pointing out along the way the subject lies. The
+        /// winding stays counter-clockwise, the way the belt's own chevrons do it.</summary>
         private void AppendChevron(in ThreatRadar.Marker marker, Palette.RadarLook look, float pixel, Color colour)
         {
             Vector2 dir = marker.Direction;
@@ -214,8 +198,7 @@ namespace Facet.Game
         }
 
         /// <summary>One dot per member of the cluster, stacked along the edge and pulled in from the arrow so
-        /// the two read as one object. Capped - a hundred enemies is an arrow with six dots and a number the
-        /// status card says out loud - and a lone walker is just an arrow.</summary>
+        /// the two read as one object. Capped, and a lone walker is just an arrow.</summary>
         private void AppendPips(in ThreatRadar.Marker marker, Palette.RadarLook look, float pixel, Color colour)
         {
             int pips = Mathf.Min(marker.Count, look.MaxPips);
@@ -235,14 +218,10 @@ namespace Facet.Game
         }
 
         /// <summary>
-        /// A stopped line's mark: the same four corners as <see cref="AppendMark"/>, with nothing inside
-        /// them - a place on the edge of the screen rather than a thing standing on it, which is what a
-        /// filled dot in a mark's size reads as once the eye has been taught that red is the wave. The
-        /// stroke grows outward from those corners, so the diamond the player sees is
-        /// <see cref="Palette.RadarLook.StopMarkHalfPixels"/> plus the stroke across.
-        ///
-        /// Wound counter-clockwise - east, north, west, south - the order
-        /// <see cref="ProcMesh.AppendPolygonOutline"/> needs to grow the band outward.
+        /// A stopped line's mark: the same four corners as <see cref="AppendMark"/> with nothing inside them -
+        /// a place on the edge of the screen rather than a thing standing on it. The stroke grows outward from
+        /// those corners. Wound counter-clockwise, the order <see cref="ProcMesh.AppendPolygonOutline"/> needs to
+        /// grow the band outward.
         /// </summary>
         private void AppendStopMark(Vector2 at, float radius, Color colour, float stroke)
         {
@@ -253,9 +232,8 @@ namespace Facet.Game
             AppendPolygonOutline(_mark, Vector2.zero, colour, stroke);
         }
 
-        /// <summary>A filled four-sided mark - a pip, the Core - standing on a corner, from a radius and an
-        /// optional outline. Wound counter-clockwise: east, north, west, south. The stop's mark is the
-        /// hollow one (<see cref="AppendStopMark"/>), because a filled dot is a body.</summary>
+        /// <summary>A filled four-sided mark - a pip, the Core - from a radius and an optional outline. Wound
+        /// counter-clockwise: east, north, west, south.</summary>
         private void AppendMark(Vector2 at, float radius, Color colour, float outlineWidth)
         {
             _mark[0] = at + Vector2.right * radius;
@@ -266,11 +244,9 @@ namespace Facet.Game
                 outlineWidth > 0f ? Colors.Outline : colour, outlineWidth);
         }
 
-        /// <summary>The band around the free area - not the whole screen - that says the Core is being hit
-        /// out of view. Drawn <em>inside</em> that area's edge, because the strip outside it belongs to a HUD
-        /// panel and a frame laid there would be eaten by the build bar. It fades over
-        /// <see cref="Palette.RadarLook.DangerTicks"/> from the hit, marking the beat rather than haunting the
-        /// run.</summary>
+        /// <summary>The band around the free area - not the whole screen - that says the Core is being hit out of
+        /// view. Drawn <em>inside</em> that area's edge: the strip outside it belongs to a HUD panel, and a frame
+        /// laid there would be eaten by the build bar.</summary>
         private void AppendDangerFrame(in ThreatRadar.Viewport view, Palette.RadarLook look, float pixel,
             int age)
         {
@@ -287,8 +263,8 @@ namespace Facet.Game
             AppendRect(free.xMax - thickness, free.yMin, free.xMax, free.yMax, colour);
         }
 
-        /// <summary>Distance in tiles to the marker's strength: near things are drawn loud, far ones are a
-        /// hint at the edge of vision. Urgent markers skip it - see <see cref="AppendMarker"/>.</summary>
+        /// <summary>Distance in tiles to the marker's strength: near things are drawn loud, far ones are a hint
+        /// at the edge of vision. Urgent markers skip it.</summary>
         private static float Fade(float distance, Palette.RadarLook look)
         {
             float span = Mathf.Max(0.001f, look.FarTiles - look.NearTiles);
@@ -297,7 +273,7 @@ namespace Facet.Game
         }
 
         /// <summary>0..1 for a pulse across the palette's window, walked off the simulation's own clock so the
-        /// beat is the run's beat and not the frame rate's.</summary>
+        /// beat is the run's and not the frame rate's.</summary>
         private static float Pulse(int tick, int ticks)
             => ticks <= 0 ? 1f : 0.5f + 0.5f * Mathf.Sin(tick / (float)ticks * Mathf.PI * 2f);
 
