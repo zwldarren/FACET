@@ -86,7 +86,7 @@ namespace Facet.Tests
                 foreach (BuildKind kind in world.Content.BuildKinds)
                 {
                     Operators requires = world.Content.Machine(kind).Requires;
-                    bool expected = (requires & ~unlocked) == 0;
+                    bool expected = (requires & ~unlocked) == 0 && !BuildCatalog.Retired(kind);
 
                     Assert.AreEqual(expected, world.IsUnlocked(kind),
                         kind + " needs " + requires + " and the map unlocked " + unlocked);
@@ -103,10 +103,18 @@ namespace Facet.Tests
             SimWorld bare = new SimWorld(Map(Operators.None), new SimConfig());
             foreach (BuildKind kind in new[]
                      {
-                         BuildKind.Belt, BuildKind.Drill, BuildKind.Pipe, BuildKind.Splitter,
-                         BuildKind.Sorter, BuildKind.Wall, BuildKind.Turret,
+                         BuildKind.Belt, BuildKind.Pipe, BuildKind.Splitter,
+                         BuildKind.Sorter, BuildKind.Turret,
                      })
                 Assert.IsTrue(bare.IsUnlocked(kind), kind + " is scaffolding and needs no operator");
+
+            // The drill and the wall are retired from the bar: a belt on ore mines, and the wall was never
+            // asked for. Still placeable by the rules, so a map that stands one keeps working.
+            foreach (BuildKind kind in new[] { BuildKind.Drill, BuildKind.Wall })
+            {
+                Assert.IsFalse(bare.IsUnlocked(kind), kind + " has no key on the bar");
+                Assert.IsFalse(bare.LockedByTutorial(kind), "and its silence is not the lesson's");
+            }
         }
 
         [Test]

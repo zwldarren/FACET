@@ -168,7 +168,7 @@ namespace Facet.Tests
         /// <summary>A world with one patch and the Core pinned at (8,4), for the rate tests.</summary>
         private static SimWorld RateWorld(int startShapes = 1000)
             => new SimWorld(new MapDefinition("rates", 30, 12, startShapes,
-                new[] { new ShapePatch(new Int2(24, 5), 3, 2, Quad.Circle) },
+                new[] { new ShapePatch(new Int2(24, 6), 3, 1, Quad.Circle) },
                 new Int2[0], new WaveDefinition[0], coreCell: new Int2(8, 4)), new SimConfig());
 
         /// <summary>

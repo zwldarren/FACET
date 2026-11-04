@@ -63,6 +63,15 @@ namespace Facet.Core
 
         public static int Count => ContentDatabase.Default.BuildKinds.Length;
 
+        /// <summary>
+        /// Is this kind kept off the player's bar? The drill and the wall are retired from play: a belt laid
+        /// on ore mines it (<see cref="BeltMining"/>), which is one building fewer to learn before the first
+        /// coin, and the wall was a tool no lesson taught and no map asked for. Both stay in the content table
+        /// and in the simulation - a map may still stand one, and the rules that read them are unchanged - but
+        /// the bar has no key for them and the hotkeys ignore them.
+        /// </summary>
+        public static bool Retired(BuildKind kind) => kind == BuildKind.Drill || kind == BuildKind.Wall;
+
         /// <summary>What a placement of this kind puts on the tile.</summary>
         public static TileKind TileFor(BuildKind kind) => ContentDatabase.Default.Machine(kind).Tile;
     }

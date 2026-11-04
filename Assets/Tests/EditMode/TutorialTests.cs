@@ -494,7 +494,8 @@ namespace Facet.Tests
             Assert.AreEqual(1, world.Waves.NextWave);
             Assert.IsFalse(world.Waves.HasWaveToStart);
             Assert.IsFalse(world.IsUnlocked(BuildKind.Belt), "and the bar is back to the lesson's first key");
-            Assert.IsTrue(world.IsUnlocked(BuildKind.Drill));
+            Assert.IsTrue(world.CanPlace(BuildKind.Drill, Vein, Dir.West),
+                "the lesson's first building is placeable again (the drill is off the bar, not out of the rules)");
         }
 
         // ---------------------------------------------------------------- the two gates
@@ -526,7 +527,7 @@ namespace Facet.Tests
             SimWorld refused = new SimWorld(LessonMap(taught, unlocked: Operators.Rotator), new SimConfig());
             Assert.IsFalse(refused.IsUnlocked(BuildKind.Cutter),
                 "the map never unlocked the cutter, so the bar cannot carry one");
-            Assert.IsTrue(refused.IsUnlocked(BuildKind.Drill));
+            Assert.IsTrue(refused.CanPlace(BuildKind.Drill, Vein, Dir.West));
             Assert.IsFalse(refused.TryPlace(BuildKind.Cutter, new Int2(9, 9), Dir.West),
                 "and asking for one anyway is refused");
 
