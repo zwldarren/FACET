@@ -55,6 +55,14 @@ namespace Facet.Core
         /// map, and a restart re-opens the same opening rather than reversing it.</summary>
         private bool _skipped;
 
+        /// <summary>The coached lesson's three inputs, each a fact about the player rather than about the
+        /// world, handed in by <see cref="SimWorld"/> before each step: the popup's button was pressed, a wave
+        /// was asked for, and what the player is holding. The first two are cleared each time a line ticks, so
+        /// one press can never pass two lines.</summary>
+        private bool _acknowledged;
+        private bool _waveCalled;
+        private BuildKind? _selected;
+
         public TutorialState(TutorialScript script, MachineField machines, BeltField belts,
             EconomyState economy, WaveDirector waves)
         {
@@ -95,6 +103,47 @@ namespace Facet.Core
         /// normally.</summary>
         public bool GatesWaves => Active && !Complete;
 
+        /// <summary>Is this lesson taught by the coach (popup, boxes, a HUD revealed piece by piece)?</summary>
+        public bool Coached => Active && _script.Coached;
+
+        /// <summary>Is the current line an explanation waiting for the player's "next"?</summary>
+        public bool WaitsForAcknowledge => Active && !Complete && Current.Step == TutorialStep.Acknowledge;
+
+        /// <summary>Is the current line waiting for the player to call the wave? The HUD's wave button reads it:
+        /// a held wave is normally not startable, but this line is exactly the one that asks for the press.</summary>
+        public bool WaitsForWaveCall => Active && !Complete && Current.Step == TutorialStep.StartWave;
+
+        /// <summary>The HUD pieces a coached lesson has brought on screen so far: every line's
+        /// <see cref="TutorialTask.Reveal"/> up to and including the current one. Everything for a lesson that
+        /// is not coached, or that is over - a finished lesson hands the whole HUD back.</summary>
+        public TutorialHud Revealed
+        {
+            get
+            {
+                if (!Coached || Complete) return TutorialHud.All;
+
+                TutorialHud shown = TutorialHud.None;
+                for (int i = 0; i <= _index && i < _script.Count; i++) shown |= _script[i].Reveal;
+                return shown;
+            }
+        }
+
+        /// <summary>The player pressed the popup's button. Kept only while the current line is an explanation,
+        /// so an early press cannot be banked against a later one.</summary>
+        public void Acknowledge()
+        {
+            if (WaitsForAcknowledge) _acknowledged = true;
+        }
+
+        /// <summary>A wave was asked for this tick. Kept only while the current line is the one that asks.</summary>
+        public void NoteWaveCall()
+        {
+            if (WaitsForWaveCall) _waveCalled = true;
+        }
+
+        /// <summary>What the player is holding this tick: the selection the build bar and the hotkeys set.</summary>
+        public void NoteSelection(BuildKind? selected) => _selected = selected;
+
         /// <summary>One tick of the lesson: read the world for the current line, and tick it if it is really
         /// done.
         ///
@@ -110,6 +159,8 @@ namespace Facet.Core
             if (!IsDone(task.Step)) return;
 
             _index++;
+            _acknowledged = false;
+            _waveCalled = false;
             RebuildOpen();
 
             // The line is ticked before the wave is released, so the bar it just widened and the wave it
@@ -154,6 +205,9 @@ namespace Facet.Core
         public void Reset()
         {
             _index = 0;
+            _acknowledged = false;
+            _waveCalled = false;
+            _selected = null;
             RebuildOpen();
         }
 
@@ -203,6 +257,27 @@ namespace Facet.Core
 
                 case TutorialStep.BeltFork:
                     return HasWiredFork();
+
+                case TutorialStep.Acknowledge:
+                    return _acknowledged;
+
+                case TutorialStep.SelectDrill:
+                    return _selected == BuildKind.Drill || _machines.CountOf(BuildKind.Drill) > 0;
+
+                case TutorialStep.SelectBelt:
+                    return _selected == BuildKind.Belt || _economy.TotalBanked > 0;
+
+                case TutorialStep.SelectTurret:
+                    return _selected == BuildKind.Turret || _machines.CountOf(BuildKind.Turret) > 0;
+
+                case TutorialStep.PlaceTurret:
+                    return _machines.CountOf(BuildKind.Turret) > 0;
+
+                case TutorialStep.StartWave:
+                    return _waveCalled;
+
+                case TutorialStep.ClearWave:
+                    return _waves.Finished;
 
                 default:
                     // A line carrying <see cref="TutorialScript.NoStep"/> is broken data, reported by the map

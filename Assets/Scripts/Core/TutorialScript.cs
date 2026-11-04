@@ -54,6 +54,108 @@ namespace Facet.Core
         /// placed by turning the cutter, so the proof is the cut that reached the gun and not a machine
         /// standing somewhere on the map.</summary>
         TwoTurretsLoadedAcross = 7,
+
+        // ---- the coached lesson's steps (a map with TutorialScript.Coached): one idea per popup ----
+
+        /// <summary>The player has read the popup and pressed its button (or Enter). The one step that is an
+        /// act rather than a fact about the run: an explanation has nothing in the world to check, so the
+        /// request goes through <see cref="SimWorld.RequestTutorialNext"/> and lands on a tick boundary like
+        /// every other request.</summary>
+        Acknowledge = 8,
+
+        /// <summary>The drill is in the player's hand - selected on the bar or by its hotkey - or one already
+        /// stands, so a player who raced ahead is not held on a line they have passed.</summary>
+        SelectDrill = 9,
+
+        /// <summary>The belt is in the player's hand, or a shape has already been banked.</summary>
+        SelectBelt = 10,
+
+        /// <summary>The turret is in the player's hand, or one already stands.</summary>
+        SelectTurret = 11,
+
+        /// <summary>A turret stands, loaded or not.</summary>
+        PlaceTurret = 12,
+
+        /// <summary>The player asked for the wave: N, or the HUD's wave button, or the popup's own button.
+        /// A coached lesson holds every wave, and this line is the one that lets it go
+        /// (<see cref="TutorialTask.StartsWave"/>).</summary>
+        StartWave = 13,
+
+        /// <summary>The map's waves are all cleared. The lesson's last line: it keeps the popup saying what to
+        /// do while the wave is being fought.</summary>
+        ClearWave = 14,
+    }
+
+    /// <summary>What a coached line draws a box around, so the player knows where to look. Places on the map
+    /// (the Core, the gate, the line's target) are boxed in the world; the rest are pieces of the HUD, which
+    /// the HUD itself measures (<c>HudView.TryFocusRect</c>), so a box can never drift from what it points at.
+    /// A line may name several.</summary>
+    public enum TutorialFocus : byte
+    {
+        None = 0,
+
+        /// <summary>The Core's whole footprint.</summary>
+        Core = 1,
+
+        /// <summary>The map's first wave entrance.</summary>
+        Gate = 2,
+
+        /// <summary>The line's <see cref="TutorialTask.Target"/> tile, grown to the whole ore patch it sits in
+        /// when it is ore - "this patch", not "this one tile".</summary>
+        Target = 3,
+
+        /// <summary>Every tile of the line's blueprint (<see cref="TutorialTask.Ghost"/>).</summary>
+        Ghost = 4,
+
+        /// <summary>The bar's key for the building this line is about.</summary>
+        BarTile = 5,
+
+        /// <summary>The coin readout beside the status card.</summary>
+        Stockpile = 6,
+
+        /// <summary>The status card's Core health row.</summary>
+        CoreHealth = 7,
+
+        /// <summary>The status card's wave clock and its sentence.</summary>
+        WaveClock = 8,
+
+        /// <summary>The status card's briefing: how many enemies, and the shape each group is weak to.</summary>
+        WaveChips = 9,
+
+        /// <summary>The wave button in the controls cluster.</summary>
+        WaveButton = 10,
+
+        /// <summary>The whole status card.</summary>
+        StatusCard = 11,
+
+        /// <summary>The whole build bar: where the buildings the lesson hands over appear.</summary>
+        BuildBar = 12,
+    }
+
+    /// <summary>The pieces of the HUD a coached lesson shows, as flags: a coached map opens with none of them
+    /// and each line reveals what it is about to talk about, so the screen never holds a panel the player has
+    /// not been introduced to. A map without a coached lesson shows everything, always.</summary>
+    [Flags]
+    public enum TutorialHud : byte
+    {
+        None = 0,
+
+        /// <summary>The status card: map, Core health, wave clock and briefing.</summary>
+        Status = 1,
+
+        /// <summary>The coin readout.</summary>
+        Stockpile = 2,
+
+        /// <summary>The build bar.</summary>
+        Bar = 4,
+
+        /// <summary>The controls cluster: wave, pause, speed, help, menu.</summary>
+        Controls = 8,
+
+        /// <summary>The info card over the bar.</summary>
+        Info = 16,
+
+        All = Status | Stockpile | Bar | Controls | Info,
     }
 
     /// <summary>One piece of a line's blueprint: where a building or belt goes, which way it faces, and what
@@ -134,8 +236,27 @@ namespace Facet.Core
         /// tutorials.</summary>
         public readonly bool StartsWave;
 
+        /// <summary>The coached popup's heading - "Welcome", "Success!" - or empty for none. Only a coached
+        /// lesson prints it.</summary>
+        public readonly string Title;
+
+        /// <summary>What the coached popup boxes while this line is current. Empty boxes nothing.</summary>
+        public readonly TutorialFocus[] Focus;
+
+        /// <summary>The HUD pieces this line brings on screen. A coached lesson's HUD is the union of every line
+        /// up to and including the current one (<see cref="TutorialState.Revealed"/>), so a piece once shown
+        /// stays shown.</summary>
+        public readonly TutorialHud Reveal;
+
+        /// <summary>Ore this line lays down when it ticks, the way <see cref="Opens"/> hands over buildings:
+        /// a tutorial level shows one vein at a time, so the player is never choosing between patches before
+        /// the lesson needs a second one. Every tile is one-by-one. A restart re-stamps the map without
+        /// them.</summary>
+        public readonly ShapePatch[] AddsOre;
+
         public TutorialTask(TutorialStep step, string text, Int2? target, BuildKind[] opens,
-            bool startsWave, string hint = null, TutorialGhost[] ghost = null)
+            bool startsWave, string hint = null, TutorialGhost[] ghost = null, string title = null,
+            TutorialFocus[] focus = null, TutorialHud reveal = TutorialHud.None, ShapePatch[] addsOre = null)
         {
             Step = step;
             Text = text ?? string.Empty;
@@ -144,6 +265,10 @@ namespace Facet.Core
             Opens = opens ?? new BuildKind[0];
             StartsWave = startsWave;
             Hint = hint ?? string.Empty;
+            Title = title ?? string.Empty;
+            Focus = focus ?? new TutorialFocus[0];
+            Reveal = reveal;
+            AddsOre = addsOre ?? new ShapePatch[0];
         }
     }
 
@@ -182,11 +307,23 @@ namespace Facet.Core
         /// <summary>The lines, in the order they are taught.</summary>
         public readonly TutorialTask[] Tasks;
 
-        public TutorialScript(BuildKind[] starting, TutorialTask[] tasks)
+        /// <summary>Is this lesson taught by the coach - one big popup per line, boxes around what it is about,
+        /// and a HUD that starts empty and is revealed a piece at a time? A tutorial map is coached; Quarry's
+        /// lesson laid over a real level is not, and keeps the task card in the corner.</summary>
+        public readonly bool Coached;
+
+        public TutorialScript(BuildKind[] starting, TutorialTask[] tasks, bool coached = false)
         {
             Starting = starting ?? new BuildKind[0];
             Tasks = tasks ?? new TutorialTask[0];
+            Coached = coached;
         }
+
+        /// <summary>Is this a step that is not about any building - an explanation to read, a wave to call or
+        /// to survive? The validator skips its "is the building handed over" rule for these, since there is no
+        /// building to hand over.</summary>
+        public static bool NeedsNoBuilding(TutorialStep step)
+            => step == TutorialStep.Acknowledge || step == TutorialStep.StartWave || step == TutorialStep.ClearWave;
 
         /// <summary>How many lines the script has.</summary>
         public int Count => Tasks.Length;
@@ -225,9 +362,16 @@ namespace Facet.Core
             {
                 case TutorialStep.PlaceDrill:
                 case TutorialStep.BankShape:
+                case TutorialStep.SelectDrill:
                     building = BuildKind.Drill;
                     return true;
 
+                case TutorialStep.SelectBelt:
+                    building = BuildKind.Belt;
+                    return true;
+
+                case TutorialStep.SelectTurret:
+                case TutorialStep.PlaceTurret:
                 case TutorialStep.ArmTurret:
                 case TutorialStep.ArmTurretWithHalf:
                 case TutorialStep.TwoTurretsLoaded:

@@ -269,6 +269,8 @@ namespace Facet.Game
             TutorialTask task = World.Tutorial.Current;
             TutorialGhost[] ghosts = task.Ghost;
 
+            if (World.Tutorial.Coached) AppendCoachGlow(task);
+
             if (ghosts.Length == 0)
             {
                 AppendFallbackFrame(_seenTarget);
@@ -580,6 +582,39 @@ namespace Facet.Game
                     centre + d1 * (radius + half), centre + d1 * (radius - half), color);
             }
         }
+
+        /// <summary>The tutorial level's "click here": a bright, breathing tile under every cell the line wants
+        /// built on, in a colour nothing else on the map uses, so the spot is found at a glance. Drawn on the
+        /// guide's plane like the rest of the blueprint, so a building placed there covers it.</summary>
+        private void AppendCoachGlow(TutorialTask task)
+        {
+            float breath = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4f);
+            Color fill = WithAlpha(CoachGlow, 0.30f + 0.30f * breath);
+            Color edge = WithAlpha(CoachGlow, 0.75f + 0.25f * breath);
+            float thickness = 0.12f;
+
+            if (task.Ghost.Length == 0)
+            {
+                if (task.Target.HasValue) AppendGlowCell(task.Target.Value, fill, edge, thickness);
+                return;
+            }
+
+            for (int i = 0; i < task.Ghost.Length; i++)
+                if (World.TileGrid.Get(task.Ghost[i].Cell) == TileKind.Empty)
+                    AppendGlowCell(task.Ghost[i].Cell, fill, edge, thickness);
+        }
+
+        private void AppendGlowCell(Int2 cell, Color fill, Color edge, float t)
+        {
+            AppendRect(cell.X, cell.Y, cell.X + 1f, cell.Y + 1f, fill);
+            AppendRect(cell.X, cell.Y, cell.X + 1f, cell.Y + t, edge);
+            AppendRect(cell.X, cell.Y + 1f - t, cell.X + 1f, cell.Y + 1f, edge);
+            AppendRect(cell.X, cell.Y, cell.X + t, cell.Y + 1f, edge);
+            AppendRect(cell.X + 1f - t, cell.Y, cell.X + 1f, cell.Y + 1f, edge);
+        }
+
+        /// <summary>Electric cyan: far from the warm accent, the ore's mineral colours and the ground.</summary>
+        private static readonly Color CoachGlow = new Color(0.10f, 0.92f, 1f, 1f);
 
         /// <summary>Kept for a line that has a target but no blueprint: a frame is the smallest honest
         /// answer.</summary>

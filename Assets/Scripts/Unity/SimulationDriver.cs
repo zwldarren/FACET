@@ -82,8 +82,16 @@ namespace Facet.Game
 
         private TutorialGuideView _guide;
 
+        /// <summary>The coached lesson's popup and boxes (the tutorial level). Draws nothing on a map whose
+        /// lesson is not coached.</summary>
+        private TutorialCoachView _coach;
+
         /// <summary>Reset on every map, because each map teaches its own lesson.</summary>
         private TutorialCamera _tutorialCamera;
+
+        /// <summary>Tiles of empty room the coached level's framing leaves right of the map, where the coach's
+        /// popup sits, so the popup covers neither the map nor the HUD.</summary>
+        private const float CoachRoomTiles = 10f;
 
         private HudView _hud;
 
@@ -292,8 +300,9 @@ namespace Facet.Game
 
             // The lesson's camera reads the frame that just ticked: a line that advanced or a wave that
             // started is already in World, and the glide must begin from the view the player has now. Paused,
-            // the view is the player's to inspect - the tutorial should not move it.
-            if (_tutorialCamera != null && !World.Paused)
+            // the view is the player's to inspect - the tutorial should not move it. A coached level frames the
+            // whole map once and holds it, so nothing the lesson boxes is ever off screen to glide to.
+            if (_tutorialCamera != null && !World.Paused && !World.Tutorial.Coached)
             {
                 _tutorialCamera.Tick(World, _hud != null && _hud.TutorialUp,
                     _hud != null && _hud.InfoGrown, _hud != null ? _hud.InfoExtra : 0f,
@@ -348,6 +357,7 @@ namespace Facet.Game
         {
             if (_hud != null) _hud.enabled = !held;
             if (_rig != null) _rig.enabled = !held;
+            if (_coach != null) _coach.enabled = !held;
         }
 
         /// <summary>A run is one run, so the map is always built again - the world behind a menu is never
@@ -427,6 +437,7 @@ namespace Facet.Game
             // The run opens on the Core: the map can be taller than the screen, and the Core is what the
             // player defends and must find first.
             if (_rig != null) _rig.Initialize(World.TileGrid, World.Core.Center, Campaign.IsFirstMap);
+            if (_rig != null && World.Tutorial.Coached) _rig.FrameWholeMap(World.Map.Width, World.Map.Height, CoachRoomTiles);
             // The locator follows the rig - its Core marker points at the same focus point - and the tutorial
             // card is up on this map or it is not.
             if (_radar != null) _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
@@ -435,6 +446,7 @@ namespace Facet.Game
             if (_hud != null)
                 _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,
                     _input.RequestFilter, Clock, OpenMenu);
+            if (_coach != null) _coach.Initialize(World, _hud, _camera, palette);
 
             Debug.Log("FACET: loaded map " + (Campaign.MapIndex + 1) + " of " + Campaign.MapCount +
                 " - " + World.Map.Name + (World.Map.GeneratedWaves < 0 ? " (endless)" : string.Empty), this);
@@ -509,9 +521,14 @@ namespace Facet.Game
             _hud.Initialize(World, palette, Campaign, _input.RequestSelect, _input.RequestRotate, Catalog,
                 _input.RequestFilter, Clock, OpenMenu);
 
+            // The coach over the HUD: it boxes the HUD's own pieces, so it is built after them.
+            _coach = AddView<TutorialCoachView>("TutorialCoach");
+            _coach.Initialize(World, _hud, _camera, palette);
+
             _rig = _camera.GetComponent<CameraRig>();
             if (_rig == null) _rig = _camera.gameObject.AddComponent<CameraRig>();
             _rig.Initialize(World.TileGrid, World.Core.Center, Campaign.IsFirstMap);
+            if (World.Tutorial.Coached) _rig.FrameWholeMap(World.Map.Width, World.Map.Height, CoachRoomTiles);
 
             // The lesson's targets are the places a player would otherwise have to pan to find.
             _tutorialCamera = new TutorialCamera(_rig, _camera);

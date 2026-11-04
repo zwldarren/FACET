@@ -29,6 +29,19 @@ namespace Facet.Game
             _icons = Colors.PatchIcons(Colors.Patches.IconRadius, Colors.OutlinePixels);
         }
 
+        private int _seenVersion = -1;
+
+        /// <summary>The ground changes mid-run only when a coached lesson lays its next vein; a restart
+        /// re-stamps it. Either bumps the field's version.</summary>
+        protected override void Observe(in ViewFrame frame)
+        {
+            int version = World.Terrain.Version;
+            if (version == _seenVersion) return;
+
+            _seenVersion = version;
+            MarkDirty();
+        }
+
         protected override void AppendFrame(in ViewFrame frame)
         {
             World.Terrain.GetOre(_ore);

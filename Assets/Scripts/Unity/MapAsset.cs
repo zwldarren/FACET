@@ -188,6 +188,22 @@ namespace Facet.Game
                 "ticked while the previous wave is still being fought calls the wave after it - which is what " +
                 "lets the cut a wave is weak to be taught during the wave before.")]
             public bool StartsWave;
+
+            [Tooltip("Coached maps only: the popup's heading, e.g. \"Welcome\" or \"Success!\". Leave empty for none.")]
+            public string Title = string.Empty;
+
+            [Tooltip("Coached maps only: what the popup boxes while this line is current - the Core, the gate, " +
+                "the target tile (grown to its ore patch), the ghost layout, the bar key for this line's " +
+                "building, or a piece of the HUD.")]
+            public TutorialFocus[] Focus = new TutorialFocus[0];
+
+            [Tooltip("Coached maps only: the HUD pieces this line brings on screen. A coached map starts with " +
+                "an empty HUD, and a piece once revealed stays.")]
+            public TutorialHud Reveal = TutorialHud.None;
+
+            [Tooltip("Coached maps only: ore this line lays down when it is done - list those tiles here and " +
+                "not under Ore, so the vein is not on the map until the lesson needs it.")]
+            public OreCell[] AddsOre = new OreCell[0];
         }
 
         [Header("Tutorial")]
@@ -201,6 +217,11 @@ namespace Facet.Game
             "line with no text, a guide tile off the map, or a line about a building no earlier line hands " +
             "over - the last one is a run that waits forever for a wave nothing can release.")]
         public TutorialTaskRow[] TutorialTasks = new TutorialTaskRow[0];
+
+        [Tooltip("Teach this map's lesson with the coach: one big popup per line, boxes around what it is " +
+            "about, and a HUD that starts empty and is revealed line by line. For a tutorial level; a lesson " +
+            "laid over a real level (Quarry) leaves this off and keeps the task card.")]
+        public bool TutorialCoached;
 
         /// <summary>The tile a problem is about when it is about the map as a whole, spelled as
         /// <see cref="MapValidation"/> spells it.</summary>
@@ -403,7 +424,7 @@ namespace Facet.Game
                 // The card that prints a line is a fixed corner of micro type: the HUD shrinks to its floor
                 // and past the floor the sentence spills out of the card onto the map. Same rule for the hint,
                 // which the card pins under the line once the player has been stuck a while.
-                if (LongerThanCard(row.Text))
+                if (LongerThanCard(row.Text, TutorialCoached))
                 {
                     into.Add(new MapProblem(MapProblemKind.TutorialLineTooLong, NoCell,
                         Name + ": tutorial line " + (i + 1) + " runs " + row.Text.Length + " characters - " +
@@ -411,7 +432,7 @@ namespace Facet.Game
                         "line would spill past the card onto the map"));
                 }
 
-                if (LongerThanCard(row.Hint))
+                if (LongerThanCard(row.Hint, TutorialCoached))
                 {
                     into.Add(new MapProblem(MapProblemKind.TutorialLineTooLong, NoCell,
                         Name + ": tutorial line " + (i + 1) + "'s hint runs " + row.Hint.Length +
@@ -443,6 +464,14 @@ namespace Facet.Game
 
                 BuildKind need;
 
+                // An explanation, a wave to call or a wave to survive is not about a building, so there is no
+                // building for an earlier line to have handed over.
+                if (TutorialScript.NeedsNoBuilding(row.Step))
+                {
+                    if (row.Opens != null) opened.AddRange(row.Opens);
+                    continue;
+                }
+
                 if (!TutorialScript.TryRequiredBuilding(row.Step, out need))
                 {
                     into.Add(new MapProblem(MapProblemKind.TutorialStepUnknown, NoCell,
@@ -473,7 +502,12 @@ namespace Facet.Game
         /// and past the floor the text overflows the card.</summary>
         private const int TutorialTextBudget = 88;
 
-        private static bool LongerThanCard(string line) => line != null && line.Length > TutorialTextBudget;
+        /// <summary>The coach's popup is several times the task card's width and a size larger, and holds
+        /// about this many characters on two lines.</summary>
+        private const int CoachedTextBudget = 180;
+
+        private static bool LongerThanCard(string line, bool coached)
+            => line != null && line.Length > (coached ? CoachedTextBudget : TutorialTextBudget);
 
         /// <summary>Does the map's own operator set admit a building? Asked of the shipped table, which is
         /// what an asset validated in the Editor is played with; a kind the table does not define reads as
@@ -874,15 +908,28 @@ namespace Facet.Game
                 bool placed = row.Target.x >= 0 && row.Target.y >= 0;
                 tasks[i] = new TutorialTask(row.Step, row.Text,
                     placed ? new Int2(row.Target.x, row.Target.y) : (Int2?)null,
-                    row.Opens, row.StartsWave, row.Hint, GhostOf(row.Ghost));
+                    row.Opens, row.StartsWave, row.Hint, GhostOf(row.Ghost),
+                    row.Title, row.Focus, row.Reveal, OreOf(row.AddsOre));
             }
 
-            return new TutorialScript(TutorialStarting, tasks);
+            return new TutorialScript(TutorialStarting, tasks, TutorialCoached);
         }
 
         /// <summary>Convert a row's authored ghosts to the engine-free blueprint, preserving order: the
         /// first entry is the line's primary building, which is what the bar highlights first. A null list
         /// is no blueprint rather than a null array, the same normalization every other row field gets.</summary>
+        /// <summary>A line's extra ore as one-tile patches; a tile with no mineral is skipped.</summary>
+        private static ShapePatch[] OreOf(OreCell[] cells)
+        {
+            if (cells == null || cells.Length == 0) return null;
+
+            var patches = new List<ShapePatch>(cells.Length);
+            for (int i = 0; i < cells.Length; i++)
+                if (cells[i].Mineral != Quad.Empty)
+                    patches.Add(new ShapePatch(new Int2(cells[i].Cell.x, cells[i].Cell.y), 1, 1, cells[i].Mineral));
+            return patches.ToArray();
+        }
+
         private static TutorialGhost[] GhostOf(TutorialGhostRow[] rows)
         {
             if (rows == null || rows.Length == 0) return new TutorialGhost[0];

@@ -115,6 +115,7 @@ namespace Facet.Core
 
             int i = _grid.Index(cell);
             _kind[i] = kind;
+            Version++;
 
             // The mineral is only meaningful under ore, so a tile that stops being ore stops yielding:
             // leaving it behind would let a re-stamp hand back a patch nobody drew.
@@ -130,7 +131,13 @@ namespace Facet.Core
             int i = _grid.Index(cell);
             _kind[i] = TerrainKind.Ore;
             _mineral[i] = mineral;
+            Version++;
         }
+
+        /// <summary>Bumped on every write to the ground, so a view that draws it (the ore icons) knows to
+        /// redraw. The ground almost never changes mid-run - a coached lesson laying its next vein is the one
+        /// case - so a counter beats a per-frame comparison.</summary>
+        public int Version { get; private set; }
 
         /// <summary>
         /// Put a tile back to bare ground after whatever stood on it is removed. Terrain lives in this
@@ -167,6 +174,7 @@ namespace Facet.Core
         {
             Array.Clear(_kind, 0, _kind.Length);
             Array.Clear(_mineral, 0, _mineral.Length);
+            Version++;
         }
 
         /// <summary>

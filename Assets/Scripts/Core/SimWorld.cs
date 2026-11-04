@@ -184,7 +184,20 @@ namespace Facet.Core
             // in a chamber, a half off a cutter - and releases the wave it is waiting on there and then, before
             // the clock step gets to look at the gate. Read after the machines, because the question "is that
             // turret loaded" is the machine system's answer and not the previous tick's.
+            // The coached lesson's inputs, handed over before it reads the tick: what the player is holding,
+            // whether the popup's button was pressed, and whether a wave was asked for - N and the button both
+            // land here, so the line that asks for the wave sees the press that answers it.
+            Tutorial.NoteSelection(_build.Selected);
+            if (_tutorialNextRequested)
+            {
+                _tutorialNextRequested = false;
+                Tutorial.Acknowledge();
+            }
+            if (cmd.StartWavePressed || _waveRequested) Tutorial.NoteWaveCall();
+
+            int linesBefore = Tutorial.StepsCompleted;
             Tutorial.Step();
+            if (Tutorial.StepsCompleted > linesBefore) LayTutorialOre(linesBefore, Tutorial.StepsCompleted);
 
             // The gate is said here and only here - after the lesson has had its say and before the clock can
             // open a wait - so a line ticked on the same tick a wave is cleared cannot leave the run holding a
@@ -235,6 +248,7 @@ namespace Facet.Core
 
             Waves.Reset();
             Tutorial.Reset();
+            _tutorialNextRequested = false;
             _machineSystem.Reset();
             _build.Reset();
             Economy.Reset(Map.StartShapes);
@@ -256,6 +270,32 @@ namespace Facet.Core
         /// happens between ticks and only this world knows the tick order. A test that means to start a
         /// wave writes <c>world.Waves.StartNextWave()</c> on the clock directly.</summary>
         public void RequestNextWave() => _waveRequested = true;
+
+        /// <summary>The coached popup's button (or Enter): "I have read this, go on". A request rather than a
+        /// call into the lesson, for the same reason the wave button is one - a click happens between ticks, and
+        /// the lesson advances on a tick boundary.</summary>
+        public void RequestTutorialNext() => _tutorialNextRequested = true;
+
+        /// <summary>The veins the lines just ticked lay down. Only onto open ground: a tile already built on,
+        /// or rock, keeps what it is, so a lesson can never bury a building.</summary>
+        private void LayTutorialOre(int from, int to)
+        {
+            for (int line = from; line < to; line++)
+            {
+                ShapePatch[] ore = Tutorial.TaskAt(line).AddsOre;
+                for (int p = 0; p < ore.Length; p++)
+                    for (int dy = 0; dy < ore[p].Height; dy++)
+                        for (int dx = 0; dx < ore[p].Width; dx++)
+                        {
+                            Int2 cell = new Int2(ore[p].Origin.X + dx, ore[p].Origin.Y + dy);
+                            if (TileGrid.InBounds(cell) && TileGrid.Get(cell) == TileKind.Empty &&
+                                Terrain.KindAt(cell) == TerrainKind.Ground)
+                                Terrain.SetOre(cell, ore[p].Mineral);
+                        }
+            }
+        }
+
+        private bool _tutorialNextRequested;
 
         /// <summary>Ask for the run to restart on the next tick. The HUD's restart button calls this;
         /// the R key still goes through <see cref="InputCommand.RestartPressed"/>.</summary>

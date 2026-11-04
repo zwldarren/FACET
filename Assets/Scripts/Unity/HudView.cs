@@ -246,7 +246,8 @@ namespace Facet.Game
         public bool PointerOverHud { get; private set; }
 
         private bool CanStartWaveNow =>
-            _world.Status == GameStatus.Playing && !_world.Paused && _world.Waves.HasWaveToStart;
+            _world.Status == GameStatus.Playing && !_world.Paused &&
+            (_world.Waves.HasWaveToStart || _world.Tutorial.WaitsForWaveCall);
 
         /// <summary>Relayed to the locator and the guide through <see cref="ThreatRadarView.SetInfoGrown"/>: their
         /// panel boxes are the boxes the HUD draws.</summary>
@@ -283,6 +284,7 @@ namespace Facet.Game
             get
             {
                 if (_campaign == null) return false;
+                if (_world != null && _world.Tutorial.Coached) return false;
                 if (_tutorialChoice.HasValue) return _tutorialChoice.Value;
 
                 // A later map that hands over a machine opens with the card up too, unless it brings a lesson
@@ -310,6 +312,7 @@ namespace Facet.Game
 
                 TutorialState tutorial = _world.Tutorial;
                 if (!tutorial.Active) return false;
+                if (tutorial.Coached) return false;
                 if (!tutorial.Complete) return true;
 
                 return _tutorialDoneAt >= 0f && Time.unscaledTime - _tutorialDoneAt < TaskDoneHold;
@@ -414,6 +417,7 @@ namespace Facet.Game
             UpdateInfo();
             UpdateTooltip();
             UpdateButtons();
+            ApplyCoachConcealment();
         }
 
         private void OnDestroy()
@@ -1280,9 +1284,15 @@ namespace Facet.Game
             Vector2 pointer = Pointer();
             if (pointer.x < 0f) return false;
 
-            if (Over(_status.Root, pointer) || Over(_controls.Root, pointer) ||
-                Over(_bar.Root, pointer) || Over(_info.Root, pointer))
+            if (OverShown(_status.Root, pointer) || OverShown(_controls.Root, pointer) ||
+                OverShown(_bar.Root, pointer) || OverShown(_info.Root, pointer))
                 return true;
+
+            for (int i = 0; i < _pointerClaims.Count; i++)
+            {
+                RectTransform claim = _pointerClaims[i];
+                if (claim != null && claim.gameObject.activeInHierarchy && Over(claim, pointer)) return true;
+            }
 
             if (_helpOpen && Over(_help.Root, pointer)) return true;
 
@@ -1302,6 +1312,161 @@ namespace Facet.Game
 
         private static bool Over(RectTransform rt, Vector2 screenPoint)
             => RectTransformUtility.RectangleContainsScreenPoint(rt, screenPoint, null);
+
+        /// <summary>Over a panel the coach has not hidden: a concealed card is not there to click.</summary>
+        private static bool OverShown(RectTransform rt, Vector2 screenPoint) => Shown(rt) && Over(rt, screenPoint);
+
+        // ------------------------------------------------------------------ the coached lesson
+
+        /// <summary>Other views' boxes that take the pointer the way a card does - the coach's popup - so a
+        /// click on its button does not also build on the tile under it.</summary>
+        private readonly List<RectTransform> _pointerClaims = new List<RectTransform>();
+
+        /// <summary>Let another view's box claim the pointer like a HUD card. Claimed for good; a destroyed or
+        /// hidden box claims nothing.</summary>
+        public void ClaimPointer(RectTransform box)
+        {
+            if (box != null && !_pointerClaims.Contains(box)) _pointerClaims.Add(box);
+        }
+
+        /// <summary>A coached map opens with an empty HUD and each line reveals the pieces it talks about
+        /// (<see cref="TutorialState.Revealed"/>). Hidden with a <see cref="CanvasGroup"/> rather than by
+        /// switching the panel off, so every panel keeps drawing itself and is correct the frame it appears -
+        /// and a hidden panel takes no clicks. Every other map reveals everything, which is a no-op.</summary>
+        private void ApplyCoachConcealment()
+        {
+            TutorialHud shown = _world.Tutorial.Revealed;
+
+            SetShown(_status?.Root, (shown & TutorialHud.Status) != 0);
+            SetShown(_stockpile?.Root, (shown & TutorialHud.Stockpile) != 0);
+            SetShown(_bar?.Root, (shown & TutorialHud.Bar) != 0);
+            SetShown(_controls?.Root, (shown & TutorialHud.Controls) != 0);
+            SetShown(_info?.Root, (shown & TutorialHud.Info) != 0);
+        }
+
+        private static void SetShown(RectTransform root, bool shown)
+        {
+            if (root == null) return;
+
+            CanvasGroup group = root.GetComponent<CanvasGroup>();
+            if (group == null)
+            {
+                if (shown) return;   // never hidden, nothing to undo
+                group = root.gameObject.AddComponent<CanvasGroup>();
+            }
+
+            float alpha = shown ? 1f : 0f;
+            if (Mathf.Approximately(group.alpha, alpha)) return;
+
+            group.alpha = alpha;
+            group.blocksRaycasts = shown;
+            group.interactable = shown;
+        }
+
+        private static bool Shown(RectTransform root)
+        {
+            if (root == null) return false;
+            CanvasGroup group = root.GetComponent<CanvasGroup>();
+            return group == null || group.alpha > 0f;
+        }
+
+        /// <summary>
+        /// Where a piece of the HUD is on screen, in screen pixels (origin bottom-left), for the coach to box. The
+        /// HUD measures its own pieces so a box can never drift from what it points at. False for a piece that is
+        /// not on screen - not built yet, hidden, or a bar key the run has not been handed.
+        /// <paramref name="building"/> says which bar key <see cref="TutorialFocus.BarTile"/> means.
+        /// </summary>
+        public bool TryFocusRect(TutorialFocus focus, BuildKind building, out Rect screen)
+        {
+            screen = default;
+            if (_status == null) return false;
+
+            var union = new FocusUnion();
+            switch (focus)
+            {
+                case TutorialFocus.Stockpile:
+                    if (Shown(_stockpile?.Root)) union.Add(_stockpile.Root);
+                    break;
+
+                case TutorialFocus.StatusCard:
+                    if (Shown(_status.Root)) union.Add(_status.Root);
+                    break;
+
+                case TutorialFocus.CoreHealth:
+                    if (!Shown(_status.Root)) break;
+                    union.Add(_status.CoreCap.Rect);
+                    union.Add(_status.HealthValue.Rect);
+                    union.Add(_status.HealthTrack.Rect);
+                    break;
+
+                case TutorialFocus.WaveClock:
+                    if (!Shown(_status.Root)) break;
+                    union.Add(_status.WaveTag.Rect);
+                    union.Add(_status.News.Rect);
+                    break;
+
+                case TutorialFocus.WaveChips:
+                    if (!Shown(_status.Root)) break;
+                    union.Add(_status.NextLabel.Rect);
+                    for (int i = 0; i < _status.Chips.Length; i++)
+                        if (_status.Chips[i].Back.Rect.gameObject.activeInHierarchy) union.Add(_status.Chips[i].Back.Rect);
+                    break;
+
+                case TutorialFocus.WaveButton:
+                    if (Shown(_controls?.Root) && _controls.Wave != null) union.Add(_controls.Wave.Root);
+                    break;
+
+                case TutorialFocus.BuildBar:
+                    if (!Shown(_bar?.Root)) break;
+                    for (int i = 0; i < _bar.Tiles.Count; i++)
+                        if (_bar.Tiles[i].Root.gameObject.activeInHierarchy) union.Add(_bar.Tiles[i].Root);
+                    break;
+
+                case TutorialFocus.BarTile:
+                    if (!Shown(_bar?.Root)) break;
+                    for (int i = 0; i < _bar.Tiles.Count; i++)
+                        if (_bar.Tiles[i].Kind == building) union.Add(_bar.Tiles[i].Root);
+                    break;
+            }
+
+            return union.TryGet(out screen);
+        }
+
+        /// <summary>The smallest screen rectangle holding a set of HUD nodes: on a screen-space overlay canvas a
+        /// node's world corners are screen pixels.</summary>
+        private struct FocusUnion
+        {
+            private bool _any;
+            private Vector2 _min;
+            private Vector2 _max;
+
+            public void Add(RectTransform rt)
+            {
+                if (rt == null || !rt.gameObject.activeInHierarchy) return;
+
+                var corners = new Vector3[4];
+                rt.GetWorldCorners(corners);
+                for (int i = 0; i < 4; i++)
+                {
+                    Vector2 c = corners[i];
+                    if (!_any)
+                    {
+                        _min = _max = c;
+                        _any = true;
+                        continue;
+                    }
+
+                    _min = Vector2.Min(_min, c);
+                    _max = Vector2.Max(_max, c);
+                }
+            }
+
+            public bool TryGet(out Rect rect)
+            {
+                rect = _any ? Rect.MinMaxRect(_min.x, _min.y, _max.x, _max.y) : default;
+                return _any && rect.width > 0f && rect.height > 0f;
+            }
+        }
 
         // ------------------------------------------------------------------ the tutorial card
 

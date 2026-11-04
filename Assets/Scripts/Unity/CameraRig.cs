@@ -109,6 +109,28 @@ namespace Facet.Game
             _autoGlide = true;
         }
 
+        /// <summary>Show the whole map at once, centred, as large as it fits with a margin for the HUD: the tutorial
+        /// level is small on purpose, and at the campaign's zoom it would be a postage stamp in the middle of the
+        /// screen. Cuts rather than glides - it is the view the level opens on. <c>C</c> still returns to the
+        /// Core, and the wheel still zooms.</summary>
+        public void FrameWholeMap(int width, int height, float roomRight = 0f)
+        {
+            if (_camera == null || _grid == null) return;
+
+            const float margin = 2.5f;   // tiles of room for the HUD's top and bottom strips
+            float aspect = Mathf.Max(0.1f, _camera.aspect);
+            float framed = width + Mathf.Max(0f, roomRight);
+            float size = Mathf.Max(height * 0.5f + margin, (framed * 0.5f + margin) / aspect);
+            _targetZoom = Mathf.Clamp(size, minZoom, maxZoom);
+
+            // Not through the pan bound: the room on the right is off the map on purpose, and the bound
+            // would pull the view back over it.
+            _target = new Vector3(framed * 0.5f, height * 0.5f, transform.position.z);
+            transform.position = _target;
+            _camera.orthographicSize = _targetZoom;
+            _autoGlide = false;
+        }
+
         /// <summary><c>C</c>: put the Core in the middle of the view, through the pan bound so the key cannot
         /// shove the map off the open screen, and gliding rather than cutting so the player keeps their
         /// bearings.</summary>
