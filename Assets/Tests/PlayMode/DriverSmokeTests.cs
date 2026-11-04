@@ -144,13 +144,13 @@ namespace Facet.PlayTests
             map.StartShapes = 80;
             map.SpawnPoints = new[] { new Vector2Int(2, 18) };
             map.Waves = new[] { OneWave() };
-            map.TutorialStarting = new[] { BuildKind.Drill };
+            map.TutorialStarting = new[] { BuildKind.Belt };
             map.TutorialTasks = new[]
             {
                 new MapAsset.TutorialTaskRow
                 {
-                    Step = TutorialStep.PlaceDrill,
-                    Text = "Stand a drill on the vein.",
+                    Step = TutorialStep.SelectBelt,
+                    Text = "Pick up a belt.",
                     Target = new Vector2Int(6, 12),
                 },
             };

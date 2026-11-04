@@ -60,10 +60,11 @@ namespace Facet.Game
         public const float BarPad = 12f;
         public const float BarGap = 5f;
 
-        /// <summary>Keys in the shipped table - <see cref="BuildKind.Belt"/> to
-        /// <see cref="BuildKind.Sink"/>. A table that grows past it widens the bar through
-        /// <see cref="BarWidthFor"/> rather than laying keys over the card's edge.</summary>
-        public const int BarTiles = 11;
+        /// <summary>Keys the shipped table puts on the bar - <see cref="BuildKind.Belt"/> to
+        /// <see cref="BuildKind.Sink"/> less the two kinds retired from play (<see cref="BuildCatalog.Retired"/>:
+        /// the drill and the wall), since a belt on ore mines it. A table that grows past it widens the bar
+        /// through <see cref="BarWidthFor"/> rather than laying keys over the card's edge.</summary>
+        public const int BarTiles = 9;
 
         /// <summary>The full table's width, spelled from the tile numbers so the two cannot drift. Fewer
         /// keys make a narrower bar, not a stretched one.</summary>
