@@ -53,7 +53,7 @@ namespace Facet.Game
         private const float BodySize = 19f;
         private const float SmallSize = 12f;
         private const float Inset = 22f;
-        private const float MaxWidth = 400f;
+        private const float MaxWidth = HudLayout.StatusWidth;
         private const float ButtonHeight = 40f;
         private const float ButtonWidth = 200f;
 
@@ -62,7 +62,15 @@ namespace Facet.Game
         private const float HintSeconds = 15f;
 
         /// <summary>The breathing room around a boxed thing, in screen pixels at 720p.</summary>
-        private const float BoxPad = 6f;
+        private const float BoxPad = 12f;
+
+        /// <summary>How far the box breathes in and out past its pad, in pixels at 720p: a box that moves is
+        /// found before a box that only glows.</summary>
+        private const float BoxBreath = 5f;
+
+        /// <summary>The boxes' colour: a hot orange that nothing else on screen uses - not the HUD's warm
+        /// accent, not the cyan of the tiles to click, not an ore.</summary>
+        private static readonly Color BoxColour = new Color(1f, 0.38f, 0.05f, 1f);
 
         public void Initialize(SimWorld world, HudView hud, Camera camera, Palette palette)
         {
@@ -178,19 +186,17 @@ namespace Facet.Game
             HideBoxesFrom(0);
         }
 
-        /// <summary>Write the popup and size it to its words: the panel sits in the top-right corner, under the
-        /// controls cluster, over the room the coached framing leaves beside the map - so it covers neither the
-        /// HUD it points at nor the tiles the player has to click.</summary>
+        /// <summary>Write the popup and size it to its words: the panel sits on the left, in the status card's
+        /// column just under it, over the room the coached framing leaves left of the map - so it covers neither
+        /// the HUD it points at nor the tiles the player has to click.</summary>
         private void Fill(string counter, string title, string body, string hint, string button, float scale,
             Color titleColour)
         {
             _canvasRoot.gameObject.SetActive(true);
             _panel.gameObject.SetActive(true);
 
-            float left = (HudLayout.Margin * 2f + HudLayout.StatusWidth) * scale;
-            float width = Mathf.Min(MaxWidth * scale, Screen.width - left - HudLayout.Margin * scale);
-            width = Mathf.Max(240f * scale, width);
-            float x = Screen.width - HudLayout.Margin * scale - width;
+            float width = Mathf.Min(MaxWidth * scale, Screen.width - 2f * HudLayout.Margin * scale);
+            float x = HudLayout.Margin * scale;
             float inner = width - Inset * 2f * scale;
 
             _counter.Text.fontSize = SmallSize * scale;
@@ -243,7 +249,7 @@ namespace Facet.Game
 
             y += Inset * scale;
 
-            float top = (HudLayout.Margin * 2f + HudLayout.ControlsHeight) * scale;
+            float top = (HudLayout.Margin + HudLayout.StatusHeight + HudLayout.TutorialGap * 2f) * scale;
             _panel.anchorMin = _panel.anchorMax = new Vector2(0f, 1f);
             _panel.pivot = new Vector2(0f, 1f);
             _panel.anchoredPosition = new Vector2(x, -top);
@@ -285,8 +291,14 @@ namespace Facet.Game
                 if (!TryScreenRect(task, task.Focus[i], building, out Rect rect)) continue;
 
                 FocusBox box = BoxAt(used++);
-                float pad = BoxPad * scale;
+                float wave = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 5f);
+                float pad = (BoxPad + BoxBreath * wave) * scale;
                 rect = Rect.MinMaxRect(rect.xMin - pad, rect.yMin - pad, rect.xMax + pad, rect.yMax + pad);
+
+                // Kept on screen, so a box around a corner piece of the HUD keeps all four sides.
+                const float edge = 2f;
+                rect = Rect.MinMaxRect(Mathf.Max(edge, rect.xMin), Mathf.Max(edge, rect.yMin),
+                    Mathf.Min(Screen.width - edge, rect.xMax), Mathf.Min(Screen.height - edge, rect.yMax));
 
                 box.Root.gameObject.SetActive(true);
                 box.Root.anchorMin = box.Root.anchorMax = Vector2.zero;
@@ -294,10 +306,10 @@ namespace Facet.Game
                 box.Root.anchoredPosition = rect.position;
                 box.Root.sizeDelta = rect.size;
 
-                Color colour = done ? HudInk.Good(_palette) : _palette.HudAccent;
-                float pulse = done ? 1f : 0.55f + 0.45f * (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 5f));
+                Color colour = done ? HudInk.Good(_palette) : BoxColour;
+                float pulse = 0.8f + 0.2f * wave;
                 box.Frame.Set(WithAlpha(colour, pulse));
-                box.Wash.Set(WithAlpha(colour, 0.10f * pulse));
+                box.Wash.Set(WithAlpha(colour, 0.16f * pulse));
             }
 
             HideBoxesFrom(used);
@@ -419,7 +431,7 @@ namespace Facet.Game
                 {
                     Root = root,
                     Wash = HudUi.AdoptRound(wash, Color.clear, 8f),
-                    Frame = HudUi.AdoptBorder(frame, Color.clear, 8f, 3f),
+                    Frame = HudUi.AdoptBorder(frame, Color.clear, 8f, 5f),
                 };
                 root.SetAsFirstSibling();   // boxes under the popup
                 _boxes.Add(box);

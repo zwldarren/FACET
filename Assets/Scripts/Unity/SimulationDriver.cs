@@ -89,9 +89,9 @@ namespace Facet.Game
         /// <summary>Reset on every map, because each map teaches its own lesson.</summary>
         private TutorialCamera _tutorialCamera;
 
-        /// <summary>Tiles of empty room the coached level's framing leaves right of the map, where the coach's
+        /// <summary>Tiles of empty room the coached level's framing leaves left of the map, where the coach's
         /// popup sits, so the popup covers neither the map nor the HUD.</summary>
-        private const float CoachRoomTiles = 10f;
+        private const float CoachRoomTiles = 12f;
 
         private HudView _hud;
 
