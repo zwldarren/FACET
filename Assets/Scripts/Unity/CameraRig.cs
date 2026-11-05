@@ -113,19 +113,20 @@ namespace Facet.Game
         /// level is small on purpose, and at the campaign's zoom it would be a postage stamp in the middle of the
         /// screen. Cuts rather than glides - it is the view the level opens on. <c>C</c> still returns to the
         /// Core, and the wheel still zooms.</summary>
-        public void FrameWholeMap(int width, int height, float roomRight = 0f)
+        public void FrameWholeMap(int width, int height, float roomLeft = 0f)
         {
             if (_camera == null || _grid == null) return;
 
             const float margin = 2.5f;   // tiles of room for the HUD's top and bottom strips
             float aspect = Mathf.Max(0.1f, _camera.aspect);
-            float framed = width + Mathf.Max(0f, roomRight);
+            float room = Mathf.Max(0f, roomLeft);
+            float framed = width + room;
             float size = Mathf.Max(height * 0.5f + margin, (framed * 0.5f + margin) / aspect);
             _targetZoom = Mathf.Clamp(size, minZoom, maxZoom);
 
-            // Not through the pan bound: the room on the right is off the map on purpose, and the bound
+            // Not through the pan bound: the room on the left is off the map on purpose, and the bound
             // would pull the view back over it.
-            _target = new Vector3(framed * 0.5f, height * 0.5f, transform.position.z);
+            _target = new Vector3(width - framed * 0.5f, height * 0.5f, transform.position.z);
             transform.position = _target;
             _camera.orthographicSize = _targetZoom;
             _autoGlide = false;
