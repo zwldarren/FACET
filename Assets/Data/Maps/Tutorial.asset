@@ -15,7 +15,7 @@ MonoBehaviour:
   Name: Tutorial
   Width: 22
   Height: 14
-  StartShapes: 60
+  StartShapes: 40
   CoreCell: {x: 3, y: 5}
   Terrain: 0202020202020202020202020202020202020202020202000000000000000000000000000000000000000002020000000000000000000000000000000000000000020200000000000000000000000000000000000000000202000000000000000000000000000000000000000002020000000000000002020202020202020202020202020200000000000000000000000000000000000000000202000000000000000000000000000000000000000000020000000000000000000000000000000000000000020200000000000000020202020202020202020202020202000000000000000000000000000000000000000002020000000000000000000000000000000000000000020200000000000000000000000000000000000000000202020202020202020202020202020202020202020202
   Ore:
@@ -45,32 +45,29 @@ MonoBehaviour:
   Unlocked: 0
   Seed: 0
   GeneratedWaves: 0
-  TutorialStarting: []
+  TutorialStarting: 
   TutorialTasks:
   - Step: 8
-    Text: Enemies come in through the GATE. Defeat them and protect your CORE.
+    Text: "Enemies come in through the GATE. \nDefeat them and protect your CORE."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens: []
+    Opens: 
     StartsWave: 0
-    Title: 'Welcome!'
-    Focus:
-    - 2
-    - 1
+    Title: Welcome!
+    Focus: 0201
     Reveal: 0
     AddsOre: []
   - Step: 8
-    Text: This is ORE. Drills mine shapes from it. Shapes are your money and your ammo.
+    Text: "This is ORE. A belt laid on ore mines shapes from it. \nShapes are your
+      money and your ammo."
     Hint: 
     Target: {x: 4, y: 11}
     Ghost: []
-    Opens:
-    - 1
+    Opens: 00
     StartsWave: 0
     Title: Ore
-    Focus:
-    - 3
+    Focus: 03
     Reveal: 0
     AddsOre: []
   - Step: 8
@@ -78,83 +75,53 @@ MonoBehaviour:
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens: []
+    Opens: 
     StartsWave: 0
     Title: Build bar
-    Focus:
-    - 12
+    Focus: 0c
     Reveal: 4
     AddsOre: []
-  - Step: 9
-    Text: 'Press 2, or click the DRILL.'
-    Hint: 
-    Target: {x: -1, y: -1}
-    Ghost: []
-    Opens: []
-    StartsWave: 0
-    Title: Pick the drill
-    Focus:
-    - 5
-    Reveal: 0
-    AddsOre: []
-  - Step: 0
-    Text: 'Click the glowing tile. Its arrow must point DOWN, toward the Core.'
-    Hint: Press Q or E to turn it before you click.
-    Target: {x: 4, y: 11}
-    Ghost:
-    - Build: 1
-      Cell: {x: 4, y: 11}
-      Facing: 2
-    Opens:
-    - 0
-    StartsWave: 0
-    Title: Place the drill
-    Focus:
-    - 4
-    Reveal: 0
-    AddsOre: []
   - Step: 10
-    Text: 'Press 1, or click the BELT.'
+    Text: Press 1, or click the BELT.
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens: []
+    Opens: 
     StartsWave: 0
     Title: Pick the belt
-    Focus:
-    - 5
+    Focus: 05
     Reveal: 0
     AddsOre: []
   - Step: 1
-    Text: Press on the DRILL and drag down into the Core.
-    Hint: 'Start the drag on the drill itself, then let go on the Core.'
+    Text: Press on the glowing ORE tile, and drag down into the Core.
+    Hint: Start the drag on the ore itself, then let go on the Core.
     Target: {x: 4, y: 11}
     Ghost:
+    - Build: 0
+      Cell: {x: 4, y: 11}
+      Facing: 2
     - Build: 0
       Cell: {x: 4, y: 10}
       Facing: 2
     - Build: 0
       Cell: {x: 4, y: 9}
       Facing: 2
-    Opens: []
+    Opens: 
     StartsWave: 0
     Title: Lay the belt
-    Focus:
-    - 3
-    - 4
+    Focus: 0401
     Reveal: 0
     AddsOre: []
   - Step: 8
-    Text: Your first shape reached the Core. This number goes up with every shape you bank.
+    Text: Your first shape reached the Core! This number goes up with every shape
+      you bank.
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens:
-    - 9
+    Opens: 09
     StartsWave: 0
-    Title: 'Success!'
-    Focus:
-    - 6
+    Title: Success!
+    Focus: 06
     Reveal: 2
     AddsOre:
     - Cell: {x: 9, y: 2}
@@ -165,122 +132,126 @@ MonoBehaviour:
       Mineral: 1
     - Cell: {x: 10, y: 3}
       Mineral: 1
-  - Step: 11
-    Text: 'Turrets shoot enemies. Press 0, or click the TURRET.'
+  - Step: 8
+    Text: "Placed something in the wrong spot? \nRIGHT-CLICK it to delete it."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens: []
+    Opens: 
+    StartsWave: 0
+    Title: Mistakes are fine
+    Focus: 
+    Reveal: 0
+    AddsOre: []
+  - Step: 11
+    Text: "Turrets shoot enemies. \nPress 0, or click the TURRET."
+    Hint: 
+    Target: {x: -1, y: -1}
+    Ghost: []
+    Opens: 
     StartsWave: 0
     Title: Pick the turret
-    Focus:
-    - 5
+    Focus: 05
     Reveal: 0
     AddsOre: []
   - Step: 12
-    Text: 'Click the glowing tile, next to the enemies'' road.'
+    Text: Click the glowing tile next to the enemies' road to place the turret.
     Hint: 
     Target: {x: 12, y: 3}
     Ghost:
     - Build: 9
       Cell: {x: 12, y: 3}
       Facing: 1
-    Opens: []
+    Opens: 
     StartsWave: 0
     Title: Place the turret
-    Focus:
-    - 4
+    Focus: 04
     Reveal: 0
     AddsOre: []
   - Step: 2
-    Text: 'Turrets fire the shapes you feed them. Drill the new ore (arrow RIGHT), then belt it into the turret.'
-    Hint: 'Drill on the glowing ore tile, turned with Q/E, then drag a belt from the drill to the turret.'
+    Text: "Turrets fire the shapes you feed them. \nDrag a belt from the new ORE
+      into the turret."
+    Hint: Press 1, start on the glowing ore tile, and drag right until you reach
+      the turret.
     Target: {x: 10, y: 3}
     Ghost:
-    - Build: 1
+    - Build: 0
       Cell: {x: 10, y: 3}
       Facing: 1
     - Build: 0
       Cell: {x: 11, y: 3}
       Facing: 1
-    Opens: []
+    Opens: 
     StartsWave: 0
     Title: Load the turret
-    Focus:
-    - 4
+    Focus: 04
     Reveal: 0
     AddsOre: []
   - Step: 8
-    Text: 'The turret has ammo. Now, the top of the screen.'
+    Text: "The turret has ammo. \nNow let's move to the top of the screen."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens: []
+    Opens: 
     StartsWave: 0
-    Title: 'Loaded!'
-    Focus:
-    - 11
+    Title: Loaded!
+    Focus: 0b
     Reveal: 1
     AddsOre: []
   - Step: 8
-    Text: 'Your Core''s health. If it reaches zero, you lose.'
+    Text: "Your Core's health. \nIf it reaches zero, you lose."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens: []
+    Opens: 
     StartsWave: 0
     Title: Core health
-    Focus:
-    - 7
+    Focus: 07
     Reveal: 0
     AddsOre: []
   - Step: 8
-    Text: 'Which wave is next, and when it comes. Clear every wave to win.'
+    Text: "Which wave is next, and when it comes. \nClear every wave to win."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens: []
+    Opens: 
     StartsWave: 0
     Title: Waves
-    Focus:
-    - 8
+    Focus: 08
     Reveal: 0
     AddsOre: []
   - Step: 8
-    Text: 'The shape these enemies are weak to. This wave: a full circle, which your drill makes.'
+    Text: "The shape these enemies are weak to. \nThis wave: a full circle, which
+      your ore gives."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens: []
+    Opens: 
     StartsWave: 0
     Title: Weakness
-    Focus:
-    - 9
+    Focus: 09
     Reveal: 0
     AddsOre: []
   - Step: 13
-    Text: 'Press N, or click this button, to start wave 1.'
+    Text: Press N, or click this button, to start wave 1.
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens: []
+    Opens: 
     StartsWave: 1
     Title: Ready?
-    Focus:
-    - 10
-    - 2
+    Focus: 0a02
     Reveal: 8
     AddsOre: []
   - Step: 14
-    Text: 'Here they come. Watch your turret fire!'
+    Text: Here they come. Watch your turret fire!
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens: []
+    Opens: 
     StartsWave: 0
-    Title: 'Defend!'
-    Focus:
-    - 1
+    Title: Defend!
+    Focus: 01
     Reveal: 0
     AddsOre: []
   TutorialCoached: 1

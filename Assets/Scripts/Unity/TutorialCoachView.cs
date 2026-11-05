@@ -325,7 +325,7 @@ namespace Facet.Game
         private static BuildKind LineBuilding(TutorialTask task)
         {
             if (TutorialScript.TryRequiredBuilding(task.Step, out BuildKind building)) return building;
-            return task.Ghost.Length > 0 ? task.Ghost[0].Build : BuildKind.Drill;
+            return task.Ghost.Length > 0 ? task.Ghost[0].Build : BuildKind.Belt;
         }
 
         private bool TryScreenRect(TutorialTask task, TutorialFocus focus, BuildKind building, out Rect rect)
