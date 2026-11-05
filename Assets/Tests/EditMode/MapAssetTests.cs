@@ -139,7 +139,8 @@ namespace Facet.Tests
             Assert.IsTrue(world.IsUnlocked(BuildKind.Cutter));
             Assert.IsTrue(world.IsUnlocked(BuildKind.Rotator));
             Assert.IsFalse(world.IsUnlocked(BuildKind.Stacker), "the stacker is not this map's to give");
-            Assert.IsTrue(world.IsUnlocked(BuildKind.Drill), "and the scaffolding needs no unlocking at all");
+            Assert.IsFalse(world.IsUnlocked(BuildKind.Drill),
+                "and the scaffolding needs no unlocking at all - the drill is off the bar (a belt on ore mines)");
         }
 
         [Test]

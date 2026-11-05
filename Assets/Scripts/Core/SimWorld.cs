@@ -86,6 +86,9 @@ namespace Facet.Core
 
         private readonly MachineSystem _machineSystem;
         private readonly CoreSinkSystem _sink;
+
+        /// <summary>Belts on ore mine it - the drill's job, without the drill.</summary>
+        private readonly BeltMining _mining;
         private readonly BuildController _build;
 
         /// <summary>The walkers' way to the Core, rebuilt in the tick whenever the machines' solidity
@@ -120,6 +123,7 @@ namespace Facet.Core
             _machineSystem = new MachineSystem(TileGrid, Terrain, Belts, Machines, Enemies, Projectiles,
                 Content, Events);
             _sink = new CoreSinkSystem(TileGrid, Belts, Economy, Events);
+            _mining = new BeltMining(TileGrid, Terrain, Belts, Content);
             _build = new BuildController(TileGrid, Terrain, map, Belts, Machines, Economy, Content, Events,
                 Tutorial);
 
@@ -175,6 +179,7 @@ namespace Facet.Core
 
             Belts.Step(SimConfig.TickDt, Config.BeltSpeed);
             _machineSystem.Step(SimConfig.TickDt);
+            _mining.Step(SimConfig.TickDt);
             _sink.Step(Core.Cell);
             Projectiles.Step(SimConfig.TickDt, Enemies);
             _paths.Sync();
@@ -250,6 +255,7 @@ namespace Facet.Core
             Tutorial.Reset();
             _tutorialNextRequested = false;
             _machineSystem.Reset();
+            _mining.Reset();
             _build.Reset();
             Economy.Reset(Map.StartShapes);
 
@@ -309,12 +315,12 @@ namespace Facet.Core
         /// them; the campaign's progression is a map's operator set, and a map that teaches has its tutorial's
         /// lines on top of it. Both are asked of the one rule owner
         /// (<see cref="BuildController.IsUnlocked"/>), so a hidden tile and a dead hotkey cannot drift apart.</summary>
-        public bool IsUnlocked(BuildKind kind) => _build.IsUnlocked(kind);
+        public bool IsUnlocked(BuildKind kind) => !BuildCatalog.Retired(kind) && _build.IsUnlocked(kind);
 
         /// <summary>Is the tutorial the one gate this kind fails right now? The distinction a dead hotkey's
         /// answer needs: a lesson-locked kind deserves a word ("the lesson hands it over"), a map-locked one
         /// is not part of this run and gets silence. One rule owner again - <see cref="BuildController.LockedByTutorial"/>.</summary>
-        public bool LockedByTutorial(BuildKind kind) => _build.LockedByTutorial(kind);
+        public bool LockedByTutorial(BuildKind kind) => !BuildCatalog.Retired(kind) && _build.LockedByTutorial(kind);
 
         /// <summary>Re-route the sorter standing on a cell - the picker's verb. False when there is no
         /// sorter there or the filter would route nothing.</summary>

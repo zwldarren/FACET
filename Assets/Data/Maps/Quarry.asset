@@ -164,24 +164,16 @@ MonoBehaviour:
   Seed: 0
   GeneratedWaves: 0
   TutorialStarting:
-  - 1
+  - 0
   TutorialTasks:
-  - Step: 0
-    Text: Drill (2) the vein tile at the ghost - one drill, one line.
-    Hint: Press 2, then click the ghost tile; Q/E turns it before you place it.
+  - Step: 1
+    Text: Drag Belt (1) west from the glowing vein into the Core - a belt on ore mines it.
+    Hint: Press on the vein tile and drag west to the Core, one belt per tile.
     Target: {x: 34, y: 6}
     Ghost:
-    - Build: 1
+    - Build: 0
       Cell: {x: 34, y: 6}
       Facing: 3
-    Opens:
-    - 0
-    StartsWave: 0
-  - Step: 1
-    Text: Drag Belt (1) west from the drill into the Core - full shapes bank coins.
-    Hint: Start on the tile in front of the drill and drag west, one belt per tile.
-    Target: {x: 26, y: 6}
-    Ghost:
     - Build: 0
       Cell: {x: 33, y: 6}
       Facing: 3
@@ -212,11 +204,11 @@ MonoBehaviour:
     - 10
     StartsWave: 0
   - Step: 2
-    Text: Turret (0) at the ghost - the right vein feeds it a full round.
-    Hint: Drill the vein tile above the first, belt west, then north and west into the turret.
+    Text: Turret (0) at the ghost - belt the right vein to it for full rounds.
+    Hint: Belt from the vein tile above the first, west, then north and west into the turret.
     Target: {x: 25, y: 13}
     Ghost:
-    - Build: 1
+    - Build: 0
       Cell: {x: 34, y: 7}
       Facing: 3
     - Build: 0
@@ -268,10 +260,10 @@ MonoBehaviour:
     StartsWave: 0
   - Step: 3
     Text: Cutter (3) on the left line - turn it to flow east so the cut is top/bottom.
-    Hint: Drill the left vein, belt straight east into the cutter's back, then Q/E to flow east.
+    Hint: Belt the left vein straight east into the cutter's back, then Q/E to flow east.
     Target: {x: 17, y: 8}
     Ghost:
-    - Build: 1
+    - Build: 0
       Cell: {x: 11, y: 7}
       Facing: 1
     - Build: 0

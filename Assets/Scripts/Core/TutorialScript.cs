@@ -361,11 +361,12 @@ namespace Facet.Core
             switch (step)
             {
                 case TutorialStep.PlaceDrill:
-                case TutorialStep.BankShape:
                 case TutorialStep.SelectDrill:
                     building = BuildKind.Drill;
                     return true;
 
+                // A belt laid on ore mines it (<see cref="BeltMining"/>), so banking needs only belts.
+                case TutorialStep.BankShape:
                 case TutorialStep.SelectBelt:
                     building = BuildKind.Belt;
                     return true;

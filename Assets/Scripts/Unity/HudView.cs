@@ -813,7 +813,7 @@ namespace Facet.Game
                 panel.Title.Set("HOW TO PLAY", _palette.HudText);
                 lines = new[]
                 {
-                    "Drill (2) on ore, then drag Belt (1) to the Core.",
+                    "Drag Belt (1) from ore into the Core - a belt on ore mines it.",
                     "A full shape banked earns one coin.",
                     "Each wave is weak to the shape printed above it.",
                     "Cutter (3) splits, Rotator (4) turns  \u00B7  Q/E turns a ghost.",
@@ -1743,7 +1743,7 @@ namespace Facet.Game
                 case RejectionReason.BadGround:
                     return def.Tile == TileKind.Drill
                         ? "NO ORE - a drill mines only the patch it stands on"
-                        : "ON ORE - only a drill may stand on a patch";
+                        : "ON ORE - only a belt may cross a patch, and it mines it";
                 case RejectionReason.Doorway:
                     return "A DOORWAY - waves walk in at " + refusal.Cell +
                            ", and nothing solid may stand there";
@@ -3098,7 +3098,7 @@ namespace Facet.Game
 
             if (!ore) return;
 
-            InspectLine("mines as " + Shape.Full(mineral).Describe() + " · a drill must stand here", oreColour);
+            InspectLine("mines as " + Shape.Full(mineral).Describe() + " · lay a belt on it to mine", oreColour);
 
             if (TryVeinAt(cell, out ShapePatch vein))
                 InspectLine(vein.Width + " x " + vein.Height + " vein in the ground", HudInk.Muted(_palette));
@@ -3270,7 +3270,7 @@ namespace Facet.Game
             {
                 Quad mineral = _world.Terrain.OreAt(cell);
                 TooltipHeader("Ore patch", _palette.MineralColor(mineral));
-                TooltipLine("mines as " + Shape.Full(mineral).Describe() + " - a drill mines it",
+                TooltipLine("mines as " + Shape.Full(mineral).Describe() + " - a belt laid on it mines it",
                     _palette.MineralColor(mineral));
             }
 
