@@ -69,6 +69,8 @@ namespace Facet.Game
         /// survives a map change and the simulation never sees it.</summary>
         public TickClock Clock { get; } = new TickClock();
 
+        private ProgressMetricsReporter _progressMetrics;
+
         private BuildInput _input;
         private Camera _camera;
 
@@ -164,6 +166,7 @@ namespace Facet.Game
 
             // The matched-round analytics: a reader of the world, like the views, sending one row per wave.
             gameObject.AddComponent<AnalyticsReporter>().Bind(this);
+            _progressMetrics = gameObject.AddComponent<ProgressMetricsReporter>();
         }
 
         private void Update()
@@ -275,11 +278,13 @@ namespace Facet.Game
 
             // The gear scales the real time poured in, never TickDt: at 3x a frame runs three 30 Hz ticks,
             // so a run is the same tick sequence at every gear.
+            _progressMetrics?.BeginFrame(World, Time.unscaledDeltaTime);
             int ticks = Clock.Advance(Time.deltaTime, SimConfig.TickDt);
             for (int i = 0; i < ticks; i++)
             {
                 int beforeTick = World.TickCount;
                 World.Tick(cmd);
+                _progressMetrics?.AfterTick(World, cmd.RestartPressed || World.TickCount < beforeTick);
                 if (cmd.RestartPressed || World.TickCount < beforeTick)
                     for (int view = 0; view < _views.Count; view++) _views[view].Rebind(World);
                 _input.ConsumeOneShots();
@@ -394,6 +399,7 @@ namespace Facet.Game
 
             _shell.Close();
             SetRunHeld(false);
+            _progressMetrics?.ExpectRestart();
             World.RequestRestart();
             // A restart reopens the lesson from its first line, so the camera's memory of the last one goes
             // with it - otherwise the first target of the new run would look already visited.
@@ -406,6 +412,7 @@ namespace Facet.Game
         {
             if (_shell == null) return;
 
+            _progressMetrics?.FinishRun("left_map");
             _shell.ShowTitle();
             SetRunHeld(true);
         }
@@ -419,6 +426,7 @@ namespace Facet.Game
         /// rather than the authored data.</summary>
         private void LoadMap(MapDefinition map)
         {
+            _progressMetrics?.FinishRun("map_changed");
             World = NewWorld(map);
             ReportMapProblems(World.Map);
 
