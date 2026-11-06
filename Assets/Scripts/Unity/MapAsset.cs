@@ -227,6 +227,11 @@ namespace Facet.Game
             "laid over a real level (Quarry) leaves this off and keeps the task card.")]
         public bool TutorialCoached;
 
+        [Tooltip("Let the wave clock run while the lesson is up, as on an ordinary map: the opening counts down " +
+            "from the first building and N calls the wave early. For a level that hands the player the whole " +
+            "job, whose one line is about surviving the wave.")]
+        public bool TutorialClockRuns;
+
         /// <summary>The tile a problem is about when it is about the map as a whole, spelled as
         /// <see cref="MapValidation"/> spells it.</summary>
         private static readonly Int2 NoCell = new Int2(-1, -1);
@@ -928,7 +933,8 @@ namespace Facet.Game
                     row.Title, row.Focus, row.Reveal, OreOf(row.AddsOre));
             }
 
-            return new TutorialScript(TutorialStarting, tasks, TutorialCoached, GhostOf(TutorialPrebuilt));
+            return new TutorialScript(TutorialStarting, tasks, TutorialCoached, GhostOf(TutorialPrebuilt),
+                TutorialClockRuns);
         }
 
         /// <summary>Convert a row's authored ghosts to the engine-free blueprint, preserving order: the

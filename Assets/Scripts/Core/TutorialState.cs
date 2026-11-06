@@ -101,7 +101,7 @@ namespace Facet.Core
         /// a level's waves arrive because a line was ticked rather than because a countdown ran out - and
         /// false the moment the last line is ticked, which is what lets the level's remaining waves play
         /// normally.</summary>
-        public bool GatesWaves => Active && !Complete;
+        public bool GatesWaves => Active && !Complete && !_script.ClockRuns;
 
         /// <summary>Is this lesson taught by the coach (popup, boxes, a HUD revealed piece by piece)?</summary>
         public bool Coached => Active && _script.Coached;

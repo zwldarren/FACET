@@ -28,7 +28,7 @@ import sys
 import urllib.request
 from collections import OrderedDict
 
-MAP_ORDER = ["Tutorial", "Cutter Tutorial", "Rotator Tutorial", "Quarry", "Brickyard"]
+MAP_ORDER = ["Tutorial", "Cutter Tutorial", "First Stand", "Rotator Tutorial", "Quarry", "Brickyard"]
 
 
 def read_rows(source):

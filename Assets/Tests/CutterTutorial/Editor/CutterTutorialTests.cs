@@ -241,16 +241,17 @@ namespace Facet.Tests
         {
             var campaign = AssetDatabase.LoadAssetAtPath<MapSet>("Assets/Data/Campaign.asset");
             Assert.IsNotNull(campaign);
-            Assert.AreEqual(5, campaign.Maps.Length);
+            Assert.AreEqual(6, campaign.Maps.Length);
             Assert.AreEqual("Tutorial", campaign.Maps[0].Name);
             Assert.AreSame(Load(), campaign.Maps[1]);
-            Assert.AreEqual("Rotator Tutorial", campaign.Maps[2].Name);
-            Assert.AreEqual("Quarry", campaign.Maps[3].Name);
-            Assert.AreEqual("Brickyard", campaign.Maps[4].Name);
-            Assert.IsFalse(campaign.Maps[3].TutorialCoached);
-            Assert.AreEqual(48, campaign.Maps[3].Width);
-            Assert.AreEqual(72, campaign.Maps[3].Height);
-            Assert.AreEqual(3, campaign.Maps[3].Waves.Length);
+            Assert.AreEqual("First Stand", campaign.Maps[2].Name);
+            Assert.AreEqual("Rotator Tutorial", campaign.Maps[3].Name);
+            Assert.AreEqual("Quarry", campaign.Maps[4].Name);
+            Assert.AreEqual("Brickyard", campaign.Maps[5].Name);
+            Assert.IsFalse(campaign.Maps[4].TutorialCoached);
+            Assert.AreEqual(48, campaign.Maps[4].Width);
+            Assert.AreEqual(72, campaign.Maps[4].Height);
+            Assert.AreEqual(3, campaign.Maps[4].Waves.Length);
         }
 
         private TutorialState Single(TutorialStep step, params TutorialGhost[] ghost)
