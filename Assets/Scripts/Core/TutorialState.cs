@@ -190,6 +190,21 @@ namespace Facet.Core
             return false;
         }
 
+        /// <summary>Is this tile part of the line the lesson opened with, while the lesson is still running? The
+        /// player cannot rebuild it - the lesson hands over one machine - so removing a piece of it would leave
+        /// a run that can never finish. A two-tile machine answers for both of its tiles.</summary>
+        public bool IsPrebuilt(Int2 cell)
+        {
+            if (!Active || Complete) return false;
+
+            Int2 home = _machines.TryGet(cell, out MachineState machine) ? machine.Home : cell;
+            TutorialGhost[] line = _script.Prebuilt;
+            for (int i = 0; i < line.Length; i++)
+                if (line[i].Cell == home) return true;
+
+            return false;
+        }
+
         /// <summary>Set the lesson aside: nothing is taught, nothing is held, and the bar is the map's own
         /// from the first frame. A caller's verb for a world it does not want taught - a world is told this
         /// once, before its first tick, and <see cref="Reset"/> does not hear it. The driver does not call
@@ -278,7 +293,7 @@ namespace Facet.Core
 
                 case TutorialStep.PlaceCutter:
                     if (!TryLessonCutter(out MachineSnapshot placed)) return false;
-                    return HasCutterGhostFacing(placed.Direction);
+                    return HasGhostFacing(BuildKind.Cutter, placed.Direction);
 
                 case TutorialStep.FeedCutter:
                     if (!TryLessonCutter(out MachineSnapshot fed)) return false;
@@ -293,6 +308,16 @@ namespace Facet.Core
 
                 case TutorialStep.PlaceCutterTurrets:
                     return LessonTurretsPlaced();
+
+                case TutorialStep.SelectRotator:
+                    return _selected == BuildKind.Rotator || TryLessonMachine(BehaviorKind.Rotator, out _);
+
+                case TutorialStep.PlaceRotator:
+                    if (!TryLessonMachine(BehaviorKind.Rotator, out MachineSnapshot rotator)) return false;
+                    return HasGhostFacing(BuildKind.Rotator, rotator.Direction);
+
+                case TutorialStep.LoadWaveShape:
+                    return LessonTurretHoldsWaveShape();
 
                 case TutorialStep.StartWave:
                     return _waveCalled;
@@ -312,26 +337,41 @@ namespace Facet.Core
             }
         }
 
-        // These new coached steps refer to the blueprint's own cutter, so a second cutter elsewhere
+        // These new coached steps refer to the blueprint's own machine, so a second one elsewhere
         // cannot complete the lesson while the highlighted one is still mis-wired.
         private bool TryLessonCutter(out MachineSnapshot cutter)
+            => TryLessonMachine(BehaviorKind.Cutter, out cutter);
+
+        private bool TryLessonMachine(BehaviorKind behavior, out MachineSnapshot machine)
         {
-            cutter = default;
+            machine = default;
             TutorialTask task = _script[_index];
             return task.Target.HasValue
                 && _machines.TryGet(task.Target.Value, out MachineState state)
                 && state.Home == task.Target.Value
-                && _machines.TryGetSnapshot(task.Target.Value, out cutter)
-                && cutter.Behavior == BehaviorKind.Cutter
-                && cutter.Cell == task.Target.Value;
+                && _machines.TryGetSnapshot(task.Target.Value, out machine)
+                && machine.Behavior == behavior
+                && machine.Cell == task.Target.Value;
         }
 
-        private bool HasCutterGhostFacing(Dir facing)
+        private bool HasGhostFacing(BuildKind build, Dir facing)
         {
             TutorialTask task = _script[_index];
             for (int i = 0; i < task.Ghost.Length; i++)
-                if (task.Ghost[i].Build == BuildKind.Cutter)
+                if (task.Ghost[i].Build == build)
                     return task.Ghost[i].Direction == facing;
+            return false;
+        }
+
+        private bool LessonTurretHoldsWaveShape()
+        {
+            if (!TryLessonMachine(BehaviorKind.Turret, out MachineSnapshot gun) || gun.Shape.IsEmpty) return false;
+
+            WaveDefinition wave = _waves.NextWaveDefinition;
+            if (wave == null) return false;
+
+            for (int i = 0; i < wave.Groups.Length; i++)
+                if (wave.Groups[i].Weakness == gun.Shape) return true;
             return false;
         }
 

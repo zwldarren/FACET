@@ -93,7 +93,7 @@ namespace Facet.Tests
                 Assert.Greater(_world.Tutorial.StepsCompleted, before, "stuck at " + task.Title);
             }
             Assert.GreaterOrEqual(_world.Tutorial.StepsCompleted, 15);
-            Assert.AreEqual(1, _world.Waves.CurrentWave);
+            Assert.IsTrue(_world.Waves.Finished);
             Assert.AreEqual(GameStatus.Won, _world.Status);
             Assert.Greater(_world.Core.Hp, 0f);
         }
@@ -241,15 +241,16 @@ namespace Facet.Tests
         {
             var campaign = AssetDatabase.LoadAssetAtPath<MapSet>("Assets/Data/Campaign.asset");
             Assert.IsNotNull(campaign);
-            Assert.AreEqual(4, campaign.Maps.Length);
+            Assert.AreEqual(5, campaign.Maps.Length);
             Assert.AreEqual("Tutorial", campaign.Maps[0].Name);
             Assert.AreSame(Load(), campaign.Maps[1]);
-            Assert.AreEqual("Quarry", campaign.Maps[2].Name);
-            Assert.AreEqual("Brickyard", campaign.Maps[3].Name);
-            Assert.IsFalse(campaign.Maps[2].TutorialCoached);
-            Assert.AreEqual(48, campaign.Maps[2].Width);
-            Assert.AreEqual(72, campaign.Maps[2].Height);
-            Assert.AreEqual(3, campaign.Maps[2].Waves.Length);
+            Assert.AreEqual("Rotator Tutorial", campaign.Maps[2].Name);
+            Assert.AreEqual("Quarry", campaign.Maps[3].Name);
+            Assert.AreEqual("Brickyard", campaign.Maps[4].Name);
+            Assert.IsFalse(campaign.Maps[3].TutorialCoached);
+            Assert.AreEqual(48, campaign.Maps[3].Width);
+            Assert.AreEqual(72, campaign.Maps[3].Height);
+            Assert.AreEqual(3, campaign.Maps[3].Waves.Length);
         }
 
         private TutorialState Single(TutorialStep step, params TutorialGhost[] ghost)

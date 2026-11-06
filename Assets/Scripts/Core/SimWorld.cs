@@ -131,6 +131,7 @@ namespace Facet.Core
             // defends, so the Core's tiles are already claimed by the time the ground is stamped.
             PlaceCore(Map.CoreCell);
             Terrain.Stamp(map);
+            StandPrebuilt();
             Status = GameStatus.Playing;
 
             // The clock's gate has to agree with the lesson from the first frame, not from the first tick: the
@@ -258,6 +259,7 @@ namespace Facet.Core
             _mining.Reset();
             _build.Reset();
             Economy.Reset(Map.StartShapes);
+            StandPrebuilt();
 
             Paused = false;
             Status = GameStatus.Playing;
@@ -281,6 +283,20 @@ namespace Facet.Core
         /// call into the lesson, for the same reason the wave button is one - a click happens between ticks, and
         /// the lesson advances on a tick boundary.</summary>
         public void RequestTutorialNext() => _tutorialNextRequested = true;
+
+        /// <summary>Stand the line a lesson opens with. Placed straight on the fields rather than through the
+        /// build controller: it is part of the map, not something the player paid for.</summary>
+        private void StandPrebuilt()
+        {
+            if (Map.Tutorial == null) return;
+
+            TutorialGhost[] line = Map.Tutorial.Prebuilt;
+            for (int i = 0; i < line.Length; i++)
+            {
+                if (line[i].Build == BuildKind.Belt) Belts.TryPlace(line[i].Cell, line[i].Direction);
+                else Machines.TryPlace(line[i].Cell, line[i].Build, line[i].Direction);
+            }
+        }
 
         /// <summary>The veins the lines just ticked lay down. Only onto open ground: a tile already built on,
         /// or rock, keeps what it is, so a lesson can never bury a building.</summary>

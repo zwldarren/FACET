@@ -107,6 +107,7 @@ namespace Facet.Game
                 case TutorialStep.SelectBelt:
                 case TutorialStep.SelectTurret:
                 case TutorialStep.SelectCutter:
+                case TutorialStep.SelectRotator:
                 case TutorialStep.StartWave:
                 case TutorialStep.ClearWave:
                     return false;

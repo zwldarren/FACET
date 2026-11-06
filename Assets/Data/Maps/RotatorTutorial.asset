@@ -1,0 +1,203 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12eb7dba49ecf9044b3a9f06ba9fb05f, type: 3}
+  m_Name: RotatorTutorial
+  m_EditorClassIdentifier: FACET.Game::Facet.Game.MapAsset
+  Name: Rotator Tutorial
+  Width: 24
+  Height: 16
+  StartShapes: 30
+  CoreCell: {x: 18, y: 6}
+  Terrain: 020202020202020202020202020202020202020202020202020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000002020202020202020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020202020202020202020202020202020202020202020202
+  Ore:
+  - Cell: {x: 5, y: 5}
+    Mineral: 1
+  - Cell: {x: 5, y: 4}
+    Mineral: 1
+  - Cell: {x: 6, y: 5}
+    Mineral: 1
+  - Cell: {x: 6, y: 4}
+    Mineral: 1
+  SpawnPoints:
+  - {x: 23, y: 12}
+  Waves:
+  - Intermission: 10
+    Groups:
+    - Kind: 0
+      Count: 3
+      SpawnPoint: 0
+      FirstDelay: 0
+      Interval: 4
+      Weakness:
+        NW: 0
+        NE: 1
+        SE: 1
+        SW: 0
+  Unlocked: 3
+  Seed: 526
+  GeneratedWaves: 0
+  TutorialStarting: 
+  TutorialPrebuilt:
+  - Build: 0
+    Cell: {x: 5, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 6, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 7, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 8, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 9, y: 5}
+    Facing: 1
+  - Build: 2
+    Cell: {x: 10, y: 6}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 11, y: 6}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 12, y: 6}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 13, y: 6}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 14, y: 7}
+    Facing: 0
+  - Build: 9
+    Cell: {x: 14, y: 8}
+    Facing: 0
+  - Build: 0
+    Cell: {x: 11, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 12, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 13, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 14, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 15, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 16, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 17, y: 5}
+    Facing: 1
+  - Build: 0
+    Cell: {x: 18, y: 5}
+    Facing: 0
+  TutorialTasks:
+  - Step: 8
+    Text: "These enemies are weak to RIGHT halves, but this line makes TOP halves. The gun needs a different shape."
+    Hint: ""
+    Target: {x: 14, y: 6}
+    Ghost: []
+    Opens:
+    StartsWave: 0
+    Title: "Wrong shape"
+    Focus: 09
+    Reveal: 31
+    AddsOre: []
+  - Step: 8
+    Text: "A Rotator turns a shape a quarter clockwise. One turn makes a TOP half into a RIGHT half."
+    Hint: ""
+    Target: {x: 14, y: 6}
+    Ghost:
+    - Build: 3
+      Cell: {x: 14, y: 6}
+      Facing: 0
+    Opens: 03
+    StartsWave: 0
+    Title: "Meet the Rotator"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 21
+    Text: "Press 4, or click ROTATOR."
+    Hint: ""
+    Target: {x: 14, y: 6}
+    Ghost:
+    - Build: 3
+      Cell: {x: 14, y: 6}
+      Facing: 0
+    Opens:
+    StartsWave: 0
+    Title: "Pick the Rotator"
+    Focus: 05
+    Reveal: 0
+    AddsOre: []
+  - Step: 22
+    Text: "Place it in the blue gap. Press Q or E until its arrow points UP, then click."
+    Hint: "Shapes leave by the arrow. If it points the wrong way, right-click to remove it and try again."
+    Target: {x: 14, y: 6}
+    Ghost:
+    - Build: 3
+      Cell: {x: 14, y: 6}
+      Facing: 0
+    Opens:
+    StartsWave: 0
+    Title: "Fill the gap"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 23
+    Text: "Watch the shape turn. The gun must load a RIGHT half before the wave can start."
+    Hint: ""
+    Target: {x: 14, y: 8}
+    Ghost:
+    - Build: 9
+      Cell: {x: 14, y: 8}
+      Facing: 0
+    Opens:
+    StartsWave: 0
+    Title: "Load the gun"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 13
+    Text: "Press N, or click START WAVE."
+    Hint: ""
+    Target: {x: 14, y: 8}
+    Ghost:
+    - Build: 9
+      Cell: {x: 14, y: 8}
+      Facing: 0
+    Opens:
+    StartsWave: 1
+    Title: "Try your fix"
+    Focus: 0a02
+    Reveal: 0
+    AddsOre: []
+  - Step: 14
+    Text: "Right shape, full damage. Keep the line running and clear this wave to finish."
+    Hint: ""
+    Target: {x: 14, y: 8}
+    Ghost:
+    - Build: 9
+      Cell: {x: 14, y: 8}
+      Facing: 0
+    Opens:
+    StartsWave: 0
+    Title: "Defend"
+    Focus: 0401
+    Reveal: 0
+    AddsOre: []
+  TutorialCoached: 1
