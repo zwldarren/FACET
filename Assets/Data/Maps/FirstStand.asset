@@ -1,0 +1,89 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12eb7dba49ecf9044b3a9f06ba9fb05f, type: 3}
+  m_Name: FirstStand
+  m_EditorClassIdentifier: FACET.Game::Facet.Game.MapAsset
+  Name: First Stand
+  Width: 24
+  Height: 16
+  StartShapes: 40
+  CoreCell: {x: 4, y: 6}
+  Terrain: 020202020202020202020202020202020202020202020202020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020202020202020202020202020202020202020202020202
+  Ore:
+  - Cell: {x: 11, y: 12}
+    Mineral: 1
+  - Cell: {x: 12, y: 12}
+    Mineral: 1
+  - Cell: {x: 13, y: 12}
+    Mineral: 1
+  - Cell: {x: 11, y: 13}
+    Mineral: 1
+  - Cell: {x: 12, y: 13}
+    Mineral: 1
+  - Cell: {x: 13, y: 13}
+    Mineral: 1
+  - Cell: {x: 11, y: 2}
+    Mineral: 1
+  - Cell: {x: 12, y: 2}
+    Mineral: 1
+  - Cell: {x: 13, y: 2}
+    Mineral: 1
+  - Cell: {x: 11, y: 3}
+    Mineral: 1
+  - Cell: {x: 12, y: 3}
+    Mineral: 1
+  - Cell: {x: 13, y: 3}
+    Mineral: 1
+  SpawnPoints:
+  - {x: 23, y: 8}
+  Waves:
+  - Intermission: 90
+    Groups:
+    - Kind: 0
+      Count: 5
+      SpawnPoint: 0
+      FirstDelay: 0
+      Interval: 3
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 0
+        SW: 0
+    - Kind: 0
+      Count: 5
+      SpawnPoint: 0
+      FirstDelay: 1.5
+      Interval: 3
+      Weakness:
+        NW: 0
+        NE: 0
+        SE: 1
+        SW: 1
+  Unlocked: 1
+  Seed: 526
+  GeneratedWaves: 0
+  TutorialStarting: 000209
+  TutorialPrebuilt: []
+  TutorialTasks:
+  - Step: 14
+    Text: "No guided steps this time. The timer starts with your first building. Build your defense before the wave arrives, or press N to call it early."
+    Hint: "Belt ore into the Core for shapes, and into a turret for ammo."
+    Target: {x: -1, y: -1}
+    Ghost: []
+    Opens: 
+    StartsWave: 0
+    Title: "Your turn"
+    Focus: 09
+    Reveal: 31
+    AddsOre: []
+  TutorialCoached: 1
+  TutorialClockRuns: 1

@@ -347,13 +347,19 @@ namespace Facet.Core
         /// (<see cref="TutorialState.IsPrebuilt"/>).</summary>
         public readonly TutorialGhost[] Prebuilt;
 
+        /// <summary>Does the wave clock run while this lesson is up, as it does on an ordinary map? For a level
+        /// that hands the player the whole job: the opening counts down from the first building, N calls the
+        /// wave early, and <see cref="TutorialState.GatesWaves"/> stays false.</summary>
+        public readonly bool ClockRuns;
+
         public TutorialScript(BuildKind[] starting, TutorialTask[] tasks, bool coached = false,
-            TutorialGhost[] prebuilt = null)
+            TutorialGhost[] prebuilt = null, bool clockRuns = false)
         {
             Starting = starting ?? new BuildKind[0];
             Tasks = tasks ?? new TutorialTask[0];
             Coached = coached;
             Prebuilt = prebuilt ?? new TutorialGhost[0];
+            ClockRuns = clockRuns;
         }
 
         /// <summary>Is this a step that is not about any building - an explanation to read, a wave to call or

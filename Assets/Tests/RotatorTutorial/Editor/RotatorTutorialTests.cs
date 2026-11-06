@@ -40,8 +40,9 @@ namespace Facet.Tests
         {
             var campaign = AssetDatabase.LoadAssetAtPath<MapSet>("Assets/Data/Campaign.asset");
             Assert.AreEqual("Cutter Tutorial", campaign.Maps[1].Name);
-            Assert.AreSame(Load(), campaign.Maps[2]);
-            Assert.AreEqual("Quarry", campaign.Maps[3].Name);
+            Assert.AreEqual("First Stand", campaign.Maps[2].Name);
+            Assert.AreSame(Load(), campaign.Maps[3]);
+            Assert.AreEqual("Quarry", campaign.Maps[4].Name);
         }
 
         [Test]
