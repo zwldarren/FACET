@@ -84,6 +84,25 @@ namespace Facet.Core
         /// <summary>The map's waves are all cleared. The lesson's last line: it keeps the popup saying what to
         /// do while the wave is being fought.</summary>
         ClearWave = 14,
+
+        // Appended: existing map assets keep their serialized step numbers.
+        /// <summary>The cutter is selected, or the lesson's cutter already stands.</summary>
+        SelectCutter = 15,
+
+        /// <summary>A cutter stands at the task target, facing the cutter ghost's direction.</summary>
+        PlaceCutter = 16,
+
+        /// <summary>The target cutter has received a real item or already produced its halves.</summary>
+        FeedCutter = 17,
+
+        /// <summary>An outgoing belt is wired to the target cutter's primary output.</summary>
+        WireCutterPrimary = 18,
+
+        /// <summary>Both the primary and displaced output belts are wired on that same cutter.</summary>
+        WireCutterSecondary = 19,
+
+        /// <summary>Turrets stand on both turret ghosts; chamber contents are checked in the next step.</summary>
+        PlaceCutterTurrets = 20,
     }
 
     /// <summary>What a coached line draws a box around, so the player knows where to look. Places on the map
@@ -372,6 +391,7 @@ namespace Facet.Core
                     return true;
 
                 case TutorialStep.SelectTurret:
+                case TutorialStep.PlaceCutterTurrets:
                 case TutorialStep.PlaceTurret:
                 case TutorialStep.ArmTurret:
                 case TutorialStep.ArmTurretWithHalf:
@@ -380,6 +400,11 @@ namespace Facet.Core
                     building = BuildKind.Turret;
                     return true;
 
+                case TutorialStep.SelectCutter:
+                case TutorialStep.PlaceCutter:
+                case TutorialStep.FeedCutter:
+                case TutorialStep.WireCutterPrimary:
+                case TutorialStep.WireCutterSecondary:
                 case TutorialStep.MakeHalf:
                 case TutorialStep.BeltFork:
                     building = BuildKind.Cutter;

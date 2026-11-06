@@ -1,0 +1,387 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 12eb7dba49ecf9044b3a9f06ba9fb05f, type: 3}
+  m_Name: CutterTutorial
+  m_EditorClassIdentifier: FACET.Game::Facet.Game.MapAsset
+  Name: Cutter Tutorial
+  Width: 24
+  Height: 16
+  StartShapes: 100
+  CoreCell: {x: 18, y: 6}
+  Terrain: 020202020202020202020202020202020202020202020202020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020000000000000000000000000000000002020202020202020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000002020202020202020202020202020202020202020202020202
+  Ore:
+  - Cell: {x: 5, y: 5}
+    Mineral: 1
+  - Cell: {x: 5, y: 4}
+    Mineral: 1
+  - Cell: {x: 6, y: 5}
+    Mineral: 1
+  - Cell: {x: 6, y: 4}
+    Mineral: 1
+  - Cell: {x: 21, y: 4}
+    Mineral: 1
+  - Cell: {x: 22, y: 4}
+    Mineral: 1
+  SpawnPoints:
+  - {x: 23, y: 12}
+  Waves:
+  - Intermission: 10
+    Groups:
+    - Kind: 0
+      Count: 3
+      SpawnPoint: 0
+      FirstDelay: 0
+      Interval: 4
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 0
+        SW: 0
+    - Kind: 0
+      Count: 3
+      SpawnPoint: 0
+      FirstDelay: 1.5
+      Interval: 4
+      Weakness:
+        NW: 0
+        NE: 0
+        SE: 1
+        SW: 1
+  Unlocked: 1
+  Seed: 526
+  GeneratedWaves: 0
+  TutorialStarting: 00
+  TutorialTasks:
+  - Step: 8
+    Text: "This small lesson teaches one new machine: the cutter. Turn a full circle into two halves, then feed each half to a turret."
+    Hint: ""
+    Target: {x: 10, y: 6}
+    Ghost:
+    - Build: 2
+      Cell: {x: 10, y: 6}
+      Facing: 1
+    Opens:
+    StartsWave: 0
+    Title: "Meet the cutter"
+    Focus: 04
+    Reveal: 31
+    AddsOre: []
+  - Step: 1
+    Text: "Press 1. Drag UP from the glowing ore tile below the Core. Two belts deliver full circles and earn building shapes."
+    Hint: "Start at the blue ore tile and drag up to the Core. The arrows must point UP."
+    Target: {x: 21, y: 4}
+    Ghost:
+    - Build: 0
+      Cell: {x: 21, y: 4}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 21, y: 5}
+      Facing: 0
+    Opens:
+    StartsWave: 0
+    Title: "Keep the Core supplied"
+    Focus: 0401
+    Reveal: 0
+    AddsOre: []
+  - Step: 8
+    Text: "The cutter occupies two tiles. Facing RIGHT, it cuts a full circle into a top half and a bottom half. Each half has its own exit."
+    Hint: ""
+    Target: {x: 10, y: 6}
+    Ghost:
+    - Build: 2
+      Cell: {x: 10, y: 6}
+      Facing: 1
+    Opens: 02
+    StartsWave: 0
+    Title: "One shape, two halves"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 15
+    Text: "Press 3, or click CUTTER."
+    Hint: ""
+    Target: {x: 10, y: 6}
+    Ghost:
+    - Build: 2
+      Cell: {x: 10, y: 6}
+      Facing: 1
+    Opens:
+    StartsWave: 0
+    Title: "Pick the cutter"
+    Focus: 05
+    Reveal: 0
+    AddsOre: []
+  - Step: 16
+    Text: "Place the cutter on the blue two-tile footprint, with its arrow pointing RIGHT."
+    Hint: "Use Q/E before placing to face right, or drag right from the upper blue tile. If placed wrongly, right-click to remove it and try again."
+    Target: {x: 10, y: 6}
+    Ghost:
+    - Build: 2
+      Cell: {x: 10, y: 6}
+      Facing: 1
+    Opens:
+    StartsWave: 0
+    Title: "Place the cutter"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 17
+    Text: "Press 1. From the glowing ore tile on the LEFT, drag RIGHT along the blue line into the cutter."
+    Hint: "A belt on ore mines it. Keep all five arrows pointing RIGHT, then wait for a circle to enter."
+    Target: {x: 10, y: 6}
+    Ghost:
+    - Build: 0
+      Cell: {x: 5, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 6, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 7, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 8, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 9, y: 5}
+      Facing: 1
+    Opens:
+    StartsWave: 0
+    Title: "Feed a full circle"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 3
+    Text: "Wait for the first circle to split. The cutter now holds a top half and a bottom half."
+    Hint: "If nothing happens, check the input belt arrows. Both input and output flow to the RIGHT."
+    Target: {x: 10, y: 6}
+    Ghost:
+    - Build: 2
+      Cell: {x: 10, y: 6}
+      Facing: 1
+    Opens:
+    StartsWave: 0
+    Title: "Watch the cut"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 8
+    Text: "Both halves need somewhere to go. Leaving either exit disconnected stops the cutter once that side fills up."
+    Hint: ""
+    Target: {x: 10, y: 6}
+    Ghost:
+    - Build: 2
+      Cell: {x: 10, y: 6}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 11, y: 6}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 11, y: 5}
+      Facing: 1
+    Opens:
+    StartsWave: 0
+    Title: "Two exits need two belts"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 18
+    Text: "Press 1. Follow the upper blue route RIGHT, then UP. This lane will feed the first turret."
+    Hint: "Begin just outside the upper cutter tile. Follow every blue tile; turn the last two arrows UP."
+    Target: {x: 10, y: 6}
+    Ghost:
+    - Build: 0
+      Cell: {x: 11, y: 6}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 12, y: 6}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 13, y: 6}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 14, y: 6}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 14, y: 7}
+      Facing: 0
+    Opens:
+    StartsWave: 0
+    Title: "Connect the upper exit"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 19
+    Text: "Now follow the lower blue route RIGHT, then UP. Keep it separate from the first lane."
+    Hint: "The two lanes must stay separate so each turret receives one kind of half."
+    Target: {x: 10, y: 6}
+    Ghost:
+    - Build: 0
+      Cell: {x: 11, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 12, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 13, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 14, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 15, y: 5}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 15, y: 6}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 15, y: 7}
+      Facing: 0
+    Opens:
+    StartsWave: 0
+    Title: "Connect the lower exit"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 8
+    Text: "Build one turret at the end of each lane. The two guns will cover enemies with either half-circle weakness."
+    Hint: ""
+    Target: {x: 14, y: 8}
+    Ghost:
+    - Build: 9
+      Cell: {x: 14, y: 8}
+      Facing: 0
+    - Build: 9
+      Cell: {x: 15, y: 8}
+      Facing: 0
+    Opens: 09
+    StartsWave: 0
+    Title: "A turret for each half"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 20
+    Text: "Press 0. Place one turret on EACH blue tile at the ends of the two lanes."
+    Hint: "If you need more shapes, wait for the short Core supply belt to earn them."
+    Target: {x: 14, y: 8}
+    Ghost:
+    - Build: 9
+      Cell: {x: 14, y: 8}
+      Facing: 0
+    - Build: 9
+      Cell: {x: 15, y: 8}
+      Facing: 0
+    Opens:
+    StartsWave: 0
+    Title: "Place both turrets"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 7
+    Text: "Wait for both turrets to load. One must hold the top half and the other the bottom half."
+    Hint: "If a gun stays empty, trace its belt back to the cutter and check for a missing tile or a backwards arrow."
+    Target: {x: 14, y: 8}
+    Ghost:
+    - Build: 0
+      Cell: {x: 11, y: 6}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 12, y: 6}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 13, y: 6}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 14, y: 6}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 14, y: 7}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 11, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 12, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 13, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 14, y: 5}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 15, y: 5}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 15, y: 6}
+      Facing: 0
+    - Build: 0
+      Cell: {x: 15, y: 7}
+      Facing: 0
+    - Build: 9
+      Cell: {x: 14, y: 8}
+      Facing: 0
+    - Build: 9
+      Cell: {x: 15, y: 8}
+      Facing: 0
+    Opens:
+    StartsWave: 0
+    Title: "Load both halves"
+    Focus: 04
+    Reveal: 0
+    AddsOre: []
+  - Step: 8
+    Text: "This short wave includes enemies weak to TOP halves and enemies weak to BOTTOM halves. Your two lanes supply both."
+    Hint: ""
+    Target: {x: 14, y: 8}
+    Ghost: []
+    Opens:
+    StartsWave: 0
+    Title: "Read the weaknesses"
+    Focus: 09
+    Reveal: 0
+    AddsOre: []
+  - Step: 13
+    Text: "Press N, or click START WAVE. Watch both halves travel from the cutter into the guns."
+    Hint: ""
+    Target: {x: 14, y: 8}
+    Ghost:
+    - Build: 9
+      Cell: {x: 14, y: 8}
+      Facing: 0
+    - Build: 9
+      Cell: {x: 15, y: 8}
+      Facing: 0
+    Opens:
+    StartsWave: 1
+    Title: "Try your cutter line"
+    Focus: 0a02
+    Reveal: 0
+    AddsOre: []
+  - Step: 14
+    Text: "Keep both lanes supplied and protect the Core. Clear this short wave to finish the cutter lesson."
+    Hint: ""
+    Target: {x: 14, y: 8}
+    Ghost:
+    - Build: 9
+      Cell: {x: 14, y: 8}
+      Facing: 0
+    - Build: 9
+      Cell: {x: 15, y: 8}
+      Facing: 0
+    Opens:
+    StartsWave: 0
+    Title: "Defend with both halves"
+    Focus: 0401
+    Reveal: 0
+    AddsOre: []
+  TutorialCoached: 1
