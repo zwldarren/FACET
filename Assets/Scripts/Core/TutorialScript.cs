@@ -103,6 +103,16 @@ namespace Facet.Core
 
         /// <summary>Turrets stand on both turret ghosts; chamber contents are checked in the next step.</summary>
         PlaceCutterTurrets = 20,
+
+        /// <summary>The rotator is selected, or the lesson's rotator already stands.</summary>
+        SelectRotator = 21,
+
+        /// <summary>A rotator stands at the task target, facing the rotator ghost's direction.</summary>
+        PlaceRotator = 22,
+
+        /// <summary>The turret at the task target holds a round the coming wave is weak to. Read from the
+        /// chamber and the wave's own briefing, so a gun holding any other shape cannot pass the line.</summary>
+        LoadWaveShape = 23,
     }
 
     /// <summary>What a coached line draws a box around, so the player knows where to look. Places on the map
@@ -331,11 +341,19 @@ namespace Facet.Core
         /// lesson laid over a real level is not, and keeps the task card in the corner.</summary>
         public readonly bool Coached;
 
-        public TutorialScript(BuildKind[] starting, TutorialTask[] tasks, bool coached = false)
+        /// <summary>The line the run opens with already standing, so a lesson about one machine can start from
+        /// a working factory instead of asking the player to rebuild what earlier lessons taught. Stamped by
+        /// <see cref="SimWorld"/> at the start of every run, and held in place until the lesson is over
+        /// (<see cref="TutorialState.IsPrebuilt"/>).</summary>
+        public readonly TutorialGhost[] Prebuilt;
+
+        public TutorialScript(BuildKind[] starting, TutorialTask[] tasks, bool coached = false,
+            TutorialGhost[] prebuilt = null)
         {
             Starting = starting ?? new BuildKind[0];
             Tasks = tasks ?? new TutorialTask[0];
             Coached = coached;
+            Prebuilt = prebuilt ?? new TutorialGhost[0];
         }
 
         /// <summary>Is this a step that is not about any building - an explanation to read, a wave to call or
@@ -408,6 +426,13 @@ namespace Facet.Core
                 case TutorialStep.MakeHalf:
                 case TutorialStep.BeltFork:
                     building = BuildKind.Cutter;
+                    return true;
+
+                // The gun in LoadWaveShape stands from the start; the rotator is what the line waits on.
+                case TutorialStep.SelectRotator:
+                case TutorialStep.PlaceRotator:
+                case TutorialStep.LoadWaveShape:
+                    building = BuildKind.Rotator;
                     return true;
 
                 default:

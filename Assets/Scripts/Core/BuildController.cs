@@ -216,6 +216,7 @@ namespace Facet.Core
         public bool Remove(Int2 cell)
         {
             if (_belts.IsJammed(cell)) return _belts.TryClearJam(cell);
+            if (_tutorial != null && _tutorial.IsPrebuilt(cell)) return false;
             if (_belts.Has(cell))
             {
                 if (!_belts.TryRemove(cell)) return false;

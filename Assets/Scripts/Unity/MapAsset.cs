@@ -212,6 +212,10 @@ namespace Facet.Game
             "is empty - a map with no lines has no tutorial.")]
         public BuildKind[] TutorialStarting = new BuildKind[0];
 
+        [Tooltip("Buildings already standing when the run opens, for a lesson about one machine that starts " +
+            "from a working line. The lesson keeps them from being removed until it is over.")]
+        public TutorialGhostRow[] TutorialPrebuilt = new TutorialGhostRow[0];
+
         [Tooltip("The lines this map teaches, in order. One at a time: each has to be really done before the " +
             "next is shown. Empty - the shipped default - is a map without a tutorial. Validate() refuses a " +
             "line with no text, a guide tile off the map, or a line about a building no earlier line hands " +
@@ -402,6 +406,18 @@ namespace Facet.Game
             // otherwise a line could open the building its own rule is about, which is a lesson that starts
             // finished.
             var opened = new List<BuildKind>(TutorialStarting ?? new BuildKind[0]);
+
+            TutorialGhostRow[] prebuilt = TutorialPrebuilt ?? new TutorialGhostRow[0];
+            for (int p = 0; p < prebuilt.Length; p++)
+            {
+                Vector2Int cell = prebuilt[p].Cell;
+                if (cell.x >= 0 && cell.y >= 0 && cell.x < width && cell.y < height) continue;
+
+                into.Add(new MapProblem(MapProblemKind.TutorialTargetOffMap,
+                    new Int2(cell.x, cell.y),
+                    Name + ": the lesson opens with a " + prebuilt[p].Build + " at (" + cell.x + "," + cell.y +
+                    "), which is outside the " + width + "x" + height + " map"));
+            }
 
             for (int i = 0; i < rows.Length; i++)
             {
@@ -912,7 +928,7 @@ namespace Facet.Game
                     row.Title, row.Focus, row.Reveal, OreOf(row.AddsOre));
             }
 
-            return new TutorialScript(TutorialStarting, tasks, TutorialCoached);
+            return new TutorialScript(TutorialStarting, tasks, TutorialCoached, GhostOf(TutorialPrebuilt));
         }
 
         /// <summary>Convert a row's authored ghosts to the engine-free blueprint, preserving order: the
