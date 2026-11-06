@@ -113,8 +113,8 @@ namespace Facet.Game
 
             // A finished lesson, a won map or a lost one each get their own last word; otherwise the current line.
             if (_world.Status == GameStatus.Won)
-                ShowEnd("TUTORIAL COMPLETE",
-                    "You held the Core! Press N for the first real map.", scale);
+                ShowEnd("MAP CLEARED",
+                    "You held the Core! Press N to continue.", scale);
             else if (_world.Status == GameStatus.Lost)
                 ShowEnd("THE CORE FELL",
                     "Keep the turret fed with shapes. Press R to try again.",

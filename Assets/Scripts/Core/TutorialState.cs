@@ -273,6 +273,27 @@ namespace Facet.Core
                 case TutorialStep.PlaceTurret:
                     return _machines.CountOf(BuildKind.Turret) > 0;
 
+                case TutorialStep.SelectCutter:
+                    return _selected == BuildKind.Cutter || TryLessonCutter(out _);
+
+                case TutorialStep.PlaceCutter:
+                    if (!TryLessonCutter(out MachineSnapshot placed)) return false;
+                    return HasCutterGhostFacing(placed.Direction);
+
+                case TutorialStep.FeedCutter:
+                    if (!TryLessonCutter(out MachineSnapshot fed)) return false;
+                    if (!_machines.TryGet(fed.Cell, out MachineState state)) return false;
+                    return !state.Carried.IsEmpty || state.OutputCount > 0 || state.OutputCount2 > 0;
+
+                case TutorialStep.WireCutterPrimary:
+                    return LessonCutterOutputs(both: false);
+
+                case TutorialStep.WireCutterSecondary:
+                    return LessonCutterOutputs(both: true);
+
+                case TutorialStep.PlaceCutterTurrets:
+                    return LessonTurretsPlaced();
+
                 case TutorialStep.StartWave:
                     return _waveCalled;
 
@@ -289,6 +310,69 @@ namespace Facet.Core
                         "' has no completion rule - the lesson can never pass this line");
                     return false;
             }
+        }
+
+        // These new coached steps refer to the blueprint's own cutter, so a second cutter elsewhere
+        // cannot complete the lesson while the highlighted one is still mis-wired.
+        private bool TryLessonCutter(out MachineSnapshot cutter)
+        {
+            cutter = default;
+            TutorialTask task = _script[_index];
+            return task.Target.HasValue
+                && _machines.TryGet(task.Target.Value, out MachineState state)
+                && state.Home == task.Target.Value
+                && _machines.TryGetSnapshot(task.Target.Value, out cutter)
+                && cutter.Behavior == BehaviorKind.Cutter
+                && cutter.Cell == task.Target.Value;
+        }
+
+        private bool HasCutterGhostFacing(Dir facing)
+        {
+            TutorialTask task = _script[_index];
+            for (int i = 0; i < task.Ghost.Length; i++)
+                if (task.Ghost[i].Build == BuildKind.Cutter)
+                    return task.Ghost[i].Direction == facing;
+            return false;
+        }
+
+        private bool LessonCutterOutputs(bool both)
+        {
+            if (!TryLessonCutter(out MachineSnapshot cutter)) return false;
+            if (!MachineDelivery.IsOutput(_belts, cutter.Cell, cutter.Direction)) return false;
+            if (!LessonBeltsMatchGhosts()) return false;
+            if (!both) return true;
+            return MachineFootprint.TrySecond(cutter.Behavior, cutter.Cell, cutter.Direction, out Int2 second)
+                && MachineDelivery.IsOutput(_belts, second, cutter.Direction);
+        }
+
+        private bool LessonBeltsMatchGhosts()
+        {
+            TutorialTask task = _script[_index];
+            int required = 0;
+            for (int i = 0; i < task.Ghost.Length; i++)
+            {
+                TutorialGhost ghost = task.Ghost[i];
+                if (ghost.Build != BuildKind.Belt) continue;
+                required++;
+                if (!_belts.TryGet(ghost.Cell, out BeltState belt) || belt.Direction != ghost.Direction)
+                    return false;
+            }
+            return required > 0;
+        }
+
+        private bool LessonTurretsPlaced()
+        {
+            TutorialTask task = _script[_index];
+            int required = 0;
+            for (int i = 0; i < task.Ghost.Length; i++)
+            {
+                TutorialGhost ghost = task.Ghost[i];
+                if (ghost.Build != BuildKind.Turret) continue;
+                required++;
+                if (!_machines.TryGetSnapshot(ghost.Cell, out MachineSnapshot turret)
+                    || turret.Behavior != BehaviorKind.Turret) return false;
+            }
+            return required >= 2;
         }
 
         /// <summary>Is there a half anywhere: on a belt, or held in a machine's chamber, buffer or
