@@ -7,7 +7,7 @@ namespace Facet.Game
         // TEMPORARY: verify both forms receive rows, then set this back to false.
         public const bool SendFromEditor = false;
         // Change when the tested tutorial/map changes; compare matching builds and tasks only.
-        public const string BuildLabel = "tutorial-metrics-v1";
+        public const string BuildLabel = "beta-progress";
 
         public const string TaskFormUrl = "https://docs.google.com/forms/d/e/1FAIpQLSeys14N87ec9yW94gI-4iyx6Z1jA01R0r4fM3RpAVTNoMsSnA/formResponse";
         // session, run, map, task_index, task_kind, task_label, seconds, outcome, build
