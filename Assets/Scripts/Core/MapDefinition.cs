@@ -101,11 +101,16 @@ namespace Facet.Core
         /// </summary>
         public readonly TutorialScript Tutorial;
 
+        /// <summary>What this map's run researches and when - the buildings a long map hands over wave by wave,
+        /// bought with banked shapes. <see cref="ResearchSchedule.None"/> on every map that does not, which then
+        /// plays exactly as it did before research existed.</summary>
+        public readonly ResearchSchedule Research;
+
         public MapDefinition(string name, int width, int height, int startShapes,
             ShapePatch[] patches, Int2[] spawnPoints, WaveDefinition[] waves,
             TerrainKind[] terrain = null, Int2? coreCell = null,
             Operators unlocked = Operators.All, int seed = 0, int generatedWaves = 0,
-            TutorialScript tutorial = null)
+            TutorialScript tutorial = null, ResearchSchedule research = null)
         {
             Name = name;
             Width = width;
@@ -120,6 +125,7 @@ namespace Facet.Core
             Seed = seed;
             GeneratedWaves = generatedWaves;
             Tutorial = tutorial;
+            Research = research ?? ResearchSchedule.None;
 
             // The money, named off the map's own veins rather than authored beside them: the first mineral
             // the patch list yields, which is the one a drill on this map will first put on a belt.
@@ -160,7 +166,7 @@ namespace Facet.Core
         /// is carried over as-is; the run's seed remains the host's per-run decision.</summary>
         public MapDefinition WithEndless()
             => new MapDefinition(Name, Width, Height, StartShapes, Patches, SpawnPoints, Waves,
-                Terrain, CoreCell, Unlocked, Seed, -1, Tutorial);
+                Terrain, CoreCell, Unlocked, Seed, -1, Tutorial, Research);
 
         /// <summary>Centre of a spawn point in world units, where enemies are created. The index is
         /// resolved by <see cref="ResolveSpawn"/> like every other reader, so the entry tile is the one the

@@ -295,6 +295,9 @@ namespace Facet.Game
             // player here; idempotent, so polling every frame is the honest way to read an unreported edge.
             if (World.Status == GameStatus.Won) Campaign.MarkCleared();
 
+            // An endless run's score is the waves it held; the record only writes when it is beaten.
+            if (World.Waves.Endless) BestWave.Record(World.Map.Name, World.Waves.Cleared);
+
             // A clear is the one moment progress grows, so it is the one moment the store is written -
             // not every frame the won world keeps saying so.
             PersistProgress();

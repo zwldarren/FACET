@@ -113,6 +113,23 @@ namespace Facet.Core
         /// <summary>The turret at the task target holds a round the coming wave is weak to. Read from the
         /// chamber and the wave's own briefing, so a gun holding any other shape cannot pass the line.</summary>
         LoadWaveShape = 23,
+
+        /// <summary>The line's building (the first of <see cref="TutorialTask.Opens"/>) has been researched. The
+        /// steps below name their building that way because a research lesson has no blueprint: the player's
+        /// factory is their own, so these are facts about the run rather than about a tile.</summary>
+        ResearchBuilding = 24,
+
+        /// <summary>The line's building is in the player's hand, or one already stands.</summary>
+        SelectBuilding = 25,
+
+        /// <summary>The line's building stands anywhere on the map.</summary>
+        PlaceBuilding = 26,
+
+        /// <summary>Two turrets stand with a round in the chamber, whatever the round is.</summary>
+        TwoTurretsArmed = 27,
+
+        /// <summary>Any turret holds a round the coming wave is weak to.</summary>
+        AnyTurretHoldsWaveShape = 28,
     }
 
     /// <summary>What a coached line draws a box around, so the player knows where to look. Places on the map
@@ -366,7 +383,9 @@ namespace Facet.Core
         /// to survive? The validator skips its "is the building handed over" rule for these, since there is no
         /// building to hand over.</summary>
         public static bool NeedsNoBuilding(TutorialStep step)
-            => step == TutorialStep.Acknowledge || step == TutorialStep.StartWave || step == TutorialStep.ClearWave;
+            => step == TutorialStep.Acknowledge || step == TutorialStep.StartWave || step == TutorialStep.ClearWave
+               || step == TutorialStep.ResearchBuilding || step == TutorialStep.SelectBuilding
+               || step == TutorialStep.PlaceBuilding;
 
         /// <summary>How many lines the script has.</summary>
         public int Count => Tasks.Length;
@@ -421,6 +440,8 @@ namespace Facet.Core
                 case TutorialStep.ArmTurretWithHalf:
                 case TutorialStep.TwoTurretsLoaded:
                 case TutorialStep.TwoTurretsLoadedAcross:
+                case TutorialStep.TwoTurretsArmed:
+                case TutorialStep.AnyTurretHoldsWaveShape:
                     building = BuildKind.Turret;
                     return true;
 

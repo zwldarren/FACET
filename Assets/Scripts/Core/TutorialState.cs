@@ -37,6 +37,10 @@ namespace Facet.Core
         /// is the announcement, so there is no countdown between the sentence and the wave.</summary>
         private readonly WaveDirector _waves;
 
+        /// <summary>The run's research, for a lesson about a building that has to be bought. Null on a map's own
+        /// lesson, which hands its buildings over itself.</summary>
+        private readonly ResearchState _research;
+
         /// <summary>The buildings the run offers right now: the script's starting set plus every ticked
         /// line's <see cref="TutorialTask.Opens"/>. Rebuilt on the tick a line is ticked and read every frame
         /// by the HUD, so the rebuild happens once and the read stays a walk of a handful of entries.</summary>
@@ -64,8 +68,9 @@ namespace Facet.Core
         private BuildKind? _selected;
 
         public TutorialState(TutorialScript script, MachineField machines, BeltField belts,
-            EconomyState economy, WaveDirector waves)
+            EconomyState economy, WaveDirector waves, ResearchState research = null)
         {
+            _research = research;
             _script = script;
             _machines = machines ?? throw new ArgumentNullException(nameof(machines));
             _belts = belts ?? throw new ArgumentNullException(nameof(belts));
@@ -322,6 +327,23 @@ namespace Facet.Core
                 case TutorialStep.StartWave:
                     return _waveCalled;
 
+                case TutorialStep.ResearchBuilding:
+                    return TryLineBuilding(out BuildKind bought) && _research != null && _research.Researched(bought);
+
+                case TutorialStep.SelectBuilding:
+                    return TryLineBuilding(out BuildKind held)
+                        && (_selected == held || _machines.CountOf(held) > 0);
+
+                case TutorialStep.PlaceBuilding:
+                    return TryLineBuilding(out BuildKind stands) && _machines.CountOf(stands) > 0;
+
+                case TutorialStep.TwoTurretsArmed:
+                    _machines.CountTurrets(out int _, out int loadedGuns);
+                    return loadedGuns >= 2;
+
+                case TutorialStep.AnyTurretHoldsWaveShape:
+                    return AnyTurretHoldsWaveShape();
+
                 case TutorialStep.ClearWave:
                     return _waves.Finished;
 
@@ -360,6 +382,32 @@ namespace Facet.Core
             for (int i = 0; i < task.Ghost.Length; i++)
                 if (task.Ghost[i].Build == build)
                     return task.Ghost[i].Direction == facing;
+            return false;
+        }
+
+        /// <summary>The building a line without a blueprint is about.</summary>
+        private bool TryLineBuilding(out BuildKind building)
+        {
+            BuildKind[] opens = _script[_index].Opens;
+            building = opens.Length > 0 ? opens[0] : BuildKind.Belt;
+            return opens.Length > 0;
+        }
+
+        private bool AnyTurretHoldsWaveShape()
+        {
+            WaveDefinition wave = _waves.NextWaveDefinition;
+            if (wave == null) return false;
+
+            _machines.GetMachines(_machineScratch);
+            for (int m = 0; m < _machineScratch.Count; m++)
+            {
+                MachineSnapshot gun = _machineScratch[m];
+                if (gun.Behavior != BehaviorKind.Turret || gun.Shape.IsEmpty) continue;
+
+                for (int g = 0; g < wave.Groups.Length; g++)
+                    if (wave.Groups[g].Weakness == gun.Shape) return true;
+            }
+
             return false;
         }
 

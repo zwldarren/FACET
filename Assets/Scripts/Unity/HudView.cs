@@ -355,6 +355,7 @@ namespace Facet.Game
             Action<Int2, ShapeFilter> setFilter = null, TickClock clock = null, Action openMenu = null)
         {
             _world = world;
+            _offersRead = 0;
             if (clock != null) _clock = clock;
             _palette = palette;
             _campaign = campaign;
@@ -413,6 +414,7 @@ namespace Facet.Game
             UpdateStockpile();
             UpdateStatus();
             UpdateControls();
+            AnnounceOffers();
             UpdateBuildBar();
             UpdateInfo();
             UpdateTooltip();
@@ -1030,7 +1032,9 @@ namespace Facet.Game
             tile.Cue.Show(false);
 
             tile.Selected = kind == _world.SelectedKind;
-            tile.Affordable = _world.Economy.CanAfford(kind);
+            tile.Locked = !_world.IsUnlocked(kind);
+            tile.Affordable = TileAffordable(kind, tile.Locked);
+            WordTile(tile);
 
             DressBuildTile(tile);
             return tile;
@@ -1704,6 +1708,14 @@ namespace Facet.Game
         {
             if (_world == null || !_world.Content.TryMachine(kind, out MachineDef def)) return;
 
+            if (_world.Researchable(kind))
+            {
+                int price = _world.Research.CostOf(kind);
+                Notice("LOCKED - click the " + def.Name + " key to research it for " + price + " " +
+                    Plural(Shape.MineralName(_world.Map.CurrencyMineral), price), NoticeSeconds);
+                return;
+            }
+
             Notice("NOT YET - the " + def.Name + " is the lesson's to hand over", NoticeSeconds);
         }
 
@@ -2375,8 +2387,19 @@ namespace Facet.Game
                 if (hovered) _hoveredTile = i;
 
                 bool selectedTile = tile.Kind == selected;
-                bool affordable = _world.Economy.CanAfford(tile.Kind);
+                bool locked = !_world.IsUnlocked(tile.Kind);
+                bool affordable = TileAffordable(tile.Kind, locked);
                 bool lesson = LessonWants(tile.Kind);
+
+                // Bought this frame: the key's words change from its research price to the building's, and the
+                // card follows.
+                if (tile.Locked != locked)
+                {
+                    tile.Locked = locked;
+                    WordTile(tile);
+                    DressBuildTile(tile);
+                    _infoDirty = true;
+                }
 
                 if (tile.Selected != selectedTile || tile.Hovered != hovered ||
                     tile.Affordable != affordable || tile.Lesson != lesson)
@@ -2426,14 +2449,33 @@ namespace Facet.Game
                     tile.Cue.Show(false);
                 }
 
-                if (!tile.Affordable && _world.Content.Machine(tile.Kind).Cost > 0)
-                    tile.Afford.Set(Mathf.Clamp01(_world.Economy.Shapes / (float)_world.Content.Machine(tile.Kind).Cost),
-                        _palette.CursorNoFunds);
+                int keyCost = TileCost(tile.Kind, tile.Locked);
+                if (!tile.Affordable && keyCost > 0)
+                    tile.Afford.Set(Mathf.Clamp01(_world.Economy.Shapes / (float)keyCost), _palette.CursorNoFunds);
                 else tile.Afford.Set(0f, Color.clear);
             }
 
             // The cost's shape needs the number's measured width, so the first frames place it as they learn it.
             for (int i = 0; i < _bar.Tiles.Count; i++) PlaceCostIcon(_bar.Tiles[i]);
+        }
+
+        /// <summary>Can the player pay for what this key does now: the building, or - locked - its research.</summary>
+        private bool TileAffordable(BuildKind kind, bool locked)
+            => locked ? _world.Research.CanAfford(kind) : _world.Economy.CanAfford(kind);
+
+        /// <summary>What a key costs to press: the building's price, or its research price while it is locked.</summary>
+        private int TileCost(BuildKind kind, bool locked)
+            => locked ? _world.Research.CostOf(kind) : _world.Content.Machine(kind).Cost;
+
+        /// <summary>A key's words follow its lock: a locked key names what clicking it does and wears the research
+        /// price.</summary>
+        private void WordTile(BuildTile tile)
+        {
+            string name = _world.Content.Machine(tile.Kind).Name;
+            tile.Name.Set(tile.Locked ? "Unlock " + name : name, _palette.HudText);
+            tile.Cost.Set(TileCost(tile.Kind, tile.Locked).ToString(), HudInk.Muted(_palette));
+            tile.Hotkey.Set(tile.Locked ? "+" : BuildInput.HotkeyLabel((int)tile.Kind), HudInk.Faint(_palette));
+            tile.CostPlaced = false;
         }
 
         /// <summary>Does the current lesson line's blueprint use this building? A line with no blueprint highlights
@@ -2462,6 +2504,7 @@ namespace Facet.Game
             if (tile.Selected) fill = HudInk.Blend(_palette.HudPanel, _palette.HudAccent, 0.22f);
             else if (tile.Hovered) fill = HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.19f);
             else if (!tile.Affordable) fill = HudInk.Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.08f);
+            if (tile.Locked && !tile.Hovered) fill = HudInk.Blend(fill, _palette.HudPanel, 0.45f);
             tile.Button.Fill.Set(fill);
 
             tile.Keycap.Set(tile.Selected
@@ -2491,9 +2534,70 @@ namespace Facet.Game
         /// tile's click and the digit key are the same door, so the rule has one statement.</summary>
         private void SelectKind(BuildKind kind)
         {
-            if (_world == null || !_world.IsUnlocked(kind)) return;
+            if (_world == null) return;
+
+            if (_world.Researchable(kind))
+            {
+                Research(kind);
+                return;
+            }
+
+            if (!_world.IsUnlocked(kind)) return;
 
             _selectKind?.Invoke(kind);
+        }
+
+        /// <summary>Buy a locked key's research, or say what it still costs. The purchase lands on the next tick.</summary>
+        private void Research(BuildKind kind)
+        {
+            ResearchOffer offer = _world.Research.OfferFor(kind);
+            if (offer == null) return;
+
+            string names = OfferNames(offer);
+            int cost = offer.Cost;
+            string money = Plural(Shape.MineralName(_world.Map.CurrencyMineral), cost);
+
+            if (_world.Research.CanAfford(kind))
+            {
+                _world.RequestResearch(kind);
+                Notice("RESEARCHED - " + names + " for " + cost + " " + money, NoticeSeconds);
+            }
+            else
+            {
+                int missing = cost - _world.Economy.Shapes;
+                Notice("NOT ENOUGH - " + names + " needs " + cost + " " + money + " from the Core (" + missing +
+                    " more)", NoticeSeconds);
+            }
+        }
+
+        private string OfferNames(ResearchOffer offer)
+        {
+            var names = new System.Text.StringBuilder();
+            for (int i = 0; i < offer.Builds.Length; i++)
+            {
+                if (i > 0) names.Append(i == offer.Builds.Length - 1 ? " + " : ", ");
+                names.Append(_world.Content.TryMachine(offer.Builds[i], out MachineDef def)
+                    ? def.Name : offer.Builds[i].ToString());
+            }
+
+            return names.ToString();
+        }
+
+        /// <summary>How many of the run's research offers this HUD has read.</summary>
+        private int _offersRead;
+
+        /// <summary>Say an offer's one line as it is made. Read by count, so each is said once per run; an offer
+        /// with a lesson has the coach to speak for it and no line of its own.</summary>
+        private void AnnounceOffers()
+        {
+            ResearchState research = _world.Research;
+            if (research.OfferedCount < _offersRead) _offersRead = 0;
+
+            while (_offersRead < research.OfferedCount)
+            {
+                string hint = research.OfferedAt(_offersRead++).Hint;
+                if (!string.IsNullOrEmpty(hint)) Notice(hint, NoticeSeconds * 2f);
+            }
         }
 
         // ------------------------------------------------------------------ the bar's keys
@@ -2593,9 +2697,20 @@ namespace Facet.Game
                 HudInk.Muted(_palette));
 
             // A locked kind is described like any other, with the one thing the player needs said first.
-            _info.Blurb.Set(locked
-                ? "not unlocked on this map · " + Blurb(kind)
-                : Blurb(kind), _palette.HudText);
+            bool researchable = locked && _world.Researchable(kind);
+            if (researchable)
+            {
+                int price = _world.Research.CostOf(kind);
+                _info.BuildRight.Set("research " + price + " " +
+                    Plural(Shape.MineralName(_world.Map.CurrencyMineral), price) + "   ·   LOCKED",
+                    HudInk.Muted(_palette));
+            }
+
+            _info.Blurb.Set(researchable
+                ? "click the key to research it with shapes from the Core · " + Blurb(kind)
+                : locked
+                    ? "not unlocked on this map · " + Blurb(kind)
+                    : Blurb(kind), _palette.HudText);
 
             string stats = Stats(kind);
             bool hasStats = !string.IsNullOrEmpty(stats);
@@ -3351,7 +3466,13 @@ namespace Facet.Game
             switch (_world.Status)
             {
                 case GameStatus.Lost:
-                    text = "CORE DESTROYED\n" + StatsLine() + "\nR to restart";
+                    // An endless run is scored by how long it held, and the best is kept across runs.
+                    text = _world.Waves.Endless
+                        ? "CORE DESTROYED\nyou held " + _world.Waves.Cleared + " " +
+                          (_world.Waves.Cleared == 1 ? "wave" : "waves") + " · best " +
+                          Mathf.Max(BestWave.Read(_world.Map.Name), _world.Waves.Cleared) + "\n" + StatsLine() +
+                          "\nR to restart"
+                        : "CORE DESTROYED\n" + StatsLine() + "\nR to restart";
                     colour = _palette.HudWarn;
                     show = true;
                     break;
@@ -3535,7 +3656,7 @@ namespace Facet.Game
             int shown = 0;
             for (int i = 0; i < all.Length; i++)
             {
-                if (!_world.IsUnlocked(all[i])) continue;
+                if (!OnBar(all[i])) continue;
                 shown++;
             }
 
@@ -3545,12 +3666,16 @@ namespace Facet.Game
             shown = 0;
             for (int i = 0; i < all.Length; i++)
             {
-                if (!_world.IsUnlocked(all[i])) continue;
+                if (!OnBar(all[i])) continue;
                 visible[shown++] = all[i];
             }
 
             return visible;
         }
+
+        /// <summary>Is this building on the bar: handed over, or offered by research and waiting to be bought - the
+        /// locked key with a price on it.</summary>
+        private bool OnBar(BuildKind kind) => _world.IsUnlocked(kind) || _world.Researchable(kind);
 
         /// <summary>Does the bar's row of tiles still match the buildings this run offers? A map's set is fixed for the
         /// run but a tutorial's grows with its lines, so this is asked every frame. Walking the table costs no array.</summary>
@@ -3563,7 +3688,7 @@ namespace Facet.Game
 
             for (int i = 0; i < kinds.Length; i++)
             {
-                if (!_world.IsUnlocked(kinds[i])) continue;
+                if (!OnBar(kinds[i])) continue;
                 if (shown >= _bar.Tiles.Count || _bar.Tiles[shown].Kind != kinds[i]) return false;
 
                 shown++;
@@ -3715,6 +3840,9 @@ namespace Facet.Game
             public bool Hovered;
             public bool Affordable;
             public bool CostPlaced;
+
+            /// <summary>On the bar behind research: the key buys it rather than selects it.</summary>
+            public bool Locked;
 
             public bool Lesson;
 

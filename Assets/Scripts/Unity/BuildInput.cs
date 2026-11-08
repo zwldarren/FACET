@@ -127,7 +127,7 @@ namespace Facet.Game
                     {
                         BuildKind kind = BuildCatalog.All[i];
                         if (world.IsUnlocked(kind)) ToggleSelect(kind);
-                        else if (world.LockedByTutorial(kind)) LockedPressed = kind;
+                        else if (world.LockedByTutorial(kind) || world.Researchable(kind)) LockedPressed = kind;
                     }
 
                 // Q/E turn the ghost; rotation is latched, so two presses between ticks turn it twice.

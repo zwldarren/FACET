@@ -38,6 +38,10 @@ namespace Facet.Core
         /// operator set owns the other.</summary>
         private readonly TutorialState _tutorial;
 
+        /// <summary>The run's research, or null: the third gate. A building the map's schedule names stays locked
+        /// until its offer is bought.</summary>
+        private readonly ResearchState _research;
+
         /// <summary>The stream placements and removals are reported on. Derived telemetry: the
         /// controller's decisions are unchanged by it.</summary>
         private readonly SimEventBuffer _events;
@@ -80,7 +84,7 @@ namespace Facet.Core
 
         public BuildController(TileGrid grid, TerrainField terrain, MapDefinition map, BeltField belts,
             MachineField machines, EconomyState economy, ContentDatabase content, SimEventBuffer events,
-            TutorialState tutorial = null)
+            TutorialState tutorial = null, ResearchState research = null)
         {
             _grid = grid ?? throw new ArgumentNullException(nameof(grid));
             _terrain = terrain ?? throw new ArgumentNullException(nameof(terrain));
@@ -91,6 +95,7 @@ namespace Facet.Core
             _content = content ?? throw new ArgumentNullException(nameof(content));
             _events = events ?? throw new ArgumentNullException(nameof(events));
             _tutorial = tutorial;
+            _research = research;
             Reset();
         }
 
@@ -132,7 +137,8 @@ namespace Facet.Core
         public bool IsUnlocked(BuildKind kind)
             => _content.TryMachine(kind, out MachineDef machine)
                && (machine.Requires & ~_map.Unlocked) == 0
-               && (_tutorial == null || _tutorial.Unlocks(kind));
+               && (_tutorial == null || _tutorial.Unlocks(kind))
+               && (_research == null || _research.Allows(kind));
 
         /// <summary>Is the lesson the one gate this kind fails? True only while a tutorial is still teaching
         /// and the kind is one the map itself would allow - the case a pressed-but-dead hotkey is worth

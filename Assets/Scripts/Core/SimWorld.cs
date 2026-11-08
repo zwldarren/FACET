@@ -38,6 +38,11 @@ namespace Facet.Core
         /// through <see cref="IsUnlocked"/> and <see cref="Waves"/> rather than of it directly.</summary>
         public readonly TutorialState Tutorial;
 
+        /// <summary>What this run has researched and what is on offer. Always present - a map without a schedule
+        /// has an inactive one that allows everything - so the bar and the build rule ask it without a null check.
+        /// </summary>
+        public readonly ResearchState Research;
+
         /// <summary>The content this run reads: every cost, machine stat, gun number and enemy profile.
         /// Injected rather than read from a static, so a test or a replay can run a different table and
         /// stay reproducible.</summary>
@@ -119,13 +124,15 @@ namespace Facet.Core
             Waves = new WaveDirector(Enemies, map, Events, Config.FreshSeed);
             Economy = new EconomyState(Content, map.StartShapes);
             Tutorial = new TutorialState(map.Tutorial, Machines, Belts, Economy, Waves);
+            Research = new ResearchState(map.Research, Economy, (script, research) =>
+                new TutorialState(script, Machines, Belts, Economy, Waves, research));
 
             _machineSystem = new MachineSystem(TileGrid, Terrain, Belts, Machines, Enemies, Projectiles,
                 Content, Events);
             _sink = new CoreSinkSystem(TileGrid, Belts, Economy, Events);
             _mining = new BeltMining(TileGrid, Terrain, Belts, Content);
             _build = new BuildController(TileGrid, Terrain, map, Belts, Machines, Economy, Content, Events,
-                Tutorial);
+                Tutorial, Research);
 
             // The Core first, then the ground: a map's terrain may not bury the thing the player
             // defends, so the Core's tiles are already claimed by the time the ground is stamped.
@@ -194,10 +201,12 @@ namespace Facet.Core
             // whether the popup's button was pressed, and whether a wave was asked for - N and the button both
             // land here, so the line that asks for the wave sees the press that answers it.
             Tutorial.NoteSelection(_build.Selected);
+            Research.NoteSelection(_build.Selected);
             if (_tutorialNextRequested)
             {
                 _tutorialNextRequested = false;
                 Tutorial.Acknowledge();
+                Research.Acknowledge();
             }
             if (cmd.StartWavePressed || _waveRequested) Tutorial.NoteWaveCall();
 
@@ -211,7 +220,18 @@ namespace Facet.Core
             // tick's answer, which is the same answer: the lesson only ever changes inside the step above.
             Waves.HoldEveryWait = Tutorial.GatesWaves;
 
+            // A research lesson stops the countdown, so the wave it prepares for waits for the player to be ready.
+            Waves.HoldCountdown = Research.Teaching;
             Waves.Step(SimConfig.TickDt);
+
+            // Research is offered on the tick a wave is cleared - read after the wave step that clears it - and
+            // bought on the tick the player asks, after the offer, so a request made the frame a key appears lands.
+            Research.Step(Waves.Cleared, Waves.Phase == WavePhase.Running);
+            if (_researchRequested.HasValue)
+            {
+                Research.TryResearch(_researchRequested.Value);
+                _researchRequested = null;
+            }
 
             // The N key and the HUD's button, applied *after* the wave step: step 8 ends a wave on the
             // tick its last enemy dies, so a request in that same tick would find a wave still running
@@ -259,6 +279,9 @@ namespace Facet.Core
             _mining.Reset();
             _build.Reset();
             Economy.Reset(Map.StartShapes);
+            Research.Reset();
+            Waves.HoldCountdown = false;
+            _researchRequested = null;
             StandPrebuilt();
 
             Paused = false;
@@ -283,6 +306,15 @@ namespace Facet.Core
         /// call into the lesson, for the same reason the wave button is one - a click happens between ticks, and
         /// the lesson advances on a tick boundary.</summary>
         public void RequestTutorialNext() => _tutorialNextRequested = true;
+
+        /// <summary>Buy the research offer that names this building, on the next tick. A request for something not
+        /// on offer, or not affordable then, is dropped.</summary>
+        public void RequestResearch(BuildKind kind) => _researchRequested = kind;
+
+        /// <summary>Is this building on the bar but locked behind research it can be bought with?</summary>
+        public bool Researchable(BuildKind kind) => !BuildCatalog.Retired(kind) && Research.Researchable(kind);
+
+        private BuildKind? _researchRequested;
 
         /// <summary>Stand the line a lesson opens with. Placed straight on the fields rather than through the
         /// build controller: it is part of the map, not something the player paid for.</summary>

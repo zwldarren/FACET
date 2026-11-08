@@ -101,8 +101,10 @@ namespace Facet.Game
         {
             if (_world == null || _canvasRoot == null) return;
 
-            TutorialState tutorial = _world.Tutorial;
-            if (!tutorial.Coached)
+            // The map's own coached lesson, or the research lesson running now: one voice for both.
+            bool mapLesson = _world.Tutorial.Coached;
+            TutorialState tutorial = mapLesson ? _world.Tutorial : _world.Research.Lesson;
+            if (tutorial == null || (!mapLesson && _world.Status != GameStatus.Playing))
             {
                 Hide();
                 return;
@@ -150,7 +152,7 @@ namespace Facet.Game
             }
 
             TutorialTask task = tutorial.Current;
-            string key = "line" + index;
+            string key = "line" + tutorial.GetHashCode() + ":" + index;
             if (key != _shownKey)
             {
                 _shownKey = key;
@@ -324,6 +326,8 @@ namespace Facet.Game
         /// <see cref="TutorialFocus.BarTile"/> box points at.</summary>
         private static BuildKind LineBuilding(TutorialTask task)
         {
+            // A research line names its building itself: it may be about any of them, the turret included.
+            if (task.Opens.Length > 0) return task.Opens[0];
             if (TutorialScript.TryRequiredBuilding(task.Step, out BuildKind building)) return building;
             return task.Ghost.Length > 0 ? task.Ghost[0].Build : BuildKind.Belt;
         }
