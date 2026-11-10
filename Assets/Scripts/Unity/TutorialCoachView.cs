@@ -9,8 +9,9 @@ using UnityEngine.UI;
 namespace Facet.Game
 {
     /// <summary>
-    /// The coach: how a coached lesson (<see cref="TutorialScript.Coached"/>, the tutorial level) is taught. One
-    /// big popup at the top of the screen says the current line - a heading, the sentence, and a button when the
+    /// The coach: how a coached lesson (<see cref="TutorialScript.Coached"/>, the tutorial levels) is taught. One
+    /// big popup set down beside what the line is about says it, the rest of the screen is dimmed so the boxed
+    /// places are the only bright ones, and it says the current line - a heading, the sentence, and a button when the
     /// line is something to read or the wave to call - and a pulsing box is drawn around everything the line is
     /// about, on the map (the Core, the gate, an ore patch, a layout) or on the HUD (a bar key, the coin
     /// readout, a row of the status card). The HUD hides what the lesson has not reached yet
@@ -40,6 +41,14 @@ namespace Facet.Game
         private Action _buttonAction;
 
         private readonly List<FocusBox> _boxes = new List<FocusBox>();
+
+        /// <summary>The dimming laid over everything the line is not about: a set of dark strips that tile the
+        /// screen around the boxes, so the boxed places are the only bright ones. Pooled, like the boxes.</summary>
+        private readonly List<HudBox> _shades = new List<HudBox>();
+
+        /// <summary>This frame's boxed places in screen pixels, padded like their boxes but without the breath,
+        /// so the popup's placement and the dimming's holes stand still while the frames pulse.</summary>
+        private readonly List<Rect> _focusRects = new List<Rect>();
 
         /// <summary>The line on screen, so the hint's clock restarts when it changes. A ticked line goes
         /// straight to the next one: no "done" flash in between.</summary>
@@ -71,6 +80,9 @@ namespace Facet.Game
         /// <summary>The boxes' colour: a hot orange that nothing else on screen uses - not the HUD's warm
         /// accent, not the cyan of the tiles to click, not an ore.</summary>
         private static readonly Color BoxColour = new Color(1f, 0.38f, 0.05f, 1f);
+
+        /// <summary>How dark the dimming is over everything outside the boxes.</summary>
+        private const float ShadeAlpha = 0.6f;
 
         public void Initialize(SimWorld world, HudView hud, Camera camera, Palette palette)
         {
@@ -174,16 +186,23 @@ namespace Facet.Game
             }
 
             bool hintDue = !string.IsNullOrEmpty(task.Hint) && Time.unscaledTime - _lineSince >= HintSeconds;
-            Fill(counter, task.Title, task.Text, hintDue ? task.Hint : null, button, scale, _palette.HudAccent);
             LayoutBoxes(task, scale, done: false);
+            Fill(counter, task.Title, task.Text, hintDue ? task.Hint : null, button, scale, _palette.HudAccent);
+
+            // The fight is the one line not dimmed: the player has to see the enemies, wherever they walk. A
+            // lesson without the spotlight is never dimmed.
+            bool dim = tutorial.Spotlight && task.Step != TutorialStep.ClearWave;
+            LayoutShade(dim ? _focusRects : null);
         }
 
         private void ShowEnd(string title, string body, float scale)
         {
             _buttonAction = null;
+            _focusRects.Clear();
             Fill(string.Empty, title, body, null, null, scale,
                 _world.Status == GameStatus.Won ? HudInk.Good(_palette) : _palette.HudWarn);
             HideBoxesFrom(0);
+            LayoutShade(null);
         }
 
         /// <summary>Write the popup and size it to its words: the panel sits on the left, in the status card's
@@ -196,7 +215,6 @@ namespace Facet.Game
             _panel.gameObject.SetActive(true);
 
             float width = Mathf.Min(MaxWidth * scale, Screen.width - 2f * HudLayout.Margin * scale);
-            float x = HudLayout.Margin * scale;
             float inner = width - Inset * 2f * scale;
 
             _counter.Text.fontSize = SmallSize * scale;
@@ -249,10 +267,10 @@ namespace Facet.Game
 
             y += Inset * scale;
 
-            float top = (HudLayout.Margin + HudLayout.StatusHeight + HudLayout.TutorialGap * 2f) * scale;
-            _panel.anchorMin = _panel.anchorMax = new Vector2(0f, 1f);
-            _panel.pivot = new Vector2(0f, 1f);
-            _panel.anchoredPosition = new Vector2(x, -top);
+            // Placed by its bottom-left corner in screen pixels, the way the boxes are measured.
+            _panel.anchorMin = _panel.anchorMax = Vector2.zero;
+            _panel.pivot = Vector2.zero;
+            _panel.anchoredPosition = ChoosePanelSpot(y, scale);
             _panel.sizeDelta = new Vector2(width, y);
 
             // A slow breath on the frame, so the popup reads as the thing to look at without flashing.
@@ -264,6 +282,7 @@ namespace Facet.Game
         {
             if (_panel != null) _panel.gameObject.SetActive(false);
             HideBoxesFrom(0);
+            LayoutShade(null);
         }
 
         private static float Height(HudText text, float width)
@@ -285,6 +304,7 @@ namespace Facet.Game
         {
             int used = 0;
             BuildKind building = LineBuilding(task);
+            _focusRects.Clear();
 
             for (int i = 0; i < task.Focus.Length; i++)
             {
@@ -292,13 +312,8 @@ namespace Facet.Game
 
                 FocusBox box = BoxAt(used++);
                 float wave = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 5f);
-                float pad = (BoxPad + BoxBreath * wave) * scale;
-                rect = Rect.MinMaxRect(rect.xMin - pad, rect.yMin - pad, rect.xMax + pad, rect.yMax + pad);
-
-                // Kept on screen, so a box around a corner piece of the HUD keeps all four sides.
-                const float edge = 2f;
-                rect = Rect.MinMaxRect(Mathf.Max(edge, rect.xMin), Mathf.Max(edge, rect.yMin),
-                    Mathf.Min(Screen.width - edge, rect.xMax), Mathf.Min(Screen.height - edge, rect.yMax));
+                _focusRects.Add(OnScreen(Grow(rect, (BoxPad + BoxBreath) * scale)));
+                rect = OnScreen(Grow(rect, (BoxPad + BoxBreath * wave) * scale));
 
                 box.Root.gameObject.SetActive(true);
                 box.Root.anchorMin = box.Root.anchorMax = Vector2.zero;
@@ -315,6 +330,114 @@ namespace Facet.Game
             HideBoxesFrom(used);
         }
 
+        private static Rect Grow(Rect r, float by) => Rect.MinMaxRect(r.xMin - by, r.yMin - by, r.xMax + by, r.yMax + by);
+
+        /// <summary>Kept on screen, so a box around a corner piece of the HUD keeps all four sides.</summary>
+        private static Rect OnScreen(Rect r)
+        {
+            const float edge = 2f;
+            return Rect.MinMaxRect(Mathf.Max(edge, r.xMin), Mathf.Max(edge, r.yMin),
+                Mathf.Min(Screen.width - edge, r.xMax), Mathf.Min(Screen.height - edge, r.yMax));
+        }
+
+        // ---------------------------------------------------------------- where the popup goes
+
+        /// <summary>The popup's bottom-left corner: always the same place, the left column under the status card,
+        /// in the room the coached framing leaves left of the map. It never moves between lines, so the player
+        /// always knows where to read.</summary>
+        private static Vector2 ChoosePanelSpot(float height, float scale)
+        {
+            float margin = HudLayout.Margin * scale;
+            float top = (HudLayout.Margin + HudLayout.StatusHeight + HudLayout.TutorialGap * 2f) * scale;
+            return new Vector2(margin, Mathf.Max(margin, Screen.height - top - height));
+        }
+
+        /// <summary>The tile a machine the line is about stands as; Empty for a belt or anything that is not a
+        /// machine, which the feed box then leaves out.</summary>
+        private static TileKind FedTile(BuildKind building)
+        {
+            if (building == BuildKind.Belt) return TileKind.Empty;
+            try { return BuildCatalog.TileFor(building); }
+            catch (ArgumentOutOfRangeException) { return TileKind.Empty; }
+        }
+
+        // ---------------------------------------------------------------- the dimming
+
+        /// <summary>Darken the screen everywhere but the holes: the screen is cut into a grid along every hole's
+        /// edges, and each run of cells in a row that no hole covers becomes one dark strip. A handful of boxes
+        /// is a handful of strips. Null or no holes: no dimming at all - a line with nothing boxed is read plain.
+        /// The strips take no clicks, so the player can still build anywhere.</summary>
+        private void LayoutShade(List<Rect> holes)
+        {
+            int used = 0;
+            if (holes != null && holes.Count > 0)
+            {
+                var xs = new List<float> { 0f, Screen.width };
+                var ys = new List<float> { 0f, Screen.height };
+                for (int i = 0; i < holes.Count; i++)
+                {
+                    xs.Add(holes[i].xMin); xs.Add(holes[i].xMax);
+                    ys.Add(holes[i].yMin); ys.Add(holes[i].yMax);
+                }
+                xs.Sort();
+                ys.Sort();
+
+                Color dark = new Color(0f, 0f, 0f, ShadeAlpha);
+                for (int j = 0; j + 1 < ys.Count; j++)
+                {
+                    float y0 = ys[j], y1 = ys[j + 1];
+                    if (y1 - y0 < 0.5f) continue;
+
+                    float runStart = -1f;
+                    for (int i = 0; i + 1 < xs.Count; i++)
+                    {
+                        float x0 = xs[i], x1 = xs[i + 1];
+                        if (x1 - x0 < 0.5f) continue;
+
+                        bool covered = Covered(holes, new Vector2((x0 + x1) * 0.5f, (y0 + y1) * 0.5f));
+                        if (!covered && runStart < 0f) runStart = x0;
+                        if (covered && runStart >= 0f)
+                        {
+                            Strip(used++, Rect.MinMaxRect(runStart, y0, x0, y1), dark);
+                            runStart = -1f;
+                        }
+                    }
+                    if (runStart >= 0f) Strip(used++, Rect.MinMaxRect(runStart, y0, Screen.width, y1), dark);
+                }
+            }
+
+            for (int i = used; i < _shades.Count; i++) _shades[i].Image.gameObject.SetActive(false);
+        }
+
+        private static bool Covered(List<Rect> holes, Vector2 point)
+        {
+            for (int i = 0; i < holes.Count; i++)
+                if (holes[i].Contains(point)) return true;
+            return false;
+        }
+
+        private void Strip(int index, Rect rect, Color colour)
+        {
+            while (_shades.Count <= index)
+            {
+                RectTransform node = Node(_canvasRoot, "shade" + _shades.Count);
+                Image image = node.gameObject.AddComponent<Image>();
+                image.raycastTarget = false;   // dims the map, never blocks a click on it
+                var shade = new HudBox(image);
+                node.SetAsFirstSibling();   // under the boxes and the popup
+                _shades.Add(shade);
+            }
+
+            HudBox strip = _shades[index];
+            RectTransform rt = strip.Image.rectTransform;
+            strip.Image.gameObject.SetActive(true);
+            rt.anchorMin = rt.anchorMax = Vector2.zero;
+            rt.pivot = Vector2.zero;
+            rt.anchoredPosition = rect.position;
+            rt.sizeDelta = rect.size;
+            strip.Set(colour);
+        }
+
         private void HideBoxesFrom(int first)
         {
             for (int i = first; i < _boxes.Count; i++) _boxes[i].Root.gameObject.SetActive(false);
@@ -322,6 +445,12 @@ namespace Facet.Game
 
         /// <summary>The building a line is about: the one its rule names, or the first of its blueprint. What a
         /// <see cref="TutorialFocus.BarTile"/> box points at.</summary>
+        /// <summary>The bar key a <see cref="TutorialFocus.BarTile"/> box points at: what the player has to pick
+        /// up to do the line. A line with a blueprint is done with the blueprint's building (a belt to feed a
+        /// turret is picked up as the belt, not the turret); otherwise the building the line's rule names.</summary>
+        private static BuildKind BarBuilding(TutorialTask task)
+            => task.Ghost != null && task.Ghost.Length > 0 ? task.Ghost[0].Build : LineBuilding(task);
+
         private static BuildKind LineBuilding(TutorialTask task)
         {
             if (TutorialScript.TryRequiredBuilding(task.Step, out BuildKind building)) return building;
@@ -349,21 +478,42 @@ namespace Facet.Game
 
                 case TutorialFocus.Ghost:
                 {
-                    if (task.Ghost.Length == 0) return false;
+                    if (task.Ghost == null || task.Ghost.Length == 0) return false;
                     int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
+                    void Take(Int2 cell)
+                    {
+                        minX = Math.Min(minX, cell.X);
+                        minY = Math.Min(minY, cell.Y);
+                        maxX = Math.Max(maxX, cell.X);
+                        maxY = Math.Max(maxY, cell.Y);
+                    }
+
+                    // The whole job in one box: the blueprint, the tile the drag starts on, and the machine the
+                    // line is about where it already stands next to the blueprint (the turret a belt is to feed),
+                    // so nothing the player has to touch is left in the dark.
+                    for (int i = 0; i < task.Ghost.Length; i++) Take(task.Ghost[i].Cell);
+                    if (task.Target.HasValue) Take(task.Target.Value);
+
+                    TileKind fed = FedTile(building);
                     for (int i = 0; i < task.Ghost.Length; i++)
                     {
                         Int2 c = task.Ghost[i].Cell;
-                        minX = Math.Min(minX, c.X);
-                        minY = Math.Min(minY, c.Y);
-                        maxX = Math.Max(maxX, c.X);
-                        maxY = Math.Max(maxY, c.Y);
+                        Int2[] around = { new Int2(c.X + 1, c.Y), new Int2(c.X - 1, c.Y),
+                                          new Int2(c.X, c.Y + 1), new Int2(c.X, c.Y - 1) };
+                        for (int n = 0; n < around.Length; n++)
+                            if (_world.TileGrid.InBounds(around[n]) && _world.TileGrid.Get(around[n]) == fed &&
+                                fed != TileKind.Empty)
+                                Take(around[n]);
                     }
+
                     return WorldRect(minX, minY, maxX - minX + 1, maxY - minY + 1, out rect);
                 }
 
                 case TutorialFocus.None:
                     return false;
+
+                case TutorialFocus.BarTile:
+                    return _hud != null && _hud.TryFocusRect(focus, BarBuilding(task), out rect);
 
                 default:
                     return _hud != null && _hud.TryFocusRect(focus, building, out rect);
@@ -433,7 +583,7 @@ namespace Facet.Game
                     Wash = HudUi.AdoptRound(wash, Color.clear, 8f),
                     Frame = HudUi.AdoptBorder(frame, Color.clear, 8f, 5f),
                 };
-                root.SetAsFirstSibling();   // boxes under the popup
+                root.SetSiblingIndex(_shades.Count);   // over the dimming, under the popup
                 _boxes.Add(box);
             }
 

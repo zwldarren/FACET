@@ -352,14 +352,20 @@ namespace Facet.Core
         /// wave early, and <see cref="TutorialState.GatesWaves"/> stays false.</summary>
         public readonly bool ClockRuns;
 
+        /// <summary>Does the coach spotlight each line: dim the screen around the boxed places and set the popup
+        /// down beside them? Off, the popup keeps its one place in the left column and nothing is dimmed. Per
+        /// map, so the first tutorial can try it without changing how the other lessons look.</summary>
+        public readonly bool Spotlight;
+
         public TutorialScript(BuildKind[] starting, TutorialTask[] tasks, bool coached = false,
-            TutorialGhost[] prebuilt = null, bool clockRuns = false)
+            TutorialGhost[] prebuilt = null, bool clockRuns = false, bool spotlight = false)
         {
             Starting = starting ?? new BuildKind[0];
             Tasks = tasks ?? new TutorialTask[0];
             Coached = coached;
             Prebuilt = prebuilt ?? new TutorialGhost[0];
             ClockRuns = clockRuns;
+            Spotlight = spotlight;
         }
 
         /// <summary>Is this a step that is not about any building - an explanation to read, a wave to call or
