@@ -20,6 +20,23 @@ namespace Facet.Game
     {
         private static readonly Dir[] Sides = { Dir.North, Dir.East, Dir.South, Dir.West };
 
+        /// <summary>How far a lane reaches past its own cell edge into a machine it docks with, in tiles.
+        ///
+        /// A machine's body stands off the edge of its tile - the turret's octagon is 0.42 of a tile from its
+        /// centre, an operator's body 0.44 - so a lane that stopped at the cell edge left a strip of bare
+        /// ground, about two pixels at the tutorial's zoom and five up close, between the belt and what it
+        /// feeds. The join read as a gap rather than as a dock. The reach only has to cross that strip: the
+        /// machine is drawn over the belt layer, so whatever the reach adds past the body's edge is hidden
+        /// and nothing pokes out on the far side.</summary>
+        private const float DockReach = 0.12f;
+
+        /// <summary>The collar at a docking joint: a band of the rail's colour across the belt where it meets the
+        /// machine. The bed and the machine's port are the same colour, so without it the seam is invisible and
+        /// the belt reads as one strip of cloth lying across the machine; the collar is the sleeve the port is
+        /// clamped in. Exactly as wide as the rail it sits between, so it closes the joint without growing a
+        /// barb on either side of the run.</summary>
+        private const float CollarLength = 0.07f;
+
         private readonly List<BeltSnapshot> _belts = new List<BeltSnapshot>();
         private readonly List<int> _feeds = new List<int>();
         private readonly List<Vector2> _hub = new List<Vector2>();
@@ -83,10 +100,30 @@ namespace Facet.Game
                 // go at all. The last two are different problems - clear the offending item, or finish the
                 // line - so they are different colours, and the short exit lane says the second one in
                 // geometry as well.
-                Color bed = belt.Jammed ? Colors.Jam : belt.Blocked ? Colors.BeltBlocked : Colors.Belt;
+                Color bed = belt.Jammed ? Colors.Jam : belt.Blocked ? Colors.BeltBlocked : BedColour(belt);
                 AppendBed(belt, _feeds[i], w, 0f, bed);
+
+                // The sleeve, on a healthy cell only: a jam is the machine refusing at this very joint, and
+                // its red bed is already saying so - a dark collar over it would only soften the shout.
+                if (!belt.Jammed && Dock(belt.Cell + belt.Direction.Offset()) > 0f)
+                    AppendCollar(belt, w, rail);
+
                 AppendChevron(belt, _feeds[i], w);
             }
+        }
+
+        /// <summary>The bed's colour on a healthy cell - which is its own cream, except on a vein.
+        ///
+        /// A belt laid on ore is the only belt whose job is what it stands on, and the strip covers most of the
+        /// mineral's figure. Tinting that one cell toward the mineral it mines says "this end of the run is
+        /// eating the ground" without a second mark, and it does it in the colour the pieces leaving the cell
+        /// already wear.</summary>
+        private Color BedColour(in BeltSnapshot belt)
+        {
+            Color bed = Colors.Belt;
+            if (!World.Terrain.HasOre(belt.Cell)) return bed;
+
+            return Color.Lerp(bed, Colors.MineralColor(World.Terrain.OreAt(belt.Cell)), 0.46f);
         }
 
         /// <summary>
@@ -109,10 +146,12 @@ namespace Facet.Game
             if (turning) AppendElbow(centre, ToVector(entry.Opposite()), forward, halfWidth, color);
             else AppendSquareHub(centre, halfWidth, color);
 
-            // The exit lane: full length when the next cell takes the item, short when the run just ends - a
-            // dangling half-lane is the "this goes nowhere" readout.
-            bool exitFull = TakesFrom(belt.Cell + belt.Direction.Offset());
-            float exitLength = exitFull ? 0.5f : 0.32f + cap;
+            // The exit lane: full length when the next cell takes the item - and past the cell edge where that
+            // cell is a machine standing back from it - short when the run just ends, a dangling half-lane
+            // being the "this goes nowhere" readout.
+            Int2 exitCell = belt.Cell + belt.Direction.Offset();
+            bool exitFull = TakesFrom(exitCell);
+            float exitLength = exitFull ? 0.5f + Dock(exitCell) : 0.32f + cap;
             AppendLane(centre, centre + forward * exitLength, halfWidth, color);
 
             // A lane from every side something feeds in from: belts pointing at me, and machines whose facing pushes
@@ -122,8 +161,24 @@ namespace Facet.Game
             {
                 if (!Fed(feeds, Sides[s])) continue;
                 Vector2 side = ToVector(Sides[s]);
-                AppendLane(centre + side * 0.5f, centre, halfWidth, color);
+                AppendLane(centre + side * (0.5f + Dock(belt.Cell + Sides[s].Offset())), centre, halfWidth, color);
             }
+        }
+
+        /// <summary>How far this belt's lane reaches into the cell it docks with: past its own edge where that
+        /// cell is a machine, flush where it is another belt (which comes out to meet it). A wall takes nothing
+        /// and is answered by the short dangling lane instead, so it is not a dock.</summary>
+        private float Dock(Int2 cell)
+            => World.TileGrid.Get(cell).Takes() && !World.Belts.TryGet(cell, out _) ? DockReach : 0f;
+
+        /// <summary>The sleeve where the run plugs into a machine, drawn once per docking cell after its bed: a
+        /// band across the very joint, in the rail's colour and a little wider than the bed. It is the only
+        /// line on a belt, and it is there for the one place a belt has an end worth reading.</summary>
+        private void AppendCollar(BeltSnapshot belt, float halfWidth, float rail)
+        {
+            Vector2 forward = ToVector(belt.Direction);
+            Vector2 at = CellCentre(belt.Cell) + forward * (0.5f - CollarLength * 0.5f);
+            AppendLane(at, at + forward * CollarLength, halfWidth + rail, Colors.BeltRail);
         }
 
         /// <summary>Which sides of <paramref name="belt"/> deliver into it, one bit per <see cref="Dir"/>.</summary>

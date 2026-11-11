@@ -7,6 +7,11 @@ namespace Facet.Game
     /// <see cref="CoreState.Size"/> footprint, with a dark emblem in the middle that tints toward the damage colour as
     /// HP falls - one shape carrying both "this is what you lose on" and "how close you are to losing".
     ///
+    /// The emblem is a plate rather than a hole: rounded with the block's own corner, with one light rule inset
+    /// inside it. As a hard-cornered flat black square it was the one featureless void on a map of outlined shapes,
+    /// and the eye went to it for the wrong reason - the rule is what makes it an inlaid mark, and it is drawn the
+    /// way the rest of the map is drawn, at a constant width in pixels so the zoom cannot thin it away.
+    ///
     /// The Core is the one view whose rebuild reason is a watched value rather than a revision or the clock: it
     /// redraws when its cell or health changes and while a view-clock hit cue is active. Geometry is built
     /// once in <see cref="OnInitialized"/>.
@@ -22,6 +27,12 @@ namespace Facet.Game
         private bool _wasAnimating;
         private Vector2[] _block;
         private Vector2[] _emblem;
+
+        /// <summary>The emblem's rule: the same square inset by the palette's distance, its outline grown outward to
+        /// a constant width in pixels - so the plate is marked the way the map is drawn, and not with a second
+        /// outline.</summary>
+        private Vector2[] _rule;
+
         private VisualStyle _core;
 
         private Int2 _seenCell = new Int2(int.MinValue, int.MinValue);
@@ -52,13 +63,29 @@ namespace Facet.Game
             float emblemTiles = Colors.CoreBlock.EmblemTiles;
             float min = size * 0.5f - emblemTiles * 0.5f;
             float max = size * 0.5f + emblemTiles * 0.5f;
-            _emblem = new[]
+
+            // The emblem is cut with the block's own rounding: a hard square inside a rounded slab read as a hole
+            // in the paper rather than a mark on it, and the rounding is the only thing the two have to agree on.
+            // Its radius is capped against its own side, so a larger emblem cannot round itself into a disc.
+            float emblemRadius = Mathf.Clamp(Colors.CoreBlock.EmblemRadius, 0f, emblemTiles * 0.2f);
+            _emblem = ProcMesh.Rounded(new[]
             {
                 new Vector2(min, min),
                 new Vector2(max, min),
                 new Vector2(max, max),
                 new Vector2(min, max),
-            };
+            }, emblemRadius);
+
+            // The rule, as the emblem's own square inset and rounded a little tighter: concentric with the plate, so
+            // the mark reads as one object with a frame in it rather than as two shapes stacked.
+            float ruleInset = Mathf.Clamp(Colors.CoreBlock.EmblemRuleInset, 0f, emblemTiles * 0.4f);
+            _rule = ProcMesh.Rounded(new[]
+            {
+                new Vector2(min + ruleInset, min + ruleInset),
+                new Vector2(max - ruleInset, min + ruleInset),
+                new Vector2(max - ruleInset, max - ruleInset),
+                new Vector2(min + ruleInset, max - ruleInset),
+            }, Mathf.Max(0f, emblemRadius - ruleInset * 0.5f));
         }
 
         protected override void Observe(in ViewFrame frame)
@@ -120,8 +147,15 @@ namespace Facet.Game
             AppendShadow(_block, origin);
             AppendPolygon(_block, origin, FlashTint(fill), outline, outlineWidth);
 
-            // No outline of its own: it sits inside the block, where a second outline would read as a seam.
+            // No outline of its own: it sits inside the block, where a second outline would read as a seam. The rule
+            // inside it is a band of the block's own colour lifted off the ink, drawn the way an outline is drawn -
+            // grown outward from a polygon, at a constant width in pixels - so it holds its weight at every zoom.
             AppendPolygon(_emblem, origin, emblem, emblem, 0f);
+
+            float width = Mathf.Clamp(Colors.CoreBlock.EmblemRulePixels, 0f, 8f) * WorldPerPixel;
+            if (width > 0f)
+                AppendPolygonOutline(_rule, origin,
+                    Color.Lerp(emblem, healthy, Mathf.Clamp(Colors.CoreBlock.EmblemRuleLight, 0f, 1f)), width);
 
             AppendCoreImpact(origin);
             EndSprites();

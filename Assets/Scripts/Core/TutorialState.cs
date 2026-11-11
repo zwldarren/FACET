@@ -337,6 +337,19 @@ namespace Facet.Core
                     return TryLessonMachine(BehaviorKind.Turret, out MachineSnapshot lessonGun)
                            && !lessonGun.Shape.IsEmpty;
 
+                case TutorialStep.TurretCount:
+                    // A line with no count is broken data, not "at least no turrets": it would pass before the
+                    // player built anything. The authoring surface reports it; here it simply never ticks, the
+                    // same answer every other unreadable line gives.
+                    if (_script[_index].Turrets < 1) return false;
+                    _machines.CountTurrets(out int turrets, out _);
+                    return turrets >= _script[_index].Turrets;
+
+                case TutorialStep.ArmedTurretCount:
+                    if (_script[_index].Turrets < 1) return false;
+                    _machines.CountTurrets(out _, out int armedTurrets);
+                    return armedTurrets >= _script[_index].Turrets;
+
                 default:
                     // A line carrying <see cref="TutorialScript.NoStep"/> is broken data, reported by the map
                     // validator where a designer can act on it: it never ticks, and saying so every tick would

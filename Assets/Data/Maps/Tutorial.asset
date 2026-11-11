@@ -84,6 +84,9 @@ MonoBehaviour:
     Focus: 0201
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 8
     Text: "This is ORE. A belt laid on ore mines shapes from it. \nShapes are your
       money and your ammo."
@@ -96,6 +99,9 @@ MonoBehaviour:
     Focus: 03
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 8
     Text: "Every building costs ore shapes. This is how many you have. \nMine ore
       to get more!"
@@ -108,6 +114,9 @@ MonoBehaviour:
     Focus: 06
     Reveal: 2
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 8
     Text: 'The buildings you can use appear down here.
 
@@ -122,6 +131,9 @@ MonoBehaviour:
     Focus: 0c
     Reveal: 4
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 10
     Text: Press 1, or click the BELT.
     Hint: 
@@ -133,6 +145,9 @@ MonoBehaviour:
     Focus: 05
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 1
     Text: Press on the glowing ORE tile, and drag down into the Core.
     Hint: Start the drag on the ore itself, then let go on the Core.
@@ -153,6 +168,9 @@ MonoBehaviour:
     Focus: 0401
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 8
     Text: Your first shape reached the Core! This number goes up with every shape
       you bank.
@@ -173,6 +191,9 @@ MonoBehaviour:
       Mineral: 1
     - Cell: {x: 20, y: 3}
       Mineral: 1
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 8
     Text: "Placed something in the wrong spot? \nRIGHT-CLICK it to delete it."
     Hint: 
@@ -184,6 +205,9 @@ MonoBehaviour:
     Focus: 
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 11
     Text: "Turrets shoot enemies. \nPress 0, or click the TURRET."
     Hint: 
@@ -195,6 +219,9 @@ MonoBehaviour:
     Focus: 05
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 12
     Text: Click the glowing tile next to the enemies' road to place the turret.
     Hint: 
@@ -209,6 +236,9 @@ MonoBehaviour:
     Focus: 04
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 2
     Text: "Turrets fire the shapes you feed them. \nDrag a belt from the new ORE
       into the turret."
@@ -228,6 +258,9 @@ MonoBehaviour:
     Focus: 0405
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 8
     Text: "The turret has ammo. \nNow let's move to the top of the screen."
     Hint: 
@@ -239,6 +272,9 @@ MonoBehaviour:
     Focus: 0b
     Reveal: 1
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 8
     Text: "Your Core's health. \nIf it reaches zero, you lose."
     Hint: 
@@ -250,6 +286,9 @@ MonoBehaviour:
     Focus: 07
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 8
     Text: "Which wave is next, and when it comes. \nClear every wave to win."
     Hint: 
@@ -261,6 +300,9 @@ MonoBehaviour:
     Focus: 08
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 8
     Text: "The shape these enemies are weak to. \nThis wave: a full circle, which
       your ore gives."
@@ -273,6 +315,9 @@ MonoBehaviour:
     Focus: 09
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 13
     Text: Press N, or click this button, to start wave 1.
     Hint: 
@@ -284,15 +329,18 @@ MonoBehaviour:
     Focus: 0a02
     Reveal: 8
     AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
   - Step: 24
-    Text: Wave 1 is down. The next wave is heavier - one turret cannot hold it.
+    Text: Wave 1 is here. Keep the turret fed and hold the Core.
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Two guns
-    Focus: 01
+    Title: Wave 1
+    Focus: 
     Reveal: 0
     AddsOre:
     - Cell: {x: 20, y: 11}
@@ -305,50 +353,50 @@ MonoBehaviour:
       Mineral: 1
     AddsGround: []
     Wave: 1
-  - Step: 25
-    Text: A new vein opened below the lane. Belt it into a second turret.
+    Turrets: 0
+  - Step: 8
+    Text: Wave 1 is down. The next wave is heavier - one turret cannot hold it. A
+      new vein surfaced below the lane.
     Hint: 
-    Target: {x: 23, y: 11}
-    Ghost:
-    - Build: 0
-      Cell: {x: 21, y: 11}
-      Facing: 1
-    - Build: 0
-      Cell: {x: 22, y: 11}
-      Facing: 1
-    - Build: 9
-      Cell: {x: 23, y: 11}
-      Facing: 1
+    Target: {x: -1, y: -1}
+    Ghost: []
+    Opens: 
+    StartsWave: 0
+    Title: Two guns
+    Focus: 
+    Reveal: 0
+    AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
+  - Step: 27
+    Text: Belt the new vein below the lane into a second turret.
+    Hint: Any free tile beside the new vein works - a belt can turn.
+    Target: {x: -1, y: -1}
+    Ghost: []
     Opens: 
     StartsWave: 0
     Title: A second turret
-    Focus: 0403
+    Focus: 
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
-  - Step: 26
-    Text: Two turrets, two feeds. Wait for the second round.
-    Hint: 
-    Target: {x: 23, y: 11}
-    Ghost:
-    - Build: 0
-      Cell: {x: 21, y: 11}
-      Facing: 1
-    - Build: 0
-      Cell: {x: 22, y: 11}
-      Facing: 1
-    - Build: 9
-      Cell: {x: 23, y: 11}
-      Facing: 1
+    Turrets: 2
+  - Step: 28
+    Text: Feed the second turret. Both guns must hold ammo for the next wave.
+    Hint: Lay a belt from the new vein into the turret.
+    Target: {x: -1, y: -1}
+    Ghost: []
     Opens: 
     StartsWave: 0
     Title: Feed it
-    Focus: 0403
+    Focus: 
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
+    Turrets: 2
   - Step: 13
     Text: Press N when both turrets are fed.
     Hint: 
@@ -362,15 +410,16 @@ MonoBehaviour:
     AddsOre: []
     AddsGround: []
     Wave: 0
+    Turrets: 0
   - Step: 24
-    Text: Wave 2 is down. The old wall west of the Core has opened.
+    Text: Wave 2 is here. Two guns and two feeds - hold the Core.
     Hint: 
-    Target: {x: 2, y: 2}
+    Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: The west opens
-    Focus: 03
+    Title: Wave 2
+    Focus: 
     Reveal: 0
     AddsOre:
     - Cell: {x: 2, y: 2}
@@ -395,62 +444,51 @@ MonoBehaviour:
       Size: {x: 1, y: 3}
       Kind: 0
     Wave: 2
-  - Step: 25
-    Text: Belt the new vein and guard the western lane.
+    Turrets: 0
+  - Step: 8
+    Text: Wave 2 is down. The old wall west of the Core has opened - there is ore
+      beyond it.
     Hint: 
-    Target: {x: 6, y: 4}
-    Ghost:
-    - Build: 0
-      Cell: {x: 3, y: 3}
-      Facing: 1
-    - Build: 0
-      Cell: {x: 4, y: 3}
-      Facing: 1
-    - Build: 0
-      Cell: {x: 5, y: 3}
-      Facing: 1
-    - Build: 0
-      Cell: {x: 6, y: 3}
-      Facing: 0
-    - Build: 9
-      Cell: {x: 6, y: 4}
-      Facing: 1
+    Target: {x: -1, y: -1}
+    Ghost: []
+    Opens: 
+    StartsWave: 0
+    Title: The west opens
+    Focus: 
+    Reveal: 0
+    AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
+  - Step: 27
+    Text: The last wave comes from the western gate. Build a turret out west to guard
+      the lane.
+    Hint: Any free tile in the western room that can see the lane works.
+    Target: {x: -1, y: -1}
+    Ghost: []
     Opens: 
     StartsWave: 0
     Title: A western gun
-    Focus: 0403
+    Focus: 
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
-  - Step: 26
+    Turrets: 3
+  - Step: 28
     Text: Feed the western turret. The last wave comes from the west.
-    Hint: 
-    Target: {x: 6, y: 4}
-    Ghost:
-    - Build: 0
-      Cell: {x: 3, y: 3}
-      Facing: 1
-    - Build: 0
-      Cell: {x: 4, y: 3}
-      Facing: 1
-    - Build: 0
-      Cell: {x: 5, y: 3}
-      Facing: 1
-    - Build: 0
-      Cell: {x: 6, y: 3}
-      Facing: 0
-    - Build: 9
-      Cell: {x: 6, y: 4}
-      Facing: 1
+    Hint: Drag a belt from the western vein into the turret.
+    Target: {x: -1, y: -1}
+    Ghost: []
     Opens: 
     StartsWave: 0
     Title: Feed the west
-    Focus: 0403
+    Focus: 
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
+    Turrets: 3
   - Step: 13
     Text: Press N. Hold the Core.
     Hint: 
@@ -464,6 +502,7 @@ MonoBehaviour:
     AddsOre: []
     AddsGround: []
     Wave: 0
+    Turrets: 0
   - Step: 14
     Text: Here they come. Watch your turrets fire!
     Hint: 
@@ -477,6 +516,7 @@ MonoBehaviour:
     AddsOre: []
     AddsGround: []
     Wave: 0
+    Turrets: 0
   TutorialCoached: 1
   TutorialClockRuns: 0
   TutorialSpotlight: 1

@@ -130,6 +130,19 @@ namespace Facet.Core
         /// pair with <see cref="PlaceTurretAtTarget"/> is what <see cref="ArmTurret"/> is for a map with one gun
         /// to teach - the fact is the same chamber either way.</summary>
         ArmTurretAtTarget = 26,
+
+        // Appended after the target-specific pair: a later turret a lesson only needs to exist, not to stand
+        // on one authored tile. A tutorial's job is to teach a decision, and where the second and third gun go
+        // is the player's - a fixed tile there turns a sandbox into a click-the-glowing-square drill.
+        /// <summary>At least <see cref="TutorialTask.Turrets"/> turrets stand anywhere on the map. For a lesson
+        /// that has already taught one gun and now wants a second (or third) line without prescribing the
+        /// tile: the target-specific pair stays for lessons where the layout itself is the thing taught.</summary>
+        TurretCount = 27,
+
+        /// <summary>At least <see cref="TutorialTask.Turrets"/> turrets are armed anywhere on the map. The
+        /// companion to <see cref="TurretCount"/>, and the fact a wave is survived by: a gun with nothing in
+        /// its chamber is a wall.</summary>
+        ArmedTurretCount = 28,
     }
 
     /// <summary>What a coached line draws a box around, so the player knows where to look. Places on the map
@@ -312,10 +325,16 @@ namespace Facet.Core
         /// designer's arrangement and not a rule about lessons.</summary>
         public readonly int Wave;
 
+        /// <summary>For <see cref="TutorialStep.TurretCount"/> and <see cref="TutorialStep.ArmedTurretCount"/>:
+        /// how many turrets the line asks for - the second gun, the western gun, and any count a later lesson
+        /// needs. 0 for every other step. A number rather than a step per turret, for the same reason
+        /// <see cref="Wave"/> is: which one of a battery a lesson is about is the designer's arrangement.</summary>
+        public readonly int Turrets;
+
         public TutorialTask(TutorialStep step, string text, Int2? target, BuildKind[] opens,
             bool startsWave, string hint = null, TutorialGhost[] ghost = null, string title = null,
             TutorialFocus[] focus = null, TutorialHud reveal = TutorialHud.None, ShapePatch[] addsOre = null,
-            TerrainPatch[] addsGround = null, int wave = 0)
+            TerrainPatch[] addsGround = null, int wave = 0, int turrets = 0)
         {
             Step = step;
             Text = text ?? string.Empty;
@@ -330,6 +349,7 @@ namespace Facet.Core
             AddsOre = addsOre ?? new ShapePatch[0];
             AddsGround = addsGround ?? new TerrainPatch[0];
             Wave = wave;
+            Turrets = turrets;
         }
     }
 
@@ -464,6 +484,8 @@ namespace Facet.Core
                 case TutorialStep.ArmTurretWithHalf:
                 case TutorialStep.TwoTurretsLoaded:
                 case TutorialStep.TwoTurretsLoadedAcross:
+                case TutorialStep.TurretCount:
+                case TutorialStep.ArmedTurretCount:
                     building = BuildKind.Turret;
                     return true;
 

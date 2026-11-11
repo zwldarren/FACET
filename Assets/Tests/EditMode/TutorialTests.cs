@@ -608,6 +608,36 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void ATurretCountLine_CountsGunsAnywhere_AndTheArmedLineReadsTheirChambers()
+        {
+            // The second and third guns are the player's placement decision, not a tile the lesson picked:
+            // the count rule reads how many stand, and the armed rule that follows reads the chambers. A fixed
+            // target would turn the line into click-the-glowing-square even when the player has a better spot.
+            var script = new TutorialScript(new[] { BuildKind.Turret }, new[]
+            {
+                new TutorialTask(TutorialStep.TurretCount, "two", null, null, false, turrets: 2),
+                new TutorialTask(TutorialStep.ArmedTurretCount, "fed", null, null, false, turrets: 2),
+            });
+
+            var world = new SimWorld(LessonMap(script), new SimConfig());
+
+            Sim.Place(world, BuildKind.Turret, new Int2(9, 11), Dir.West);
+            world.Tick(InputCommand.None);
+            Assert.AreEqual(0, world.Tutorial.StepsCompleted, "one gun is not the two the line asks for");
+
+            Sim.Place(world, BuildKind.Turret, new Int2(10, 11), Dir.West);
+            world.Tick(InputCommand.None);
+            Assert.AreEqual(1, world.Tutorial.StepsCompleted,
+                "the second gun ticks the count line wherever the player put it");
+
+            // The chamber is the fact, so loading it directly is the same answer a fed belt gives the gun.
+            world.Machines.RefAt(new Int2(9, 11)).Carried = Sim.TopHalfCircle;
+            world.Machines.RefAt(new Int2(10, 11)).Carried = Sim.TopHalfCircle;
+            world.Tick(InputCommand.None);
+            Assert.AreEqual(2, world.Tutorial.StepsCompleted, "both loaded chambers tick the armed count");
+        }
+
+        [Test]
         public void ATargetTurretLine_ReadsTheTurretAtItsTarget_AndItsChamber()
         {
             // A map with a gun already taught cannot use PlaceTurret for a second: it would tick on the first

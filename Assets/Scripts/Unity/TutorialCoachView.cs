@@ -42,12 +42,18 @@ namespace Facet.Game
 
         private readonly List<FocusBox> _boxes = new List<FocusBox>();
 
+        /// <summary>This line's boxes before they are merged: two subjects that overlap - a blueprint and the
+        /// target tile inside it - are one place on screen, and two frames around one place read as a
+        /// doubled border rather than as two facts.</summary>
+        private readonly List<Rect> _merges = new List<Rect>();
+
         /// <summary>The dimming laid over everything the line is not about: a set of dark strips that tile the
         /// screen around the boxes, so the boxed places are the only bright ones. Pooled, like the boxes.</summary>
         private readonly List<HudBox> _shades = new List<HudBox>();
 
-        /// <summary>This frame's boxed places in screen pixels, padded like their boxes but without the breath,
-        /// so the popup's placement and the dimming's holes stand still while the frames pulse.</summary>
+        /// <summary>This frame's boxed places in screen pixels: the rects their frames are drawn on and the holes the
+        /// dimming leaves, so the popup's placement and the dimming's edges stand on the same numbers the frames
+        /// do.</summary>
         private readonly List<Rect> _focusRects = new List<Rect>();
 
         /// <summary>The line on screen, so the hint's clock restarts when it changes. A ticked line goes
@@ -73,16 +79,45 @@ namespace Facet.Game
         /// <summary>The breathing room around a boxed thing, in screen pixels at 720p.</summary>
         private const float BoxPad = 12f;
 
-        /// <summary>How far the box breathes in and out past its pad, in pixels at 720p: a box that moves is
-        /// found before a box that only glows.</summary>
-        private const float BoxBreath = 5f;
+        /// <summary>How fast the overlay breathes, in radians per second: one rate for the popup's frame and for every
+        /// focus box, so they brighten together. Two pulses on one screen at different rates - which is what a box at
+        /// this rate and a popup at another was - is the thing the eye cannot stop noticing.</summary>
+        private const float PulseSpeed = 5f;
+
+        /// <summary>How far outside its pad the frame stands, in pixels at 720p, so its strokes never touch the
+        /// subject they point at.
+        ///
+        /// A constant, not a breath: the frame used to grow and shrink a couple of pixels, and every pixel of that
+        /// move re-rasterised a one-pixel dash. A thin translucent line that moves by a fraction of its own width
+        /// every frame twinkles at the frame rate rather than at the pulse's, which read as the dashes and the corners
+        /// blinking out of step. What moves now is the ink, which cannot alias.</summary>
+        private const float BoxClearance = 3f;
+
+        /// <summary>How far a corner bracket reaches along the box, in pixels at 720p: the solid part of the
+        /// frame, and what makes the box read at a glance before the eye has followed an edge.</summary>
+        private const float BracketArm = 20f;
+
+        /// <summary>The dashed run between two brackets - dash and gap, in pixels at 720p. The run is
+        /// redivided to fill its side evenly, so these are proportions rather than exact lengths.</summary>
+        private const float DashLength = 12f;
+        private const float DashGap = 9f;
+
+        /// <summary>The most dashes one side will ever take, so a box around half the screen costs a bounded
+        /// number of quads: past this the dashes lengthen instead of multiplying.</summary>
+        private const int MaxDashes = 16;
 
         /// <summary>The boxes' colour: a hot orange that nothing else on screen uses - not the HUD's warm
         /// accent, not the cyan of the tiles to click, not an ore.</summary>
         private static readonly Color BoxColour = new Color(1f, 0.38f, 0.05f, 1f);
 
-        /// <summary>How dark the dimming is over everything outside the boxes.</summary>
-        private const float ShadeAlpha = 0.6f;
+        /// <summary>How dark the dimming is over everything outside the boxes.
+        ///
+        /// Warm ink rather than black: the map is a warm paper, and a neutral black laid over it turns that
+        /// paper grey - the one thing the dimming must not do, since what the boxes hold up is the map. The
+        /// same brown-black the HUD's own shadows are mixed from, at a weight that still leaves the unboxed
+        /// half of the screen readable enough to move the camera by.</summary>
+        private const float ShadeAlpha = 0.60f;
+        private static readonly Color ShadeColour = new Color(0.075f, 0.058f, 0.045f, 1f);
 
         public void Initialize(SimWorld world, HudView hud, Camera camera, Palette palette)
         {
@@ -273,8 +308,9 @@ namespace Facet.Game
             _panel.anchoredPosition = ChoosePanelSpot(y, scale);
             _panel.sizeDelta = new Vector2(width, y);
 
-            // A slow breath on the frame, so the popup reads as the thing to look at without flashing.
-            float breath = 0.65f + 0.35f * Mathf.Sin(Time.unscaledTime * 3f);
+            // The same slow breath the boxes pulse to, so the popup reads as the thing to look at without flashing -
+            // and so the overlay has one rhythm. Two rates on one screen is what the eye cannot stop noticing.
+            float breath = 0.65f + 0.35f * Mathf.Sin(Time.unscaledTime * PulseSpeed);
             _panelFrame.Set(WithAlpha(titleColour, breath));
         }
 
@@ -299,35 +335,190 @@ namespace Facet.Game
         // ---------------------------------------------------------------- the boxes
 
         /// <summary>One box per thing the line is about. World places are measured from the camera every frame,
-        /// so a box follows the map as it pans and zooms; HUD pieces are measured by the HUD itself.</summary>
+        /// so a box follows the map as it pans and zooms; HUD pieces are measured by the HUD itself.
+        ///
+        /// The subjects are merged before anything is drawn: a line that boxes a blueprint and, inside it, the
+        /// tile the drag starts on is pointing at one place, and two rectangles around one place cross each
+        /// other's edges in the middle of what they are describing. What is drawn, and the hole the dimming
+        /// leaves, are both the merged set, so the frame, the hole and the subject are one shape.</summary>
         private void LayoutBoxes(TutorialTask task, float scale, bool done)
         {
-            int used = 0;
             BuildKind building = LineBuilding(task);
             _focusRects.Clear();
+            _merges.Clear();
 
             for (int i = 0; i < task.Focus.Length; i++)
             {
                 if (!TryScreenRect(task, task.Focus[i], building, out Rect rect)) continue;
+                _merges.Add(OnScreen(Grow(rect, BoxPad * scale)));
+            }
+
+            MergeOverlapping(_merges);
+
+            float wave = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * PulseSpeed);
+            int used = 0;
+
+            for (int i = 0; i < _merges.Count; i++)
+            {
+                // One rect for the hole and for the frame: what the frame stands on does not move, so neither the
+                // dimming's edge nor the frame's own strokes are re-rasterised while it pulses.
+                Rect rect = OnScreen(Grow(_merges[i], BoxClearance * scale));
+                _focusRects.Add(rect);
 
                 FocusBox box = BoxAt(used++);
-                float wave = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 5f);
-                _focusRects.Add(OnScreen(Grow(rect, (BoxPad + BoxBreath) * scale)));
-                rect = OnScreen(Grow(rect, (BoxPad + BoxBreath * wave) * scale));
-
                 box.Root.gameObject.SetActive(true);
                 box.Root.anchorMin = box.Root.anchorMax = Vector2.zero;
                 box.Root.pivot = Vector2.zero;
                 box.Root.anchoredPosition = rect.position;
                 box.Root.sizeDelta = rect.size;
 
+                // The pulse is the whole of the animation, and it is deep enough to be the cue the breathing used to
+                // be: a third of the ink, at the speed of a slow breath. Every piece carries the same alpha, so the
+                // corners and the dashes can only ever brighten together.
                 Color colour = done ? HudInk.Good(_palette) : BoxColour;
-                float pulse = 0.8f + 0.2f * wave;
-                box.Frame.Set(WithAlpha(colour, pulse));
-                box.Wash.Set(WithAlpha(colour, 0.16f * pulse));
+                float pulse = 0.68f + 0.32f * wave;
+                int pieces = PlaceFrame(box, rect.size, Mathf.Max(2f, 1.6f * scale), scale,
+                    WithAlpha(colour, pulse));
+                box.HideFrom(pieces);
+                box.Wash.Set(WithAlpha(colour, 0.10f * pulse));
             }
 
             HideBoxesFrom(used);
+        }
+
+        /// <summary>Brackets at the corners and a dashed run between them: an annotation drawn over a picture,
+        /// not a panel cut out of it.
+        ///
+        /// A closed rectangle of solid sides reads as a window the map is seen through, and it is heavy over
+        /// the very thing it is meant to show. Brackets hold the four corners - which is where the eye finds a
+        /// rectangle - and the dashes carry the edge without closing it, so the boxed tile stays part of the
+        /// map. Corners are heavier and longer than the dashes, so the shape reads at any size: on a one-tile box,
+        /// where there is no room for a run, the brackets alone still close it.
+        ///
+        /// The hierarchy is thickness and length, never opacity. At six-tenths of the box's alpha a dash was a pale
+        /// peach over the tutorial's cream floor - half a pixel of antialiasing away from invisible - and the pulse
+        /// carried it in and out of sight a piece at a time, depending on what each dash happened to be over.
+        ///
+        /// Every piece is a plain quad sized in pixels - exactly as thick as it says, at any box size and any
+        /// stroke, which is the same rule the map's own borders are drawn by and what a nine-sliced ring is
+        /// not: one texel of colour stretched by the 9-slice bleeds inward as a gradient and turns the whole
+        /// box into a slab of orange.</summary>
+        /// <returns>How many pieces it drew, so the rest of the pool can be hidden.</returns>
+        private int PlaceFrame(FocusBox box, Vector2 size, float thickness, float scale, Color colour)
+        {
+            float w = size.x;
+            float h = size.y;
+            float t = Mathf.Min(thickness, Mathf.Min(w, h) * 0.5f);
+
+            // A bracket never owns more than a corner: two arms have to leave room to breathe between them.
+            float arm = Mathf.Min(BracketArm * scale, Mathf.Min(w, h) * 0.45f);
+
+            // The corners are heavier than the dashes between them. Four held corners read as a box even when
+            // the edges are only suggested, and it is the corner - not the edge - that says where the box ends.
+            float corner = Mathf.Min(t * 1.6f, Mathf.Min(w, h) * 0.3f);
+
+            float dash = Mathf.Max(3f, DashLength * scale);
+            float gap = Mathf.Max(2f, DashGap * scale);
+
+            // Eight arms, none overlapping: the horizontal arm owns the corner square and the vertical one
+            // starts after it. Two translucent strips crossing would darken the exact pixel the eye lands on.
+            int used = 0;
+            used = Arm(box, used, new Vector2(0f, 0f), new Vector2(arm, corner), colour);
+            used = Arm(box, used, new Vector2(0f, corner), new Vector2(corner, arm - corner), colour);
+            used = Arm(box, used, new Vector2(w - arm, 0f), new Vector2(arm, corner), colour);
+            used = Arm(box, used, new Vector2(w - corner, corner), new Vector2(corner, arm - corner), colour);
+            used = Arm(box, used, new Vector2(0f, h - corner), new Vector2(arm, corner), colour);
+            used = Arm(box, used, new Vector2(0f, h - arm), new Vector2(corner, arm - corner), colour);
+            used = Arm(box, used, new Vector2(w - arm, h - corner), new Vector2(arm, corner), colour);
+            used = Arm(box, used, new Vector2(w - corner, h - arm), new Vector2(corner, arm - corner), colour);
+
+            // The run starts a gap clear of each bracket, so a corner is its own mark and the edge is a rhythm of
+            // equal gaps rather than an arm that happens to run into the first dash.
+            float inset = arm + gap;
+            float sideX = w - 2f * inset;
+            float sideY = h - 2f * inset;
+
+            used = Dashes(box, used, new Vector2(inset, 0f), Vector2.right, sideX, t, dash, gap, colour);
+            used = Dashes(box, used, new Vector2(inset, h - t), Vector2.right, sideX, t, dash, gap, colour);
+            used = Dashes(box, used, new Vector2(0f, inset), Vector2.up, sideY, t, dash, gap, colour);
+            used = Dashes(box, used, new Vector2(w - t, inset), Vector2.up, sideY, t, dash, gap, colour);
+
+            return used;
+        }
+
+        /// <summary>One bracket arm, or nothing where the box is too small to hold it.</summary>
+        private int Arm(FocusBox box, int index, Vector2 at, Vector2 size, Color colour)
+        {
+            if (size.x < 0.5f || size.y < 0.5f) return index;
+            Piece(box, index, at, size, colour);
+            return index + 1;
+        }
+
+        /// <summary>One side's dashes between the two brackets: <paramref name="run"/> pixels from
+        /// <paramref name="from"/> along <paramref name="along"/>, <paramref name="cross"/> pixels thick. The
+        /// run is divided into as many dashes as fit at this size - capped, so a huge box lengthens its dashes
+        /// rather than doubling their count - and a side too short for even one has none at all.</summary>
+        private int Dashes(FocusBox box, int index, Vector2 from, Vector2 along, float run, float cross,
+            float dash, float gap, Color colour)
+        {
+            if (run <= gap || cross < 0.5f) return index;
+
+            int count = Mathf.Clamp(Mathf.FloorToInt(run / (dash + gap)), 0, MaxDashes);
+            if (count == 0) return index;
+
+            float step = run / count;
+            float length = Mathf.Max(2f, step - gap);
+            var size = along.x > 0f ? new Vector2(length, cross) : new Vector2(cross, length);
+
+            for (int i = 0; i < count; i++)
+                Piece(box, index++, from + along * (i * step), size, colour);
+
+            return index;
+        }
+
+        /// <summary>One piece of a box's frame, pooled per box: the index is its slot, so a box whose sides need a
+        /// dash more or less reuses the pieces it had and hides the ones it no longer needs.</summary>
+        private void Piece(FocusBox box, int index, Vector2 at, Vector2 size, Color colour)
+        {
+            while (box.Strips.Count <= index)
+                box.Strips.Add(HudUi.AdoptBox(ImageNode(box.Root, "strip" + box.Strips.Count), Color.clear));
+
+            HudBox strip = box.Strips[index];
+            RectTransform rt = strip.Image.rectTransform;
+            strip.Image.gameObject.SetActive(true);
+            rt.anchorMin = rt.anchorMax = Vector2.zero;
+            rt.pivot = Vector2.zero;
+            rt.anchoredPosition = at;
+            rt.sizeDelta = size;
+            strip.Set(colour);
+        }
+
+        /// <summary>Fold every pair of overlapping - or just touching - rectangles into their union, in place,
+        /// until nothing overlaps. A handful of boxes, so the quadratic walk costs nothing.</summary>
+        private static void MergeOverlapping(List<Rect> rects)
+        {
+            bool merged = true;
+            while (merged)
+            {
+                merged = false;
+
+                for (int i = 0; i < rects.Count && !merged; i++)
+                {
+                    for (int j = i + 1; j < rects.Count; j++)
+                    {
+                        Rect a = Grow(rects[i], 2f);
+                        Rect b = rects[j];
+                        if (!a.Overlaps(b)) continue;
+
+                        rects[i] = Rect.MinMaxRect(
+                            Mathf.Min(rects[i].xMin, b.xMin), Mathf.Min(rects[i].yMin, b.yMin),
+                            Mathf.Max(rects[i].xMax, b.xMax), Mathf.Max(rects[i].yMax, b.yMax));
+                        rects.RemoveAt(j);
+                        merged = true;
+                        break;
+                    }
+                }
+            }
         }
 
         private static Rect Grow(Rect r, float by) => Rect.MinMaxRect(r.xMin - by, r.yMin - by, r.xMax + by, r.yMax + by);
@@ -382,7 +573,7 @@ namespace Facet.Game
                 xs.Sort();
                 ys.Sort();
 
-                Color dark = new Color(0f, 0f, 0f, ShadeAlpha);
+                Color dark = WithAlpha(ShadeColour, ShadeAlpha);
                 for (int j = 0; j + 1 < ys.Count; j++)
                 {
                     float y0 = ys[j], y1 = ys[j + 1];
@@ -592,13 +783,11 @@ namespace Facet.Game
             {
                 RectTransform root = Node(_canvasRoot, "focus" + _boxes.Count);
                 RectTransform wash = ImageNode(root, "wash");
-                RectTransform frame = ImageNode(root, "frame");
 
                 var box = new FocusBox
                 {
                     Root = root,
-                    Wash = HudUi.AdoptRound(wash, Color.clear, 8f),
-                    Frame = HudUi.AdoptBorder(frame, Color.clear, 8f, 5f),
+                    Wash = HudUi.AdoptRound(wash, Color.clear, 1.5f),
                 };
                 root.SetSiblingIndex(_shades.Count);   // over the dimming, under the popup
                 _boxes.Add(box);
@@ -611,7 +800,18 @@ namespace Facet.Game
         {
             public RectTransform Root;
             public HudBox Wash;
-            public HudBorder Frame;
+
+            /// <summary>The frame's pieces - brackets and dashes - pooled in the order they are drawn. One list
+            /// rather than four sides: how many pieces a box needs depends on how big it is, and a side that
+            /// fits no dashes needs none at all.</summary>
+            public readonly List<HudBox> Strips = new List<HudBox>();
+
+            /// <summary>Hide the pieces a smaller frame no longer uses, so the pool can never show a stale
+            /// dash from the line before.</summary>
+            public void HideFrom(int first)
+            {
+                for (int i = first; i < Strips.Count; i++) Strips[i].Image.gameObject.SetActive(false);
+            }
         }
 
         // ---------------------------------------------------------------- building

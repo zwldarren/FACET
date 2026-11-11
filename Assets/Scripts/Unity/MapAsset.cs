@@ -231,6 +231,12 @@ namespace Facet.Game
                 "This is how a lesson with more than one wave holds its popup through one wave and then ticks " +
                 "in the pause after it.")]
             public int Wave;
+
+            [Tooltip("TurretCount and ArmedTurretCount only: how many turrets the line asks for - 2 for the " +
+                "second gun, 3 for the next one. 0 for every other step. A count rather than a fixed tile, so " +
+                "the line says how many guns the run needs and the player decides where they stand.")]
+            [Min(0)]
+            public int Turrets;
         }
 
         [Header("Tutorial")]
@@ -524,6 +530,18 @@ namespace Facet.Game
                         Name + ": tutorial line " + (i + 1) + " asks for step " + row.Step +
                         " and names no target tile - the rule reads the tile the line points at, so the line " +
                         "can never tick"));
+                }
+
+                // A count line with no count can never tick: the authored default is 0, and "at least no
+                // turrets" is a line that passes before the player has built anything. Report it the same way
+                // as a rule that reads a missing target.
+                if ((row.Step == TutorialStep.TurretCount || row.Step == TutorialStep.ArmedTurretCount) &&
+                    row.Turrets < 1)
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialStepUnreachable, NoCell,
+                        Name + ": tutorial line " + (i + 1) + " asks for step " + row.Step +
+                        " with a turret count of " + row.Turrets + " - set Turrets to the number of guns the " +
+                        "line asks for, or it can never mean anything"));
                 }
 
                 // An explanation, a wave to call or a wave to survive is not about a building, so there is no
@@ -984,7 +1002,8 @@ namespace Facet.Game
                 tasks[i] = new TutorialTask(row.Step, row.Text,
                     placed ? new Int2(row.Target.x, row.Target.y) : (Int2?)null,
                     row.Opens, row.StartsWave, row.Hint, GhostOf(row.Ghost),
-                    row.Title, row.Focus, row.Reveal, OreOf(row.AddsOre), GroundOf(row.AddsGround), row.Wave);
+                    row.Title, row.Focus, row.Reveal, OreOf(row.AddsOre), GroundOf(row.AddsGround), row.Wave,
+                    row.Turrets);
             }
 
             return new TutorialScript(TutorialStarting, tasks, TutorialCoached, GhostOf(TutorialPrebuilt),

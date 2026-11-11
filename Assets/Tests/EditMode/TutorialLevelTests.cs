@@ -107,14 +107,15 @@ namespace Facet.Tests
             Assert.AreEqual(100f, world.Core.Hp, 0f, "one turret holds the first wave untouched");
             Assert.IsTrue(world.Terrain.HasOre(SouthVein), "and the lesson lays the vein the second gun feeds on");
 
+            Next(world);                                                        // "Two guns": the wave is down
             Sim.Place(world, BuildKind.Turret, new Int2(23, 11), Dir.East);
-            Until(world, 18, 2);                                                // a turret at the line's target
+            Until(world, 19, 2);                                                // a second turret, anywhere
             Sim.Drag(world, SouthVein, new Int2(23, 11));                       // and its feed
-            Until(world, 19, 600);                                              // the chamber has a round
+            Until(world, 20, 600);                                              // both chambers have a round
 
             world.Tick(new InputCommand(startWavePressed: true));
-            Until(world, 20, 2);                                                // wave 2 called
-            Until(world, 21, 30 * 180);                                         // cleared: the west opens
+            Until(world, 21, 2);                                                // wave 2 called
+            Until(world, 22, 30 * 180);                                         // cleared: the west opens
             Assert.AreEqual(100f, world.Core.Hp, 0f, "two turrets hold the second wave untouched");
             Assert.AreEqual(TerrainKind.Ore, world.Terrain.KindAt(WestVein),
                 "the west room the map was authored without is now floor, with a vein in it");
@@ -126,14 +127,15 @@ namespace Facet.Tests
             Assert.IsTrue(world.Terrain.HasOre(WestVein), "the vein is there to mine");
             Assert.AreEqual(0, world.Enemies.AliveCount);
 
+            Next(world);                                                        // "The west opens"
             Sim.Place(world, BuildKind.Turret, new Int2(6, 4), Dir.East);
-            Until(world, 22, 2);                                                // the western gun
+            Until(world, 24, 2);                                                // a third turret, anywhere
             Sim.Drag(world, new Int2(3, 3), new Int2(6, 4));                    // its feed from the new vein
             Assert.IsTrue(world.Belts.Has(new Int2(6, 3)), "the run turns up into the turret");
-            Until(world, 23, 600);                                              // armed
+            Until(world, 25, 600);                                              // all three armed
 
             world.Tick(new InputCommand(startWavePressed: true));
-            Until(world, 24, 2);                                                // wave 3 called
+            Until(world, 26, 2);                                                // wave 3 called
 
             for (int i = 0; i < 30 * 180 && world.Status == GameStatus.Playing; i++) world.Tick(InputCommand.None);
             Assert.AreEqual(GameStatus.Won, world.Status, "the lesson's three waves are the run");
