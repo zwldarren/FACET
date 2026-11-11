@@ -73,7 +73,7 @@ namespace Facet.Tests
             Next(world);                                                        // the build bar
             Assert.IsTrue(world.IsUnlocked(BuildKind.Belt));
             Assert.IsFalse(world.IsUnlocked(BuildKind.Turret), "the turret waits for its own lesson");
-            world.Tick(Gesture.Aim(new Int2(1, 1), BuildKind.Belt));
+            world.Tick(Gesture.Select(BuildKind.Belt));                          // the bar's belt, not a map stroke
             Until(world, 5, 2);                                                 // belt picked up
             Sim.Drag(world, FirstVein, new Int2(14, 8));                        // from the ore into the Core
             Assert.IsTrue(world.Belts.Has(FirstVein) && world.Belts.Has(new Int2(14, 9)),
@@ -85,7 +85,7 @@ namespace Facet.Tests
             Assert.IsTrue(world.Terrain.HasOre(SecondVein), "and is laid when the turret lesson starts");
             Next(world);                                                        // right-click deletes
 
-            world.Tick(Gesture.Aim(new Int2(1, 1), BuildKind.Turret));
+            world.Tick(Gesture.Select(BuildKind.Turret));
             Until(world, 9, 2);                                                 // turret picked up
             Sim.Place(world, BuildKind.Turret, new Int2(22, 3), Dir.East);
             Until(world, 10, 2);                                                // turret placed
@@ -116,12 +116,14 @@ namespace Facet.Tests
             Until(world, 20, 2);                                                // wave 2 called
             Until(world, 21, 30 * 180);                                         // cleared: the west opens
             Assert.AreEqual(100f, world.Core.Hp, 0f, "two turrets hold the second wave untouched");
-            Assert.AreEqual(TerrainKind.Ground, world.Terrain.KindAt(WestVein),
-                "the west room the map was authored without is now ground");
+            Assert.AreEqual(TerrainKind.Ore, world.Terrain.KindAt(WestVein),
+                "the west room the map was authored without is now floor, with a vein in it");
+            Assert.AreEqual(TerrainKind.Ground, world.Terrain.KindAt(new Int2(5, 2)),
+                "and the floor reaches past the vein");
             Assert.AreEqual(TerrainKind.Rock, world.Terrain.KindAt(WestWall), "with its lane walled");
             Assert.AreEqual(TerrainKind.Ground, world.Terrain.KindAt(new Int2(10, 7)),
                 "and its doorway opened onto the old map");
-            Assert.IsTrue(world.Terrain.HasOre(WestVein), "and a vein in it");
+            Assert.IsTrue(world.Terrain.HasOre(WestVein), "the vein is there to mine");
             Assert.AreEqual(0, world.Enemies.AliveCount);
 
             Sim.Place(world, BuildKind.Turret, new Int2(6, 4), Dir.East);

@@ -17,6 +17,13 @@ namespace Facet.Core
         public static InputCommand Aim(Int2 cell, BuildKind? kind = null)
             => new InputCommand(buildHeld: true, cursorCell: cell, selected: kind);
 
+        /// <summary>The tick a building is picked up from the bar, or by its hotkey: a selection and nothing
+        /// else. The bar is not the map, so this carries no press - and that is the whole difference from
+        /// <see cref="Aim"/>: a drag that follows an aim continues the aim's stroke from wherever it was left,
+        /// while a drag that follows a real pick starts where the player put it.</summary>
+        public static InputCommand Select(BuildKind kind)
+            => new InputCommand(selected: kind);
+
         /// <summary>The tick the left button came up over a cell: the edge that commits what the gesture
         /// carries. <see cref="BuildController"/> also closes on the hold falling, so a gesture without
         /// this still works but spells the protocol differently than the mouse does.</summary>
