@@ -46,6 +46,7 @@ MonoBehaviour:
   Seed: 0
   GeneratedWaves: 0
   TutorialStarting: 
+  TutorialPrebuilt: []
   TutorialTasks:
   - Step: 8
     Text: "Enemies come in through the GATE. \nDefeat them and protect your CORE."
@@ -71,7 +72,22 @@ MonoBehaviour:
     Reveal: 0
     AddsOre: []
   - Step: 8
-    Text: The buildings you can use appear down here.
+    Text: "Every building costs ore shapes. This is how many you have. \nMine ore
+      to get more!"
+    Hint: 
+    Target: {x: -1, y: -1}
+    Ghost: []
+    Opens: 
+    StartsWave: 0
+    Title: Building costs
+    Focus: 06
+    Reveal: 2
+    AddsOre: []
+  - Step: 8
+    Text: 'The buildings you can use appear down here.
+
+      The number on the bottom
+      right is how much ore it costs.'
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
@@ -184,7 +200,7 @@ MonoBehaviour:
     Opens: 
     StartsWave: 0
     Title: Load the turret
-    Focus: 04
+    Focus: 0405
     Reveal: 0
     AddsOre: []
   - Step: 8
@@ -255,3 +271,5 @@ MonoBehaviour:
     Reveal: 0
     AddsOre: []
   TutorialCoached: 1
+  TutorialClockRuns: 0
+  TutorialSpotlight: 1

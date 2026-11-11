@@ -32,6 +32,7 @@ namespace Facet.Tests
             var problems = map.Validate();
             Assert.AreEqual(0, problems.Count, problems.Count > 0 ? problems[0].ToString() : "");
             Assert.IsTrue(map.TutorialCoached);
+            Assert.IsTrue(map.TutorialSpotlight, "the first tutorial dims around its boxes");
         }
 
         [Test]
@@ -62,15 +63,16 @@ namespace Facet.Tests
 
             Next(world);                                                        // welcome: gate and Core
             Next(world);                                                        // the ore
+            Next(world);                                                        // buildings cost ore
             Next(world);                                                        // the build bar
             Assert.IsTrue(world.IsUnlocked(BuildKind.Belt));
             Assert.IsFalse(world.IsUnlocked(BuildKind.Turret), "the turret waits for its own lesson");
             world.Tick(Gesture.Aim(new Int2(1, 1), BuildKind.Belt));
-            Until(world, 4, 2);                                                 // belt picked up
+            Until(world, 5, 2);                                                 // belt picked up
             Sim.Drag(world, new Int2(4, 11), new Int2(4, 8));                   // from the ore into the Core
             Assert.IsTrue(world.Belts.Has(new Int2(4, 11)) && world.Belts.Has(new Int2(4, 9)),
                 "a drag that starts on the ore lays a belt on it, all the way down");
-            Until(world, 5, 600);                                               // the belt on ore mines, and banks
+            Until(world, 6, 600);                                               // the belt on ore mines, and banks
 
             Assert.IsFalse(world.Terrain.HasOre(SecondVein), "the second patch waits for the turret");
             Next(world);                                                        // "Success!"
@@ -78,11 +80,11 @@ namespace Facet.Tests
             Next(world);                                                        // right-click deletes
 
             world.Tick(Gesture.Aim(new Int2(1, 1), BuildKind.Turret));
-            Until(world, 8, 2);                                                 // turret picked up
+            Until(world, 9, 2);                                                 // turret picked up
             Sim.Place(world, BuildKind.Turret, new Int2(12, 3), Dir.East);
-            Until(world, 9, 2);                                                 // turret placed
+            Until(world, 10, 2);                                                 // turret placed
             Sim.Drag(world, SecondVein, new Int2(12, 3));                       // ore into the turret
-            Until(world, 10, 600);                                              // turret loaded
+            Until(world, 11, 600);                                              // turret loaded
             Next(world);                                                        // "Loaded!"
             Next(world);                                                        // Core health
             Next(world);                                                        // the wave line
@@ -93,7 +95,7 @@ namespace Facet.Tests
             Assert.AreEqual(0, world.Enemies.AliveCount, "nothing comes until the player calls the wave");
 
             world.Tick(new InputCommand(startWavePressed: true));
-            Until(world, 15, 2);
+            Until(world, 16, 2);
 
             for (int i = 0; i < 30 * 90 && world.Status == GameStatus.Playing; i++) world.Tick(InputCommand.None);
             Assert.AreEqual(GameStatus.Won, world.Status);

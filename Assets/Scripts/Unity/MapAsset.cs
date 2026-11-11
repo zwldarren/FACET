@@ -232,6 +232,10 @@ namespace Facet.Game
             "job, whose one line is about surviving the wave.")]
         public bool TutorialClockRuns;
 
+        [Tooltip("Coached maps only: dim the screen around what each line boxes, and set the popup down beside " +
+            "it instead of in the left column.")]
+        public bool TutorialSpotlight;
+
         /// <summary>The tile a problem is about when it is about the map as a whole, spelled as
         /// <see cref="MapValidation"/> spells it.</summary>
         private static readonly Int2 NoCell = new Int2(-1, -1);
@@ -934,7 +938,7 @@ namespace Facet.Game
             }
 
             return new TutorialScript(TutorialStarting, tasks, TutorialCoached, GhostOf(TutorialPrebuilt),
-                TutorialClockRuns);
+                TutorialClockRuns, TutorialSpotlight);
         }
 
         /// <summary>Convert a row's authored ghosts to the engine-free blueprint, preserving order: the

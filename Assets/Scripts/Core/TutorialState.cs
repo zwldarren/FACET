@@ -105,6 +105,8 @@ namespace Facet.Core
 
         /// <summary>Is this lesson taught by the coach (popup, boxes, a HUD revealed piece by piece)?</summary>
         public bool Coached => Active && _script.Coached;
+        /// <summary>Is this lesson taught with the spotlight (<see cref="TutorialScript.Spotlight"/>)?</summary>
+        public bool Spotlight => _script.Spotlight;
 
         /// <summary>Is the current line an explanation waiting for the player's "next"?</summary>
         public bool WaitsForAcknowledge => Active && !Complete && Current.Step == TutorialStep.Acknowledge;
