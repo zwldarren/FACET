@@ -457,6 +457,23 @@ namespace Facet.Game
             return task.Ghost.Length > 0 ? task.Ghost[0].Build : BuildKind.Belt;
         }
 
+        /// <summary>The door a line about "the gate" means: the one the wave it is about walks in at, because a
+        /// map may have more than one - the first map opens a second one for its last wave - and pointing at the
+        /// first would box a gate that wave never uses. Falls back to the map's first door while the clock names
+        /// none.</summary>
+        private Int2 GateInPlay(MapDefinition map)
+        {
+            WaveDefinition next = _world != null ? _world.Waves.NextWaveDefinition : null;
+            if (next != null)
+                for (int g = 0; g < next.Groups.Length; g++)
+                {
+                    int door = map.ResolveSpawn(next.Groups[g].SpawnPoint);
+                    if (door >= 0) return map.SpawnPoints[door];
+                }
+
+            return map.SpawnPoints[0];
+        }
+
         private bool TryScreenRect(TutorialTask task, TutorialFocus focus, BuildKind building, out Rect rect)
         {
             rect = default;
@@ -469,7 +486,7 @@ namespace Facet.Game
 
                 case TutorialFocus.Gate:
                     if (map.SpawnPoints.Length == 0) return false;
-                    Int2 gate = map.SpawnPoints[0];
+                    Int2 gate = GateInPlay(map);
                     return WorldRect(gate.X, gate.Y, 1, 1, out rect);
 
                 case TutorialFocus.Target:

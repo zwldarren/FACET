@@ -13,22 +13,23 @@ MonoBehaviour:
   m_Name: Tutorial
   m_EditorClassIdentifier: FACET.Game::Facet.Game.MapAsset
   Name: Tutorial
-  Width: 22
+  Width: 32
   Height: 14
   StartShapes: 40
-  CoreCell: {x: 3, y: 5}
-  Terrain: 0202020202020202020202020202020202020202020202000000000000000000000000000000000000000002020000000000000000000000000000000000000000020200000000000000000000000000000000000000000202000000000000000000000000000000000000000002020000000000000002020202020202020202020202020200000000000000000000000000000000000000000202000000000000000000000000000000000000000000020000000000000000000000000000000000000000020200000000000000020202020202020202020202020202000000000000000000000000000000000000000002020000000000000000000000000000000000000000020200000000000000000000000000000000000000000202020202020202020202020202020202020202020202
+  CoreCell: {x: 13, y: 5}
+  Terrain: 04040404040404040404020202020202020202020202020202020202020202020404040404040404040402000000000000000000000000000000000000000002040404040404040404040200000000000000000000000000000000000000000204040404040404040404020000000000000000000000000000000000000000020404040404040404040402000000000000000000000000000000000000000002040404040404040404040200000000000000020202020202020202020202020204040404040404040404020000000000000000000000000000000000000000020404040404040404040402000000000000000000000000000000000000000000040404040404040404040200000000000000000000000000000000000000000204040404040404040404020000000000000002020202020202020202020202020404040404040404040402000000000000000000000000000000000000000002040404040404040404040200000000000000000000000000000000000000000204040404040404040404020000000000000000000000000000000000000000020404040404040404040402020202020202020202020202020202020202020202
   Ore:
-  - Cell: {x: 4, y: 11}
+  - Cell: {x: 14, y: 11}
     Mineral: 1
-  - Cell: {x: 5, y: 11}
+  - Cell: {x: 15, y: 11}
     Mineral: 1
-  - Cell: {x: 4, y: 12}
+  - Cell: {x: 14, y: 12}
     Mineral: 1
-  - Cell: {x: 5, y: 12}
+  - Cell: {x: 15, y: 12}
     Mineral: 1
   SpawnPoints:
-  - {x: 21, y: 7}
+  - {x: 31, y: 7}
+  - {x: 0, y: 7}
   Waves:
   - Intermission: 10
     Groups:
@@ -37,6 +38,30 @@ MonoBehaviour:
       SpawnPoint: 0
       FirstDelay: 1
       Interval: 3
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 1
+        SW: 1
+  - Intermission: 25
+    Groups:
+    - Kind: 0
+      Count: 12
+      SpawnPoint: 0
+      FirstDelay: 0.5
+      Interval: 1
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 1
+        SW: 1
+  - Intermission: 25
+    Groups:
+    - Kind: 0
+      Count: 8
+      SpawnPoint: 1
+      FirstDelay: 0.5
+      Interval: 1.6
       Weakness:
         NW: 1
         NE: 1
@@ -63,7 +88,7 @@ MonoBehaviour:
     Text: "This is ORE. A belt laid on ore mines shapes from it. \nShapes are your
       money and your ammo."
     Hint: 
-    Target: {x: 4, y: 11}
+    Target: {x: 14, y: 11}
     Ghost: []
     Opens: 00
     StartsWave: 0
@@ -111,16 +136,16 @@ MonoBehaviour:
   - Step: 1
     Text: Press on the glowing ORE tile, and drag down into the Core.
     Hint: Start the drag on the ore itself, then let go on the Core.
-    Target: {x: 4, y: 11}
+    Target: {x: 14, y: 11}
     Ghost:
     - Build: 0
-      Cell: {x: 4, y: 11}
+      Cell: {x: 14, y: 11}
       Facing: 2
     - Build: 0
-      Cell: {x: 4, y: 10}
+      Cell: {x: 14, y: 10}
       Facing: 2
     - Build: 0
-      Cell: {x: 4, y: 9}
+      Cell: {x: 14, y: 9}
       Facing: 2
     Opens: 
     StartsWave: 0
@@ -140,13 +165,13 @@ MonoBehaviour:
     Focus: 06
     Reveal: 2
     AddsOre:
-    - Cell: {x: 9, y: 2}
+    - Cell: {x: 19, y: 2}
       Mineral: 1
-    - Cell: {x: 10, y: 2}
+    - Cell: {x: 20, y: 2}
       Mineral: 1
-    - Cell: {x: 9, y: 3}
+    - Cell: {x: 19, y: 3}
       Mineral: 1
-    - Cell: {x: 10, y: 3}
+    - Cell: {x: 20, y: 3}
       Mineral: 1
   - Step: 8
     Text: "Placed something in the wrong spot? \nRIGHT-CLICK it to delete it."
@@ -173,10 +198,10 @@ MonoBehaviour:
   - Step: 12
     Text: Click the glowing tile next to the enemies' road to place the turret.
     Hint: 
-    Target: {x: 12, y: 3}
+    Target: {x: 22, y: 3}
     Ghost:
     - Build: 9
-      Cell: {x: 12, y: 3}
+      Cell: {x: 22, y: 3}
       Facing: 1
     Opens: 
     StartsWave: 0
@@ -189,13 +214,13 @@ MonoBehaviour:
       into the turret."
     Hint: Press 1, start on the glowing ore tile, and drag right until you reach
       the turret.
-    Target: {x: 10, y: 3}
+    Target: {x: 20, y: 3}
     Ghost:
     - Build: 0
-      Cell: {x: 10, y: 3}
+      Cell: {x: 20, y: 3}
       Facing: 1
     - Build: 0
-      Cell: {x: 11, y: 3}
+      Cell: {x: 21, y: 3}
       Facing: 1
     Opens: 
     StartsWave: 0
@@ -259,8 +284,188 @@ MonoBehaviour:
     Focus: 0a02
     Reveal: 8
     AddsOre: []
+  - Step: 24
+    Text: Wave 1 is down. The next wave is heavier - one turret cannot hold it.
+    Hint: 
+    Target: {x: -1, y: -1}
+    Ghost: []
+    Opens: 
+    StartsWave: 0
+    Title: Two guns
+    Focus: 01
+    Reveal: 0
+    AddsOre:
+    - Cell: {x: 20, y: 11}
+      Mineral: 1
+    - Cell: {x: 21, y: 11}
+      Mineral: 1
+    - Cell: {x: 20, y: 12}
+      Mineral: 1
+    - Cell: {x: 21, y: 12}
+      Mineral: 1
+    AddsGround: []
+    Wave: 1
+  - Step: 25
+    Text: A new vein opened below the lane. Belt it into a second turret.
+    Hint: 
+    Target: {x: 23, y: 11}
+    Ghost:
+    - Build: 0
+      Cell: {x: 21, y: 11}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 22, y: 11}
+      Facing: 1
+    - Build: 9
+      Cell: {x: 23, y: 11}
+      Facing: 1
+    Opens: 
+    StartsWave: 0
+    Title: A second turret
+    Focus: 0403
+    Reveal: 0
+    AddsOre: []
+    AddsGround: []
+    Wave: 0
+  - Step: 26
+    Text: Two turrets, two feeds. Wait for the second round.
+    Hint: 
+    Target: {x: 23, y: 11}
+    Ghost:
+    - Build: 0
+      Cell: {x: 21, y: 11}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 22, y: 11}
+      Facing: 1
+    - Build: 9
+      Cell: {x: 23, y: 11}
+      Facing: 1
+    Opens: 
+    StartsWave: 0
+    Title: Feed it
+    Focus: 0403
+    Reveal: 0
+    AddsOre: []
+    AddsGround: []
+    Wave: 0
+  - Step: 13
+    Text: Press N when both turrets are fed.
+    Hint: 
+    Target: {x: -1, y: -1}
+    Ghost: []
+    Opens: 
+    StartsWave: 1
+    Title: Wave 2
+    Focus: 0a02
+    Reveal: 0
+    AddsOre: []
+    AddsGround: []
+    Wave: 0
+  - Step: 24
+    Text: Wave 2 is down. The old wall west of the Core has opened.
+    Hint: 
+    Target: {x: 2, y: 2}
+    Ghost: []
+    Opens: 
+    StartsWave: 0
+    Title: The west opens
+    Focus: 03
+    Reveal: 0
+    AddsOre:
+    - Cell: {x: 2, y: 2}
+      Mineral: 1
+    - Cell: {x: 3, y: 2}
+      Mineral: 1
+    - Cell: {x: 2, y: 3}
+      Mineral: 1
+    - Cell: {x: 3, y: 3}
+      Mineral: 1
+    AddsGround:
+    - Cell: {x: 0, y: 1}
+      Size: {x: 10, y: 12}
+      Kind: 0
+    - Cell: {x: 0, y: 5}
+      Size: {x: 10, y: 1}
+      Kind: 2
+    - Cell: {x: 0, y: 9}
+      Size: {x: 10, y: 1}
+      Kind: 2
+    - Cell: {x: 10, y: 6}
+      Size: {x: 1, y: 3}
+      Kind: 0
+    Wave: 2
+  - Step: 25
+    Text: Belt the new vein and guard the western lane.
+    Hint: 
+    Target: {x: 6, y: 4}
+    Ghost:
+    - Build: 0
+      Cell: {x: 3, y: 3}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 4, y: 3}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 5, y: 3}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 6, y: 3}
+      Facing: 0
+    - Build: 9
+      Cell: {x: 6, y: 4}
+      Facing: 1
+    Opens: 
+    StartsWave: 0
+    Title: A western gun
+    Focus: 0403
+    Reveal: 0
+    AddsOre: []
+    AddsGround: []
+    Wave: 0
+  - Step: 26
+    Text: Feed the western turret. The last wave comes from the west.
+    Hint: 
+    Target: {x: 6, y: 4}
+    Ghost:
+    - Build: 0
+      Cell: {x: 3, y: 3}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 4, y: 3}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 5, y: 3}
+      Facing: 1
+    - Build: 0
+      Cell: {x: 6, y: 3}
+      Facing: 0
+    - Build: 9
+      Cell: {x: 6, y: 4}
+      Facing: 1
+    Opens: 
+    StartsWave: 0
+    Title: Feed the west
+    Focus: 0403
+    Reveal: 0
+    AddsOre: []
+    AddsGround: []
+    Wave: 0
+  - Step: 13
+    Text: Press N. Hold the Core.
+    Hint: 
+    Target: {x: -1, y: -1}
+    Ghost: []
+    Opens: 
+    StartsWave: 1
+    Title: Last wave
+    Focus: 0a02
+    Reveal: 0
+    AddsOre: []
+    AddsGround: []
+    Wave: 0
   - Step: 14
-    Text: Here they come. Watch your turret fire!
+    Text: Here they come. Watch your turrets fire!
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
@@ -270,6 +475,8 @@ MonoBehaviour:
     Focus: 01
     Reveal: 0
     AddsOre: []
+    AddsGround: []
+    Wave: 0
   TutorialCoached: 1
   TutorialClockRuns: 0
   TutorialSpotlight: 1

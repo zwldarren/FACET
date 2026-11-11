@@ -310,6 +310,11 @@ namespace Facet.Game
             for (int i = 0; i < World.Map.SpawnPoints.Length; i++)
             {
                 Int2 cell = World.Map.SpawnPoints[i];
+
+                // A door the map has not opened yet is drawn nowhere: a map may keep a room - and the gate in
+                // it - behind the void until a lesson reveals it, and a marker floating in the blank would both
+                // give the surprise away and point at ground the wave cannot walk on.
+                if (!World.Terrain.KindAt(cell).IsDrawn()) continue;
                 float minX = cell.X + look.SpawnFrameInset;
                 float minY = cell.Y + look.SpawnFrameInset;
                 float maxX = cell.X + 1f - look.SpawnFrameInset;

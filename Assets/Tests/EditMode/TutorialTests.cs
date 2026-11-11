@@ -558,5 +558,87 @@ namespace Facet.Tests
                 "the current line past the end cannot be read as a step that ticks");
             Assert.AreEqual(string.Empty, world.Tutorial.Current.Text);
         }
+
+        // ---------------------------------------------------------------- the first map's second half
+
+        [Test]
+        public void AClearedWaveLine_WaitsForItsWave_ThenOpensTheRoomAndClosesItOnRestart()
+        {
+            // The map's own ground says rock; the line opens it into a floor and lays a vein in it. The run
+            // reads the *previous* tick's wave, so the room is one tick behind the wave that cleared - and a
+            // restart must put the authored rock back, or the map a replay opens is not the map that shipped.
+            var room = new Int2(2, 2);
+            var openGround = new[] { new TerrainPatch(room, 3, 3, TerrainKind.Ground) };
+            var vein = new[] { new ShapePatch(room, 2, 2, Quad.Circle) };
+
+            var script = new TutorialScript(new[] { BuildKind.Belt }, new[]
+            {
+                new TutorialTask(TutorialStep.StartWave, "go", null, null, true),
+                new TutorialTask(TutorialStep.ClearedWave, "open", null, null, false,
+                    addsGround: openGround, addsOre: vein, wave: 1),
+            });
+
+            MapDefinition rig = Sim.RigMap();
+            TerrainKind[] ground = TerrainLayout.Rects(rig.Width, rig.Height,
+                new TerrainRect(room, 2, 2, TerrainKind.Rock));
+            MapDefinition map = new MapDefinition("lesson-room", rig.Width, rig.Height, rig.StartShapes,
+                rig.Patches, rig.SpawnPoints,
+                new[] { new WaveDefinition(0f), new WaveDefinition(0f) },
+                ground, rig.CoreCell, Operators.All, rig.Seed, 0, script);
+
+            var world = new SimWorld(map, new SimConfig());
+            Assert.AreEqual(TerrainKind.Rock, world.Terrain.KindAt(room), "the map authored a rock there");
+
+            world.RequestNextWave();
+            world.Tick(InputCommand.None);          // the line lets wave 1 go; the empty wave clears at once
+            Assert.AreEqual(1, world.Tutorial.StepsCompleted);
+            Assert.AreEqual(1, world.Waves.ClearedWaves);
+            Assert.AreEqual(TerrainKind.Rock, world.Terrain.KindAt(room),
+                "the tick that cleared the wave is not the tick that reads it");
+
+            world.Tick(InputCommand.None);          // this tick reads the cleared wave
+            Assert.AreEqual(2, world.Tutorial.StepsCompleted);
+            Assert.AreEqual(TerrainKind.Ore, world.Terrain.KindAt(room),
+                "the rock opened and the vein landed in it");
+            Assert.IsTrue(world.Terrain.HasOre(new Int2(3, 3)), "the whole patch, not just its corner");
+
+            world.Restart();
+            Assert.AreEqual(TerrainKind.Rock, world.Terrain.KindAt(room), "a restart re-stamps the map");
+            Assert.IsFalse(world.Terrain.HasOre(new Int2(3, 3)));
+        }
+
+        [Test]
+        public void ATargetTurretLine_ReadsTheTurretAtItsTarget_AndItsChamber()
+        {
+            // A map with a gun already taught cannot use PlaceTurret for a second: it would tick on the first
+            // gun. The target-specific pair is the rule that means the one the line points at - and the last
+            // line is the chamber, because a turret with nothing in it is a wall.
+            // The rig's second vein lies at (12,9)-(13,9); a gun stands beside it at (14,9), fed by the ore
+            // belt at (13,9). (13,9) itself is ore, so it cannot take the gun.
+            var script = new TutorialScript(new[] { BuildKind.Turret, BuildKind.Belt }, new[]
+            {
+                new TutorialTask(TutorialStep.PlaceTurret, "any", null, null, false),
+                new TutorialTask(TutorialStep.PlaceTurretAtTarget, "second", new Int2(14, 9), null, false),
+                new TutorialTask(TutorialStep.ArmTurretAtTarget, "fed", new Int2(14, 9), null, false),
+            });
+
+            var world = new SimWorld(LessonMap(script), new SimConfig());
+
+            Sim.Place(world, BuildKind.Turret, new Int2(9, 11), Dir.West);
+            world.Tick(InputCommand.None);
+            Assert.AreEqual(1, world.Tutorial.StepsCompleted, "a turret anywhere ticks the generic line");
+            Sim.Tick(world, 5);
+            Assert.AreEqual(1, world.Tutorial.StepsCompleted, "but not the line that points at one tile");
+
+            Sim.Place(world, BuildKind.Turret, new Int2(14, 9), Dir.East);
+            world.Tick(InputCommand.None);
+            Assert.AreEqual(2, world.Tutorial.StepsCompleted, "the turret at the target is the line's answer");
+            Sim.Tick(world, 60);
+            Assert.AreEqual(2, world.Tutorial.StepsCompleted, "an empty chamber is not a fed one");
+
+            Sim.Place(world, BuildKind.Belt, new Int2(13, 9), Dir.East);   // the rig's vein into the gun
+            Sim.Tick(world, 300);
+            Assert.AreEqual(3, world.Tutorial.StepsCompleted, "the round in the chamber ticks the last line");
+        }
     }
 }

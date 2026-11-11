@@ -3,6 +3,33 @@ using System.Collections.Generic;
 
 namespace Facet.Core
 {
+    /// <summary>One rectangular patch of ground a lesson lays down when its line ticks: the tutorial's way of
+    /// opening map that was not there before. The same value is stamped into a world mid-run
+    /// (<see cref="TerrainField.Reveal"/>) and into the validator's copy of the ground, so the room the
+    /// player ends the run in is the room the map was judged with - a door inside it cannot read as a door
+    /// in a wall to one surface and as open ground to the other.</summary>
+    public readonly struct TerrainPatch
+    {
+        public readonly Int2 Origin;
+        public readonly int Width;
+        public readonly int Height;
+
+        /// <summary>What the opened ground is: floor, or the rock a room's walls are made of.</summary>
+        public readonly TerrainKind Kind;
+
+        public TerrainPatch(Int2 origin, int width, int height, TerrainKind kind)
+        {
+            Origin = origin;
+            Width = width;
+            Height = height;
+            Kind = kind;
+        }
+
+        public bool Contains(Int2 cell)
+            => cell.X >= Origin.X && cell.Y >= Origin.Y &&
+               cell.X < Origin.X + Width && cell.Y < Origin.Y + Height;
+    }
+
     /// <summary>One rectangular shape patch in the ground: a vein of one mineral.</summary>
     public readonly struct ShapePatch
     {
@@ -242,8 +269,10 @@ namespace Facet.Core
         /// plain ground; a patch claims its cells as ore (a vein is the more specific intent, so a rock
         /// drawn across one cannot delete the mineral); the terrain array paints what nobody claimed.
         /// An array that states ore is a map no writer produces, and <see cref="MapValidation"/> names it.
+        /// <paramref name="withLessonGround"/> adds the ground the map's tutorial lines open mid-run, which
+        /// is the map the validator must judge - see <see cref="StampGround"/>.
         /// <paramref name="mineral"/> optionally receives the mineral of every ore cell.</summary>
-        public void StampTerrain(TerrainKind[] kind, Quad[] mineral = null)
+        public void StampTerrain(TerrainKind[] kind, Quad[] mineral = null, bool withLessonGround = false)
         {
             if (kind == null) throw new ArgumentNullException(nameof(kind));
 
@@ -278,6 +307,47 @@ namespace Facet.Core
                 if (IsCoreTile(cell)) continue;
                 if (kind[i] != TerrainKind.Ground) continue;   // already claimed by a patch
                 kind[i] = Terrain[i];
+            }
+
+            if (!withLessonGround || Tutorial == null) return;
+
+            // A lesson's ground is part of the map as the lesson leaves it. The validator needs the whole
+            // picture - the room the last wave walks into, and the door in it - or a room that opens mid-run
+            // would be reported as a door standing in a wall. Stamped last, in line order, which is the same
+            // order and the same rule the world stamps a reveal with.
+            for (int t = 0; t < Tutorial.Count; t++)
+            {
+                TerrainPatch[] patches = Tutorial[t].AddsGround;
+                for (int p = 0; p < patches.Length; p++) StampGround(kind, patches[p]);
+            }
+        }
+
+        /// <summary>
+        /// Write one lesson patch into a ground array already stamped from the map's data: the floor and walls
+        /// of a room a line opens. Two cells are never written - the Core's footprint, which keeps its tiles
+        /// whatever the ground says, and a vein, because the map's ore is its written data and a reveal is not
+        /// the place to erase it. <paramref name="blocked"/> is the run's extra gate: the world refuses to
+        /// open a tile something already stands on, so a lesson can never bury a building.
+        /// </summary>
+        public void StampGround(TerrainKind[] kind, TerrainPatch patch, Func<Int2, bool> blocked = null)
+        {
+            if (kind == null) throw new ArgumentNullException(nameof(kind));
+
+            for (int y = 0; y < patch.Height; y++)
+            {
+                for (int x = 0; x < patch.Width; x++)
+                {
+                    var cell = new Int2(patch.Origin.X + x, patch.Origin.Y + y);
+                    if (cell.X < 0 || cell.Y < 0 || cell.X >= Width || cell.Y >= Height) continue;
+
+                    int i = cell.Y * Width + cell.X;
+                    if (i >= kind.Length) continue;
+                    if (IsCoreTile(cell)) continue;
+                    if (kind[i] == TerrainKind.Ore) continue;
+                    if (blocked != null && blocked(cell)) continue;
+
+                    kind[i] = patch.Kind;
+                }
             }
         }
 

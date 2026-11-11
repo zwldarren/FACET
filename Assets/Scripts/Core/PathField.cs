@@ -25,10 +25,12 @@ namespace Facet.Core
     /// rock - which nothing may chew - stays a wall to the end, and so does a building nothing may attack
     /// (<see cref="MachineDef.MaxHp"/> of 0), which is the same promise by another name.
     ///
-    /// Recomputed lazily when <see cref="MachineField.Revision"/> says solidity changed; terrain is fixed for
-    /// the world's lifetime, so it cannot invalidate this. Each cell stores the direction back toward the
-    /// Core rather than a full path - enemies only need "which way from here" - and a cell no flood reached
-    /// reads as no direction, which lets an enemy tell "walk this way" from "there is no way".</summary>
+    /// Recomputed lazily when <see cref="MachineField.Revision"/> says solidity changed or
+    /// <see cref="TerrainField.Version"/> says the ground moved - a lesson's reveal opens a route where there
+    /// was void, so the map is no longer the constant the older rule assumed. Each cell stores the direction
+    /// back toward the Core rather than a full path - enemies only need "which way from here" - and a cell no
+    /// flood reached reads as no direction, which lets an enemy tell "walk this way" from "there is no
+    /// way".</summary>
     public sealed class PathField
     {
         /// <summary>Relaxation order: the <see cref="Dir"/> enum's own order, N,E,S,W. Fixed so a
@@ -86,6 +88,10 @@ namespace Facet.Core
         /// <see cref="MachineField.Revision"/> only ever counts up, so the two can be compared.</summary>
         private int _builtAt = -1;
 
+        /// <summary>The ground revision the current field was built from, for the one write a run makes to
+        /// terrain: a lesson's reveal. Same comparison, same reason.</summary>
+        private int _groundAt = -1;
+
         public PathField(TileGrid grid, TerrainField terrain, MachineField machines, ContentDatabase content)
         {
             _grid = grid ?? throw new ArgumentNullException(nameof(grid));
@@ -107,12 +113,13 @@ namespace Facet.Core
             _heapCost = new int[4 * cells];
         }
 
-        /// <summary>Rebuild every field if the buildings have changed since the last rebuild, and do
-        /// nothing otherwise - the common case, since a tick usually places nothing.</summary>
+        /// <summary>Rebuild every field if the buildings or the ground have changed since the last rebuild, and
+        /// do nothing otherwise - the common case, since a tick usually changes neither.</summary>
         public void Sync()
         {
-            if (_builtAt == _machines.Revision) return;
+            if (_builtAt == _machines.Revision && _groundAt == _terrain.Version) return;
             _builtAt = _machines.Revision;
+            _groundAt = _terrain.Version;
 
             MarkThreat();
             FloodDirect();

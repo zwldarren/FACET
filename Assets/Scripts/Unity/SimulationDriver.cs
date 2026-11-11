@@ -445,7 +445,7 @@ namespace Facet.Game
             // The run opens on the Core: the map can be taller than the screen, and the Core is what the
             // player defends and must find first.
             if (_rig != null) _rig.Initialize(World.TileGrid, World.Core.Center, Campaign.IsFirstMap);
-            if (_rig != null && World.Tutorial.Coached) _rig.FrameWholeMap(World.Map.Width, World.Map.Height, CoachRoomTiles);
+            FrameStartView();
             // The locator follows the rig - its Core marker points at the same focus point - and the tutorial
             // card is up on this map or it is not.
             if (_radar != null) _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
@@ -536,7 +536,7 @@ namespace Facet.Game
             _rig = _camera.GetComponent<CameraRig>();
             if (_rig == null) _rig = _camera.gameObject.AddComponent<CameraRig>();
             _rig.Initialize(World.TileGrid, World.Core.Center, Campaign.IsFirstMap);
-            if (World.Tutorial.Coached) _rig.FrameWholeMap(World.Map.Width, World.Map.Height, CoachRoomTiles);
+            FrameStartView();
 
             // The lesson's targets are the places a player would otherwise have to pan to find.
             _tutorialCamera = new TutorialCamera(_rig, _camera);
@@ -553,6 +553,23 @@ namespace Facet.Game
                 _shell.ShowTitle();
                 SetRunHeld(true);
             }
+        }
+
+        /// <summary>The view a coached level opens on: the ground the map draws, not the rectangle it is
+        /// authored in. A map may hold a room back as void until its lesson opens it
+        /// (<see cref="TerrainField.Reveal"/>), and framing the whole rectangle would open the run zoomed out
+        /// over the empty half and give the surprise away.</summary>
+        private void FrameStartView()
+        {
+            if (_rig == null || World == null || !World.Tutorial.Coached) return;
+
+            if (!World.Terrain.TryDrawnBounds(out Int2 min, out Int2 max))
+            {
+                _rig.FrameWholeMap(World.Map.Width, World.Map.Height, CoachRoomTiles);
+                return;
+            }
+
+            _rig.FrameRect(min.X, min.Y, max.X + 1, max.Y + 1, CoachRoomTiles);
         }
 
         private T AddView<T>(string viewName) where T : Component

@@ -113,6 +113,23 @@ namespace Facet.Core
         /// <summary>The turret at the task target holds a round the coming wave is weak to. Read from the
         /// chamber and the wave's own briefing, so a gun holding any other shape cannot pass the line.</summary>
         LoadWaveShape = 23,
+
+        // Appended after the cutter and rotator lessons: the first map's second wave, and the room it opens.
+        /// <summary>The wave named by <see cref="TutorialTask.Wave"/> has been cleared. The line that keeps the
+        /// popup up while a wave is fought on a level with more than one wave: <see cref="ClearWave"/> can only
+        /// say "every wave", which is the run's end, and a lesson about what the next wave needs has to tick in
+        /// the pause after the one before it.</summary>
+        ClearedWave = 24,
+
+        /// <summary>A turret stands at the line's target. <see cref="PlaceTurret"/> counts any turret, so on a
+        /// map that has already taught its first gun it would tick before the player read a lesson about a
+        /// second one. This is the target-specific half of the same rule, like <see cref="PlaceCutter"/>.</summary>
+        PlaceTurretAtTarget = 25,
+
+        /// <summary>The turret at the line's target holds a round: the second gun is fed, not just built. The
+        /// pair with <see cref="PlaceTurretAtTarget"/> is what <see cref="ArmTurret"/> is for a map with one gun
+        /// to teach - the fact is the same chamber either way.</summary>
+        ArmTurretAtTarget = 26,
     }
 
     /// <summary>What a coached line draws a box around, so the player knows where to look. Places on the map
@@ -283,9 +300,22 @@ namespace Facet.Core
         /// them.</summary>
         public readonly ShapePatch[] AddsOre;
 
+        /// <summary>Ground this line opens when it ticks: a room the map was authored without, laid down in
+        /// the authored order so a floor can be followed by the rock of its walls. The same patches are stamped
+        /// into the validator's copy (<see cref="MapDefinition.StampTerrain"/>), so a door inside a room that
+        /// opens mid-run is judged against the ground the run ends with. Empty for every line that only
+        /// teaches.</summary>
+        public readonly TerrainPatch[] AddsGround;
+
+        /// <summary>For <see cref="TutorialStep.ClearedWave"/>: the 1-based wave that must be cleared, 0 for
+        /// every other step. A number rather than a step per wave, because which wave a line waits for is the
+        /// designer's arrangement and not a rule about lessons.</summary>
+        public readonly int Wave;
+
         public TutorialTask(TutorialStep step, string text, Int2? target, BuildKind[] opens,
             bool startsWave, string hint = null, TutorialGhost[] ghost = null, string title = null,
-            TutorialFocus[] focus = null, TutorialHud reveal = TutorialHud.None, ShapePatch[] addsOre = null)
+            TutorialFocus[] focus = null, TutorialHud reveal = TutorialHud.None, ShapePatch[] addsOre = null,
+            TerrainPatch[] addsGround = null, int wave = 0)
         {
             Step = step;
             Text = text ?? string.Empty;
@@ -298,6 +328,8 @@ namespace Facet.Core
             Focus = focus ?? new TutorialFocus[0];
             Reveal = reveal;
             AddsOre = addsOre ?? new ShapePatch[0];
+            AddsGround = addsGround ?? new TerrainPatch[0];
+            Wave = wave;
         }
     }
 
@@ -310,8 +342,10 @@ namespace Facet.Core
     ///
     /// <b>What a script changes.</b> Three things, all in <see cref="TutorialState"/>: which buildings the
     /// bottom bar offers (and therefore which hotkeys work), when the wave clock is let go, and which line
-    /// the HUD prints. Nothing else about the run moves - the map, its waves and its economy are the map's
-    /// own. That is what makes a tutorial a lesson laid over a level rather than a different kind of level.
+    /// the HUD prints. It may also lay what a line's data says - a vein (<see cref="TutorialTask.AddsOre"/>) or
+    /// a room the map was authored without (<see cref="TutorialTask.AddsGround"/>) - but those are the map's own
+    /// data replayed, not a fourth gate: the waves and the economy stay the map's. That is what makes a tutorial
+    /// a lesson laid over a level rather than a different kind of level.
     /// </summary>
     public sealed class TutorialScript
     {
@@ -372,7 +406,8 @@ namespace Facet.Core
         /// to survive? The validator skips its "is the building handed over" rule for these, since there is no
         /// building to hand over.</summary>
         public static bool NeedsNoBuilding(TutorialStep step)
-            => step == TutorialStep.Acknowledge || step == TutorialStep.StartWave || step == TutorialStep.ClearWave;
+            => step == TutorialStep.Acknowledge || step == TutorialStep.StartWave ||
+               step == TutorialStep.ClearWave || step == TutorialStep.ClearedWave;
 
         /// <summary>How many lines the script has.</summary>
         public int Count => Tasks.Length;
@@ -423,7 +458,9 @@ namespace Facet.Core
                 case TutorialStep.SelectTurret:
                 case TutorialStep.PlaceCutterTurrets:
                 case TutorialStep.PlaceTurret:
+                case TutorialStep.PlaceTurretAtTarget:
                 case TutorialStep.ArmTurret:
+                case TutorialStep.ArmTurretAtTarget:
                 case TutorialStep.ArmTurretWithHalf:
                 case TutorialStep.TwoTurretsLoaded:
                 case TutorialStep.TwoTurretsLoadedAcross:

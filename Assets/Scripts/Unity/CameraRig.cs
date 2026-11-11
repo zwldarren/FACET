@@ -114,19 +114,26 @@ namespace Facet.Game
         /// screen. Cuts rather than glides - it is the view the level opens on. <c>C</c> still returns to the
         /// Core, and the wheel still zooms.</summary>
         public void FrameWholeMap(int width, int height, float roomLeft = 0f)
+            => FrameRect(0, 0, width, height, roomLeft);
+
+        /// <summary>The same view, framed on a rectangle of the map rather than all of it. A map may hold a
+        /// room back as void (<see cref="Facet.Core.TerrainKind.Void"/>), and opening on the empty rectangle it
+        /// will grow into would show the surprise and shrink the lesson to nothing - so the start view frames the
+        /// ground the map draws now. Same cut, same margin, same room on the left for the coach.</summary>
+        public void FrameRect(float minX, float minY, float maxX, float maxY, float roomLeft = 0f)
         {
             if (_camera == null || _grid == null) return;
 
             const float margin = 2.5f;   // tiles of room for the HUD's top and bottom strips
             float aspect = Mathf.Max(0.1f, _camera.aspect);
             float room = Mathf.Max(0f, roomLeft);
-            float framed = width + room;
-            float size = Mathf.Max(height * 0.5f + margin, (framed * 0.5f + margin) / aspect);
+            float framed = Mathf.Max(1f, maxX - minX) + room;
+            float size = Mathf.Max(Mathf.Max(1f, maxY - minY) * 0.5f + margin, (framed * 0.5f + margin) / aspect);
             _targetZoom = Mathf.Clamp(size, minZoom, maxZoom);
 
             // Not through the pan bound: the room on the left is off the map on purpose, and the bound
             // would pull the view back over it.
-            _target = new Vector3(width - framed * 0.5f, height * 0.5f, transform.position.z);
+            _target = new Vector3(maxX - framed * 0.5f, (minY + maxY) * 0.5f, transform.position.z);
             transform.position = _target;
             _camera.orthographicSize = _targetZoom;
             _autoGlide = false;

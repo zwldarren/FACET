@@ -327,6 +327,16 @@ namespace Facet.Core
                 case TutorialStep.ClearWave:
                     return _waves.Finished;
 
+                case TutorialStep.ClearedWave:
+                    return _script[_index].Wave > 0 && _waves.ClearedWaves >= _script[_index].Wave;
+
+                case TutorialStep.PlaceTurretAtTarget:
+                    return TryLessonMachine(BehaviorKind.Turret, out _);
+
+                case TutorialStep.ArmTurretAtTarget:
+                    return TryLessonMachine(BehaviorKind.Turret, out MachineSnapshot lessonGun)
+                           && !lessonGun.Shape.IsEmpty;
+
                 default:
                     // A line carrying <see cref="TutorialScript.NoStep"/> is broken data, reported by the map
                     // validator where a designer can act on it: it never ticks, and saying so every tick would

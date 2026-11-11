@@ -203,7 +203,7 @@ namespace Facet.Core
 
             int linesBefore = Tutorial.StepsCompleted;
             Tutorial.Step();
-            if (Tutorial.StepsCompleted > linesBefore) LayTutorialOre(linesBefore, Tutorial.StepsCompleted);
+            if (Tutorial.StepsCompleted > linesBefore) LayLessonGround(linesBefore, Tutorial.StepsCompleted);
 
             // The gate is said here and only here - after the lesson has had its say and before the clock can
             // open a wait - so a line ticked on the same tick a wave is cleared cannot leave the run holding a
@@ -298,13 +298,20 @@ namespace Facet.Core
             }
         }
 
-        /// <summary>The veins the lines just ticked lay down. Only onto open ground: a tile already built on,
-        /// or rock, keeps what it is, so a lesson can never bury a building.</summary>
-        private void LayTutorialOre(int from, int to)
+        /// <summary>What the lines just ticked lay down on the map: the ground a reveal opens first, then the
+        /// veins that sit in it. One call because the order is the rule - a vein laid before its floor would be
+        /// skipped as ground with nothing to stand on, and a room without its vein is a lesson that cannot be
+        /// done. Both go only onto open cells: ground with nothing built on it, so a lesson can never bury a
+        /// building or overwrite the map's own ore.</summary>
+        private void LayLessonGround(int from, int to)
         {
             for (int line = from; line < to; line++)
             {
-                ShapePatch[] ore = Tutorial.TaskAt(line).AddsOre;
+                TutorialTask task = Tutorial.TaskAt(line);
+                TerrainPatch[] ground = task.AddsGround;
+                for (int p = 0; p < ground.Length; p++) Terrain.Reveal(Map, ground[p]);
+
+                ShapePatch[] ore = task.AddsOre;
                 for (int p = 0; p < ore.Length; p++)
                     for (int dy = 0; dy < ore[p].Height; dy++)
                         for (int dx = 0; dx < ore[p].Width; dx++)
