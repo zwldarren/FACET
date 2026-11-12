@@ -13,6 +13,7 @@ namespace Facet.Tests
     {
         private const string MainMapPath = "Assets/Data/Maps/MainMap.asset";
         private const string TutorialPath = "Assets/Data/Maps/Tutorial.asset";
+        private const string WorkshopPath = "Assets/Data/Maps/Workshop.asset";
         private const string CampaignPath = "Assets/Data/Campaign.asset";
 
         private static MapAsset Load()
@@ -26,13 +27,51 @@ namespace Facet.Tests
         private static readonly Shape RightHalfCircle = Shape.Of(Quad.Empty, Quad.Circle, Quad.Circle, Quad.Empty);
 
         [Test]
-        public void TheCampaign_IsTheTutorial_ThenTheMainMap()
+        public void TheCampaign_IsTheTutorial_TheWorkshop_ThenTheMainMap()
         {
             var campaign = AssetDatabase.LoadAssetAtPath<MapSet>(CampaignPath);
             Assert.IsNotNull(campaign);
-            Assert.AreEqual(2, campaign.Maps.Length);
+            Assert.AreEqual(3, campaign.Maps.Length);
             Assert.AreSame(AssetDatabase.LoadAssetAtPath<MapAsset>(TutorialPath), campaign.Maps[0]);
-            Assert.AreSame(Load(), campaign.Maps[1]);
+            Assert.AreSame(AssetDatabase.LoadAssetAtPath<MapAsset>(WorkshopPath), campaign.Maps[1]);
+            Assert.AreSame(Load(), campaign.Maps[2]);
+        }
+
+        [Test]
+        public void TheWorkshop_TeachesTheCutterAndRotator_ThenExamsThem()
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<MapAsset>(WorkshopPath);
+            Assert.IsNotNull(asset, WorkshopPath + " is missing");
+            CollectionAssert.IsEmpty(asset.Validate());
+
+            MapDefinition map = asset.ToCore();
+            Assert.IsTrue(map.Tutorial.Coached);
+            Assert.IsTrue(map.Tutorial.ClockRuns, "the waves are the exam, so the clock is not the lesson's");
+
+            var world = new SimWorld(map, new SimConfig());
+            Assert.IsTrue(world.IsUnlocked(BuildKind.Cutter));
+            Assert.IsTrue(world.IsUnlocked(BuildKind.Rotator));
+            Assert.IsTrue(world.IsUnlocked(BuildKind.Sink));
+            Assert.IsFalse(world.IsUnlocked(BuildKind.Splitter), "Frontier teaches that one");
+            Assert.IsFalse(world.IsUnlocked(BuildKind.Stacker));
+
+            // Each operator gets one line with its machine at work, and nothing it has to build to pass.
+            int demos = 0;
+            for (int i = 0; i < map.Tutorial.Count; i++)
+            {
+                TutorialTask line = map.Tutorial[i];
+                if (System.Array.IndexOf(line.Focus, TutorialFocus.Demo) >= 0)
+                {
+                    demos++;
+                    Assert.AreEqual(TutorialStep.Acknowledge, line.Step, "a demo is read, not rebuilt");
+                }
+            }
+            Assert.AreEqual(2, demos, "one demo for the cutter, one for the rotator");
+
+            foreach (SpawnGroup group in map.Waves[0].Groups)
+                Assert.AreEqual(TopHalfCircle, group.Weakness, "wave 1 asks for the cut");
+            foreach (SpawnGroup group in map.Waves[2].Groups)
+                Assert.AreEqual(RightHalfCircle, group.Weakness, "wave 3 asks for the turn");
         }
 
         [Test]
@@ -49,14 +88,15 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void TheRun_OpensWithBeltAndTurretOnly()
+        public void TheRun_OpensWithWhatTheWorkshopTaught()
         {
             var world = new SimWorld(Load().ToCore(), new SimConfig());
 
-            Assert.IsTrue(world.IsUnlocked(BuildKind.Belt));
-            Assert.IsTrue(world.IsUnlocked(BuildKind.Turret));
-            foreach (BuildKind kind in new[] { BuildKind.Splitter, BuildKind.Cutter, BuildKind.Sink,
-                         BuildKind.Rotator, BuildKind.Pipe, BuildKind.Stacker, BuildKind.Sorter })
+            foreach (BuildKind kind in new[] { BuildKind.Belt, BuildKind.Turret, BuildKind.Cutter, BuildKind.Sink,
+                         BuildKind.Rotator })
+                Assert.IsTrue(world.IsUnlocked(kind), kind + " was learned in the Workshop");
+            foreach (BuildKind kind in new[] { BuildKind.Splitter, BuildKind.Pipe, BuildKind.Stacker,
+                         BuildKind.Sorter })
             {
                 Assert.IsFalse(world.IsUnlocked(kind), kind + " waits for research");
                 Assert.IsFalse(world.Researchable(kind), kind + " is not even on offer yet");
@@ -68,13 +108,11 @@ namespace Facet.Tests
         {
             ResearchOffer[] offers = Load().ToCore().Research.Offers;
 
-            Assert.AreEqual(6, offers.Length);
+            Assert.AreEqual(4, offers.Length);
             AssertLesson(offers[0], 3, BuildKind.Splitter);
-            AssertLesson(offers[1], 5, BuildKind.Cutter, BuildKind.Sink);
-            AssertLesson(offers[2], 8, BuildKind.Rotator);
-            AssertHint(offers[3], 10, BuildKind.Pipe);
-            AssertLesson(offers[4], 11, BuildKind.Stacker);
-            AssertHint(offers[5], 15, BuildKind.Sorter);
+            AssertHint(offers[1], 10, BuildKind.Pipe);
+            AssertLesson(offers[2], 11, BuildKind.Stacker);
+            AssertHint(offers[3], 15, BuildKind.Sorter);
         }
 
         private static void AssertLesson(ResearchOffer offer, int afterWave, params BuildKind[] builds)
@@ -83,8 +121,14 @@ namespace Facet.Tests
             CollectionAssert.AreEquivalent(builds, offer.Builds);
             Assert.IsNotNull(offer.Lesson, "an operator is taught");
             Assert.IsEmpty(offer.Hint, "by its lesson rather than a line");
-            Assert.AreEqual(TutorialStep.ResearchBuilding, offer.Lesson[0].Step, "and the first thing is buying it");
-            Assert.AreEqual(builds[0], offer.Lesson[0].Opens[0]);
+
+            // Watch it, then unlock it: two lines, and no building the player is made to place.
+            Assert.AreEqual(2, offer.Lesson.Count, "the lesson stays short");
+            Assert.AreEqual(TutorialStep.Acknowledge, offer.Lesson[0].Step, "the first line is read");
+            CollectionAssert.Contains(offer.Lesson[0].Focus, TutorialFocus.Demo, "beside the machine at work");
+            Assert.IsTrue(MachineDemo.Covers(builds[0]), "and there is a demo for it");
+            Assert.AreEqual(TutorialStep.ResearchBuilding, offer.Lesson[1].Step, "the second is buying it");
+            Assert.AreEqual(builds[0], offer.Lesson[1].Opens[0]);
 
             for (int i = 0; i < offer.Lesson.Count; i++)
             {

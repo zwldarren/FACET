@@ -41,6 +41,11 @@ namespace Facet.Game
 
         private readonly List<FocusBox> _boxes = new List<FocusBox>();
 
+        /// <summary>The looping machine picture a line with <see cref="TutorialFocus.Demo"/> shows, and the item
+        /// pictures it draws with.</summary>
+        private HudIcons _icons;
+        private MachineDemo _demo;
+
         /// <summary>The line on screen, so the hint's clock restarts when it changes. A ticked line goes
         /// straight to the next one: no "done" flash in between.</summary>
         private int _shownIndex = -1;
@@ -176,7 +181,11 @@ namespace Facet.Game
             }
 
             bool hintDue = !string.IsNullOrEmpty(task.Hint) && Time.unscaledTime - _lineSince >= HintSeconds;
-            Fill(counter, task.Title, task.Text, hintDue ? task.Hint : null, button, scale, _palette.HudAccent);
+            BuildKind building = LineBuilding(task);
+            BuildKind? demo = HasFocus(task, TutorialFocus.Demo) && MachineDemo.Covers(building)
+                ? building
+                : (BuildKind?)null;
+            Fill(counter, task.Title, task.Text, hintDue ? task.Hint : null, button, scale, _palette.HudAccent, demo);
             LayoutBoxes(task, scale, done: false);
         }
 
@@ -184,15 +193,22 @@ namespace Facet.Game
         {
             _buttonAction = null;
             Fill(string.Empty, title, body, null, null, scale,
-                _world.Status == GameStatus.Won ? HudInk.Good(_palette) : _palette.HudWarn);
+                _world.Status == GameStatus.Won ? HudInk.Good(_palette) : _palette.HudWarn, null);
             HideBoxesFrom(0);
         }
 
         /// <summary>Write the popup and size it to its words: the panel sits on the left, in the status card's
         /// column just under it, over the room the coached framing leaves left of the map - so it covers neither
         /// the HUD it points at nor the tiles the player has to click.</summary>
+        private static bool HasFocus(TutorialTask task, TutorialFocus focus)
+        {
+            for (int i = 0; i < task.Focus.Length; i++)
+                if (task.Focus[i] == focus) return true;
+            return false;
+        }
+
         private void Fill(string counter, string title, string body, string hint, string button, float scale,
-            Color titleColour)
+            Color titleColour, BuildKind? demo)
         {
             _canvasRoot.gameObject.SetActive(true);
             _panel.gameObject.SetActive(true);
@@ -219,6 +235,18 @@ namespace Facet.Game
             float titleHeight = string.IsNullOrEmpty(title) ? 0f : Height(_title, inner);
             Place(_title.Rect, Inset * scale, y, inner, titleHeight);
             y += titleHeight + (titleHeight > 0f ? 6f * scale : 0f);
+
+            // The machine at work, between the heading and the words: the picture first, then what it means.
+            if (demo.HasValue && _demo != null)
+            {
+                y += 4f * scale;
+                _demo.Show(demo.Value, Inset * scale, y, inner, scale, _world.Content.Machine(demo.Value).Name);
+                y += MachineDemo.Height * scale + 10f * scale;
+            }
+            else if (_demo != null)
+            {
+                _demo.Hide();
+            }
 
             float bodyHeight = Height(_body, inner);
             Place(_body.Rect, Inset * scale, y, inner, bodyHeight);
@@ -367,6 +395,7 @@ namespace Facet.Game
                 }
 
                 case TutorialFocus.None:
+                case TutorialFocus.Demo:
                     return false;
 
                 default:
@@ -483,7 +512,17 @@ namespace Facet.Game
             ImageNode(buttonRoot, "next.frame");
             _button = HudUi.AdoptButton(buttonRoot, "NEXT", 15f, _palette.HudPanel, PressButton);
 
+            _icons = new HudIcons(_palette);
+            _demo = new MachineDemo(_palette, _icons);
+            _demo.Build(_panel);
+
             _panel.gameObject.SetActive(false);
+        }
+
+        private void OnDestroy()
+        {
+            _icons?.Dispose();
+            _icons = null;
         }
 
         /// <summary>A full-size child carrying an Image, ready for one of HudUi's Adopt* calls.</summary>

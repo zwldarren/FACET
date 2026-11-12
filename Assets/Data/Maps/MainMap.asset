@@ -511,157 +511,26 @@ MonoBehaviour:
     Cost: 15
     Hint: ""
     Lesson:
-    - Step: 24
-      Text: "One line can feed two turrets.\nClick the SPLITTER to unlock it: 15 circles."
-      Hint: "Short on circles? Belt more into the Core. Press N to skip this and start the wave."
+    - Step: 8
+      Text: "Shapes take turns leaving each side.\nOne ore line can now feed two turrets."
+      Hint: ""
       Target: {x: -1, y: -1}
       Ghost: []
       Opens: 06
       StartsWave: 0
       Title: "New: Splitter"
+      Focus: 0d
+      Reveal: 0
+      AddsOre: []
+    - Step: 24
+      Text: "Click the glowing SPLITTER key: 15 circles."
+      Hint: "Short on circles? Belt more into the Core. Press N to skip this and start the wave."
+      Target: {x: -1, y: -1}
+      Ghost: []
+      Opens: 06
+      StartsWave: 0
+      Title: "Unlock it"
       Focus: 0506
-      Reveal: 0
-      AddsOre: []
-    - Step: 25
-      Text: "Press 7, or click the SPLITTER."
-      Hint: ""
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 06
-      StartsWave: 0
-      Title: "Pick the Splitter"
-      Focus: 05
-      Reveal: 0
-      AddsOre: []
-    - Step: 26
-      Text: "Right-click a belt on your turret's line.\nThen click that gap to place the Splitter."
-      Hint: ""
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 06
-      StartsWave: 0
-      Title: "Make room"
-      Focus: 
-      Reveal: 0
-      AddsOre: []
-    - Step: 27
-      Text: "Build another TURRET.\nDrag a belt from the Splitter into it."
-      Hint: "Put it farther along the enemies' road, so they stay under fire longer."
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 09
-      StartsWave: 0
-      Title: "Second turret"
-      Focus: 05
-      Reveal: 0
-      AddsOre: []
-  - AfterWave: 5
-    Builds: 020a
-    Cost: 30
-    Hint: ""
-    Lesson:
-    - Step: 24
-      Text: "The next enemies fear only TOP halves.\nClick the CUTTER to unlock it: 30 circles."
-      Hint: "Short on circles? Belt more into the Core. Press N to skip this and start the wave."
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 02
-      StartsWave: 0
-      Title: "New: Cutter"
-      Focus: 0509
-      Reveal: 0
-      AddsOre: []
-    - Step: 25
-      Text: "Press 3, or click the CUTTER."
-      Hint: ""
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 02
-      StartsWave: 0
-      Title: "Pick the Cutter"
-      Focus: 05
-      Reveal: 0
-      AddsOre: []
-    - Step: 26
-      Text: "Press Q or E until it points left or right.\nPlace it in a gap on a circle line."
-      Hint: "Pointing left or right cuts top from bottom. It is two tiles wide, so clear both."
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 02
-      StartsWave: 0
-      Title: "Cut sideways"
-      Focus: 
-      Reveal: 0
-      AddsOre: []
-    - Step: 26
-      Text: "Bottom halves need somewhere to go.\nPress X, and place a SINK at the end of their belt."
-      Hint: "Without a Sink, the Cutter stops when its bottom halves back up."
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 0a
-      StartsWave: 0
-      Title: "Bin the extras"
-      Focus: 05
-      Reveal: 0
-      AddsOre: []
-    - Step: 28
-      Text: "Belt the TOP halves into a turret."
-      Hint: "A loaded turret keeps its round until it fires. Right-click it and place it again - it's a full refund."
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 09
-      StartsWave: 0
-      Title: "Load the turret"
-      Focus: 09
-      Reveal: 0
-      AddsOre: []
-  - AfterWave: 8
-    Builds: 03
-    Cost: 30
-    Hint: ""
-    Lesson:
-    - Step: 24
-      Text: "The next enemies fear RIGHT halves.\nClick the ROTATOR to unlock it: 30 circles."
-      Hint: "Short on circles? Belt more into the Core. Press N to skip this and start the wave."
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 03
-      StartsWave: 0
-      Title: "New: Rotator"
-      Focus: 0509
-      Reveal: 0
-      AddsOre: []
-    - Step: 25
-      Text: "Press 4, or click the ROTATOR."
-      Hint: ""
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 03
-      StartsWave: 0
-      Title: "Pick the Rotator"
-      Focus: 05
-      Reveal: 0
-      AddsOre: []
-    - Step: 26
-      Text: "One turn makes a TOP half a RIGHT half.\nPlace it in a gap on your TOP half line."
-      Hint: ""
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 03
-      StartsWave: 0
-      Title: "Turn the shape"
-      Focus: 
-      Reveal: 0
-      AddsOre: []
-    - Step: 28
-      Text: "Belt the RIGHT halves into a turret."
-      Hint: "A loaded turret keeps its round until it fires. Right-click it and place it again - it's a full refund."
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 09
-      StartsWave: 0
-      Title: "Load the turret"
-      Focus: 09
       Reveal: 0
       AddsOre: []
   - AfterWave: 10
@@ -674,59 +543,26 @@ MonoBehaviour:
     Cost: 50
     Hint: ""
     Lesson:
-    - Step: 24
-      Text: "It joins two halves into one shape.\nClick the STACKER to unlock it: 50 circles."
-      Hint: "Short on circles? Belt more into the Core. Press N to skip this and start the wave."
+    - Step: 8
+      Text: "Joins two halves into one shape.\nSquare ore lies far right, and a gate opens at the top."
+      Hint: ""
       Target: {x: -1, y: -1}
       Ghost: []
       Opens: 04
       StartsWave: 0
       Title: "New: Stacker"
-      Focus: 05
+      Focus: 0d
       Reveal: 0
       AddsOre: []
-    - Step: 11
-      Text: "SQUARE ore lies far to the right.\nEnemies will also come through a new gate at the top."
-      Hint: ""
+    - Step: 24
+      Text: "Click the glowing STACKER key: 50 circles."
+      Hint: "Short on circles? Belt more into the Core. Press N to skip this and start the wave."
       Target: {x: -1, y: -1}
       Ghost: []
       Opens: 04
       StartsWave: 0
-      Title: "New ground"
-      Focus: 
-      Reveal: 0
-      AddsOre: []
-    - Step: 25
-      Text: "Press 5, or click the STACKER."
-      Hint: ""
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 04
-      StartsWave: 0
-      Title: "Pick the Stacker"
-      Focus: 05
-      Reveal: 0
-      AddsOre: []
-    - Step: 26
-      Text: "Click an empty spot near your lines."
-      Hint: ""
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 04
-      StartsWave: 0
-      Title: "Place the Stacker"
-      Focus: 
-      Reveal: 0
-      AddsOre: []
-    - Step: 11
-      Text: "Feed it a TOP circle half and a BOTTOM square half.\nBelt what it makes into a turret."
-      Hint: ""
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 04
-      StartsWave: 0
-      Title: "Build the shape"
-      Focus: 09
+      Title: "Unlock it"
+      Focus: 0506
       Reveal: 0
       AddsOre: []
   - AfterWave: 15

@@ -103,7 +103,7 @@ namespace Facet.PlayTests
                         {
                             Step = TutorialStep.SelectBuilding, Title = "Pick the Splitter",
                             Text = "Press 7, or click the SPLITTER.", Opens = new[] { BuildKind.Splitter },
-                            Focus = new[] { TutorialFocus.BarTile },
+                            Focus = new[] { TutorialFocus.BarTile, TutorialFocus.Demo },
                         },
                     },
                 },
@@ -178,6 +178,7 @@ namespace Facet.PlayTests
             Assert.AreEqual("New: Splitter", Words(Popup, "title"));
             Assert.AreEqual("STEP 1 OF 2", Words(Popup, "counter"));
             Assert.IsFalse(world.Paused, "and the run is not held: the player has to do what it says");
+            Assert.IsFalse(Popup.Find("demo").gameObject.activeSelf, "a line without a demo shows none");
 
             Transform box = Popup.parent.Find("focus0");
             Assert.IsNotNull(box, "the key it is about is boxed");
@@ -196,6 +197,13 @@ namespace Facet.PlayTests
             yield return null;
             Assert.AreEqual("Pick the Splitter", Words(Popup, "title"), "the next line");
             Assert.AreEqual("STEP 2 OF 2", Words(Popup, "counter"));
+            Transform demo = Popup.Find("demo");
+            Assert.IsTrue(demo.gameObject.activeSelf, "this line plays the machine at work");
+            Assert.AreEqual("SPLITTER", Words(demo, "machine/name"));
+            int items = 0;
+            foreach (Transform child in demo)
+                if (child.name.StartsWith("item") && child.gameObject.activeSelf) items++;
+            Assert.Greater(items, 0, "with shapes riding through it");
 
             // Line two is the key's press too, now that it selects.
             Key("Splitter").GetComponent<HudButton>().Pressed.Invoke();

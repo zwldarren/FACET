@@ -176,6 +176,11 @@ namespace Facet.Core
 
         /// <summary>The whole build bar: where the buildings the lesson hands over appear.</summary>
         BuildBar = 12,
+
+        /// <summary>Not a box: an animated demo of the line's building (the first of its
+        /// <see cref="TutorialTask.Opens"/>) inside the popup - shapes going in and coming out, so the player
+        /// sees what the machine does instead of being walked through building one.</summary>
+        Demo = 13,
     }
 
     /// <summary>The pieces of the HUD a coached lesson shows, as flags: a coached map opens with none of them

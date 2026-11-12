@@ -2560,7 +2560,8 @@ namespace Facet.Game
             if (_world.Research.CanAfford(kind))
             {
                 _world.RequestResearch(kind);
-                Notice("RESEARCHED - " + names + " for " + cost + " " + money, NoticeSeconds);
+                Notice("UNLOCKED - " + names + " · press " + BuildInput.HotkeyLabel((int)offer.Builds[0]) +
+                    " to build it", NoticeSeconds);
             }
             else
             {
