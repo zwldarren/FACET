@@ -275,10 +275,10 @@ namespace Facet.Game
             _body.Text.fontSize = BodySize * scale;
             _hint.Text.fontSize = (BodySize - 3f) * scale;
 
-            _counter.Set(counter, HudInk.Muted(_palette));
+            _counter.Set(counter, HudInk.Quiet(_palette));
             _title.Set(title ?? string.Empty, titleColour);
             _body.Set(body ?? string.Empty, _palette.HudText);
-            _hint.Set(hint ?? string.Empty, HudInk.Muted(_palette));
+            _hint.Set(hint ?? string.Empty, HudInk.Quiet(_palette));
             _hint.Show(!string.IsNullOrEmpty(hint));
 
             float y = Inset * 0.6f * scale;
@@ -862,8 +862,10 @@ namespace Facet.Game
             _canvasRoot = (RectTransform)canvasGo.transform;
 
             _panel = Node(_canvasRoot, "popup");
-            HudUi.AdoptShadow(ImageNode(_panel, "shadow"), 14f, _palette.HudShadow);
-            _panelBack = HudUi.AdoptRound(ImageNode(_panel, "back"), _palette.HudPanel, 14f);
+            // Lifted off the HUD's cards (1.7:1 against the status card above it) and casting the deeper shadow of
+            // something that arrived over the game, so the popup separates from the running game behind it.
+            HudUi.AdoptShadow(ImageNode(_panel, "shadow"), 14f, HudInk.LayerShadow(_palette));
+            _panelBack = HudUi.AdoptRound(ImageNode(_panel, "back"), HudInk.Raised(_palette), 14f);
             _panelBack.Image.raycastTarget = true;   // the popup is solid: a click on it is not a click on the map
             _panelFrame = HudUi.AdoptBorder(ImageNode(_panel, "frame"), _palette.HudAccent, 14f, 2.5f);
 
