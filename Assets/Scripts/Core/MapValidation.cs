@@ -88,6 +88,18 @@ namespace Facet.Core
         /// onto the map. The HUD shrinks type to cope, but the shrink has a floor - past it, the answer is
         /// shorter words, not smaller ones.</summary>
         TutorialLineTooLong = 22,
+
+        /// <summary>A tutorial line whose ground patch hangs off the grid, so the room it meant to open is
+        /// only half a room.</summary>
+        TutorialGroundOffMap = 23,
+
+        /// <summary>A tutorial line's ground patch with no tiles in it: a reveal that opens nothing, which
+        /// reads as a lesson that forgot its room.</summary>
+        TutorialGroundEmpty = 24,
+
+        /// <summary>A <see cref="TutorialStep.ClearedWave"/> line naming a wave this map does not have, so
+        /// the line can never tick and every wave after it waits forever.</summary>
+        TutorialWaveOutOfRange = 25,
     }
 
     /// <summary>One problem found in a map, with the sentence a designer can act on.</summary>
@@ -120,9 +132,10 @@ namespace Facet.Core
     /// produce a wave that stands still, which reads as a hung game rather than a bug.
     ///
     /// It walks the ground through <see cref="MapDefinition.StampTerrain"/> - the same rule
-    /// <see cref="TerrainField.Stamp"/> builds a world with - so the map being judged and the map the
-    /// simulation runs are one, patches and all. Buildings are deliberately excluded: a map is validated
-    /// as the player first sees it, with nothing built; whether a defence holds is balance, not data error.
+    /// <see cref="TerrainField.Stamp"/> builds a world with - with the ground the map's lesson opens included,
+    /// so the map being judged and the map the simulation ends on are one, patches and all. Buildings are
+    /// deliberately excluded: a map is validated as the player first sees it, with nothing built; whether a
+    /// defence holds is balance, not data error.
     /// </summary>
     public static class MapValidation
     {
@@ -150,6 +163,7 @@ namespace Facet.Core
             CheckPatches(map, into);
             CheckWaves(map, into);
             CheckTerrainSize(map, into);
+            CheckTutorialGround(map, into);
 
             // The array's own rule, asked with the cheap ones: it is about the data as written down, not
             // the ground a world would be built with, so a Core that does not fit still gets its veins named.
@@ -179,12 +193,14 @@ namespace Facet.Core
         /// <summary>
         /// The ground the map really has. This calls <see cref="MapDefinition.StampTerrain"/>, the same
         /// call <see cref="TerrainField.Stamp"/> makes, so a rule that changes there cannot leave this
-        /// walking a map nobody will ever play.
+        /// walking a map nobody will ever play. The lesson's own ground is included: the map is judged as its
+        /// lesson leaves it, because a door that opens onto a room the run reveals must not read as a door in a
+        /// wall here.
         /// </summary>
         private static TerrainKind[] GroundOf(MapDefinition map)
         {
             var ground = new TerrainKind[map.Width * map.Height];
-            map.StampTerrain(ground);
+            map.StampTerrain(ground, null, withLessonGround: true);
             return ground;
         }
 
@@ -222,6 +238,66 @@ namespace Facet.Core
                         map.Name + ": the ground says " + kind + " under the Core at " + cell +
                         " - the Core keeps its tiles, so the map's data is what is wrong"));
                 }
+            }
+        }
+
+        /// <summary>
+        /// What a lesson's reveal patches say, and whether the lines waiting on a wave name one the map has.
+        /// Both are the same class of mistake as a bad vein: data that reads as a room or a pause the run can
+        /// never reach, which is invisible until the lesson stops on that line with nothing said.
+        ///
+        /// The patches themselves are part of <see cref="GroundOf"/>, so a room opened onto a door is judged
+        /// as ground here; these rules are about a patch that is not a room at all - empty, or hanging off the
+        /// grid.
+        /// </summary>
+        private static void CheckTutorialGround(MapDefinition map, List<MapProblem> into)
+        {
+            TutorialScript tutorial = map.Tutorial;
+            if (tutorial == null) return;
+
+            int waves = map.GeneratedWaves < 0
+                ? int.MaxValue
+                : map.Waves.Length + Math.Max(0, map.GeneratedWaves);
+
+            for (int t = 0; t < tutorial.Count; t++)
+            {
+                TutorialTask task = tutorial[t];
+
+                for (int p = 0; p < task.AddsGround.Length; p++)
+                {
+                    TerrainPatch patch = task.AddsGround[p];
+                    if (patch.Width <= 0 || patch.Height <= 0)
+                    {
+                        into.Add(new MapProblem(MapProblemKind.TutorialGroundEmpty, patch.Origin,
+                            map.Name + ": tutorial line " + (t + 1) + " opens a " + patch.Width + "x" +
+                            patch.Height + " patch of " + patch.Kind + " at " + patch.Origin +
+                            ", so it opens nothing"));
+                        continue;
+                    }
+
+                    foreach (Int2 corner in new[]
+                             {
+                                 patch.Origin,
+                                 new Int2(patch.Origin.X + patch.Width - 1, patch.Origin.Y + patch.Height - 1),
+                             })
+                    {
+                        if (InBounds(map, corner)) continue;
+
+                        into.Add(new MapProblem(MapProblemKind.TutorialGroundOffMap, corner,
+                            map.Name + ": tutorial line " + (t + 1) + " opens ground at " + corner +
+                            ", which is outside the " + map.Width + "x" + map.Height + " map"));
+                    }
+                }
+
+                // A line waiting on a wave the run never has can never tick, and the lesson then holds every
+                // wave after it forever - the same hung run an unreachable step produces.
+                if (task.Step != TutorialStep.ClearedWave) continue;
+                if (task.Wave >= 1 && task.Wave <= waves) continue;
+
+                into.Add(new MapProblem(MapProblemKind.TutorialWaveOutOfRange, NoCell,
+                    map.Name + ": tutorial line " + (t + 1) + " waits on wave " + task.Wave +
+                    ", and this map has " + (waves == int.MaxValue ? "no such number" : waves.ToString()) +
+                    " wave" + (waves == 1 ? "" : "s") + " - the line can never tick"));
             }
         }
 

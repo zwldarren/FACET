@@ -110,6 +110,8 @@ namespace Facet.Core
 
         /// <summary>Is this lesson taught by the coach (popup, boxes, a HUD revealed piece by piece)?</summary>
         public bool Coached => Active && _script.Coached;
+        /// <summary>Is this lesson taught with the spotlight (<see cref="TutorialScript.Spotlight"/>)?</summary>
+        public bool Spotlight => _script.Spotlight;
 
         /// <summary>Is the current line an explanation waiting for the player's "next"?</summary>
         public bool WaitsForAcknowledge => Active && !Complete && Current.Step == TutorialStep.Acknowledge;
@@ -346,6 +348,29 @@ namespace Facet.Core
 
                 case TutorialStep.ClearWave:
                     return _waves.Finished;
+
+                case TutorialStep.ClearedWave:
+                    return _script[_index].Wave > 0 && _waves.ClearedWaves >= _script[_index].Wave;
+
+                case TutorialStep.PlaceTurretAtTarget:
+                    return TryLessonMachine(BehaviorKind.Turret, out _);
+
+                case TutorialStep.ArmTurretAtTarget:
+                    return TryLessonMachine(BehaviorKind.Turret, out MachineSnapshot lessonGun)
+                           && !lessonGun.Shape.IsEmpty;
+
+                case TutorialStep.TurretCount:
+                    // A line with no count is broken data, not "at least no turrets": it would pass before the
+                    // player built anything. The authoring surface reports it; here it simply never ticks, the
+                    // same answer every other unreadable line gives.
+                    if (_script[_index].Turrets < 1) return false;
+                    _machines.CountTurrets(out int turrets, out _);
+                    return turrets >= _script[_index].Turrets;
+
+                case TutorialStep.ArmedTurretCount:
+                    if (_script[_index].Turrets < 1) return false;
+                    _machines.CountTurrets(out _, out int armedTurrets);
+                    return armedTurrets >= _script[_index].Turrets;
 
                 default:
                     // A line carrying <see cref="TutorialScript.NoStep"/> is broken data, reported by the map

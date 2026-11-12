@@ -151,6 +151,23 @@ namespace Facet.Game
             public Dir Facing;
         }
 
+        /// <summary>One rectangle of ground a tutorial line opens when it ticks, as the Inspector edits it.
+        /// The conversion hands it to the engine-free <see cref="TerrainPatch"/> unchanged.</summary>
+        [Serializable]
+        public struct GroundRectRow
+        {
+            [Tooltip("Lower-left tile of the patch.")]
+            public Vector2Int Cell;
+
+            [Tooltip("How many tiles the patch covers, across and up. A patch with no area opens nothing and " +
+                "the map validator says so.")]
+            public Vector2Int Size;
+
+            [Tooltip("What the opened ground is: Ground for a floor, Rock for the wall of a room. Patches are " +
+                "applied in this list's order, so a floor can be followed by the rock that divides it.")]
+            public TerrainKind Kind;
+        }
+
         /// <summary>One line of the map's tutorial, as the Inspector edits it.</summary>
         [Serializable]
         public sealed class TutorialTaskRow
@@ -204,6 +221,22 @@ namespace Facet.Game
             [Tooltip("Coached maps only: ore this line lays down when it is done - list those tiles here and " +
                 "not under Ore, so the vein is not on the map until the lesson needs it.")]
             public OreCell[] AddsOre = new OreCell[0];
+
+            [Tooltip("Ground this line opens when it is done: a room the map was painted without. List the floor " +
+                "first and its walls after, because the rows are applied in order. The map validator judges the " +
+                "ground the lesson leaves behind, so a door or a vein inside the room is checked like any other.")]
+            public GroundRectRow[] AddsGround = new GroundRectRow[0];
+
+            [Tooltip("ClearedWave only: which wave must be cleared, counting from 1. 0 for every other step. " +
+                "This is how a lesson with more than one wave holds its popup through one wave and then ticks " +
+                "in the pause after it.")]
+            public int Wave;
+
+            [Tooltip("TurretCount and ArmedTurretCount only: how many turrets the line asks for - 2 for the " +
+                "second gun, 3 for the next one. 0 for every other step. A count rather than a fixed tile, so " +
+                "the line says how many guns the run needs and the player decides where they stand.")]
+            [Min(0)]
+            public int Turrets;
         }
 
         [Header("Tutorial")]
@@ -231,6 +264,10 @@ namespace Facet.Game
             "from the first building and N calls the wave early. For a level that hands the player the whole " +
             "job, whose one line is about surviving the wave.")]
         public bool TutorialClockRuns;
+
+        [Tooltip("Coached maps only: dim the screen around what each line boxes, and set the popup down beside " +
+            "it instead of in the left column.")]
+        public bool TutorialSpotlight;
 
         [Serializable]
         public sealed class ResearchRow
@@ -544,6 +581,28 @@ namespace Facet.Game
 
                 BuildKind need;
 
+                // A step whose rule reads one tile cannot pass without that tile, which is the same hung run
+                // as a building no earlier line hands over.
+                if (NeedsTarget(row.Step) && (row.Target.x < 0 || row.Target.y < 0))
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialStepUnreachable, NoCell,
+                        Name + ": tutorial line " + (i + 1) + " asks for step " + row.Step +
+                        " and names no target tile - the rule reads the tile the line points at, so the line " +
+                        "can never tick"));
+                }
+
+                // A count line with no count can never tick: the authored default is 0, and "at least no
+                // turrets" is a line that passes before the player has built anything. Report it the same way
+                // as a rule that reads a missing target.
+                if ((row.Step == TutorialStep.TurretCount || row.Step == TutorialStep.ArmedTurretCount) &&
+                    row.Turrets < 1)
+                {
+                    into.Add(new MapProblem(MapProblemKind.TutorialStepUnreachable, NoCell,
+                        Name + ": tutorial line " + (i + 1) + " asks for step " + row.Step +
+                        " with a turret count of " + row.Turrets + " - set Turrets to the number of guns the " +
+                        "line asks for, or it can never mean anything"));
+                }
+
                 // An explanation, a wave to call or a wave to survive is not about a building, so there is no
                 // building for an earlier line to have handed over.
                 if (TutorialScript.NeedsNoBuilding(row.Step))
@@ -585,6 +644,19 @@ namespace Facet.Game
         /// <summary>The coach's popup is several times the task card's width and a size larger, and holds
         /// about this many characters on two lines.</summary>
         private const int CoachedTextBudget = 180;
+
+        /// <summary>Does this step's rule read the line's target tile? Every step whose answer lives at one
+        /// place: the cutter or rotator a line points at, the gun a line wants fed. A line without a target can
+        /// never pass one of these, so the authoring surface refuses it here.</summary>
+        private static bool NeedsTarget(TutorialStep step)
+            => step == TutorialStep.PlaceCutter
+               || step == TutorialStep.FeedCutter
+               || step == TutorialStep.WireCutterPrimary
+               || step == TutorialStep.WireCutterSecondary
+               || step == TutorialStep.PlaceRotator
+               || step == TutorialStep.LoadWaveShape
+               || step == TutorialStep.PlaceTurretAtTarget
+               || step == TutorialStep.ArmTurretAtTarget;
 
         private static bool LongerThanCard(string line, bool coached)
             => line != null && line.Length > (coached ? CoachedTextBudget : TutorialTextBudget);
@@ -989,11 +1061,12 @@ namespace Facet.Game
                 tasks[i] = new TutorialTask(row.Step, row.Text,
                     placed ? new Int2(row.Target.x, row.Target.y) : (Int2?)null,
                     row.Opens, row.StartsWave, row.Hint, GhostOf(row.Ghost),
-                    row.Title, row.Focus, row.Reveal, OreOf(row.AddsOre));
+                    row.Title, row.Focus, row.Reveal, OreOf(row.AddsOre), GroundOf(row.AddsGround), row.Wave,
+                    row.Turrets);
             }
 
             return new TutorialScript(TutorialStarting, tasks, TutorialCoached, GhostOf(TutorialPrebuilt),
-                TutorialClockRuns);
+                TutorialClockRuns, TutorialSpotlight);
         }
 
         /// <summary>Convert a row's authored ghosts to the engine-free blueprint, preserving order: the
@@ -1009,6 +1082,19 @@ namespace Facet.Game
                 if (cells[i].Mineral != Quad.Empty)
                     patches.Add(new ShapePatch(new Int2(cells[i].Cell.x, cells[i].Cell.y), 1, 1, cells[i].Mineral));
             return patches.ToArray();
+        }
+
+        /// <summary>A line's ground as the rectangles it was painted as, in authored order. Sizes are kept as
+        /// written - an empty rectangle is the map validator's to name, not this conversion's to hide.</summary>
+        private static TerrainPatch[] GroundOf(GroundRectRow[] rows)
+        {
+            if (rows == null || rows.Length == 0) return null;
+
+            var patches = new TerrainPatch[rows.Length];
+            for (int i = 0; i < rows.Length; i++)
+                patches[i] = new TerrainPatch(new Int2(rows[i].Cell.x, rows[i].Cell.y),
+                    rows[i].Size.x, rows[i].Size.y, rows[i].Kind);
+            return patches;
         }
 
         private static TutorialGhost[] GhostOf(TutorialGhostRow[] rows)

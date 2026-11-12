@@ -522,7 +522,7 @@ MonoBehaviour:
       Focus: 0d
       Reveal: 0
       AddsOre: []
-    - Step: 24
+    - Step: 29
       Text: "Click the glowing SPLITTER key: 15 circles."
       Hint: "Short on circles? Belt more into the Core. Press N to skip this and start the wave."
       Target: {x: -1, y: -1}
@@ -554,7 +554,7 @@ MonoBehaviour:
       Focus: 0d
       Reveal: 0
       AddsOre: []
-    - Step: 24
+    - Step: 29
       Text: "Click the glowing STACKER key: 50 circles."
       Hint: "Short on circles? Belt more into the Core. Press N to skip this and start the wave."
       Target: {x: -1, y: -1}

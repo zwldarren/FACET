@@ -755,6 +755,29 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void Tutorial_ATurretCountRow_CarriesItsCount_AndAZeroCountIsReported()
+        {
+            // The count is the line's whole rule, so it has to survive the asset-to-core conversion; and the
+            // authored default (0) means "at least no turrets", which would tick before the player built
+            // anything. That is the same hung-run class as a rule reading a missing target, so it is reported.
+            _asset.Unlocked = Operators.All;
+            _asset.TutorialStarting = new[] { BuildKind.Turret };
+            _asset.TutorialTasks = new[]
+            {
+                new MapAsset.TutorialTaskRow
+                {
+                    Step = TutorialStep.TurretCount, Text = "Build a second gun.", Turrets = 2,
+                },
+            };
+
+            Assert.AreEqual(2, _asset.ToCore().Tutorial[0].Turrets, "the row's count reaches the rule");
+            AssertNoProblem(_asset.Validate(), MapProblemKind.TutorialStepUnreachable);
+
+            _asset.TutorialTasks[0].Turrets = 0;
+            AssertProblem(_asset.Validate(), MapProblemKind.TutorialStepUnreachable, new Int2(-1, -1));
+        }
+
+        [Test]
         public void Validate_ATutorialThatCanBeTaught_HasNoTutorialProblems()
         {
             _asset.Unlocked = Operators.All;

@@ -69,6 +69,65 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void Validate_ADoorInALessonRoom_IsJudgedOnTheGroundTheLessonLeaves()
+        {
+            // The first map's shape: a room held back as void, and its door in it. Judged on the authored
+            // ground alone the door stands inside nothing, so the wave is reported as spawning in the ground -
+            // but the lesson opens the room, so the ground the run ends with is the map to judge.
+            var door = new Int2(1, 2);
+            TerrainKind[] authored = TerrainLayout.Rects(16, 12,
+                new TerrainRect(new Int2(0, 0), 4, 12, TerrainKind.Void),
+                new TerrainRect(new Int2(4, 0), 1, 12, TerrainKind.Rock));
+
+            AssertProblem(MapValidation.Validate(Map(16, 12, new[] { door }, terrain: authored)),
+                MapProblemKind.SpawnOnTerrain, door);
+
+            var lesson = new TutorialScript(new BuildKind[0], new[]
+            {
+                new TutorialTask(TutorialStep.ClearedWave, "open", null, null, false, wave: 1,
+                    addsGround: new[]
+                    {
+                        new TerrainPatch(new Int2(0, 0), 4, 12, TerrainKind.Ground),
+                        new TerrainPatch(new Int2(4, 2), 1, 1, TerrainKind.Ground),
+                    }),
+            });
+
+            List<MapProblem> taught = MapValidation.Validate(
+                Map(16, 12, new[] { door }, terrain: authored, tutorial: lesson));
+            AssertNoProblem(taught, MapProblemKind.SpawnUnreachable);
+            AssertNoProblem(taught, MapProblemKind.SpawnOnTerrain);
+        }
+
+        [Test]
+        public void Validate_ALessonLineWaitingOnAWaveTheMapDoesNotHave_IsReported()
+        {
+            var lesson = new TutorialScript(new BuildKind[0], new[]
+            {
+                new TutorialTask(TutorialStep.ClearedWave, "later", null, null, false, wave: 9),
+            });
+
+            AssertProblem(MapValidation.Validate(Map(16, 12, new[] { new Int2(0, 10) }, tutorial: lesson)),
+                MapProblemKind.TutorialWaveOutOfRange, new Int2(-1, -1));
+        }
+
+        [Test]
+        public void Validate_ALessonGroundPatchThatIsEmptyOrOffTheMap_IsReported()
+        {
+            var lesson = new TutorialScript(new BuildKind[0], new[]
+            {
+                new TutorialTask(TutorialStep.Acknowledge, "empty", null, null, false,
+                    addsGround: new[] { new TerrainPatch(new Int2(2, 2), 0, 0, TerrainKind.Ground) }),
+                new TutorialTask(TutorialStep.Acknowledge, "off", null, null, false,
+                    addsGround: new[] { new TerrainPatch(new Int2(14, 10), 4, 4, TerrainKind.Ground) }),
+            });
+
+            List<MapProblem> problems = MapValidation.Validate(
+                Map(16, 12, new[] { new Int2(0, 10) }, tutorial: lesson));
+            AssertProblem(problems, MapProblemKind.TutorialGroundEmpty, new Int2(2, 2));
+            AssertProblem(problems, MapProblemKind.TutorialGroundOffMap, new Int2(17, 13));
+        }
+
+        [Test]
         public void Validate_ACoreThatDoesNotFit_IsReported_AndStopsTheFloods()
         {
             // The Core is placed at the tile the map names, so a footprint hanging off the grid is a map
@@ -252,9 +311,9 @@ namespace Facet.Tests
         /// <summary>A map with a real door and a real wave, so a test can break exactly one other thing
         /// about it and see one problem come back.</summary>
         private static MapDefinition Map(int width, int height, Int2[] doors,
-            ShapePatch[] patches = null, TerrainKind[] terrain = null)
+            ShapePatch[] patches = null, TerrainKind[] terrain = null, TutorialScript tutorial = null)
             => new MapDefinition("case", width, height, Sim.TestShapes, patches, doors,
-                new[] { Wave(2) }, terrain);
+                new[] { Wave(2) }, terrain, tutorial: tutorial);
 
         /// <summary>A wave that walks in at the last door and is otherwise unremarkable.</summary>
         private static WaveDefinition Wave(int count)

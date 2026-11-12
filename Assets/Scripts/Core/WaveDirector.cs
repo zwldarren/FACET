@@ -193,6 +193,11 @@ namespace Facet.Core
         /// <summary>True once every wave this run has has been fought and cleared.</summary>
         public bool Finished { get; private set; }
 
+        /// <summary>How many waves the run has cleared. A lesson uses it to tell "the wave I was told to
+        /// survive is over" from "the run is over" - two facts <see cref="Finished"/> alone cannot separate
+        /// on a map with more than one wave.</summary>
+        public int ClearedWaves { get; private set; }
+
         /// <summary>The wave table this director runs: the map's own data, so a different map is a
         /// different campaign without a code change here.</summary>
         private WaveDefinition[] Table => _map.Waves;
@@ -305,6 +310,7 @@ namespace Facet.Core
             // leans on, since its maps carry no waves at all. Marking it finished here won the run on tick 1
             // and froze the tick loop with it, so nothing advanced at all.
             Finished = false;
+            ClearedWaves = 0;
 
             // Cues granted by the lesson that just ended are the old run's and do not survive it - dropped
             // before the opening is armed, so a grant left over cannot start the new run's first wave on its
@@ -513,6 +519,7 @@ namespace Facet.Core
             _waveIndex = -1;
             CurrentWave = 0;
             Cleared = Math.Max(Cleared, cleared);
+            ClearedWaves++;
             _events.WaveCleared(cleared);
 
             // A run with no bound - endless mode - never runs out: the generator simply keeps answering.
