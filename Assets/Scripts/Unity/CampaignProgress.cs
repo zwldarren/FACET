@@ -57,3 +57,25 @@ namespace Facet.Game
         }
     }
 }
+
+namespace Facet.Game
+{
+    /// <summary>The most waves a map's endless run has held, kept per map across runs - what the game-over banner
+    /// reports beside this run's count. Only ever grows.</summary>
+    public static class BestWave
+    {
+        public const string KeyPrefix = "FACET.BestWave.";
+
+        public static int Read(string mapName) => Mathf.Max(0, PlayerPrefs.GetInt(KeyPrefix + mapName, 0));
+
+        /// <summary>Keep <paramref name="waves"/> if it beats the record. True when it did.</summary>
+        public static bool Record(string mapName, int waves)
+        {
+            if (waves <= Read(mapName)) return false;
+
+            PlayerPrefs.SetInt(KeyPrefix + mapName, waves);
+            PlayerPrefs.Save();
+            return true;
+        }
+    }
+}

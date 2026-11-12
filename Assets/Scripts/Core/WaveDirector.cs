@@ -159,9 +159,18 @@ namespace Facet.Core
         /// wave will ask for. False for every ordinary map, whose waits are the opening's alone.</summary>
         public bool HoldEveryWait { get; set; }
 
+        /// <summary>Stop the countdown where it stands, while a research lesson is being followed. Unlike a held
+        /// wait this one does not move the wave's start and does not refuse N: a player who knows the machine
+        /// calls the wave and the lesson steps aside.</summary>
+        public bool HoldCountdown { get; set; }
+
         /// <summary>1-based number of the wave being fought, or 0 during an intermission. For printing
         /// the number; for *branching*, read <see cref="Phase"/>.</summary>
         public int CurrentWave { get; private set; }
+
+        /// <summary>How many waves this run has cleared - the highest wave survived. What research is scheduled
+        /// against, and what an endless run is scored by.</summary>
+        public int Cleared { get; private set; }
 
         /// <summary>1-based number of the wave the intermission is counting down to, 0 when none is left.
         /// <b>While a wave runs this still names that wave</b> - it is the number the clock is pointed at,
@@ -291,6 +300,7 @@ namespace Facet.Core
 
             _waveIndex = -1;
             CurrentWave = 0;
+            Cleared = 0;
             NextWave = HasWaves ? 1 : 0;
 
             // A table with nothing to fight is NOT a finished run: `Finished` means "every wave this run has
@@ -408,7 +418,7 @@ namespace Facet.Core
 
                 // A held wait lets no tick pass: the countdown a map declares is spent building (or being
                 // taught), not reading the clock.
-                if (_waitHeld) return;
+                if (_waitHeld || HoldCountdown) return;
 
                 if (_intermissionTicks > 0) _intermissionTicks--;
                 IntermissionRemaining = _intermissionTicks * SimConfig.TickDt;
@@ -508,6 +518,7 @@ namespace Facet.Core
             int cleared = CurrentWave;
             _waveIndex = -1;
             CurrentWave = 0;
+            Cleared = Math.Max(Cleared, cleared);
             ClearedWaves++;
             _events.WaveCleared(cleared);
 

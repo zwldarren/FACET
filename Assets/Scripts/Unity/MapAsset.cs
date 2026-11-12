@@ -269,6 +269,64 @@ namespace Facet.Game
             "it instead of in the left column.")]
         public bool TutorialSpotlight;
 
+        [Serializable]
+        public sealed class ResearchRow
+        {
+            [Tooltip("Offered once this many waves are cleared. 0 puts it on the bar from the opening.")]
+            [Min(0)] public int AfterWave = 1;
+
+            [Tooltip("The buildings this one purchase unlocks - Cutter and Sink come together, for instance.")]
+            public BuildKind[] Builds = new BuildKind[0];
+
+            [Tooltip("What researching it costs, in banked shapes. 0 hands it over the moment it is offered.")]
+            [Min(0)] public int Cost = 20;
+
+            [Tooltip("One line on the HUD's notice strip when it is offered, for a tool that needs no lesson.")]
+            public string Hint = string.Empty;
+
+            [Tooltip("A short lesson taught by the coach when it is offered: one line at a time, each ticked by " +
+                "really doing it. The wave countdown waits for it, and N skips it.")]
+            public TutorialTaskRow[] Lesson = new TutorialTaskRow[0];
+
+            public ResearchOffer ToCore()
+                => new ResearchOffer(AfterWave, Builds, Cost, Hint, LessonPlan(Lesson));
+        }
+
+        [Header("Research")]
+        [Tooltip("Buildings this map hands over wave by wave. A building any row names is locked until that row " +
+            "is bought; one no row names is left as the map and the lesson leave it. Empty - the default - is a " +
+            "map without research.")]
+        public ResearchRow[] Research = new ResearchRow[0];
+
+        private ResearchSchedule ResearchPlan()
+        {
+            if (Research == null || Research.Length == 0) return ResearchSchedule.None;
+
+            var offers = new List<ResearchOffer>(Research.Length);
+            for (int i = 0; i < Research.Length; i++)
+                if (Research[i] != null) offers.Add(Research[i].ToCore());
+
+            return new ResearchSchedule(offers.ToArray());
+        }
+
+        /// <summary>A research row's lesson as a coached script. It starts no buildings of its own: research
+        /// decides what is open, and the rest of the run goes on around it.</summary>
+        private static TutorialScript LessonPlan(TutorialTaskRow[] rows)
+        {
+            if (rows == null || rows.Length == 0) return null;
+
+            var tasks = new TutorialTask[rows.Length];
+            for (int i = 0; i < rows.Length; i++)
+            {
+                TutorialTaskRow row = rows[i];
+                tasks[i] = row == null
+                    ? new TutorialTask(TutorialScript.NoStep, "(task line missing)", null, null, false)
+                    : new TutorialTask(row.Step, row.Text, null, row.Opens, false, row.Hint, null, row.Title, row.Focus);
+            }
+
+            return new TutorialScript(null, tasks, coached: true);
+        }
+
         /// <summary>The tile a problem is about when it is about the map as a whole, spelled as
         /// <see cref="MapValidation"/> spells it.</summary>
         private static readonly Int2 NoCell = new Int2(-1, -1);
@@ -401,7 +459,8 @@ namespace Facet.Game
                 unlocked: Unlocked,
                 seed: Seed,
                 generatedWaves: GeneratedWaves,
-                tutorial: TutorialPlan());
+                tutorial: TutorialPlan(),
+                research: ResearchPlan());
         }
 
         /// <summary>Everything wrong with this map as the simulation would read it; pure, because it runs

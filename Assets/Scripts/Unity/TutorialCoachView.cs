@@ -42,6 +42,11 @@ namespace Facet.Game
 
         private readonly List<FocusBox> _boxes = new List<FocusBox>();
 
+        /// <summary>The looping machine picture a line with <see cref="TutorialFocus.Demo"/> shows, and the item
+        /// pictures it draws with.</summary>
+        private HudIcons _icons;
+        private MachineDemo _demo;
+
         /// <summary>This line's boxes before they are merged: two subjects that overlap - a blueprint and the
         /// target tile inside it - are one place on screen, and two frames around one place read as a
         /// doubled border rather than as two facts.</summary>
@@ -148,8 +153,10 @@ namespace Facet.Game
         {
             if (_world == null || _canvasRoot == null) return;
 
-            TutorialState tutorial = _world.Tutorial;
-            if (!tutorial.Coached)
+            // The map's own coached lesson, or the research lesson running now: one voice for both.
+            bool mapLesson = _world.Tutorial.Coached;
+            TutorialState tutorial = mapLesson ? _world.Tutorial : _world.Research.Lesson;
+            if (tutorial == null || (!mapLesson && _world.Status != GameStatus.Playing))
             {
                 Hide();
                 return;
@@ -197,7 +204,7 @@ namespace Facet.Game
             }
 
             TutorialTask task = tutorial.Current;
-            string key = "line" + index;
+            string key = "line" + tutorial.GetHashCode() + ":" + index;
             if (key != _shownKey)
             {
                 _shownKey = key;
@@ -221,8 +228,12 @@ namespace Facet.Game
             }
 
             bool hintDue = !string.IsNullOrEmpty(task.Hint) && Time.unscaledTime - _lineSince >= HintSeconds;
+            BuildKind building = LineBuilding(task);
+            BuildKind? demo = HasFocus(task, TutorialFocus.Demo) && MachineDemo.Covers(building)
+                ? building
+                : (BuildKind?)null;
             LayoutBoxes(task, scale, done: false);
-            Fill(counter, task.Title, task.Text, hintDue ? task.Hint : null, button, scale, _palette.HudAccent);
+            Fill(counter, task.Title, task.Text, hintDue ? task.Hint : null, button, scale, _palette.HudAccent, demo);
 
             // The fight is the one line not dimmed: the player has to see the enemies, wherever they walk. A
             // lesson without the spotlight is never dimmed.
@@ -235,7 +246,7 @@ namespace Facet.Game
             _buttonAction = null;
             _focusRects.Clear();
             Fill(string.Empty, title, body, null, null, scale,
-                _world.Status == GameStatus.Won ? HudInk.Good(_palette) : _palette.HudWarn);
+                _world.Status == GameStatus.Won ? HudInk.Good(_palette) : _palette.HudWarn, null);
             HideBoxesFrom(0);
             LayoutShade(null);
         }
@@ -243,8 +254,15 @@ namespace Facet.Game
         /// <summary>Write the popup and size it to its words: the panel sits on the left, in the status card's
         /// column just under it, over the room the coached framing leaves left of the map - so it covers neither
         /// the HUD it points at nor the tiles the player has to click.</summary>
+        private static bool HasFocus(TutorialTask task, TutorialFocus focus)
+        {
+            for (int i = 0; i < task.Focus.Length; i++)
+                if (task.Focus[i] == focus) return true;
+            return false;
+        }
+
         private void Fill(string counter, string title, string body, string hint, string button, float scale,
-            Color titleColour)
+            Color titleColour, BuildKind? demo)
         {
             _canvasRoot.gameObject.SetActive(true);
             _panel.gameObject.SetActive(true);
@@ -270,6 +288,18 @@ namespace Facet.Game
             float titleHeight = string.IsNullOrEmpty(title) ? 0f : Height(_title, inner);
             Place(_title.Rect, Inset * scale, y, inner, titleHeight);
             y += titleHeight + (titleHeight > 0f ? 6f * scale : 0f);
+
+            // The machine at work, between the heading and the words: the picture first, then what it means.
+            if (demo.HasValue && _demo != null)
+            {
+                y += 4f * scale;
+                _demo.Show(demo.Value, Inset * scale, y, inner, scale, _world.Content.Machine(demo.Value).Name);
+                y += MachineDemo.Height * scale + 10f * scale;
+            }
+            else if (_demo != null)
+            {
+                _demo.Hide();
+            }
 
             float bodyHeight = Height(_body, inner);
             Place(_body.Rect, Inset * scale, y, inner, bodyHeight);
@@ -645,7 +675,11 @@ namespace Facet.Game
         private static BuildKind LineBuilding(TutorialTask task)
         {
             if (TutorialScript.TryRequiredBuilding(task.Step, out BuildKind building)) return building;
-            return task.Ghost.Length > 0 ? task.Ghost[0].Build : BuildKind.Belt;
+            if (task.Ghost.Length > 0) return task.Ghost[0].Build;
+
+            // A line with no rule building and no blueprint - a research lesson's, a demo's - names its building in
+            // Opens.
+            return task.Opens.Length > 0 ? task.Opens[0] : BuildKind.Belt;
         }
 
         /// <summary>The door a line about "the gate" means: the one the wave it is about walks in at, because a
@@ -718,6 +752,7 @@ namespace Facet.Game
                 }
 
                 case TutorialFocus.None:
+                case TutorialFocus.Demo:
                     return false;
 
                 case TutorialFocus.BarTile:
@@ -846,7 +881,17 @@ namespace Facet.Game
             ImageNode(buttonRoot, "next.frame");
             _button = HudUi.AdoptButton(buttonRoot, "NEXT", 15f, _palette.HudPanel, PressButton);
 
+            _icons = new HudIcons(_palette);
+            _demo = new MachineDemo(_palette, _icons);
+            _demo.Build(_panel);
+
             _panel.gameObject.SetActive(false);
+        }
+
+        private void OnDestroy()
+        {
+            _icons?.Dispose();
+            _icons = null;
         }
 
         /// <summary>A full-size child carrying an Image, ready for one of HudUi's Adopt* calls.</summary>

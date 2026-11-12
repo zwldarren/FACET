@@ -143,6 +143,24 @@ namespace Facet.Core
         /// companion to <see cref="TurretCount"/>, and the fact a wave is survived by: a gun with nothing in
         /// its chamber is a wall.</summary>
         ArmedTurretCount = 28,
+
+        // Appended after the first map's wave and turret-count steps: the research lessons' rules (Frontier).
+        /// <summary>The line's building (the first of <see cref="TutorialTask.Opens"/>) has been researched. The
+        /// steps below name their building that way because a research lesson has no blueprint: the player's
+        /// factory is their own, so these are facts about the run rather than about a tile.</summary>
+        ResearchBuilding = 29,
+
+        /// <summary>The line's building is in the player's hand, or one already stands.</summary>
+        SelectBuilding = 30,
+
+        /// <summary>The line's building stands anywhere on the map.</summary>
+        PlaceBuilding = 31,
+
+        /// <summary>Two turrets stand with a round in the chamber, whatever the round is.</summary>
+        TwoTurretsArmed = 32,
+
+        /// <summary>Any turret holds a round the coming wave is weak to.</summary>
+        AnyTurretHoldsWaveShape = 33,
     }
 
     /// <summary>What a coached line draws a box around, so the player knows where to look. Places on the map
@@ -189,6 +207,11 @@ namespace Facet.Core
 
         /// <summary>The whole build bar: where the buildings the lesson hands over appear.</summary>
         BuildBar = 12,
+
+        /// <summary>Not a box: an animated demo of the line's building (the first of its
+        /// <see cref="TutorialTask.Opens"/>) inside the popup - shapes going in and coming out, so the player
+        /// sees what the machine does instead of being walked through building one.</summary>
+        Demo = 13,
     }
 
     /// <summary>The pieces of the HUD a coached lesson shows, as flags: a coached map opens with none of them
@@ -427,7 +450,9 @@ namespace Facet.Core
         /// building to hand over.</summary>
         public static bool NeedsNoBuilding(TutorialStep step)
             => step == TutorialStep.Acknowledge || step == TutorialStep.StartWave ||
-               step == TutorialStep.ClearWave || step == TutorialStep.ClearedWave;
+               step == TutorialStep.ClearWave || step == TutorialStep.ClearedWave
+               || step == TutorialStep.ResearchBuilding || step == TutorialStep.SelectBuilding
+               || step == TutorialStep.PlaceBuilding;
 
         /// <summary>How many lines the script has.</summary>
         public int Count => Tasks.Length;
@@ -486,6 +511,8 @@ namespace Facet.Core
                 case TutorialStep.TwoTurretsLoadedAcross:
                 case TutorialStep.TurretCount:
                 case TutorialStep.ArmedTurretCount:
+                case TutorialStep.TwoTurretsArmed:
+                case TutorialStep.AnyTurretHoldsWaveShape:
                     building = BuildKind.Turret;
                     return true;
 

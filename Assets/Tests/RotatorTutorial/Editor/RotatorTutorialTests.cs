@@ -36,13 +36,11 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void CampaignTeachesTheRotatorAfterTheCutterAndBeforeQuarry()
+        public void TheLessonIsKept_ButOutOfTheCampaign()
         {
+            // The main map teaches the Rotator in its own stage 4; this lesson's words are its popup's source.
             var campaign = AssetDatabase.LoadAssetAtPath<MapSet>("Assets/Data/Campaign.asset");
-            Assert.AreEqual("Cutter Tutorial", campaign.Maps[1].Name);
-            Assert.AreEqual("First Stand", campaign.Maps[2].Name);
-            Assert.AreSame(Load(), campaign.Maps[3]);
-            Assert.AreEqual("Quarry", campaign.Maps[4].Name);
+            CollectionAssert.DoesNotContain(campaign.Maps, Load());
         }
 
         [Test]

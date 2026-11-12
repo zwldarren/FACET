@@ -237,21 +237,13 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void CampaignPlacesTheSmallLessonBeforeTheUnchangedQuarry()
+        public void TheLessonIsKept_ButOutOfTheCampaign()
         {
+            // The main map teaches the Cutter in its own stage 3, so the standalone lesson is off the list. The
+            // asset stays, valid, for a rollback.
             var campaign = AssetDatabase.LoadAssetAtPath<MapSet>("Assets/Data/Campaign.asset");
             Assert.IsNotNull(campaign);
-            Assert.AreEqual(6, campaign.Maps.Length);
-            Assert.AreEqual("Tutorial", campaign.Maps[0].Name);
-            Assert.AreSame(Load(), campaign.Maps[1]);
-            Assert.AreEqual("First Stand", campaign.Maps[2].Name);
-            Assert.AreEqual("Rotator Tutorial", campaign.Maps[3].Name);
-            Assert.AreEqual("Quarry", campaign.Maps[4].Name);
-            Assert.AreEqual("Brickyard", campaign.Maps[5].Name);
-            Assert.IsFalse(campaign.Maps[4].TutorialCoached);
-            Assert.AreEqual(48, campaign.Maps[4].Width);
-            Assert.AreEqual(72, campaign.Maps[4].Height);
-            Assert.AreEqual(3, campaign.Maps[4].Waves.Length);
+            CollectionAssert.DoesNotContain(campaign.Maps, Load());
         }
 
         private TutorialState Single(TutorialStep step, params TutorialGhost[] ghost)
