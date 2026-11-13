@@ -19,13 +19,24 @@ namespace Facet.Game
         /// <summary>Level 0: the card's own ink, the deepest surface on screen.</summary>
         public static Color Panel(Palette palette) => palette.HudPanel;
 
-        /// <summary>Level 1: a row or a button lifted off the card by one step, never by a new colour.</summary>
-        public static Color Raised(Palette palette) => Blend(palette.HudPanel, palette.HudText, 0.07f);
+        /// <summary>Level 1: a surface lifted off the card - a key, a chip, a track, the stockpile, the lesson
+        /// popup - by one step, never by a new colour. The step is 1.6:1 against the card, so a lifted surface
+        /// reads as its own object at 1280x720 without any of its words being read; at 1.08:1 the HUD was one
+        /// dark rectangle with text floating in it (#37).</summary>
+        public static Color Raised(Palette palette) => Blend(palette.HudPanel, palette.HudText, 0.20f);
 
-        /// <summary>Level 1.5: the milled edge that keeps a card or a control apart from the map - seen as
-        /// an edge, never read as a line. Quieter than <see cref="Rule"/>, because a card's outline is
-        /// repeated a dozen times a screen and a dozen visible outlines is a wireframe.</summary>
-        public static Color Edge(Palette palette) => Blend(palette.HudPanel, palette.HudText, 0.11f);
+        /// <summary>A lifted surface under the pointer: 1.4:1 above <see cref="Raised"/>.</summary>
+        public static Color Hovered(Palette palette) => Blend(palette.HudPanel, palette.HudText, 0.30f);
+
+        /// <summary>A key's own hairline, lighter than the key it rings so the edge reads against the card
+        /// (2.6:1) as well as against the key.</summary>
+        public static Color Seam(Palette palette) => Blend(palette.HudPanel, palette.HudText, 0.34f);
+
+        /// <summary>Level 1.5: the milled edge that keeps a card or a control apart from what is behind it -
+        /// seen as an edge, never read as a line. A card beside the map sits on the dark background, which is
+        /// within 1.05:1 of the card's own ink, so this edge is the only thing that outlines it there: 1.9:1
+        /// against that background.</summary>
+        public static Color Edge(Palette palette) => Blend(palette.HudPanel, palette.HudText, 0.24f);
 
         /// <summary>Level 2: a hairline or a divider - visible as an edge, never as a surface.</summary>
         public static Color Rule(Palette palette) => Blend(palette.HudPanel, palette.HudText, 0.17f);
@@ -35,6 +46,24 @@ namespace Facet.Game
 
         /// <summary>Level 3.5: the quietest readable words - seeds, hints, footers.</summary>
         public static Color Faint(Palette palette) => Blend(palette.HudText, palette.HudPanel, 0.62f);
+
+        /// <summary>Secondary words on a <see cref="Raised"/> surface: <see cref="Muted"/> drops to 3.5:1 there,
+        /// this keeps 5:1.</summary>
+        public static Color Quiet(Palette palette) => Blend(palette.HudText, palette.HudPanel, 0.26f);
+
+        /// <summary>A surface that speaks in a hue - the toast, the end-of-run banner: the card's ink a third of
+        /// the way to the hue, so a refusal and good news are two different boxes and not one box in two text
+        /// colours. Paper words stay 7:1 or better on either.</summary>
+        public static Color Voice(Palette palette, Color hue) => Blend(palette.HudPanel, hue, 0.34f);
+
+        /// <summary>The shadow of something that just arrived over the game - the toast, the lesson popup - a
+        /// deeper band than a card's, so it reads as a layer above the cards rather than one of them.</summary>
+        public static Color LayerShadow(Palette palette)
+        {
+            Color shadow = palette.HudShadow;
+            shadow.a = Mathf.Min(1f, shadow.a * 1.5f);
+            return shadow;
+        }
 
         /// <summary>Level 4: the paper the words are printed on - body text and the card titles.</summary>
         public static Color Paper(Palette palette) => palette.HudText;
