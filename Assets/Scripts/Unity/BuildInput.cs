@@ -61,6 +61,10 @@ namespace Facet.Game
         private bool _removeHeld;
         private bool _wasBuildHeld;
 
+        private bool _pressOverUi;
+
+        private bool _removePressOverUi;
+
         /// <summary>Has the "more kinds than keys" complaint been logged? Once is enough; every frame would
         /// bury everything else in the console.</summary>
         private static bool _hotkeyOverflowReported;
@@ -157,11 +161,16 @@ namespace Facet.Game
             var mouse = Mouse.current;
             if (mouse != null)
             {
-                bool held = mouse.leftButton.isPressed && !pointerOverHud;
+                bool down = mouse.leftButton.isPressed;
+                if (mouse.leftButton.wasPressedThisFrame) _pressOverUi = pointerOverHud;
+                else if (!down) _pressOverUi = false;
+
+                bool overUi = pointerOverHud || _pressOverUi;
+                bool held = down && !overUi;
 
                 // A release is reported by the device or inferred from the button going up unannounced
                 // (lost focus, a stalled WebGL canvas), so a placement is never left pending forever.
-                if (mouse.leftButton.wasPressedThisFrame && !pointerOverHud && _selected == null)
+                if (mouse.leftButton.wasPressedThisFrame && !overUi && _selected == null)
                 {
                     // With nothing selected the press is a read: selection is this type's state, so the
                     // simulation only hears "read this tile".
@@ -171,7 +180,12 @@ namespace Facet.Game
 
                 _wasBuildHeld = held;
                 _buildHeld = held;
-                _removeHeld = mouse.rightButton.isPressed && !pointerOverHud;
+
+                bool eraseDown = mouse.rightButton.isPressed;
+                if (mouse.rightButton.wasPressedThisFrame) _removePressOverUi = pointerOverHud;
+                else if (!eraseDown) _removePressOverUi = false;
+
+                _removeHeld = eraseDown && !pointerOverHud && !_removePressOverUi;
             }
 
             _cursor = CursorCell(camera, world);
