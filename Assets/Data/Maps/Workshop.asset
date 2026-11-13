@@ -189,3 +189,4 @@ MonoBehaviour:
   TutorialCoached: 1
   TutorialClockRuns: 1
   Research: []
+  MismatchDamage: 0.25

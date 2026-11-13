@@ -14,30 +14,31 @@ namespace Facet.Game
     /// </summary>
     public sealed class BuildInput
     {
-        /// <summary>The digits that select a building, in <see cref="BuildCatalog.All"/> order: key 0 is
-        /// the tenth kind, and X the eleventh - the drain is the one kind past the digits, because a
-        /// keyboard has exactly ten of them and the table outgrew them. The loop stops at the table's
-        /// length, so a shorter table's spare keys are inert; an overflowing table would need a test to
-        /// catch it - see <see cref="ContentFormatTests.Hotkeys_ReachEveryBuildKind"/>.</summary>
+        /// <summary>The digits that select a building, by <em>bar position</em>: key 1 is the bar's first key,
+        /// key 2 its second, and so on - the order the run is showing, not the content table's ordinal, so a
+        /// hidden building closes the gap instead of leaving a dead digit. Key 0 is the tenth position and X the
+        /// eleventh; the loop stops at the bar's own count, so a shorter strip's spare keys are inert.
+        /// <see cref="ContentFormatTests.Hotkeys_ReachEveryBuildKind"/> is the fail-loud for an overflowing bar.</summary>
         private static readonly Key[] BuildKeys =
         {
             Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5, Key.Digit6,
             Key.Digit7, Key.Digit8, Key.Digit9, Key.Digit0, Key.X,
         };
 
-        /// <summary>How many kinds the keyboard can reach, so the build bar's hints never go stale.</summary>
+        /// <summary>How many keys the keyboard can reach, so the build bar's hints never go stale.</summary>
         public static int HotkeyCount => BuildKeys.Length;
 
-        /// <summary>The key label for a kind's index: digits 1..9, then 0 for the tenth, then X.</summary>
+        /// <summary>The key label for one bar position: digits 1..9, then 0 for the tenth, then X.</summary>
         public static string HotkeyLabel(int index) => index <= 9 ? ((index + 1) % 10).ToString() : "X";
 
-        /// <summary>The hint text for the keys the table actually reaches: "1-9 and 0" for a table of ten,
-        /// and the letter named for the eleven the shipped content has. A hyphen, not an en dash: the built
+        /// <summary>The hint text for a bar of <paramref name="count"/> keys: "1-5" for five, "1-9" for the
+        /// nine the shipped bar carries, and the letter named for eleven. A hyphen, not an en dash: the built
         /// player's HUD font has no en dash.</summary>
-        public static string KeyRangeText()
+        public static string KeyRangeText(int count)
         {
-            int count = System.Math.Min(BuildCatalog.Count, BuildKeys.Length);
+            count = System.Math.Min(count, BuildKeys.Length);
             if (count <= 0) return "no keys";
+            if (count == 1) return "1";
             if (count < 10) return "1-" + count;
             return count < 11 ? "1-9 and 0" : "1-9, 0 and X";
         }
@@ -109,12 +110,13 @@ namespace Facet.Game
             var keyboard = Keyboard.current;
             if (keyboard != null)
             {
-                if (!_hotkeyOverflowReported && BuildCatalog.Count > BuildKeys.Length)
+                int barKeys = world.BarCount;
+                if (!_hotkeyOverflowReported && barKeys > BuildKeys.Length)
                 {
                     _hotkeyOverflowReported = true;
-                    Debug.LogError("FACET: the content table has " + BuildCatalog.Count +
-                        " build kinds but only " + BuildKeys.Length + " hotkeys - kinds after the tenth " +
-                        "cannot be selected from the keyboard. Add keys or trim the table.");
+                    Debug.LogError("FACET: the build bar has " + barKeys +
+                        " kinds but only " + BuildKeys.Length + " hotkeys - kinds after the " +
+                        BuildKeys.Length + "th cannot be selected from the keyboard. Add keys or trim the bar.");
                 }
 
                 // A locked kind is not selectable at all - the world would refuse to place it
@@ -122,10 +124,13 @@ namespace Facet.Game
                 // ask the same question, so the digit key and the click agree. A press refused by the lesson
                 // specifically is remembered for the HUD: the lesson hid the tile, so the lesson says why the
                 // key is dead.
-                for (int i = 0; i < BuildKeys.Length && i < BuildCatalog.Count; i++)
+                for (int i = 0; i < BuildKeys.Length && i < barKeys; i++)
                     if (keyboard[BuildKeys[i]].wasPressedThisFrame)
                     {
-                        BuildKind kind = BuildCatalog.All[i];
+                        BuildKind? barKind = world.BarKindAt(i);
+                        if (!barKind.HasValue) continue;
+
+                        BuildKind kind = barKind.Value;
                         if (world.IsUnlocked(kind)) ToggleSelect(kind);
                         else if (world.LockedByTutorial(kind) || world.Researchable(kind)) LockedPressed = kind;
                     }

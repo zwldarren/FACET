@@ -102,13 +102,14 @@ namespace Facet.Core
         /// <summary>The building in one sentence: the definition's own description where it has one,
         /// and a behaviour-shaped sentence where it does not - so a new gun or operator gets a sensible
         /// line without any view being edited.</summary>
-        public static string Blurb(in MachineDef def, ContentDatabase content)
+        public static string Blurb(in MachineDef def, ContentDatabase content,
+            float resisted = Balance.ResistantDamageMultiplier)
         {
             switch (def.Behavior)
             {
                 case BehaviorKind.Turret:
                     return "eats any shape from any side · a round matching the target's weakness " +
-                           "does full damage, anything else " + ResistShare();
+                           "does full damage, anything else " + ResistShare(resisted);
 
                 case BehaviorKind.Cutter:
                     // The line names the two things a player has to know and cannot see: it is two tiles
@@ -154,7 +155,8 @@ namespace Facet.Core
 
         /// <summary>The numbers behind the sentence, read from the same definitions the tick runs
         /// on. Empty is legal ("this behaviour shows no numbers") but unknown is not.</summary>
-        public static string Stats(in MachineDef def, ContentDatabase content, SimConfig config)
+        public static string Stats(in MachineDef def, ContentDatabase content, SimConfig config,
+            float resistedShare = Balance.ResistantDamageMultiplier)
         {
             switch (def.Behavior)
             {
@@ -181,7 +183,7 @@ namespace Facet.Core
                 case BehaviorKind.Turret:
                 {
                     TurretDef spec = content.Turret(def.Build);
-                    float resisted = spec.Damage * Balance.ResistantDamageMultiplier;
+                    float resisted = spec.Damage * resistedShare;
                     return spec.ShotsPerSecond.ToString("0.##") + " shots/s · " +
                            spec.Damage.ToString("0.##") + " dmg matched, " + resisted.ToString("0.##") +
                            " if not · range " + spec.Range.ToString("0.##") + " tiles";
@@ -777,8 +779,8 @@ namespace Facet.Core
 
         /// <summary>The share of full damage a round does to an enemy it does not match, as the catalogue
         /// says it: read from the balance constant so a retune moves this sentence too.</summary>
-        private static string ResistShare()
-            => (Balance.ResistantDamageMultiplier * 100f).ToString("0.#") + "%";
+        private static string ResistShare(float share)
+            => (share * 100f).ToString("0.#") + "%";
 
         /// <summary>What a cutter is holding back: the pending pieces, said in one phrase.</summary>
         private static string Held(in MachineState state)

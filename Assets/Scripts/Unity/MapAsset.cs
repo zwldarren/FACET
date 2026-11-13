@@ -292,6 +292,10 @@ namespace Facet.Game
                 => new ResearchOffer(AfterWave, Builds, Cost, Hint, LessonPlan(Lesson));
         }
 
+        [Tooltip("Share of a turret's damage a round does when it is not the shape the enemy is weak to. A half " +
+            "everywhere by default; a map that teaches cutting and turning can lower it so the right shape matters.")]
+        [Range(0f, 1f)] public float MismatchDamage = Balance.ResistantDamageMultiplier;
+
         [Header("Research")]
         [Tooltip("Buildings this map hands over wave by wave. A building any row names is locked until that row " +
             "is bought; one no row names is left as the map and the lesson leave it. Empty - the default - is a " +
@@ -460,7 +464,8 @@ namespace Facet.Game
                 seed: Seed,
                 generatedWaves: GeneratedWaves,
                 tutorial: TutorialPlan(),
-                research: ResearchPlan());
+                research: ResearchPlan(),
+                mismatchDamage: MismatchDamage);
         }
 
         /// <summary>Everything wrong with this map as the simulation would read it; pure, because it runs

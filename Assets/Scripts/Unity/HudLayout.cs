@@ -5,7 +5,8 @@ namespace Facet.Game
     /// <summary>Where the HUD's pieces sit, as unscaled screen-pixel geometry multiplied by
     /// <see cref="Scale"/>, so the layout holds the same fraction of the screen at any resolution. A shared
     /// table because the HUD draws these panels and the camera rig has to keep the map out from under them.
-    /// The four persistent pieces must stay within 22 % of a 720p screen with the tutorial up.</summary>
+    /// The four persistent pieces stay within 30 % of a 720p screen with the tutorial up. The budget was 22 %
+    /// while a key was words alone; the machine previews raised it on purpose, not by drift.</summary>
     public static class HudLayout
     {
         /// <summary>Gap between a panel and the screen edge.</summary>
@@ -21,14 +22,16 @@ namespace Facet.Game
 
         public const float StatusHeight = 153f;
 
-        /// <summary>The top-right cluster: a small wave button, three square buttons, and MENU.</summary>
-        public const float ControlsWidth = 224f;
+        /// <summary>The top-right cluster: the start-wave button, three square buttons, and MENU.</summary>
         public const float ControlsHeight = 34f;
 
         // The wave and menu buttons are wider than the squares: they carry words, not glyphs.
-        public const float WaveButtonWidth = 54f;
+        public const float WaveButtonWidth = 128f;
         public const float MenuButtonWidth = 44f;
         public const float ControlGap = 6f;
+
+        public const float ControlsWidth =
+            WaveButtonWidth + 4f * ControlGap + 3f * ControlsHeight + MenuButtonWidth;
 
         /// <summary>Wide enough for the keyboard list: the card is reference material and is not read at a
         /// glance.</summary>
@@ -56,9 +59,12 @@ namespace Facet.Game
         /// <summary>How much taller the card is with a sorter's filter picker on it.</summary>
         public const float InfoPickHeight = 66f;
 
-        public const float BarTileWidth = 66.75f;
-        public const float BarPad = 12f;
-        public const float BarGap = 5f;
+        /// <summary>One key of the build bar: wide enough to carry a picture of the building (about forty design
+        /// units) rather than only its name.</summary>
+        public const float BarTileWidth = 100f;
+        public const float BarTileHeight = 80f;
+        public const float BarPad = 8f;
+        public const float BarGap = 3f;
 
         /// <summary>Keys the shipped table puts on the bar - <see cref="BuildKind.Belt"/> to
         /// <see cref="BuildKind.Sink"/> less the two kinds retired from play (<see cref="BuildCatalog.Retired"/>:
@@ -69,7 +75,7 @@ namespace Facet.Game
         /// <summary>The full table's width, spelled from the tile numbers so the two cannot drift. Fewer
         /// keys make a narrower bar, not a stretched one.</summary>
         public const float BarWidth = 2f * BarPad + BarTiles * BarTileWidth + (BarTiles - 1) * BarGap;
-        public const float BarHeight = 52f;
+        public const float BarHeight = BarTileHeight + 2f * BarPad;
 
         public static float BarWidthFor(int tiles)
             => tiles <= 0 ? 0f : 2f * BarPad + tiles * BarTileWidth + (tiles - 1) * BarGap;

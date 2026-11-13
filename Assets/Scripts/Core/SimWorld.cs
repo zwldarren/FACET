@@ -120,6 +120,7 @@ namespace Facet.Core
             Machines = new MachineField(TileGrid, Terrain, Belts, Content, Events, Map);
             _paths = new PathField(TileGrid, Terrain, Machines, Content);
             Enemies = new EnemyField(Content, Events, TileGrid, Terrain, Machines, _paths);
+            Enemies.ResistedMultiplier = map.MismatchDamage;
             Projectiles = new ProjectileField();
             Waves = new WaveDirector(Enemies, map, Events, Config.FreshSeed);
             Economy = new EconomyState(Content, map.StartShapes);
@@ -376,6 +377,60 @@ namespace Facet.Core
         /// answer needs: a lesson-locked kind deserves a word ("the lesson hands it over"), a map-locked one
         /// is not part of this run and gets silence. One rule owner again - <see cref="BuildController.LockedByTutorial"/>.</summary>
         public bool LockedByTutorial(BuildKind kind) => !BuildCatalog.Retired(kind) && _build.LockedByTutorial(kind);
+
+        /// <summary>Does the bar carry this kind: handed over, or offered by research - the locked key with a price
+        /// on it. The tiles, the digits and the clicks all read this one rule.</summary>
+        public bool OnBar(BuildKind kind) => IsUnlocked(kind) || Researchable(kind);
+
+        /// <summary>How many keys the bar carries right now: the run's set, not the content table's. A tutorial hands
+        /// buildings over a line at a time, so this grows.</summary>
+        public int BarCount
+        {
+            get
+            {
+                BuildKind[] kinds = Content.BuildKinds;
+                int count = 0;
+                for (int i = 0; i < kinds.Length; i++)
+                    if (OnBar(kinds[i])) count++;
+                return count;
+            }
+        }
+
+        /// <summary>The kind the bar's <paramref name="index"/>'th key names, left to right; null off the end.
+        /// This is a separate order from <see cref="BuildKind"/>'s ordinal on purpose: the table keeps its index for
+        /// content and simulation, while the bar closes the gaps a hidden kind leaves so its keys read 1, 2, 3.</summary>
+        public BuildKind? BarKindAt(int index)
+        {
+            if (index < 0) return null;
+
+            BuildKind[] kinds = Content.BuildKinds;
+            int shown = 0;
+            for (int i = 0; i < kinds.Length; i++)
+            {
+                if (!OnBar(kinds[i])) continue;
+                if (shown++ == index) return kinds[i];
+            }
+
+            return null;
+        }
+
+        /// <summary>Where a kind sits on the bar, or -1 when the bar does not carry it. The hotkey label and the
+        /// lesson's hints read their number from here, so they agree with the key the player can press.</summary>
+        public int BarIndex(BuildKind kind)
+        {
+            if (!OnBar(kind)) return -1;
+
+            BuildKind[] kinds = Content.BuildKinds;
+            int shown = 0;
+            for (int i = 0; i < kinds.Length; i++)
+            {
+                if (!OnBar(kinds[i])) continue;
+                if (kinds[i] == kind) return shown;
+                shown++;
+            }
+
+            return -1;
+        }
 
         /// <summary>Re-route the sorter standing on a cell - the picker's verb. False when there is no
         /// sorter there or the filter would route nothing.</summary>

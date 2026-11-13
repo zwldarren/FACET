@@ -47,6 +47,9 @@ namespace Facet.Game
         /// disappears in a font that lacks it.</summary>
         private HudIcons _icons;
 
+        /// <summary>The buildings as pictures: one miniature per key, from the same palette the map draws with.</summary>
+        private BuildIcons _buildIcons;
+
         /// <summary>Which mineral's mark the HUD is wearing right now; repainted when a map change moves it.</summary>
         private Shape _moneyDrawn = Shape.None;
 
@@ -369,6 +372,7 @@ namespace Facet.Game
             if (openMenu != null) _openMenu = openMenu;
 
             if (_icons == null) _icons = new HudIcons(palette);
+            if (_buildIcons == null) _buildIcons = new BuildIcons(palette);
 
             if (_canvasRoot == null) BuildCanvas();
 
@@ -428,6 +432,8 @@ namespace Facet.Game
             // they go with the HUD that made them - a scene reload in the Editor would otherwise leak one set per play.
             _icons?.Dispose();
             _icons = null;
+            _buildIcons?.Dispose();
+            _buildIcons = null;
             HudUi.ReleaseShared();
         }
 
@@ -489,6 +495,10 @@ namespace Facet.Game
 
         private void BuildPanels()
         {
+            // The tiles are new objects, so the money mark has to be painted onto them again: otherwise the
+            // "already drawn" bookkeeping leaves each price with the white texture a RawImage starts with.
+            _moneyDrawn = Shape.None;
+
             _status = BuildStatus();
             _tutorial = BuildTutorial();
             _tasks = BuildTasks();
@@ -546,9 +556,10 @@ namespace Facet.Game
 
         private const float HudRadius = 10f;
 
-        private const float ControlRadius = 6f;
+        /// <summary>A key's cell corner: the bar is the surface, and a key's fill only shows its state.</summary>
+        private const float BarCellRadius = 3f;
 
-        /// <summary>The banner's card in design units: a transient overlay, off the screen's 22 % budget.</summary>
+        /// <summary>The banner's card in design units: a transient overlay, off the screen's persistent budget.</summary>
         private const float BannerWidth = 560f;
         private const float BannerHeight = 170f;
         private const float BannerRadius = 12f;
@@ -856,12 +867,21 @@ namespace Facet.Game
             panel.Body.Set(body.ToString(), ink);
         }
 
-        private static string HotkeyFor(Operators op)
+        private string HotkeyFor(Operators op)
         {
             BuildKind kind = op == Operators.Cutter ? BuildKind.Cutter
                 : op == Operators.Rotator ? BuildKind.Rotator
                 : BuildKind.Stacker;
-            return BuildInput.HotkeyLabel((int)kind);
+            return HotkeyOf(kind);
+        }
+
+        /// <summary>The digit that presses one building's key on this run's bar, or "+" while the building is
+        /// not on it. The lesson's sentences and the research notice read their number here, so a hint can
+        /// never name a key the strip does not show.</summary>
+        private string HotkeyOf(BuildKind kind)
+        {
+            int index = _world.BarIndex(kind);
+            return index < 0 ? "+" : BuildInput.HotkeyLabel(index);
         }
 
         /// <summary>The controls cluster: wave, pause, gear, menu and help, top-right. The keyboard list lives behind
@@ -872,7 +892,8 @@ namespace Facet.Game
                 HudLayout.Controls(Screen.width, _scale), PlaceCorner.TopRight);
             var panel = new ControlsPanel { Root = root };
 
-            panel.Wave = BindButton(root, "wave", HudType.Micro, _palette.HudPanel, "WAVE", PressWave);
+            panel.Wave = BindButton(root, "wave", HudType.Label, _palette.HudPanel, "START WAVE", PressWave);
+            AutoFit(panel.Wave.Label, HudType.Micro);
             panel.Wave.Root.gameObject.SetActive(false);
 
             panel.Pause = BindButton(root, "pause", HudType.Body, _palette.HudText, string.Empty, PressPause);
@@ -900,7 +921,7 @@ namespace Facet.Game
         /// than on the cluster, so a misplaced click can never restart the run. It overlays the map while open.</summary>
         private HelpPanel BuildHelp()
         {
-            string[] lines = KeyLines();
+            string[] lines = KeyLines(_world.BarCount);
             RectTransform root = BindPanel(HelpPrefab, "help",
                 HudLayout.Help(Screen.width, _scale, lines.Length), PlaceCorner.TopRight);
             var panel = new HelpPanel { Root = root };
@@ -961,7 +982,7 @@ namespace Facet.Game
             RectTransform row = HudUi.Child(root, "tiles");
 
             const float gap = HudLayout.BarGap;
-            const float tileHeight = 40f;
+            const float tileHeight = HudLayout.BarTileHeight;
             float tileWidth = HudLayout.BarTileWidth;
 
             // Derived from the width the card actually got, because HudLayout.Bar clamps it to the screen: a
@@ -985,52 +1006,61 @@ namespace Facet.Game
         }
 
         /// <summary>
-        /// One key: the asset's nine pieces, the run's words and wiring. <paramref name="rect"/> is in pixels;
-        /// <paramref name="tileWidth"/> is the design width the bar settled on for this screen.
+        /// One key: the asset's pieces, the run's words and wiring, and the picture of the building.
+        /// <paramref name="index"/> is the key's place on the bar - the digit it prints and the key the
+        /// keyboard presses.
         ///
-        /// A key's hairline is the tile's state, not a button's, which is why this adopts a HudButton rather than
-        /// a whole one.
+        /// A key's hairline is the tile's state, not a button's, which is why this adopts a HudButton rather
+        /// than a whole one.
         /// </summary>
         private BuildTile BindTile(RectTransform row, BuildKind kind, int index, Rect rect, float tileWidth)
         {
             RectTransform root = BindPanel(row, BarTilePrefab, "tile" + index, rect, PlaceCorner.TopLeft);
-            var tile = new BuildTile { Kind = kind, Root = root };
+            var tile = new BuildTile { Kind = kind, BarIndex = index, Root = root };
 
             tile.Button = root.gameObject.AddComponent<HudButton>();
-            tile.Button.Fill = HudUi.AdoptRound(HudUi.Child(root, "back"), HudInk.Raised(_palette),
-                ControlRadius);
+
+            // Transparent at rest and painted only by the state a key is in - one bar, not eleven cards. It
+            // stays active either way: this is the image that takes the click.
+            tile.Button.Fill = HudUi.AdoptRound(HudUi.Child(root, "back"), Color.clear, BarCellRadius);
             tile.Button.Fill.Image.raycastTarget = true;
             tile.Button.Pressed = () => SelectKind(kind);
 
             float narrow = Mathf.Max(0f, (HudLayout.BarTileWidth - tileWidth) * _scale);
             var cut = new Vector2(narrow, 0f);
 
-            tile.Name = BindLabel(root, "name", HudType.Label, FontStyle.Bold, TextAnchor.MiddleLeft);
+            tile.Name = BindLabel(root, "name", HudType.Label, FontStyle.Bold, TextAnchor.MiddleCenter);
             tile.Name.Set(_world.Content.Machine(kind).Name, _palette.HudText);
             AutoFit(tile.Name, 9f);
             tile.Name.Rect.sizeDelta -= cut;
 
-            tile.Keycap = HudUi.AdoptRound(HudUi.Child(root, "keycap"), HudInk.Raised(_palette), 4f);
+            tile.Keycap = HudUi.AdoptRound(HudUi.Child(root, "keycap"), HudInk.Raised(_palette), 3f);
 
             tile.Hotkey = BindLabel(root, "hotkey", HudType.Micro, FontStyle.Bold, TextAnchor.MiddleCenter);
-            tile.Hotkey.Set(BuildInput.HotkeyLabel((int)kind), HudInk.Faint(_palette));
+            tile.Hotkey.Set(BuildInput.HotkeyLabel(index), HudInk.Faint(_palette));
 
-            tile.Cost = BindLabel(root, "cost", HudType.Micro, FontStyle.Bold, TextAnchor.MiddleRight);
-            tile.Cost.Set(_world.Content.Machine(kind).Cost.ToString(), HudInk.Muted(_palette));
-            AutoFit(tile.Cost, 7f);
-            tile.Cost.Rect.sizeDelta -= cut;
+            // The picture of the building: what the key is for, with the name as its word.
+            tile.Icon = HudUi.AdoptIcon(HudUi.Child(root, "icon"));
+            PaintBuildIcon(tile);
 
+            // The price is the key's second fact, so it is set at body size rather than micro.
+            tile.Cost = BindLabel(root, "cost", HudType.Body, FontStyle.Bold, TextAnchor.MiddleRight);
+            tile.Cost.Set(_world.Content.Machine(kind).Cost.ToString(), _palette.HudText);
+            AutoFit(tile.Cost, 10f);
+
+            // Painted here too, not only by the per-frame money pass - see the _moneyDrawn reset in BuildPanels.
             tile.CostIcon = HudUi.AdoptIcon(HudUi.Child(root, "costIcon"));
-            tile.CostIcon.rectTransform.anchoredPosition -= cut;
+            Paint(tile.CostIcon, _icons.Mark(MoneyShape));
             tile.CostIcon.gameObject.SetActive(false);
 
             tile.Afford = HudUi.AdoptBar(HudUi.Child(root, "afford"), tile.Name.Rect.sizeDelta.x, 1f);
             tile.Afford.Rect.sizeDelta -= cut;
 
-            tile.Border = HudUi.AdoptBorder(HudUi.Child(root, "frame"), _palette.HudAccent, ControlRadius, 1f);
+            tile.Border = HudUi.AdoptBorder(HudUi.Child(root, "frame"), _palette.HudAccent,
+                BarCellRadius, 1f);
             tile.Border.Show(false);
 
-            tile.Cue = HudUi.AdoptBorder(HudUi.Child(root, "cue"), _palette.HudAccent, ControlRadius, 3f);
+            tile.Cue = HudUi.AdoptBorder(HudUi.Child(root, "cue"), _palette.HudAccent, BarCellRadius, 2f);
             tile.Cue.Show(false);
 
             tile.Selected = kind == _world.SelectedKind;
@@ -1040,6 +1070,17 @@ namespace Facet.Game
 
             DressBuildTile(tile);
             return tile;
+        }
+
+        /// <summary>Paint one key's machine preview.</summary>
+        private void PaintBuildIcon(BuildTile tile)
+        {
+            if (tile.Icon == null || _buildIcons == null) return;
+
+            BuildIcons.Icon icon = _buildIcons.Figure(tile.Kind, _world.Content.Machine(tile.Kind).Behavior);
+            tile.Icon.texture = icon.Texture;
+            tile.Icon.uvRect = icon.Uv;
+            tile.Icon.gameObject.SetActive(icon.Valid);
         }
 
         /// <summary>
@@ -1079,6 +1120,11 @@ namespace Facet.Game
             panel.Facing = BindLabel(panel.BuildRoot, "facing", HudType.Micro, FontStyle.Bold,
                 TextAnchor.MiddleLeft, tracked: true);
             AutoFit(panel.Facing, 8f);
+
+            // What the building does, shown rather than told: a looping picture over the room the sentences used to
+            // take. A building without one keeps its sentences.
+            panel.Demo = new MachineDemo(_palette, _icons);
+            panel.Demo.Build(panel.BuildRoot);
 
             // The card's three quiet actions along its bottom edge: the two that turn the ghost, and the door to
             // the face that reads the map. The asset places them off the right edge, where the arithmetic used to be.
@@ -1170,8 +1216,8 @@ namespace Facet.Game
 
         /// <summary>
         /// The one thing that has to be unmissable: the run is over, or the game is paused. A card the layout does
-        /// not size - a transient overlay, off the screen's 22 % budget - centred with its top edge at 42 % of the
-        /// leftover height.
+        /// not size - a transient overlay, off the screen's persistent-panel budget - centred with its top edge
+        /// at 42 % of the leftover height.
         /// </summary>
         private BannerPanel BuildBanner()
         {
@@ -1793,12 +1839,13 @@ namespace Facet.Game
                 if (_bar.Tiles[i].CostIcon != null) Paint(_bar.Tiles[i].CostIcon, coin);
         }
 
-        /// <summary>Point one mark at one rasterised item. An icon the palette cannot draw carries no texture, and a
-        /// <see cref="RawImage"/> with none draws nothing rather than a white square.</summary>
+        /// <summary>Point one mark at one rasterised item. Without a texture a <see cref="RawImage"/> draws a white
+        /// square, so a mark the palette cannot draw is switched off as well as emptied.</summary>
         private static void Paint(RawImage mark, HudIcons.Icon icon)
         {
             mark.texture = icon.Texture;
             mark.uvRect = icon.Uv;
+            mark.enabled = icon.Valid;
         }
 
         private void UpdateStockpile()
@@ -2341,7 +2388,7 @@ namespace Facet.Game
 
             if (_controls.Wave.Root.gameObject.activeSelf != canWave)
                 _controls.Wave.Root.gameObject.SetActive(canWave);
-            if (canWave) _controls.Wave.Label.Set("WAVE " + _world.Waves.NextWave);
+            if (canWave) _controls.Wave.Label.Set("START WAVE " + _world.Waves.NextWave);
         }
 
         private void SetHelpOpen(bool open)
@@ -2359,12 +2406,20 @@ namespace Facet.Game
 
         /// <summary>The keyboard, one pair of ideas per line. Every line prints whole at the smallest scale, and none
         /// uses a character a built player's font might lack.</summary>
-        public static string[] KeyLines()
+        public static string[] KeyLines() => KeyLines(HudLayout.BarTiles);
+
+        /// <summary>The same list for a bar of <paramref name="barCount"/> keys: the build line names the digits
+        /// the bar actually carries, so a lesson that has handed over five buildings says 1-5.</summary>
+        public static string[] KeyLines(int barCount)
         {
+            string buildLine = barCount > 0
+                ? BuildInput.KeyRangeText(barCount) + " or click builds"
+                : "the lesson hands buildings over";
+
             return new[]
             {
                 "WASD / arrows pan  ·  wheel zooms",
-                BuildInput.KeyRangeText() + " or click builds",
+                buildLine,
                 "the same one again drops it",
                 "Q / E turn  ·  drag lays belts",
                 "T how to play  ·  H this card",
@@ -2478,7 +2533,7 @@ namespace Facet.Game
             string name = _world.Content.Machine(tile.Kind).Name;
             tile.Name.Set(tile.Locked ? "Unlock " + name : name, _palette.HudText);
             tile.Cost.Set(TileCost(tile.Kind, tile.Locked).ToString(), HudInk.Muted(_palette));
-            tile.Hotkey.Set(tile.Locked ? "+" : BuildInput.HotkeyLabel((int)tile.Kind), HudInk.Faint(_palette));
+            tile.Hotkey.Set(tile.Locked ? "+" : BuildInput.HotkeyLabel(tile.BarIndex), HudInk.Faint(_palette));
             tile.CostPlaced = false;
         }
 
@@ -2497,50 +2552,51 @@ namespace Facet.Game
         }
 
         /// <summary>
-        /// One building as a button: hotkey, cost, name and role. A click selects the kind through the input latch -
-        /// it never places anything, so a stray click can only change what is selected. A kind the run has not handed
-        /// over is not on the bar at all, so there is no locked state to dress.
+        /// One key's state. The bar is the surface, so a key paints only the state it is in: the focus hue when
+        /// selected, one step up the ink ramp under the pointer, the warning amber when the stockpile cannot
+        /// cover it. At rest it stays clear.
         /// </summary>
         private void DressBuildTile(BuildTile tile)
         {
-            // The tile wears one ink level plus the one focus colour: roles are words on the card, not hues on the keys.
-            // Each state is its own step against the plate and against the others: a key at rest is lifted 1.6:1
-            // off the plate, a hovered one 1.4:1 above that, a selected one is the focus hue at 3:1 off the plate,
-            // and a key the stockpile cannot cover sinks back to the plate's level with an amber hairline. A locked
-            // key sits halfway back to the plate until the pointer finds it.
-            Color fill = HudInk.Raised(_palette);
-            if (tile.Selected) fill = HudInk.Blend(_palette.HudPanel, _palette.HudAccent, 0.52f);
-            else if (tile.Hovered) fill = HudInk.Hovered(_palette);
-            else if (!tile.Affordable) fill = HudInk.Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.10f);
-            if (tile.Locked && !tile.Hovered) fill = HudInk.Blend(fill, _palette.HudPanel, 0.45f);
+            bool lit = tile.Selected || tile.Hovered;
+
+            // A key's fill exists to say "this one" - there is no card inside the bar.
+            Color fill = Color.clear;
+            if (tile.Selected) fill = HudInk.Blend(_palette.HudPanel, _palette.HudAccent, 0.34f);
+            else if (tile.Hovered) fill = HudInk.Raised(_palette);
+            else if (!tile.Affordable) fill = HudInk.Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.12f);
             tile.Button.Fill.Set(fill);
 
+            // One hairline, and only when there is something to say: the focus edge, the pointer's or the warning.
+            bool edged = tile.Selected || tile.Hovered || !tile.Affordable;
+            tile.Border.Show(edged);
+            if (edged)
+                tile.Border.Set(tile.Selected
+                    ? _palette.HudAccent
+                    : tile.Hovered
+                        ? HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.50f)
+                        : HudInk.Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.55f));
+
+            // The keycap only appears with a lit key: the hint is worth reading then.
+            tile.Keycap.Show(lit);
             tile.Keycap.Set(tile.Selected
                 ? HudInk.Blend(_palette.HudPanel, _palette.HudAccent, 0.70f)
                 : HudInk.Seam(_palette));
 
-            // Every tile keeps a hairline, so eleven surfaces read as eleven keys rather than one dark strip.
-            tile.Border.Show(true);
-            tile.Border.Set(tile.Selected
-                ? _palette.HudAccent
-                : tile.Hovered
-                    ? HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.50f)
-                    : tile.Affordable
-                        ? HudInk.Seam(_palette)
-                        : HudInk.Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.55f));
+            tile.Hotkey.SetColour(tile.Selected ? _palette.HudPanel : lit ? _palette.HudText : HudInk.Quiet(_palette));
 
-            // The digit is printed on its keycap: paper on the grey cap (6:1), card ink on the selected one's
-            // bright focus cap (4.9:1), so the selected key's cap reads inverted.
-            bool lit = tile.Selected || tile.Hovered;
-            tile.Hotkey.SetColour(tile.Selected ? _palette.HudPanel : _palette.HudText);
+            // Amber when the answer is no - the colour the cursor ghost and the resource band use for it.
+            tile.Cost.SetColour(tile.Affordable ? _palette.HudText : _palette.CursorNoFunds);
 
-            // The cost turns amber when the answer is no - the same colour the cursor ghost and the resource band
-            // use for the same fact.
-            tile.Cost.SetColour(tile.Affordable
-                ? (lit ? _palette.HudText : HudInk.Quiet(_palette))
-                : _palette.CursorNoFunds);
+            tile.Name.SetColour(tile.Affordable ? (lit ? _palette.HudText : HudInk.Quiet(_palette))
+                : HudInk.Muted(_palette));
 
-            tile.Name.SetColour(tile.Affordable ? _palette.HudText : HudInk.Muted(_palette));
+            // A locked key is a price tag, not a building yet: its picture is quieter until the research lands.
+            if (tile.Icon != null)
+            {
+                Color tint = tile.Locked && !lit ? new Color(1f, 1f, 1f, 0.62f) : Color.white;
+                if (tile.Icon.color != tint) tile.Icon.color = tint;
+            }
         }
 
         /// <summary>The bar's one way to change what is selected, and the one place a locked kind is refused: the
@@ -2573,7 +2629,7 @@ namespace Facet.Game
             if (_world.Research.CanAfford(kind))
             {
                 _world.RequestResearch(kind);
-                Notice("UNLOCKED - " + names + " · press " + BuildInput.HotkeyLabel((int)offer.Builds[0]) +
+                Notice("UNLOCKED - " + names + " · press " + HotkeyOf(offer.Builds[0]) +
                     " to build it", NoticeSeconds);
             }
             else
@@ -2625,12 +2681,14 @@ namespace Facet.Game
             if (textWidth <= 0f) return;
 
             tile.CostPlaced = true;
-            float size = 9f * _scale;
+            float size = 14f * _scale;
             float x = _bar.TileWidth - 6f * _scale - textWidth - 4f * _scale - size;
-            if (x < 24f * _scale) return;   // never under the keycap
+            if (x < 34f * _scale) return;   // never under the keycap
 
-            HudUi.TopLeft(tile.CostIcon.rectTransform, x, 23.5f * _scale, size, size);
-            tile.CostIcon.gameObject.SetActive(true);
+            HudUi.TopLeft(tile.CostIcon.rectTransform, x, 3f * _scale, size, size);
+
+            // A mark the palette could not draw carries no texture, and a RawImage with none draws white.
+            tile.CostIcon.gameObject.SetActive(tile.CostIcon.texture != null);
         }
 
         // ------------------------------------------------------------------ info card
@@ -2658,6 +2716,9 @@ namespace Facet.Game
                     SetPickerUp(false);
                     RefreshBuildInfo(kind);
                 }
+
+                // The demo plays every frame: it is an animation, not a sentence that changes with the building.
+                ShowInfoDemo(kind);
 
                 // The facing is the ghost's and Q/E move it: the one line on the build card that answers to the
                 // keyboard. A cutter names the cut instead of the arrow, and it flips as the ghost turns.
@@ -2731,9 +2792,33 @@ namespace Facet.Game
             _info.Stats.Show(hasStats);
             if (hasStats) _info.Stats.Set(stats, HudInk.Muted(_palette));
 
+            // A building with a demo is shown at work instead of described: the picture takes the sentences' room,
+            // and the header above it still says the price and whether it is locked.
+            bool demo = MachineDemo.Covers(kind);
+            _info.Blurb.Show(!demo);
+            if (demo) _info.Stats.Show(false);
+            else _info.Demo.Hide();
+
             // The card's height is fixed, so a building with no stats leaves a gap rather than moving the
             // buttons under the pointer. All five places are the asset's.
             _info.Facing.Set(GhostFacing(kind), HudInk.Muted(_palette));
+        }
+
+        /// <summary>Play the build card's demo over the room the blurb and the stats share in the asset.</summary>
+        private void ShowInfoDemo(BuildKind kind)
+        {
+            if (_info.Demo == null || !MachineDemo.Covers(kind))
+            {
+                _info.Demo?.Hide();
+                return;
+            }
+
+            RectTransform blurb = _info.Blurb.Rect;
+            RectTransform stats = _info.Stats.Rect;
+            float x = blurb.anchoredPosition.x;
+            float top = -blurb.anchoredPosition.y;
+            float bottom = Mathf.Max(top + blurb.sizeDelta.y, -stats.anchoredPosition.y + stats.sizeDelta.y);
+            _info.Demo.Show(kind, x, top, blurb.sizeDelta.x, bottom - top, _scale, _world.Content.Machine(kind).Name);
         }
 
         /// <summary>The build card's facing line for the placement it describes, from the same note the built card
@@ -3641,10 +3726,11 @@ namespace Facet.Game
             MachineReading.RoleLabel(MachineReading.Role(_world.Content.Machine(kind)));
 
         private string Blurb(BuildKind kind) =>
-            MachineReading.Blurb(_world.Content.Machine(kind), _world.Content);
+            MachineReading.Blurb(_world.Content.Machine(kind), _world.Content, _world.Map.MismatchDamage);
 
         private string Stats(BuildKind kind) =>
-            MachineReading.Stats(_world.Content.Machine(kind), _world.Content, _world.Config);
+            MachineReading.Stats(_world.Content.Machine(kind), _world.Content, _world.Config,
+                _world.Map.MismatchDamage);
 
         /// <summary>The item's own words, pluralised the way the sentence reading it needs.</summary>
         private static string Plural(string word, int count)
@@ -3665,9 +3751,9 @@ namespace Facet.Game
             RebuildPanels();
         }
 
-        /// <summary>The buildings this run offers, in the table's (hotkey) order, filtered by
-        /// <see cref="SimWorld.IsUnlocked"/> - the same rule the hotkeys and the click obey, so a hidden tile is a
-        /// dead key. The table's own array comes back when nothing is hidden, so the ordinary path allocates nothing.</summary>
+        /// <summary>The buildings this run offers, in the table's order, filtered by <see cref="SimWorld.OnBar"/> -
+        /// the same rule the hotkeys and the click obey, so a hidden tile is a dead key. The table's own array comes
+        /// back when nothing is hidden, so the ordinary path allocates nothing.</summary>
         private BuildKind[] VisibleKinds()
         {
             BuildKind[] all = _world.Content.BuildKinds;
@@ -3692,9 +3778,9 @@ namespace Facet.Game
             return visible;
         }
 
-        /// <summary>Is this building on the bar: handed over, or offered by research and waiting to be bought - the
-        /// locked key with a price on it.</summary>
-        private bool OnBar(BuildKind kind) => _world.IsUnlocked(kind) || _world.Researchable(kind);
+        /// <summary>Is this building on the bar: handed over, or offered by research and waiting to be bought. The
+        /// world owns the rule, because the digit keys read the same one.</summary>
+        private bool OnBar(BuildKind kind) => _world.OnBar(kind);
 
         /// <summary>Does the bar's row of tiles still match the buildings this run offers? A map's set is fixed for the
         /// run but a tutorial's grows with its lines, so this is asked every frame. Walking the table costs no array.</summary>
@@ -3848,6 +3934,10 @@ namespace Facet.Game
             public HudText Cost;
             public RawImage CostIcon;
             public HudText Name;
+
+            /// <summary>The machine this key would place.</summary>
+            public RawImage Icon;
+
             public HudBar Afford;
             public HudBorder Border;
 
@@ -3856,6 +3946,11 @@ namespace Facet.Game
             public HudBorder Cue;
 
             public BuildKind Kind;
+
+            /// <summary>The key's place on the bar: its digit label and the key the keyboard presses. Not the
+            /// kind's ordinal, which has gaps the moment a lesson hides a building.</summary>
+            public int BarIndex;
+
             public bool Selected;
             public bool Hovered;
             public bool Affordable;
@@ -3880,6 +3975,7 @@ namespace Facet.Game
             public HudText Blurb;
             public HudText Stats;
             public HudText Facing;
+            public MachineDemo Demo;
             public HudButton TurnLeft;
             public HudButton TurnRight;
             public HudButton Inspect;

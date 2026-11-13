@@ -570,3 +570,4 @@ MonoBehaviour:
     Cost: 40
     Hint: "SORTER available - sends one shape its own way. Click its key: 40 circles."
     Lesson: []
+  MismatchDamage: 0.25
