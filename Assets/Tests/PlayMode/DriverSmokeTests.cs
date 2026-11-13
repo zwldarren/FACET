@@ -749,8 +749,16 @@ namespace Facet.PlayTests
             // The strip follows the run: a lesson that handed over one building gets one key, not a full shelf.
             // Two frames, because a map change rebuilds the panels and then dresses the new keys.
             Driver.PlayMap(2, false);
-            yield return null;
-            yield return null;
+
+            // The old bar is torn down with Destroy, which lands at the end of a frame, so for a frame or two
+            // canvas.Find("bar") can still answer with the old card and its nine keys. Wait for the rebuild to
+            // settle rather than for one frame - the assertions below are unchanged.
+            for (int frame = 0; frame < 10; frame++)
+            {
+                yield return null;
+                var settling = canvas.Find("bar/tiles") as RectTransform;
+                if (settling != null && KeyCount(settling) == 1) break;
+            }
 
             var lessonRow = canvas.Find("bar/tiles") as RectTransform;
             Assert.IsNotNull(lessonRow, "the lesson's bar is the same card and the same row");
