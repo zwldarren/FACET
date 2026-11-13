@@ -707,11 +707,12 @@ namespace Facet.Game
         /// <summary>A card's three surfaces, adopted: the cast shadow, the fill and the milled edge. The card's name is
         /// spelled once here, so an asset's node names and this builder agree by convention (<c>status.shadow</c>,
         /// <c>status.back</c>, <c>status.frame</c>).</summary>
-        private void AdoptCard(RectTransform root, string name, float radius = HudRadius)
+        private HudBox AdoptCard(RectTransform root, string name, float radius = HudRadius)
         {
             HudUi.AdoptShadow(HudUi.Child(root, name + ".shadow"), radius, _palette.HudShadow);
-            HudUi.AdoptRound(HudUi.Child(root, name + ".back"), _palette.HudPanel, radius);
+            HudBox back = HudUi.AdoptRound(HudUi.Child(root, name + ".back"), _palette.HudPanel, radius);
             HudUi.AdoptBorder(HudUi.Child(root, name + ".frame"), HudInk.Edge(_palette), radius);
+            return back;
         }
 
         /// <summary>One row of chips, hidden until a wave is briefed into them; the prefab carries the six slots and
@@ -933,7 +934,8 @@ namespace Facet.Game
                 HudLayout.Stockpile(Screen.width, _scale), PlaceCorner.TopLeft);
             var panel = new StockpilePanel { Root = root };
 
-            AdoptCard(root, "stockpile");
+            // Lifted off the status card beside it, so the stockpile and the status read as two objects.
+            AdoptCard(root, "stockpile").Set(HudInk.Raised(_palette));
             panel.Number = BindLabel(root, "number", HudType.Display, FontStyle.Bold,
                 TextAnchor.MiddleLeft, tracked: true);
 
@@ -1180,7 +1182,7 @@ namespace Facet.Game
             RectTransform root = BindPanel(BannerPrefab, "banner", rect, PlaceCorner.TopCentre);
             var panel = new BannerPanel { Root = root };
 
-            AdoptCard(root, "banner", BannerRadius);
+            panel.Back = AdoptCard(root, "banner", BannerRadius);
             panel.Label = BindLabel(root, "label", HudType.Display, FontStyle.Bold,
                 TextAnchor.MiddleCenter, wrap: true, tracked: true);
 
@@ -1207,7 +1209,7 @@ namespace Facet.Game
             panel.Group.interactable = false;
             panel.Group.alpha = 0f;
 
-            HudUi.AdoptShadow(HudUi.Child(root, "toast.shadow"), ToastRadius, _palette.HudShadow);
+            HudUi.AdoptShadow(HudUi.Child(root, "toast.shadow"), ToastRadius, HudInk.LayerShadow(_palette));
             panel.Back = HudUi.AdoptRound(HudUi.Child(root, "toast.back"), _palette.HudPanel, ToastRadius);
             // The frame is the ink the strip is speaking in - a refusal's warning, a notice's accent - and it is
             // the one surface on the HUD drawn two units thick.
@@ -1673,9 +1675,11 @@ namespace Facet.Game
 
             _refusalAlpha = refused ? fade : 0f;
             _toast.Group.alpha = fade;
-            _toast.Back.Set(_palette.HudPanel);
+            // The strip's fill is its voice too, so it reads as a layer that just arrived rather than one more
+            // card in the column above it; the words go to paper, which keeps them 7:1 on either fill.
+            _toast.Back.Set(HudInk.Voice(_palette, ink));
             _toast.Frame.Set(ink);
-            _toast.Label.Set(text, ink);
+            _toast.Label.Set(text, _palette.HudText);
 
             // Laid out when the sentence changes rather than every frame: its width comes from a measured preferred
             // height, which is this method's expensive call. It also moves with the task card above it.
@@ -2111,7 +2115,7 @@ namespace Facet.Game
                 {
                     HudUi.TopLeft(chip.Name.Rect, x + 5f * _scale + countWidth + 4f * _scale,
                         textTop * _scale, nameWidth + 2f * _scale, 12f * _scale);
-                    chip.Name.SetColour(HudInk.Muted(_palette));
+                    chip.Name.SetColour(HudInk.Quiet(_palette));
                 }
 
                 if (chip.Icon != null)
@@ -2424,8 +2428,8 @@ namespace Facet.Game
                     }
                     else
                     {
-                        tile.Border.Set(HudInk.Blend(HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.18f),
-                            _palette.HudAccent, Mathf.Clamp01(fresh / FreshSeconds)));
+                        tile.Border.Set(HudInk.Blend(HudInk.Seam(_palette), _palette.HudAccent,
+                            Mathf.Clamp01(fresh / FreshSeconds)));
                     }
                 }
 
@@ -2500,31 +2504,40 @@ namespace Facet.Game
         private void DressBuildTile(BuildTile tile)
         {
             // The tile wears one ink level plus the one focus colour: roles are words on the card, not hues on the keys.
-            Color fill = HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.11f);
-            if (tile.Selected) fill = HudInk.Blend(_palette.HudPanel, _palette.HudAccent, 0.22f);
-            else if (tile.Hovered) fill = HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.19f);
-            else if (!tile.Affordable) fill = HudInk.Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.08f);
+            // Each state is its own step against the plate and against the others: a key at rest is lifted 1.6:1
+            // off the plate, a hovered one 1.4:1 above that, a selected one is the focus hue at 3:1 off the plate,
+            // and a key the stockpile cannot cover sinks back to the plate's level with an amber hairline. A locked
+            // key sits halfway back to the plate until the pointer finds it.
+            Color fill = HudInk.Raised(_palette);
+            if (tile.Selected) fill = HudInk.Blend(_palette.HudPanel, _palette.HudAccent, 0.52f);
+            else if (tile.Hovered) fill = HudInk.Hovered(_palette);
+            else if (!tile.Affordable) fill = HudInk.Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.10f);
             if (tile.Locked && !tile.Hovered) fill = HudInk.Blend(fill, _palette.HudPanel, 0.45f);
             tile.Button.Fill.Set(fill);
 
             tile.Keycap.Set(tile.Selected
-                ? HudInk.Blend(_palette.HudPanel, _palette.HudAccent, 0.40f)
-                : HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.18f));
+                ? HudInk.Blend(_palette.HudPanel, _palette.HudAccent, 0.70f)
+                : HudInk.Seam(_palette));
 
             // Every tile keeps a hairline, so eleven surfaces read as eleven keys rather than one dark strip.
             tile.Border.Show(true);
             tile.Border.Set(tile.Selected
                 ? _palette.HudAccent
                 : tile.Hovered
-                    ? HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.38f)
-                    : HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.18f));
+                    ? HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.50f)
+                    : tile.Affordable
+                        ? HudInk.Seam(_palette)
+                        : HudInk.Blend(_palette.HudPanel, _palette.CursorNoFunds, 0.55f));
 
-            tile.Hotkey.SetColour(tile.Selected ? _palette.HudText : HudInk.Muted(_palette));
+            // The digit is printed on its keycap: paper on the grey cap (6:1), card ink on the selected one's
+            // bright focus cap (4.9:1), so the selected key's cap reads inverted.
+            bool lit = tile.Selected || tile.Hovered;
+            tile.Hotkey.SetColour(tile.Selected ? _palette.HudPanel : _palette.HudText);
 
             // The cost turns amber when the answer is no - the same colour the cursor ghost and the resource band
             // use for the same fact.
             tile.Cost.SetColour(tile.Affordable
-                ? (tile.Selected ? _palette.HudText : HudInk.Muted(_palette))
+                ? (lit ? _palette.HudText : HudInk.Quiet(_palette))
                 : _palette.CursorNoFunds);
 
             tile.Name.SetColour(tile.Affordable ? _palette.HudText : HudInk.Muted(_palette));
@@ -3513,7 +3526,11 @@ namespace Facet.Game
             _bannerShown = show;
             _bannerText = show ? text : null;
             _banner.Root.gameObject.SetActive(show);
-            if (show) _banner.Label.Set(text, colour);
+            if (show)
+            {
+                _banner.Back.Set(HudInk.Voice(_palette, colour));
+                _banner.Label.Set(text, _palette.HudText);
+            }
         }
 
         private string StatsLine()
@@ -3572,12 +3589,13 @@ namespace Facet.Game
         /// <summary>A control without a surface: one step off the card, no edge until the pointer arrives.</summary>
         private void DressGhost(HudButton button)
         {
+            // Its own small step, not Raised: a ghost's muted words would drop to 3.5:1 on a lifted fill.
             button.Fill.Set(button.Hovered
-                ? HudInk.Raised(_palette)
+                ? HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.07f)
                 : HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.045f));
             button.Border.Set(button.Hovered
                 ? HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.30f)
-                : HudInk.Edge(_palette));
+                : HudInk.Blend(_palette.HudPanel, _palette.HudText, 0.11f));
         }
 
         // ------------------------------------------------------------------ the button handlers
@@ -3790,6 +3808,7 @@ namespace Facet.Game
         private sealed class BannerPanel
         {
             public RectTransform Root;
+            public HudBox Back;
             public HudText Label;
         }
 
