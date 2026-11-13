@@ -21,14 +21,16 @@ namespace Facet.Game
 
         public const float StatusHeight = 153f;
 
-        /// <summary>The top-right cluster: a small wave button, three square buttons, and MENU.</summary>
-        public const float ControlsWidth = 224f;
+        /// <summary>The top-right cluster: the start-wave button, three square buttons, and MENU.</summary>
         public const float ControlsHeight = 34f;
 
         // The wave and menu buttons are wider than the squares: they carry words, not glyphs.
-        public const float WaveButtonWidth = 54f;
+        public const float WaveButtonWidth = 128f;
         public const float MenuButtonWidth = 44f;
         public const float ControlGap = 6f;
+
+        public const float ControlsWidth =
+            WaveButtonWidth + 4f * ControlGap + 3f * ControlsHeight + MenuButtonWidth;
 
         /// <summary>Wide enough for the keyboard list: the card is reference material and is not read at a
         /// glance.</summary>

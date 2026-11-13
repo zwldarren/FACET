@@ -872,7 +872,8 @@ namespace Facet.Game
                 HudLayout.Controls(Screen.width, _scale), PlaceCorner.TopRight);
             var panel = new ControlsPanel { Root = root };
 
-            panel.Wave = BindButton(root, "wave", HudType.Micro, _palette.HudPanel, "WAVE", PressWave);
+            panel.Wave = BindButton(root, "wave", HudType.Label, _palette.HudPanel, "START WAVE", PressWave);
+            AutoFit(panel.Wave.Label, HudType.Micro);
             panel.Wave.Root.gameObject.SetActive(false);
 
             panel.Pause = BindButton(root, "pause", HudType.Body, _palette.HudText, string.Empty, PressPause);
@@ -2341,7 +2342,7 @@ namespace Facet.Game
 
             if (_controls.Wave.Root.gameObject.activeSelf != canWave)
                 _controls.Wave.Root.gameObject.SetActive(canWave);
-            if (canWave) _controls.Wave.Label.Set("WAVE " + _world.Waves.NextWave);
+            if (canWave) _controls.Wave.Label.Set("START WAVE " + _world.Waves.NextWave);
         }
 
         private void SetHelpOpen(bool open)

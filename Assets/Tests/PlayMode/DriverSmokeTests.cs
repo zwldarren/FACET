@@ -589,6 +589,30 @@ namespace Facet.PlayTests
             Assert.AreEqual(12f * s, bars.sizeDelta.y, 0.5f, "and its design height");
         }
 
+        /// <summary>The wave button names the action, in words that fit its pill.</summary>
+        [UnityTest]
+        public IEnumerator TheWaveButton_NamesTheAction_AndItsWordsFitThePill()
+        {
+            yield return null;
+            BeginRun();
+            yield return null;   // the first controls pass after the rebuild writes the label
+
+            var hud = _driverObject.GetComponentInChildren<HudView>(true);
+            Transform wave = hud.transform.Find("HudCanvas/controls/wave");
+            Assert.IsNotNull(wave, "the cluster carries the wave button");
+            Assert.IsTrue(wave.gameObject.activeSelf, "a run that opens held offers the wave");
+
+            var button = wave.GetComponent<HudButton>();
+            Assert.IsNotNull(button, "and the node is the button the cluster binds");
+            Assert.AreEqual("START WAVE 1", button.Label.Text.text,
+                "the pill's word is the action it performs, not the phase's name");
+
+            button.Label.Text.ForceMeshUpdate();
+            float s = HudLayout.Scale(Screen.height);
+            Assert.LessOrEqual(button.Label.PreferredWidth, (HudLayout.WaveButtonWidth - 8f) * s + 0.5f,
+                "the word fits inside the pill, with its 4-unit inset each side");
+        }
+
         /// <summary>The build bar is a prefab (<c>Resources/Hud/HudBar</c>) and so is a key (<c>Resources/Hud/HudBarTile</c>).
         /// The bar's length is the run's, so this reads both ends: the full table, and the strip a lesson opens.</summary>
         [UnityTest]
