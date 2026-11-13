@@ -127,15 +127,16 @@ namespace Facet.Tests
             Assert.IsTrue(world.Terrain.HasOre(WestVein), "the vein is there to mine");
             Assert.AreEqual(0, world.Enemies.AliveCount);
 
+            Next(world);                                                        // "Look around"
             Next(world);                                                        // "The west opens"
             Sim.Place(world, BuildKind.Turret, new Int2(6, 4), Dir.East);
-            Until(world, 24, 2);                                                // a third turret, anywhere
+            Until(world, 25, 2);                                                // a third turret, anywhere
             Sim.Drag(world, new Int2(3, 3), new Int2(6, 4));                    // its feed from the new vein
             Assert.IsTrue(world.Belts.Has(new Int2(6, 3)), "the run turns up into the turret");
-            Until(world, 25, 600);                                              // all three armed
+            Until(world, 26, 600);                                              // all three armed
 
             world.Tick(new InputCommand(startWavePressed: true));
-            Until(world, 26, 2);                                                // wave 3 called
+            Until(world, 27, 2);                                                // wave 3 called
 
             for (int i = 0; i < 30 * 180 && world.Status == GameStatus.Playing; i++) world.Tick(InputCommand.None);
             Assert.AreEqual(GameStatus.Won, world.Status, "the lesson's three waves are the run");

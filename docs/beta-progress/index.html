@@ -109,9 +109,9 @@
         var buildUrl = "Build";
         var config = {
           arguments: [],
-          dataUrl: buildUrl + "/WebGL.data.unityweb",
-          frameworkUrl: buildUrl + "/WebGL.framework.js.unityweb",
-          codeUrl: buildUrl + "/WebGL.wasm.unityweb",
+          dataUrl: buildUrl + "/FACET-Web-2026-11-06.data.unityweb",
+          frameworkUrl: buildUrl + "/FACET-Web-2026-11-06.framework.js.unityweb",
+          codeUrl: buildUrl + "/FACET-Web-2026-11-06.wasm.unityweb",
           streamingAssetsUrl: "StreamingAssets",
           companyName: "DefaultCompany",
           productName: "FACET",
@@ -164,7 +164,7 @@
         };
 
         var script = document.createElement("script");
-        script.src = buildUrl + "/WebGL.loader.js";
+        script.src = buildUrl + "/FACET-Web-2026-11-06.loader.js";
         script.onload = function () {
           createUnityInstance(canvas, config, progress).then(function () {
             loading.hidden = true;
