@@ -326,6 +326,49 @@ namespace Facet.PlayTests
         }
 
         [UnityTest]
+        public IEnumerator TheBuildCard_ShowsTheBuildingAtWork_InsteadOfAParagraph()
+        {
+            yield return null;
+            Driver.PlayMap(0, false);
+            yield return null;
+
+            Key("Belt").GetComponent<HudButton>().Pressed.Invoke();
+            for (int i = 0; i < 60 && Driver.World.SelectedKind != BuildKind.Belt; i++)
+                yield return new WaitForSeconds(0.02f);
+            yield return null;
+            yield return null;
+
+            Transform build = Hud.transform.Find("HudCanvas/info/build");
+            Assert.IsNotNull(build, "the info card's build face");
+            Assert.IsTrue(build.gameObject.activeInHierarchy, "is up for the building in hand");
+
+            Transform demo = build.Find("demo");
+            Assert.IsNotNull(demo, "the card carries a demo");
+            Assert.IsTrue(demo.gameObject.activeSelf, "and plays it");
+            Assert.IsFalse(build.Find("blurb").gameObject.activeSelf, "in place of the paragraph");
+            Assert.IsFalse(build.Find("stats").gameObject.activeSelf, "and the numbers under it");
+
+            int items = 0;
+            foreach (Transform child in demo)
+                if (child.name.StartsWith("item") && child.gameObject.activeSelf) items++;
+            Assert.Greater(items, 0, "with shapes riding through it");
+
+            // The demo sits inside the card, between the header and the facing line.
+            var card = (RectTransform)Hud.transform.Find("HudCanvas/info");
+            var strip = (RectTransform)demo;
+            Assert.LessOrEqual(strip.sizeDelta.x, card.sizeDelta.x, "no wider than the card");
+            Assert.Greater(strip.sizeDelta.y, 0f);
+        }
+
+        [Test]
+        public void EveryBuildingTheBarOffers_HasADemo()
+        {
+            foreach (BuildKind kind in BuildCatalog.All)
+                if (!BuildCatalog.Retired(kind))
+                    Assert.IsTrue(MachineDemo.Covers(kind), kind + " has no demo for its card");
+        }
+
+        [UnityTest]
         public IEnumerator AnEndlessLoss_ReportsTheWavesHeld_AndKeepsTheBest()
         {
             yield return null;

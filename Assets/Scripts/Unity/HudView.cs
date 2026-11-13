@@ -1121,6 +1121,11 @@ namespace Facet.Game
                 TextAnchor.MiddleLeft, tracked: true);
             AutoFit(panel.Facing, 8f);
 
+            // What the building does, shown rather than told: a looping picture over the room the sentences used to
+            // take. A building without one keeps its sentences.
+            panel.Demo = new MachineDemo(_palette, _icons);
+            panel.Demo.Build(panel.BuildRoot);
+
             // The card's three quiet actions along its bottom edge: the two that turn the ghost, and the door to
             // the face that reads the map. The asset places them off the right edge, where the arithmetic used to be.
             panel.TurnLeft = BindButton(panel.BuildRoot, "turnL", HudType.Label, _palette.HudText, "<",
@@ -2712,6 +2717,9 @@ namespace Facet.Game
                     RefreshBuildInfo(kind);
                 }
 
+                // The demo plays every frame: it is an animation, not a sentence that changes with the building.
+                ShowInfoDemo(kind);
+
                 // The facing is the ghost's and Q/E move it: the one line on the build card that answers to the
                 // keyboard. A cutter names the cut instead of the arrow, and it flips as the ghost turns.
                 int facing = (int)_world.PlacementDirection;
@@ -2784,9 +2792,33 @@ namespace Facet.Game
             _info.Stats.Show(hasStats);
             if (hasStats) _info.Stats.Set(stats, HudInk.Muted(_palette));
 
+            // A building with a demo is shown at work instead of described: the picture takes the sentences' room,
+            // and the header above it still says the price and whether it is locked.
+            bool demo = MachineDemo.Covers(kind);
+            _info.Blurb.Show(!demo);
+            if (demo) _info.Stats.Show(false);
+            else _info.Demo.Hide();
+
             // The card's height is fixed, so a building with no stats leaves a gap rather than moving the
             // buttons under the pointer. All five places are the asset's.
             _info.Facing.Set(GhostFacing(kind), HudInk.Muted(_palette));
+        }
+
+        /// <summary>Play the build card's demo over the room the blurb and the stats share in the asset.</summary>
+        private void ShowInfoDemo(BuildKind kind)
+        {
+            if (_info.Demo == null || !MachineDemo.Covers(kind))
+            {
+                _info.Demo?.Hide();
+                return;
+            }
+
+            RectTransform blurb = _info.Blurb.Rect;
+            RectTransform stats = _info.Stats.Rect;
+            float x = blurb.anchoredPosition.x;
+            float top = -blurb.anchoredPosition.y;
+            float bottom = Mathf.Max(top + blurb.sizeDelta.y, -stats.anchoredPosition.y + stats.sizeDelta.y);
+            _info.Demo.Show(kind, x, top, blurb.sizeDelta.x, bottom - top, _scale, _world.Content.Machine(kind).Name);
         }
 
         /// <summary>The build card's facing line for the placement it describes, from the same note the built card
@@ -3694,10 +3726,11 @@ namespace Facet.Game
             MachineReading.RoleLabel(MachineReading.Role(_world.Content.Machine(kind)));
 
         private string Blurb(BuildKind kind) =>
-            MachineReading.Blurb(_world.Content.Machine(kind), _world.Content);
+            MachineReading.Blurb(_world.Content.Machine(kind), _world.Content, _world.Map.MismatchDamage);
 
         private string Stats(BuildKind kind) =>
-            MachineReading.Stats(_world.Content.Machine(kind), _world.Content, _world.Config);
+            MachineReading.Stats(_world.Content.Machine(kind), _world.Content, _world.Config,
+                _world.Map.MismatchDamage);
 
         /// <summary>The item's own words, pluralised the way the sentence reading it needs.</summary>
         private static string Plural(string word, int count)
@@ -3942,6 +3975,7 @@ namespace Facet.Game
             public HudText Blurb;
             public HudText Stats;
             public HudText Facing;
+            public MachineDemo Demo;
             public HudButton TurnLeft;
             public HudButton TurnRight;
             public HudButton Inspect;

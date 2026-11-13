@@ -120,6 +120,7 @@ namespace Facet.Core
             Machines = new MachineField(TileGrid, Terrain, Belts, Content, Events, Map);
             _paths = new PathField(TileGrid, Terrain, Machines, Content);
             Enemies = new EnemyField(Content, Events, TileGrid, Terrain, Machines, _paths);
+            Enemies.ResistedMultiplier = map.MismatchDamage;
             Projectiles = new ProjectileField();
             Waves = new WaveDirector(Enemies, map, Events, Config.FreshSeed);
             Economy = new EconomyState(Content, map.StartShapes);
