@@ -69,6 +69,10 @@ namespace Facet.Game
         private Shape _canvasCode;
         private Icon _canvas;
 
+        /// <summary>Unfitted pictures by item code, for a view that shows several at once - the lesson's machine
+        /// demo, where a top half has to look like a top half and not like a whole item.</summary>
+        private readonly Icon[] _wholeByCode = new Icon[256];
+
         private readonly Color32[] _pixels = new Color32[Size * Size];
 
         /// <summary>Scratch for one build: each filled quadrant's point list (moved by the mineral's own
@@ -138,9 +142,21 @@ namespace Facet.Game
         /// happens through <see cref="Free"/>: in the Editor, outside play mode, <c>Destroy</c> is refused
         /// (an object is destroyed permanently there), so a preview that freed its pictures this way would
         /// log an error per texture and leak every one of them.</summary>
+        /// <summary>The unfitted picture of an item, cached per item like <see cref="Mark"/>.</summary>
+        public Icon Whole(Shape shape)
+        {
+            int code = (int)shape.Code;
+            if (shape.IsEmpty || code <= 0 || code >= _wholeByCode.Length) return default;
+            if (_wholeByCode[code].Valid) return _wholeByCode[code];
+
+            _wholeByCode[code] = Build(shape, fit: false);
+            return _wholeByCode[code];
+        }
+
         public void Dispose()
         {
             for (int i = 0; i < _byCode.Length; i++) Free(ref _byCode[i]);
+            for (int i = 0; i < _wholeByCode.Length; i++) Free(ref _wholeByCode[i]);
 
             Free(ref _canvas);
             _canvasCode = Shape.None;

@@ -339,19 +339,21 @@ namespace Facet.Game
         public sealed class BeltLook
         {
             [Tooltip("Half the width of a belt strip. Neighbouring belts connect edge to edge, " +
-                "so the gap between two parallel lines is what keeps the tile grid reading.")]
-            public float HalfWidth = 0.17f;
+                "so the gap between two parallel lines is what keeps the tile grid reading. Wide enough " +
+                "to carry an item: a strip narrower than the piece riding it reads as a wire under a coin " +
+                "rather than as a conveyor.")]
+            public float HalfWidth = 0.21f;
 
             [Tooltip("Direction chevron: how far the tip reaches toward the next cell.")]
             public float ChevronLength = 0.20f;
             [Tooltip("Direction chevron: how far the base sits behind the cell centre.")]
             public float ChevronBack = 0.12f;
             [Tooltip("Direction chevron: half the base width.")]
-            public float ChevronHalfWidth = 0.18f;
+            public float ChevronHalfWidth = 0.19f;
 
             [Tooltip("Rail thickness in tiles: the darker edge drawn outside the bed on both sides. 0 draws no " +
                 "rails.")]
-            public float RailWidth = 0.045f;
+            public float RailWidth = 0.05f;
 
             [Tooltip("How many segments the outer arc of a turning belt is drawn with. A turn is a quarter " +
                 "circle rather than a square elbow; 1 draws the old square corner's chamfer.")]
@@ -422,7 +424,7 @@ namespace Facet.Game
             [Tooltip("Splitter: hub half size. The hub is a box the port stubs dock into.")]
             public float SplitterHubHalfSize = 0.30f;
             [Tooltip("Splitter: port stub half width, matched to the belt strip.")]
-            public float SplitterStubHalfWidth = 0.17f;
+            public float SplitterStubHalfWidth = 0.21f;
 
             [Tooltip("Wall: inset from the tile edge, in tiles. A wall is a plain block, a touch smaller " +
                 "than its cell so the grid still reads between two of them.")]
@@ -540,6 +542,22 @@ namespace Facet.Game
                 "big enough for a millimetre of rounding to read at the default zoom, and it is the one the " +
                 "eye should stop on.")]
             public float CornerRadius = 0.12f;
+
+            [Tooltip("Corner radius of the emblem, in tiles, capped at a fifth of its side. Cut with the same " +
+                "rounding as the block, so the mark reads as set into the slab rather than punched out of it.")]
+            public float EmblemRadius = 0.12f;
+
+            [Tooltip("How far in from the emblem's edge its rule sits, in tiles. The emblem is a plate rather than a " +
+                "hole, and one light rule inside it is the whole of what that takes: a hairline the printed way, " +
+                "held at a constant number of pixels so it survives the zoom instead of thinning away.")]
+            public float EmblemRuleInset = 0.16f;
+
+            [Tooltip("The rule's width in screen pixels.")]
+            public float EmblemRulePixels = 1.6f;
+
+            [Tooltip("How far the rule is lifted toward the block's colour. The plate is already the darkest thing " +
+                "on the map, so a rule darker than it would not be there at all.")]
+            [Range(0f, 1f)] public float EmblemRuleLight = 0.55f;
         }
 
         [Serializable]

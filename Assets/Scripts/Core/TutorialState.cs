@@ -37,6 +37,10 @@ namespace Facet.Core
         /// is the announcement, so there is no countdown between the sentence and the wave.</summary>
         private readonly WaveDirector _waves;
 
+        /// <summary>The run's research, for a lesson about a building that has to be bought. Null on a map's own
+        /// lesson, which hands its buildings over itself.</summary>
+        private readonly ResearchState _research;
+
         /// <summary>The buildings the run offers right now: the script's starting set plus every ticked
         /// line's <see cref="TutorialTask.Opens"/>. Rebuilt on the tick a line is ticked and read every frame
         /// by the HUD, so the rebuild happens once and the read stays a walk of a handful of entries.</summary>
@@ -64,8 +68,9 @@ namespace Facet.Core
         private BuildKind? _selected;
 
         public TutorialState(TutorialScript script, MachineField machines, BeltField belts,
-            EconomyState economy, WaveDirector waves)
+            EconomyState economy, WaveDirector waves, ResearchState research = null)
         {
+            _research = research;
             _script = script;
             _machines = machines ?? throw new ArgumentNullException(nameof(machines));
             _belts = belts ?? throw new ArgumentNullException(nameof(belts));
@@ -105,6 +110,8 @@ namespace Facet.Core
 
         /// <summary>Is this lesson taught by the coach (popup, boxes, a HUD revealed piece by piece)?</summary>
         public bool Coached => Active && _script.Coached;
+        /// <summary>Is this lesson taught with the spotlight (<see cref="TutorialScript.Spotlight"/>)?</summary>
+        public bool Spotlight => _script.Spotlight;
 
         /// <summary>Is the current line an explanation waiting for the player's "next"?</summary>
         public bool WaitsForAcknowledge => Active && !Complete && Current.Step == TutorialStep.Acknowledge;
@@ -322,8 +329,48 @@ namespace Facet.Core
                 case TutorialStep.StartWave:
                     return _waveCalled;
 
+                case TutorialStep.ResearchBuilding:
+                    return TryLineBuilding(out BuildKind bought) && _research != null && _research.Researched(bought);
+
+                case TutorialStep.SelectBuilding:
+                    return TryLineBuilding(out BuildKind held)
+                        && (_selected == held || _machines.CountOf(held) > 0);
+
+                case TutorialStep.PlaceBuilding:
+                    return TryLineBuilding(out BuildKind stands) && _machines.CountOf(stands) > 0;
+
+                case TutorialStep.TwoTurretsArmed:
+                    _machines.CountTurrets(out int _, out int loadedGuns);
+                    return loadedGuns >= 2;
+
+                case TutorialStep.AnyTurretHoldsWaveShape:
+                    return AnyTurretHoldsWaveShape();
+
                 case TutorialStep.ClearWave:
                     return _waves.Finished;
+
+                case TutorialStep.ClearedWave:
+                    return _script[_index].Wave > 0 && _waves.ClearedWaves >= _script[_index].Wave;
+
+                case TutorialStep.PlaceTurretAtTarget:
+                    return TryLessonMachine(BehaviorKind.Turret, out _);
+
+                case TutorialStep.ArmTurretAtTarget:
+                    return TryLessonMachine(BehaviorKind.Turret, out MachineSnapshot lessonGun)
+                           && !lessonGun.Shape.IsEmpty;
+
+                case TutorialStep.TurretCount:
+                    // A line with no count is broken data, not "at least no turrets": it would pass before the
+                    // player built anything. The authoring surface reports it; here it simply never ticks, the
+                    // same answer every other unreadable line gives.
+                    if (_script[_index].Turrets < 1) return false;
+                    _machines.CountTurrets(out int turrets, out _);
+                    return turrets >= _script[_index].Turrets;
+
+                case TutorialStep.ArmedTurretCount:
+                    if (_script[_index].Turrets < 1) return false;
+                    _machines.CountTurrets(out _, out int armedTurrets);
+                    return armedTurrets >= _script[_index].Turrets;
 
                 default:
                     // A line carrying <see cref="TutorialScript.NoStep"/> is broken data, reported by the map
@@ -360,6 +407,32 @@ namespace Facet.Core
             for (int i = 0; i < task.Ghost.Length; i++)
                 if (task.Ghost[i].Build == build)
                     return task.Ghost[i].Direction == facing;
+            return false;
+        }
+
+        /// <summary>The building a line without a blueprint is about.</summary>
+        private bool TryLineBuilding(out BuildKind building)
+        {
+            BuildKind[] opens = _script[_index].Opens;
+            building = opens.Length > 0 ? opens[0] : BuildKind.Belt;
+            return opens.Length > 0;
+        }
+
+        private bool AnyTurretHoldsWaveShape()
+        {
+            WaveDefinition wave = _waves.NextWaveDefinition;
+            if (wave == null) return false;
+
+            _machines.GetMachines(_machineScratch);
+            for (int m = 0; m < _machineScratch.Count; m++)
+            {
+                MachineSnapshot gun = _machineScratch[m];
+                if (gun.Behavior != BehaviorKind.Turret || gun.Shape.IsEmpty) continue;
+
+                for (int g = 0; g < wave.Groups.Length; g++)
+                    if (wave.Groups[g].Weakness == gun.Shape) return true;
+            }
+
             return false;
         }
 

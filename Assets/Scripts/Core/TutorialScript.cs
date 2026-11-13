@@ -113,6 +113,54 @@ namespace Facet.Core
         /// <summary>The turret at the task target holds a round the coming wave is weak to. Read from the
         /// chamber and the wave's own briefing, so a gun holding any other shape cannot pass the line.</summary>
         LoadWaveShape = 23,
+
+        // Appended after the cutter and rotator lessons: the first map's second wave, and the room it opens.
+        /// <summary>The wave named by <see cref="TutorialTask.Wave"/> has been cleared. The line that keeps the
+        /// popup up while a wave is fought on a level with more than one wave: <see cref="ClearWave"/> can only
+        /// say "every wave", which is the run's end, and a lesson about what the next wave needs has to tick in
+        /// the pause after the one before it.</summary>
+        ClearedWave = 24,
+
+        /// <summary>A turret stands at the line's target. <see cref="PlaceTurret"/> counts any turret, so on a
+        /// map that has already taught its first gun it would tick before the player read a lesson about a
+        /// second one. This is the target-specific half of the same rule, like <see cref="PlaceCutter"/>.</summary>
+        PlaceTurretAtTarget = 25,
+
+        /// <summary>The turret at the line's target holds a round: the second gun is fed, not just built. The
+        /// pair with <see cref="PlaceTurretAtTarget"/> is what <see cref="ArmTurret"/> is for a map with one gun
+        /// to teach - the fact is the same chamber either way.</summary>
+        ArmTurretAtTarget = 26,
+
+        // Appended after the target-specific pair: a later turret a lesson only needs to exist, not to stand
+        // on one authored tile. A tutorial's job is to teach a decision, and where the second and third gun go
+        // is the player's - a fixed tile there turns a sandbox into a click-the-glowing-square drill.
+        /// <summary>At least <see cref="TutorialTask.Turrets"/> turrets stand anywhere on the map. For a lesson
+        /// that has already taught one gun and now wants a second (or third) line without prescribing the
+        /// tile: the target-specific pair stays for lessons where the layout itself is the thing taught.</summary>
+        TurretCount = 27,
+
+        /// <summary>At least <see cref="TutorialTask.Turrets"/> turrets are armed anywhere on the map. The
+        /// companion to <see cref="TurretCount"/>, and the fact a wave is survived by: a gun with nothing in
+        /// its chamber is a wall.</summary>
+        ArmedTurretCount = 28,
+
+        // Appended after the first map's wave and turret-count steps: the research lessons' rules (Frontier).
+        /// <summary>The line's building (the first of <see cref="TutorialTask.Opens"/>) has been researched. The
+        /// steps below name their building that way because a research lesson has no blueprint: the player's
+        /// factory is their own, so these are facts about the run rather than about a tile.</summary>
+        ResearchBuilding = 29,
+
+        /// <summary>The line's building is in the player's hand, or one already stands.</summary>
+        SelectBuilding = 30,
+
+        /// <summary>The line's building stands anywhere on the map.</summary>
+        PlaceBuilding = 31,
+
+        /// <summary>Two turrets stand with a round in the chamber, whatever the round is.</summary>
+        TwoTurretsArmed = 32,
+
+        /// <summary>Any turret holds a round the coming wave is weak to.</summary>
+        AnyTurretHoldsWaveShape = 33,
     }
 
     /// <summary>What a coached line draws a box around, so the player knows where to look. Places on the map
@@ -159,6 +207,11 @@ namespace Facet.Core
 
         /// <summary>The whole build bar: where the buildings the lesson hands over appear.</summary>
         BuildBar = 12,
+
+        /// <summary>Not a box: an animated demo of the line's building (the first of its
+        /// <see cref="TutorialTask.Opens"/>) inside the popup - shapes going in and coming out, so the player
+        /// sees what the machine does instead of being walked through building one.</summary>
+        Demo = 13,
     }
 
     /// <summary>The pieces of the HUD a coached lesson shows, as flags: a coached map opens with none of them
@@ -283,9 +336,28 @@ namespace Facet.Core
         /// them.</summary>
         public readonly ShapePatch[] AddsOre;
 
+        /// <summary>Ground this line opens when it ticks: a room the map was authored without, laid down in
+        /// the authored order so a floor can be followed by the rock of its walls. The same patches are stamped
+        /// into the validator's copy (<see cref="MapDefinition.StampTerrain"/>), so a door inside a room that
+        /// opens mid-run is judged against the ground the run ends with. Empty for every line that only
+        /// teaches.</summary>
+        public readonly TerrainPatch[] AddsGround;
+
+        /// <summary>For <see cref="TutorialStep.ClearedWave"/>: the 1-based wave that must be cleared, 0 for
+        /// every other step. A number rather than a step per wave, because which wave a line waits for is the
+        /// designer's arrangement and not a rule about lessons.</summary>
+        public readonly int Wave;
+
+        /// <summary>For <see cref="TutorialStep.TurretCount"/> and <see cref="TutorialStep.ArmedTurretCount"/>:
+        /// how many turrets the line asks for - the second gun, the western gun, and any count a later lesson
+        /// needs. 0 for every other step. A number rather than a step per turret, for the same reason
+        /// <see cref="Wave"/> is: which one of a battery a lesson is about is the designer's arrangement.</summary>
+        public readonly int Turrets;
+
         public TutorialTask(TutorialStep step, string text, Int2? target, BuildKind[] opens,
             bool startsWave, string hint = null, TutorialGhost[] ghost = null, string title = null,
-            TutorialFocus[] focus = null, TutorialHud reveal = TutorialHud.None, ShapePatch[] addsOre = null)
+            TutorialFocus[] focus = null, TutorialHud reveal = TutorialHud.None, ShapePatch[] addsOre = null,
+            TerrainPatch[] addsGround = null, int wave = 0, int turrets = 0)
         {
             Step = step;
             Text = text ?? string.Empty;
@@ -298,6 +370,9 @@ namespace Facet.Core
             Focus = focus ?? new TutorialFocus[0];
             Reveal = reveal;
             AddsOre = addsOre ?? new ShapePatch[0];
+            AddsGround = addsGround ?? new TerrainPatch[0];
+            Wave = wave;
+            Turrets = turrets;
         }
     }
 
@@ -310,8 +385,10 @@ namespace Facet.Core
     ///
     /// <b>What a script changes.</b> Three things, all in <see cref="TutorialState"/>: which buildings the
     /// bottom bar offers (and therefore which hotkeys work), when the wave clock is let go, and which line
-    /// the HUD prints. Nothing else about the run moves - the map, its waves and its economy are the map's
-    /// own. That is what makes a tutorial a lesson laid over a level rather than a different kind of level.
+    /// the HUD prints. It may also lay what a line's data says - a vein (<see cref="TutorialTask.AddsOre"/>) or
+    /// a room the map was authored without (<see cref="TutorialTask.AddsGround"/>) - but those are the map's own
+    /// data replayed, not a fourth gate: the waves and the economy stay the map's. That is what makes a tutorial
+    /// a lesson laid over a level rather than a different kind of level.
     /// </summary>
     public sealed class TutorialScript
     {
@@ -352,21 +429,30 @@ namespace Facet.Core
         /// wave early, and <see cref="TutorialState.GatesWaves"/> stays false.</summary>
         public readonly bool ClockRuns;
 
+        /// <summary>Does the coach spotlight each line: dim the screen around the boxed places and set the popup
+        /// down beside them? Off, the popup keeps its one place in the left column and nothing is dimmed. Per
+        /// map, so the first tutorial can try it without changing how the other lessons look.</summary>
+        public readonly bool Spotlight;
+
         public TutorialScript(BuildKind[] starting, TutorialTask[] tasks, bool coached = false,
-            TutorialGhost[] prebuilt = null, bool clockRuns = false)
+            TutorialGhost[] prebuilt = null, bool clockRuns = false, bool spotlight = false)
         {
             Starting = starting ?? new BuildKind[0];
             Tasks = tasks ?? new TutorialTask[0];
             Coached = coached;
             Prebuilt = prebuilt ?? new TutorialGhost[0];
             ClockRuns = clockRuns;
+            Spotlight = spotlight;
         }
 
         /// <summary>Is this a step that is not about any building - an explanation to read, a wave to call or
         /// to survive? The validator skips its "is the building handed over" rule for these, since there is no
         /// building to hand over.</summary>
         public static bool NeedsNoBuilding(TutorialStep step)
-            => step == TutorialStep.Acknowledge || step == TutorialStep.StartWave || step == TutorialStep.ClearWave;
+            => step == TutorialStep.Acknowledge || step == TutorialStep.StartWave ||
+               step == TutorialStep.ClearWave || step == TutorialStep.ClearedWave
+               || step == TutorialStep.ResearchBuilding || step == TutorialStep.SelectBuilding
+               || step == TutorialStep.PlaceBuilding;
 
         /// <summary>How many lines the script has.</summary>
         public int Count => Tasks.Length;
@@ -417,10 +503,16 @@ namespace Facet.Core
                 case TutorialStep.SelectTurret:
                 case TutorialStep.PlaceCutterTurrets:
                 case TutorialStep.PlaceTurret:
+                case TutorialStep.PlaceTurretAtTarget:
                 case TutorialStep.ArmTurret:
+                case TutorialStep.ArmTurretAtTarget:
                 case TutorialStep.ArmTurretWithHalf:
                 case TutorialStep.TwoTurretsLoaded:
                 case TutorialStep.TwoTurretsLoadedAcross:
+                case TutorialStep.TurretCount:
+                case TutorialStep.ArmedTurretCount:
+                case TutorialStep.TwoTurretsArmed:
+                case TutorialStep.AnyTurretHoldsWaveShape:
                     building = BuildKind.Turret;
                     return true;
 

@@ -159,9 +159,18 @@ namespace Facet.Core
         /// wave will ask for. False for every ordinary map, whose waits are the opening's alone.</summary>
         public bool HoldEveryWait { get; set; }
 
+        /// <summary>Stop the countdown where it stands, while a research lesson is being followed. Unlike a held
+        /// wait this one does not move the wave's start and does not refuse N: a player who knows the machine
+        /// calls the wave and the lesson steps aside.</summary>
+        public bool HoldCountdown { get; set; }
+
         /// <summary>1-based number of the wave being fought, or 0 during an intermission. For printing
         /// the number; for *branching*, read <see cref="Phase"/>.</summary>
         public int CurrentWave { get; private set; }
+
+        /// <summary>How many waves this run has cleared - the highest wave survived. What research is scheduled
+        /// against, and what an endless run is scored by.</summary>
+        public int Cleared { get; private set; }
 
         /// <summary>1-based number of the wave the intermission is counting down to, 0 when none is left.
         /// <b>While a wave runs this still names that wave</b> - it is the number the clock is pointed at,
@@ -183,6 +192,11 @@ namespace Facet.Core
 
         /// <summary>True once every wave this run has has been fought and cleared.</summary>
         public bool Finished { get; private set; }
+
+        /// <summary>How many waves the run has cleared. A lesson uses it to tell "the wave I was told to
+        /// survive is over" from "the run is over" - two facts <see cref="Finished"/> alone cannot separate
+        /// on a map with more than one wave.</summary>
+        public int ClearedWaves { get; private set; }
 
         /// <summary>The wave table this director runs: the map's own data, so a different map is a
         /// different campaign without a code change here.</summary>
@@ -286,6 +300,7 @@ namespace Facet.Core
 
             _waveIndex = -1;
             CurrentWave = 0;
+            Cleared = 0;
             NextWave = HasWaves ? 1 : 0;
 
             // A table with nothing to fight is NOT a finished run: `Finished` means "every wave this run has
@@ -295,6 +310,7 @@ namespace Facet.Core
             // leans on, since its maps carry no waves at all. Marking it finished here won the run on tick 1
             // and froze the tick loop with it, so nothing advanced at all.
             Finished = false;
+            ClearedWaves = 0;
 
             // Cues granted by the lesson that just ended are the old run's and do not survive it - dropped
             // before the opening is armed, so a grant left over cannot start the new run's first wave on its
@@ -402,7 +418,7 @@ namespace Facet.Core
 
                 // A held wait lets no tick pass: the countdown a map declares is spent building (or being
                 // taught), not reading the clock.
-                if (_waitHeld) return;
+                if (_waitHeld || HoldCountdown) return;
 
                 if (_intermissionTicks > 0) _intermissionTicks--;
                 IntermissionRemaining = _intermissionTicks * SimConfig.TickDt;
@@ -502,6 +518,8 @@ namespace Facet.Core
             int cleared = CurrentWave;
             _waveIndex = -1;
             CurrentWave = 0;
+            Cleared = Math.Max(Cleared, cleared);
+            ClearedWaves++;
             _events.WaveCleared(cleared);
 
             // A run with no bound - endless mode - never runs out: the generator simply keeps answering.

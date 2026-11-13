@@ -29,14 +29,15 @@ namespace Facet.Game
         /// its edge. The ink carries the drawing and the fill only says what will be covered, so the map the
         /// line is about stays the brightest thing on the tile. Belt ghosts have always been weighted this
         /// way.</summary>
-        private const float GhostBodyAlpha = 0.38f;
+        private const float GhostBodyAlpha = 0.30f;
         private const float GhostEdgeAlpha = 0.90f;
 
         /// <summary>The belt's three alphas, all in the guide's accent rather than in the belt's own cream: a bed
-        /// in its real colour reads as a belt that was already laid, whichever way it was faded.</summary>
-        private const float GhostBeltAlpha = 0.30f;
-        private const float GhostRailAlpha = 0.50f;
-        private const float GhostArrowAlpha = 0.85f;
+        /// in its real colour reads as a belt that was already laid, whichever way it was faded. Kept low
+        /// enough that the ore under a ghost laid on a vein still reads as ore.</summary>
+        private const float GhostBeltAlpha = 0.34f;
+        private const float GhostRailAlpha = 0.62f;
+        private const float GhostArrowAlpha = 0.95f;
 
         /// <summary>Fainter than the placement ghost's own ring: the ring is context, the body is the answer to
         /// "what goes here".</summary>
@@ -269,15 +270,18 @@ namespace Facet.Game
             TutorialTask task = World.Tutorial.Current;
             TutorialGhost[] ghosts = task.Ghost;
 
-            if (World.Tutorial.Coached) AppendCoachGlow(task);
-
             if (ghosts.Length == 0)
             {
+                if (World.Tutorial.Coached) AppendCoachGlow(task);
                 AppendFallbackFrame(_seenTarget);
                 return;
             }
 
             for (int i = 0; i < ghosts.Length; i++) AppendGhost(ghosts, i);
+
+            // Over the ghosts, not under them: a wash of the same accent under a translucent bed disappears
+            // into it, and the one thing the player has to find before a drag is where the press starts.
+            if (World.Tutorial.Coached) AppendCoachGlow(task);
         }
 
         /// <summary>One ghost, in its building's own figure. A belt is drawn first because it is not a machine
@@ -352,17 +356,28 @@ namespace Facet.Game
             float rail = Mathf.Max(0f, look.RailWidth);
 
             // Two passes, rails first, like the belt view: a bed laid over its own rail would leave the
-            // neighbour's rail drawn across the joint. All three parts are the guide's accent, so the plan reads
+            // neighbour's rail drawn across the joint. All three parts are the guide's own ink, so the plan reads
             // as a plan at a glance.
+            Color ink = PlanInk;
             if (rail > 0f)
-                AppendBed(ghost.Cell, ghost.Direction, ghosts, half + rail, WithAlpha(Colors.HudAccent, GhostRailAlpha));
+                AppendBed(ghost.Cell, ghost.Direction, ghosts, half + rail, WithAlpha(ink, GhostRailAlpha));
 
-            AppendBed(ghost.Cell, ghost.Direction, ghosts, half, WithAlpha(Colors.HudAccent, GhostBeltAlpha));
+            AppendBed(ghost.Cell, ghost.Direction, ghosts, half, WithAlpha(ink, GhostBeltAlpha));
 
             AppendChevron(CellCentre(ghost.Cell), ghost.Direction,
                 look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength,
-                WithAlpha(Colors.HudAccent, GhostArrowAlpha));
+                WithAlpha(ink, GhostArrowAlpha));
         }
+
+        /// <summary>
+        /// The belt ghost's ink: the HUD accent pulled toward the outline the map is drawn with.
+        ///
+        /// The accent is a light blue chosen to sit on the HUD's dark panels; laid at a ghost's opacity over a
+        /// cream floor it is almost the floor's own value and the plan disappears. Mixed toward the ink first, the
+        /// same hue carries at a low alpha - which is what a plan needs, since it has to be seen without being
+        /// mistaken for a belt that was laid.
+        /// </summary>
+        private Color PlanInk => Color.Lerp(Colors.HudAccent, Colors.Outline, 0.35f);
 
         /// <summary>One cell's bed at a half width: the hub every lane docks into, the exit lane to the cell's
         /// edge and a lane in from every side the blueprint feeds it from.</summary>
@@ -583,38 +598,45 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>The tutorial level's "click here": a bright, breathing tile under every cell the line wants
-        /// built on, in a colour nothing else on the map uses, so the spot is found at a glance. Drawn on the
-        /// guide's plane like the rest of the blueprint, so a building placed there covers it.</summary>
+        /// <summary>The tutorial level's "click here": a breathing tile under every cell the line wants built on.
+        ///
+        /// Drawn in the lesson's own accent rather than in a colour of its own. A separate hue was the loudest
+        /// thing on the screen and it fought the blueprint it was placed under - two colours inside one orange
+        /// box, both saying "here". What has to be found before a drag is the <em>tile the press starts on</em>,
+        /// so this is one tile's accent ring with the ground showing through it, not a filled cell.
+        ///
+        /// Drawn on the guide's plane like the rest of the blueprint, so a building placed there covers it.</summary>
         private void AppendCoachGlow(TutorialTask task)
         {
             float breath = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4f);
-            Color fill = WithAlpha(CoachGlow, 0.30f + 0.30f * breath);
-            Color edge = WithAlpha(CoachGlow, 0.75f + 0.25f * breath);
-            float thickness = 0.12f;
+            Color fill = WithAlpha(Colors.HudAccent, 0.04f + 0.05f * breath);
+            Color ring = WithAlpha(Colors.HudAccent, 0.70f + 0.30f * breath);
 
             if (task.Ghost.Length == 0)
             {
-                if (task.Target.HasValue) AppendGlowCell(task.Target.Value, fill, edge, thickness);
+                if (task.Target.HasValue) AppendGlowCell(task.Target.Value, fill, ring);
                 return;
             }
 
             for (int i = 0; i < task.Ghost.Length; i++)
                 if (World.TileGrid.Get(task.Ghost[i].Cell) == TileKind.Empty)
-                    AppendGlowCell(task.Ghost[i].Cell, fill, edge, thickness);
+                    AppendGlowCell(task.Ghost[i].Cell, fill, ring);
         }
 
-        private void AppendGlowCell(Int2 cell, Color fill, Color edge, float t)
+        /// <summary>One cell's press target: a wash the ground reads through and an inset ring, both inside the
+        /// cell's edge so the ring sits on the tile rather than on its neighbour's line.</summary>
+        private void AppendGlowCell(Int2 cell, Color fill, Color ring)
         {
-            AppendRect(cell.X, cell.Y, cell.X + 1f, cell.Y + 1f, fill);
-            AppendRect(cell.X, cell.Y, cell.X + 1f, cell.Y + t, edge);
-            AppendRect(cell.X, cell.Y + 1f - t, cell.X + 1f, cell.Y + 1f, edge);
-            AppendRect(cell.X, cell.Y, cell.X + t, cell.Y + 1f, edge);
-            AppendRect(cell.X + 1f - t, cell.Y, cell.X + 1f, cell.Y + 1f, edge);
-        }
+            const float inset = 0.05f;
+            const float t = 0.11f;
+            float lo = inset, hi = 1f - inset;
 
-        /// <summary>Electric cyan: far from the warm accent, the ore's mineral colours and the ground.</summary>
-        private static readonly Color CoachGlow = new Color(0.10f, 0.92f, 1f, 1f);
+            AppendRect(cell.X + lo, cell.Y + lo, cell.X + hi, cell.Y + hi, fill);
+            AppendRect(cell.X + lo, cell.Y + lo, cell.X + hi, cell.Y + lo + t, ring);
+            AppendRect(cell.X + lo, cell.Y + hi - t, cell.X + hi, cell.Y + hi, ring);
+            AppendRect(cell.X + lo, cell.Y + lo, cell.X + lo + t, cell.Y + hi, ring);
+            AppendRect(cell.X + hi - t, cell.Y + lo, cell.X + hi, cell.Y + hi, ring);
+        }
 
         /// <summary>Kept for a line that has a target but no blueprint: a frame is the smallest honest
         /// answer.</summary>

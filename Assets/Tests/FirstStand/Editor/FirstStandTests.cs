@@ -39,12 +39,10 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void CampaignPlacesItAfterTheCutterAndBeforeTheRotator()
+        public void TheLevelIsKept_ButOutOfTheCampaign()
         {
             var campaign = AssetDatabase.LoadAssetAtPath<MapSet>("Assets/Data/Campaign.asset");
-            Assert.AreEqual("Cutter Tutorial", campaign.Maps[1].Name);
-            Assert.AreSame(Load(), campaign.Maps[2]);
-            Assert.AreEqual("Rotator Tutorial", campaign.Maps[3].Name);
+            CollectionAssert.DoesNotContain(campaign.Maps, Load());
         }
 
         [Test]

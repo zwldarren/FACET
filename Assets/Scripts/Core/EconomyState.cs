@@ -44,6 +44,16 @@ namespace Facet.Core
             return true;
         }
 
+        /// <summary>Charge an amount that is not a building's price - research. False when the stockpile cannot
+        /// cover it; a negative amount is refused rather than turned into income.</summary>
+        public bool TrySpend(int amount)
+        {
+            if (amount < 0 || Shapes < amount) return false;
+
+            Shapes -= amount;
+            return true;
+        }
+
         /// <summary>Full refund on removal: the cost gates how fast you can expand, not whether
         /// you dare to experiment. A cleared jam removes nothing and refunds nothing.</summary>
         public void Refund(BuildKind kind) => Shapes += _content.Machine(kind).Cost;

@@ -11,8 +11,8 @@ namespace Facet.Game
     /// separates a wall the <em>map</em> drew from the wall a player <em>bought</em>.
     ///
     /// The void is deliberately drawn nowhere here: it is the absence of ground, left out by the ground view, so
-    /// the background shows through. Terrain is stamped once and never moves, so this view has no rebuild reason of
-    /// its own - only the gate's, the zoom moving the screen-space rim width.</summary>
+    /// the background shows through. The ground rebuilds when the zoom moves the screen-space rim width - the gate's
+    /// reason - and when a lesson opens a room mid-run and stamps its walls, which the terrain's version reports.</summary>
     [DefaultExecutionOrder(100)]
     public sealed class TerrainRenderer : MeshView
     {
@@ -31,6 +31,19 @@ namespace Facet.Game
         {
             _grid = World.TileGrid;
             _terrain = World.Terrain;
+        }
+
+        /// <summary>The version the current mesh was built from: a lesson's reveal may stamp rock for a room's
+        /// walls, and a restart re-stamps the authored layout.</summary>
+        private int _seenVersion = -1;
+
+        protected override void Observe(in ViewFrame frame)
+        {
+            int version = World.Terrain.Version;
+            if (version == _seenVersion) return;
+
+            _seenVersion = version;
+            MarkDirty();
         }
 
         protected override void AppendFrame(in ViewFrame frame)

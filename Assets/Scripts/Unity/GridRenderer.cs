@@ -38,6 +38,19 @@ namespace Facet.Game
             _terrain = World.Terrain;
         }
 
+        /// <summary>The version the current mesh was built from. A lesson's reveal opens ground mid-run, which
+        /// is the one thing that moves the shape the grid draws; a restart re-stamps it.</summary>
+        private int _seenVersion = -1;
+
+        protected override void Observe(in ViewFrame frame)
+        {
+            int version = World.Terrain.Version;
+            if (version == _seenVersion) return;
+
+            _seenVersion = version;
+            MarkDirty();
+        }
+
         protected override void AppendFrame(in ViewFrame frame)
         {
             float half = Mathf.Max(Colors.GridLinePixels * frame.WorldPerPixel * 0.5f, MinHalfWidth);

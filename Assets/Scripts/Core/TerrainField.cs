@@ -14,8 +14,11 @@ namespace Facet.Core
     /// The ground: one <see cref="TerrainKind"/> per tile, plus the mineral under the ore tiles.
     ///
     /// Stamped once from the map's data and never moved during a run - it is the map, not a thing that
-    /// happens on it - so it needs no revision counter and no tick step, and a restart re-stamps the
-    /// identical layout.
+    /// happens on it - so it needs no tick step, and a restart re-stamps the identical layout. The one
+    /// exception is a lesson's reveal (<see cref="Reveal"/>): a tutorial line that opens a room the map
+    /// was authored without, which is a write to the map's own data replayed in the run
+    /// (<see cref="MapDefinition.StampGround"/>). Every write bumps <see cref="Version"/>, so a view that
+    /// redraws the ground needs one comparison and no tick of its own.
     ///
     /// <b>Terrain is deliberately not a <see cref="TileKind"/>.</b> The kind array answers "what is
     /// standing on this tile"; this one answers "what is the ground". A drill on a vein is
@@ -134,9 +137,25 @@ namespace Facet.Core
             Version++;
         }
 
-        /// <summary>Bumped on every write to the ground, so a view that draws it (the ore icons) knows to
-        /// redraw. The ground almost never changes mid-run - a coached lesson laying its next vein is the one
-        /// case - so a counter beats a per-frame comparison.</summary>
+        /// <summary>
+        /// Lay one lesson patch into the running world's ground - the one write a run makes to terrain, and
+        /// the reason <see cref="Version"/> exists. The patch is stamped by the map's own rule
+        /// (<see cref="MapDefinition.StampGround"/>), the same one the validator judges the map with, so the
+        /// room the player sees open is the room the door in it was validated against. A tile something stands
+        /// on is left alone: a reveal opens ground, it never buries a building.
+        /// </summary>
+        public void Reveal(MapDefinition map, TerrainPatch patch)
+        {
+            if (map == null) throw new ArgumentNullException(nameof(map));
+
+            map.StampGround(_kind, patch, cell => _grid.Get(cell) != TileKind.Empty);
+            Version++;
+        }
+
+        /// <summary>Bumped on every write to the ground, so a view that draws it (the grid, the rocks and the ore
+        /// icons) knows to redraw. The ground rarely changes mid-run - a coached lesson laying its next vein or
+        /// opening a room is the one case, and a restart re-stamps it - so a counter beats a per-frame
+        /// comparison.</summary>
         public int Version { get; private set; }
 
         /// <summary>
@@ -166,6 +185,35 @@ namespace Facet.Core
 
             Clear();
             map.StampTerrain(_kind, _mineral);
+        }
+
+        /// <summary>
+        /// The rectangle of drawn ground, in cells - the part of the map a player can see, which is what a view
+        /// frames at the start of a run. A map that holds a room back as void (<see cref="TerrainKind.Void"/>)
+        /// would otherwise open on a rectangle mostly made of the nothing it is hiding. False for a map that draws
+        /// no ground at all, which is a map with nothing to frame.
+        /// </summary>
+        public bool TryDrawnBounds(out Int2 min, out Int2 max)
+        {
+            int minX = int.MaxValue, minY = int.MaxValue;
+            int maxX = int.MinValue, maxY = int.MinValue;
+
+            for (int y = 0; y < _grid.Height; y++)
+            {
+                for (int x = 0; x < _grid.Width; x++)
+                {
+                    if (!_kind[y * _grid.Width + x].IsDrawn()) continue;
+
+                    if (x < minX) minX = x;
+                    if (y < minY) minY = y;
+                    if (x > maxX) maxX = x;
+                    if (y > maxY) maxY = y;
+                }
+            }
+
+            min = new Int2(minX, minY);
+            max = new Int2(maxX, maxY);
+            return maxX >= minX && maxY >= minY;
         }
 
         /// <summary>Wipe every tile back to plain ground. Only used by a restart, which re-stamps the
