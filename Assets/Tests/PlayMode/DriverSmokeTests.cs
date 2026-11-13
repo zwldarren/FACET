@@ -1227,11 +1227,10 @@ namespace Facet.PlayTests
             }
         }
 
-        /// <summary>The shell's help card is its own prefab (<c>Resources/Hud/ShellHelp</c>): the same keyboard and
-        /// height, wider, and no restart - a menu is not a run. Reached through the pause menu's door, which must not
-        /// tear the card down inside the press's dispatch.</summary>
+        /// <summary>No "how to play" door on the pause menu or the title: the first map is the tutorial and
+        /// teaches by doing, so the old help card is no longer a screen a player is sent to.</summary>
         [UnityTest]
-        public IEnumerator TheShellsHelpCard_IsThePrefab_AndClosesBackToThePauseMenu()
+        public IEnumerator TheMenus_HaveNoHowToPlayDoor()
         {
             yield return null;
             BeginRun();
@@ -1242,35 +1241,11 @@ namespace Facet.PlayTests
 
             driver.OpenMenu();
             yield return null;
-            Assert.IsTrue(Press(shell, "pause/card/howto"), "the door survives its own press");
-            yield return null;   // the rebuild the press asked for lands on the next frame
 
-            var card = shell.transform.Find("ShellCanvas/help") as RectTransform;
-            Assert.IsNotNull(card, "the card is the prefab's own 'help' node");
-
-            float s = HudLayout.Scale(Screen.height);
-            string[] lines = HudView.KeyLines();
-            Assert.AreEqual(HudLayout.HelpHeightFor(lines.Length) * s, card.sizeDelta.y, 0.5f,
-                "the card is as tall as the run's");
-            Assert.AreEqual(300f * s, card.sizeDelta.x, 0.5f, "and wider, because a screen has room for it");
-
-            for (int i = 0; i < lines.Length; i++)
-            {
-                Transform row = card.Find("key" + i);
-                Assert.IsNotNull(row, "the card carries row " + i);
-                var text = row.GetComponent<TMPro.TMP_Text>();
-                Assert.IsNotNull(text, "row " + i + " is a label");
-                Assert.AreEqual(lines[i], text.text, "row " + i + " prints its line");
-            }
-
-            Assert.IsNull(card.Find("restart"), "a menu is not a run: there is no restart on this card");
-            Assert.IsNotNull(card.Find("close"), "the card has its one way out");
-
-            // One press closes it, back onto the menu it came from rather than out of the run.
-            Assert.IsTrue(Press(shell, "help/close"), "the close button survives its own press");
-            yield return null;
-            Assert.IsTrue(shell.Open, "the shell still stands after its card closes");
-            Assert.IsNotNull(shell.transform.Find("ShellCanvas/pause"), "and the menu is the screen it returns to");
+            Transform door = shell.transform.Find("ShellCanvas/pause/card/howto");
+            Assert.IsTrue(door == null || !door.gameObject.activeSelf, "the pause menu has no how-to-play door");
+            Assert.IsTrue(shell.transform.Find("ShellCanvas/pause/card/resume").gameObject.activeSelf,
+                "and the doors it does have are still up");
         }
 
         /// <summary>The pause menu's far door leaves the run only on the second press - the first arms it and says

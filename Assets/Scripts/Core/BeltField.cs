@@ -261,6 +261,19 @@ namespace Facet.Core
         public bool TrySpawnItem(Int2 cell, Shape shape)
             => Has(cell) && TrySpawnItem(cell, shape, _state[_grid.Index(cell)].Direction);
 
+        /// <summary>Put a freshly mined piece on a belt that stands on ore: it starts at the cell's centre - where
+        /// the vein's figure is drawn - and rides out to the exit, so it is seen leaving the ore rather than
+        /// coming in from the tile behind it. Same refusals as <see cref="TrySpawnItem(Int2, Shape)"/>.</summary>
+        public bool TrySpawnMined(Int2 cell, Shape shape)
+        {
+            if (!TrySpawnItem(cell, shape)) return false;
+
+            int i = _grid.Index(cell);
+            _state[i].Progress = 0.5f;
+            _state[i].PreviousWorldPosition = WorldPositionOf(cell, 0.5f, _state[i].Entry, _state[i].Direction);
+            return true;
+        }
+
         /// <summary>Drop an item onto an empty, unjammed belt cell as if it had arrived travelling
         /// <paramref name="entry"/>: it starts on the edge it came in through and rides through the centre
         /// to the cell's exit, so a machine beside a belt that turns delivers into the turn rather than

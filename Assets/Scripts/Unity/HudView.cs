@@ -1607,6 +1607,10 @@ namespace Facet.Game
         /// </summary>
         private void UpdateLessonNotice(TutorialState tutorial)
         {
+            // A coached lesson speaks through its own popup - the next line, and its hint - so it says nothing
+            // in the middle of the screen: no "task done", no second copy of the hint.
+            if (tutorial.Coached) return;
+
             int steps = tutorial.StepsCompleted;
 
             // A map change is a new world and a restart rewinds this one - the lesson has nothing to report on

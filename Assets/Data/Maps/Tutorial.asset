@@ -355,8 +355,8 @@ MonoBehaviour:
     Wave: 1
     Turrets: 0
   - Step: 8
-    Text: Wave 1 is down. The next wave is heavier - one turret cannot hold it. A
-      new vein surfaced below the lane.
+    Text: "Wave 1 is down. \nThe next wave is bigger, so you need a second turret.
+      \nNew ORE just appeared here."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
@@ -370,7 +370,7 @@ MonoBehaviour:
     Wave: 0
     Turrets: 0
   - Step: 27
-    Text: Belt the new vein below the lane into a second turret.
+    Text: "Place a second turret next to the enemies\u2019 road."
     Hint: Any free tile beside the new vein works - a belt can turn.
     Target: {x: -1, y: -1}
     Ghost: []
@@ -384,8 +384,8 @@ MonoBehaviour:
     Wave: 0
     Turrets: 2
   - Step: 28
-    Text: Feed the second turret. Both guns must hold ammo for the next wave.
-    Hint: Lay a belt from the new vein into the turret.
+    Text: Press 1 and drag a BELT from the new ORE into the second turret.
+    Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
@@ -447,21 +447,22 @@ MonoBehaviour:
     Turrets: 0
   - Step: 8
     Text: Use W, A, S, and D to move the camera and look around the map.
-    Hint: W moves up, A moves left, S moves down, and D moves right. Press NEXT or Enter to continue.
+    Hint: W moves up, A moves left, S moves down, and D moves right. Press NEXT or
+      Enter to continue.
     Target: {x: -1, y: -1}
     Ghost: []
-    Opens:
+    Opens: 
     StartsWave: 0
     Title: Look around
-    Focus:
+    Focus: 
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
   - Step: 8
-    Text: Wave 2 is down. The old wall west of the Core has opened - there is ore
-      beyond it.
+    Text: Wave 2 is down. The wall on the left is gone, and there is new ORE behind
+      it.
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
@@ -534,3 +535,4 @@ MonoBehaviour:
   TutorialCoached: 1
   TutorialClockRuns: 0
   TutorialSpotlight: 1
+  Research: []

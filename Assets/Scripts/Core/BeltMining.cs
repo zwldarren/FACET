@@ -81,7 +81,7 @@ namespace Facet.Core
                     if (_cooldown[i] > 1e-5f) continue;
                 }
 
-                if (_belts.TrySpawnItem(cell, Shape.Full(mineral))) _cooldown[i] = interval;
+                if (_belts.TrySpawnMined(cell, Shape.Full(mineral))) _cooldown[i] = interval;
             }
         }
 
