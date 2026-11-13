@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Facet.Core;
 using Facet.Game;
 using NUnit.Framework;
@@ -171,6 +172,52 @@ namespace Facet.Tests
             bool topUsed = false;
             foreach (SpawnGroup group in map.Waves[11].Groups) topUsed |= group.SpawnPoint == 1;
             Assert.IsTrue(topUsed, "wave 12 opens the top door");
+        }
+
+        /// <summary>The ground decides the walk: the right door's wave goes up round the river's head, then down
+        /// round the ridge's foot, so it passes the middle of the map twice and a gun there covers both legs.</summary>
+        [Test]
+        public void TheRightDoor_WalksAnS_RoundTheRiverThenTheRidge()
+        {
+            var world = new SimWorld(Load().ToCore(), new SimConfig());
+            var route = new List<Int2>();
+
+            int cells = world.TraceEnemyRoute(0, route);
+
+            bool overTheRiver = false;
+            bool underTheRidge = false;
+            foreach (Int2 cell in route)
+            {
+                overTheRiver |= cell.X == 28 && cell.Y > 20;
+                underTheRidge |= (cell.X == 19 || cell.X == 20) && cell.Y < 9;
+            }
+
+            Assert.IsTrue(overTheRiver, "the wave rounds the river's head");
+            Assert.IsTrue(underTheRidge, "then the ridge's foot");
+            Assert.Greater(cells, 45, "an S, not the straight 30-tile line across an open field");
+        }
+
+        /// <summary>The squares lie across the river, and the river is one tile wide: belts cannot cross it, but
+        /// the Pipe - bought the stage before the Stacker - hops it, so the research order is also the map's.</summary>
+        [Test]
+        public void TheSquares_LieAcrossTheRiver_AndAPipeHopsIt()
+        {
+            MapDefinition frontier = Load().ToCore();
+            var open = new MapDefinition(frontier.Name, frontier.Width, frontier.Height, 1000, frontier.Patches,
+                frontier.SpawnPoints, frontier.Waves, frontier.Terrain, frontier.CoreCell);
+            var world = new SimWorld(open, new SimConfig());
+
+            Assert.IsFalse(world.TryPlaceBelt(new Int2(28, 18), Dir.West), "no belt on the river");
+
+            Sim.LayRun(world, new Int2(30, 18), Dir.West, 1);
+            Sim.Place(world, BuildKind.Pipe, new Int2(29, 18), Dir.West);
+            Sim.LayRun(world, new Int2(27, 18), Dir.West, 2);
+
+            Assert.IsTrue(world.Belts.TrySpawnItem(new Int2(30, 18), Sim.Square));
+            Sim.Tick(world, 90);
+
+            Assert.AreEqual(Sim.Square, Sim.ShapeAt(world, new Int2(26, 18)), "the square crossed the river");
+            Assert.AreEqual(1, Sim.ItemCount(world), "nothing lost, nothing duplicated");
         }
     }
 }
