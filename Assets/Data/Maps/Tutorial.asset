@@ -446,6 +446,20 @@ MonoBehaviour:
     Wave: 2
     Turrets: 0
   - Step: 8
+    Text: Use W, A, S, and D to move the camera and look around the map.
+    Hint: W moves up, A moves left, S moves down, and D moves right. Press NEXT or Enter to continue.
+    Target: {x: -1, y: -1}
+    Ghost: []
+    Opens:
+    StartsWave: 0
+    Title: Look around
+    Focus:
+    Reveal: 0
+    AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 0
+  - Step: 8
     Text: Wave 2 is down. The old wall west of the Core has opened - there is ore
       beyond it.
     Hint: 
