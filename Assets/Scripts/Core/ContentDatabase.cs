@@ -439,7 +439,7 @@ namespace Facet.Core
             }
         }
 
-        /// <summary>Every buildable kind, in ordinal (hotkey) order.</summary>
+        /// <summary>Every buildable kind, in the content table's order.</summary>
         public BuildKind[] BuildKinds { get; }
 
         /// <summary>Every enemy kind, for a UI that prints the roster instead of hardcoding a count.</summary>
