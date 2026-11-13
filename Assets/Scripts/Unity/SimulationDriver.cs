@@ -513,6 +513,7 @@ namespace Facet.Game
             AddMeshView<BeltRenderer>("Belts");
             AddMeshView<CoreView>("Core");
             AddMeshView<MachineRenderer>("Machines");
+            AddMeshView<MiningOreView>("MiningOre");   // the vein over a belt that mines it
             AddMeshView<ItemRenderer>("Items");
             AddMeshView<EnemyRenderer>("Enemies");
             AddMeshView<ProjectileRenderer>("Shots");
@@ -522,6 +523,10 @@ namespace Facet.Game
             // about to move.
             _radar = AddMeshView<ThreatRadarView>("ThreatRadar");
             _radar.InitializeLocator(_camera, Campaign.IsFirstMap);
+
+            // The route preview: the way the coming wave will walk, shown briefly before it sets out. Over the
+            // map and its buildings, like the guide - it is an annotation, not ground.
+            AddMeshView<EnemyRouteView>("EnemyRoute");
 
             // The tutorial's guide under the cursor's ghost: an annotation of a tile, so it goes over the map
             // and under the one thing that says what the next click would do.

@@ -326,12 +326,18 @@ namespace Facet.Game
 
             BindMenuButton(root, "play", PlayLabel(), PressPlay, primary: true);
             BindMenuButton(root, "maps", "the maps  ·  M", ShowLevelScreen);
-            BindMenuButton(root, "howto", "how to play  ·  T", OpenHelp);
+
+            // No "how to play" door any more: the first map is the tutorial, and it teaches by doing. Its slot
+            // goes to the door below it, so the column has no gap.
+            RectTransform howto = HudUi.Child(root, "howto");
+            Vector2 howtoSlot = howto.anchoredPosition;
+            howto.gameObject.SetActive(false);
 
 #if !UNITY_WEBGL || UNITY_EDITOR
             // A quit is a host's luxury: a WebGL build has no tab to close from inside, so the button
             // is a desktop one and says nothing where it cannot mean it.
             BindMenuButton(root, "quit", "quit", Application.Quit);
+            HudUi.Child(root, "quit").anchoredPosition = howtoSlot;
 #else
             HudUi.Child(root, "quit").gameObject.SetActive(false);
 #endif
@@ -431,9 +437,9 @@ namespace Facet.Game
             RectTransform card = HudUi.Child(root, "card");
 
 #if !UNITY_WEBGL || UNITY_EDITOR
-            const int fixedDoors = 6;   // resume, restart, maps, how to play, main menu, quit
+            const int fixedDoors = 5;   // resume, restart, maps, main menu, quit
 #else
-            const int fixedDoors = 5;   // a WebGL build has no tab to close from inside
+            const int fixedDoors = 4;   // a WebGL build has no tab to close from inside
 #endif
             // ...plus the one row that exists on one screen only: the way out of the browser's fullscreen. The page
             // hands Escape to the game while the frame is fullscreen (see PlayerPage), so a player who cannot find
@@ -470,7 +476,7 @@ namespace Facet.Game
                 _confirmRestart ? "restart this run?  ·  click again" : "restart this run", RequestRestart,
                 labelColour: _confirmRestart ? HudInk.Warning(_palette) : null);
             BindCardButton(card, "maps", "the maps", ShowLevelScreen);
-            BindCardButton(card, "howto", "how to play", OpenHelp);
+            HudUi.Child(card, "howto").gameObject.SetActive(false);   // the tutorial map teaches; no help door
             BindCardButton(card, "mainmenu",
                 _confirmQuit ? "abandon this run?  ·  click again" : "main menu", RequestMainMenu,
                 labelColour: _confirmQuit ? HudInk.Warning(_palette) : null);
@@ -487,8 +493,9 @@ namespace Facet.Game
             HudUi.Child(card, "quit").gameObject.SetActive(false);
 #endif
 
-            if (fullscreen || step < ButtonStep || cardWidth < PauseCardWidth)
-                LayoutPauseColumn(card, cardWidth, step, fullscreen);
+            // Always laid out here now: the authored column still has the help door's row in it, and only the
+            // doors that are up are stepped.
+            LayoutPauseColumn(card, cardWidth, step, fullscreen);
         }
 
         /// <summary>Laid out here for the two cases the asset cannot have authored: a compacted step and the
@@ -801,7 +808,6 @@ namespace Facet.Game
                     // advertises M and not Esc.
                     if (menu) SetMode(Mode.Levels);
                     else if (confirm) PressPlay();
-                    else if (keyboard.tKey.wasPressedThisFrame) SetMode(Mode.Help);
                     else if (back && PlayerPage.InFullscreen) PlayerPage.LeaveFullscreen();
                     break;
 
@@ -817,7 +823,6 @@ namespace Facet.Game
                         else _resume?.Invoke();
                     }
                     else if (confirm && !_confirmQuit && !_confirmRestart) _resume?.Invoke();
-                    else if (keyboard.tKey.wasPressedThisFrame) SetMode(Mode.Help);
                     break;
             }
         }

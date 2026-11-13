@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Facet.Core
 {
@@ -125,6 +126,33 @@ namespace Facet.Core
             FloodDirect();
             FloodFlank();
             FloodBreach();
+        }
+
+        /// <summary>The cells a walker setting out from <paramref name="start"/> right now would step through to
+        /// the Core, start included, into <paramref name="into"/> (cleared first). It makes the walker's own
+        /// choices in the walker's own order - the flank judgement once at the door, then
+        /// <see cref="TryDirection"/>, then <see cref="TryBreach"/> - so the route a preview draws is the route
+        /// the wave walks. Ends at the Core, or where a walker would have no way on. Reads the fields only
+        /// (after <see cref="Sync"/>, which is a cache and changes no answer), so a view may ask any frame
+        /// without touching the run. Returns the number of cells.</summary>
+        public int Trace(Int2 start, List<Int2> into, int maxSteps)
+        {
+            into.Clear();
+            if (!_grid.InBounds(start)) return 0;
+
+            Sync();
+            bool flank = FlankAt(start);
+            Int2 cell = start;
+            into.Add(cell);
+            for (int i = 0; i < maxSteps; i++)
+            {
+                bool routed = TryDirection(cell, flank, out Dir dir) || TryBreach(cell, out dir);
+                if (!routed) break;
+
+                cell = cell + dir.Offset();
+                into.Add(cell);
+            }
+            return into.Count;
         }
 
         /// <summary>Is the open way the one worth walking from this cell? True when the threat-weighted

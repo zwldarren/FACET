@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Facet.Core
 {
@@ -305,6 +306,16 @@ namespace Facet.Core
         /// <summary>The coached popup's button (or Enter): "I have read this, go on". A request rather than a
         /// call into the lesson, for the same reason the wave button is one - a click happens between ticks, and
         /// the lesson advances on a tick boundary.</summary>
+        /// <summary>The way a wave leaving spawn point <paramref name="spawnIndex"/> would walk to the Core,
+        /// cell by cell, if it set out now - what the route preview draws before a wave. Empty for a spawn
+        /// point the map does not have. A read: asking changes nothing in the run.</summary>
+        public int TraceEnemyRoute(int spawnIndex, List<Int2> into)
+        {
+            into.Clear();
+            if (spawnIndex < 0 || spawnIndex >= Map.SpawnPoints.Length) return 0;
+            return _paths.Trace(Map.SpawnPoints[spawnIndex], into, TileGrid.Width * TileGrid.Height);
+        }
+
         public void RequestTutorialNext() => _tutorialNextRequested = true;
 
         /// <summary>Buy the research offer that names this building, on the next tick. A request for something not

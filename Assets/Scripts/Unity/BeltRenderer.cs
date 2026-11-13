@@ -143,7 +143,12 @@ namespace Facet.Game
             Dir entry = PathEntry(belt, feeds, out bool turning);
 
             // The hub; also the corner joint, so an L's two lanes meet under it and a turn never shows a seam.
-            if (turning) AppendElbow(centre, ToVector(entry.Opposite()), forward, halfWidth, color);
+            // Not where a run starts on ore with nothing feeding it: there the belt leaves from the vein's
+            // figure (<see cref="MiningOreView"/> draws it over this cell), so only the exit lane is laid, from
+            // the centre out - no square back behind the ore.
+            bool minedStart = feeds == 0 && World.Terrain.HasOre(belt.Cell);
+            if (minedStart) { }
+            else if (turning) AppendElbow(centre, ToVector(entry.Opposite()), forward, halfWidth, color);
             else AppendSquareHub(centre, halfWidth, color);
 
             // The exit lane: full length when the next cell takes the item - and past the cell edge where that
@@ -314,7 +319,8 @@ namespace Facet.Game
             bool exitFull = TakesFrom(belt.Cell + belt.Direction.Offset());
 
             float p = _phase;
-            float bedStart = fedFromEntry ? 0f : 0.5f - halfWidth;
+            // A run that starts on ore starts at the vein's edge, so its arrows only begin past the figure.
+            float bedStart = fedFromEntry ? 0f : World.Terrain.HasOre(belt.Cell) ? 0.8f : 0.5f - halfWidth;
             float bedEnd = exitFull ? 1f : 0.5f + 0.32f;
             if (p - look.ChevronBack < bedStart || p + look.ChevronLength > bedEnd) return;
 
