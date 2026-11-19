@@ -61,6 +61,23 @@ namespace Facet.Game
         /// do.</summary>
         private readonly List<Rect> _focusRects = new List<Rect>();
 
+        /// <summary>The little mouse acting out the line's <see cref="TutorialTask.Gesture"/>.</summary>
+        private readonly TutorialGestureCue _cue = new TutorialGestureCue();
+
+        /// <summary>The turrets standing now, and the one built last: where a feed line with no blueprint drags
+        /// to - "load the turret you just placed" - since the player chose its tile.</summary>
+        private HashSet<Int2> _turrets = new HashSet<Int2>();
+        private HashSet<Int2> _turretsNow = new HashSet<Int2>();
+        private Int2 _newestTurret;
+        private bool _hasNewestTurret;
+
+        /// <summary>Which half of a line the cue is acting out - 1, picking the building up from the bar; 2, using
+        /// it on the map - and since when, so each half starts its loop from the beginning.</summary>
+        private int _cuePhase;
+        private int _cueLine = -1;
+        private float _cueSince;
+        private readonly List<Vector2> _cuePath = new List<Vector2>();
+
         /// <summary>The line on screen, so the hint's clock restarts when it changes. A ticked line goes
         /// straight to the next one: no "done" flash in between.</summary>
         private int _shownIndex = -1;
@@ -136,6 +153,8 @@ namespace Facet.Game
 
             _shownIndex = -1;
             _shownKey = null;
+            _turrets.Clear();
+            _hasNewestTurret = false;
         }
 
         private void OnEnable()
@@ -239,6 +258,7 @@ namespace Facet.Game
             // lesson without the spotlight is never dimmed.
             bool dim = tutorial.Spotlight && task.Step != TutorialStep.ClearWave;
             LayoutShade(dim ? _focusRects : null);
+            ShowGesture(task, scale);
         }
 
         private void ShowEnd(string title, string body, float scale)
@@ -249,6 +269,7 @@ namespace Facet.Game
                 _world.Status == GameStatus.Won ? HudInk.Good(_palette) : _palette.HudWarn, null);
             HideBoxesFrom(0);
             LayoutShade(null);
+            _cue.Hide();
         }
 
         /// <summary>Write the popup and size it to its words: the panel sits on the left, in the status card's
@@ -349,6 +370,182 @@ namespace Facet.Game
             if (_panel != null) _panel.gameObject.SetActive(false);
             HideBoxesFrom(0);
             LayoutShade(null);
+            _cue.Hide();
+        }
+
+        // ---------------------------------------------------------------- the mouse cue
+
+        /// <summary>Act out the line's mouse action where it has to happen. A click lands on the line's spot; a
+        /// drag runs from the ore to where the run ends; a right-click lands on the target, or beside the popup
+        /// when the line has none. A line whose spot is not on screen shows no mouse.</summary>
+        private void ShowGesture(TutorialTask task, float scale)
+        {
+            TrackTurrets();
+
+            TutorialGesture kind = task.Gesture;
+            _cuePath.Clear();
+
+            // First things first: a line done with a building the player is not holding yet points at that
+            // building's key in the bar; once it is in hand, the cue moves on to the map.
+            BuildKind? tool = kind == TutorialGesture.None ? null : NeededTool(task);
+            bool pickUp = tool.HasValue && _world.SelectedKind != tool &&
+                          _hud != null && _hud.TryFocusRect(TutorialFocus.BarTile, tool.Value, out _);
+            int phase = pickUp ? 1 : 2;
+            if (phase != _cuePhase || _shownIndex != _cueLine)
+            {
+                _cuePhase = phase;
+                _cueLine = _shownIndex;
+                _cueSince = Time.unscaledTime;
+            }
+
+            if (pickUp)
+            {
+                _hud.TryFocusRect(TutorialFocus.BarTile, tool.Value, out Rect keyRect);
+                _cuePath.Add(keyRect.center);
+                _cue.Show(TutorialGesture.Click, _cuePath, scale, Time.unscaledTime - _cueSince);
+                return;
+            }
+
+            switch (kind)
+            {
+                case TutorialGesture.Click:
+                    if (TryClickSpot(task, out Vector2 spot)) _cuePath.Add(spot);
+                    break;
+
+                case TutorialGesture.Drag:
+                    // No end to drag to yet (no turret built): point at the start instead.
+                    if (!TryDragRoute(task, _cuePath))
+                    {
+                        _cuePath.Clear();
+                        kind = TutorialGesture.Click;
+                        if (TryClickSpot(task, out Vector2 start)) _cuePath.Add(start);
+                    }
+                    break;
+
+                case TutorialGesture.RightClick:
+                    _cuePath.Add(task.Target.HasValue ? CellCentre(task.Target.Value) : BesidePanel(scale));
+                    break;
+            }
+
+            if (_cuePath.Count == 0) _cue.Hide();
+            else _cue.Show(kind, _cuePath, scale, Time.unscaledTime - _cueSince);
+        }
+
+        /// <summary>Where a click goes: the first blueprint tile not built yet, else the target, else the first
+        /// thing the line boxes that is on screen (a bar key, the wave button).</summary>
+        private bool TryClickSpot(TutorialTask task, out Vector2 at)
+        {
+            for (int i = 0; i < task.Ghost.Length; i++)
+            {
+                if (_world.TileGrid.Get(task.Ghost[i].Cell) != TileKind.Empty) continue;
+                at = CellCentre(task.Ghost[i].Cell);
+                return true;
+            }
+
+            if (task.Target.HasValue)
+            {
+                at = CellCentre(task.Target.Value);
+                return true;
+            }
+
+            BuildKind building = LineBuilding(task);
+            for (int i = 0; i < task.Focus.Length; i++)
+            {
+                if (task.Focus[i] == TutorialFocus.Core || task.Focus[i] == TutorialFocus.Gate) continue;
+                if (!TryScreenRect(task, task.Focus[i], building, out Rect rect)) continue;
+                at = rect.center;
+                return true;
+            }
+
+            at = default;
+            return false;
+        }
+
+        /// <summary>A drag's route, corner by corner: from the line's target (the ore the run starts on), through
+        /// the blueprint's tiles, to one tile past its last along its arrow - the Core, or the turret the belt
+        /// feeds. With no blueprint (the player chose where their turret went), straight to the turret built most
+        /// recently. Straight runs are one leg, so the dotted path is drawn as the belt will lie.</summary>
+        private bool TryDragRoute(TutorialTask task, List<Vector2> route)
+        {
+            Int2 start;
+            if (task.Target.HasValue) start = task.Target.Value;
+            else if (task.Ghost.Length > 0) start = task.Ghost[0].Cell;
+            else return false;
+
+            var cells = new List<Int2> { start };
+            if (task.Ghost.Length > 0)
+            {
+                for (int i = 0; i < task.Ghost.Length; i++)
+                    if (task.Ghost[i].Cell != cells[cells.Count - 1]) cells.Add(task.Ghost[i].Cell);
+
+                TutorialGhost last = task.Ghost[task.Ghost.Length - 1];
+                cells.Add(last.Cell + last.Direction.Offset());
+            }
+            else if (_hasNewestTurret)
+            {
+                cells.Add(_newestTurret);
+            }
+            else
+            {
+                return false;
+            }
+
+            // Keep only the corners: a cell is dropped when it carries on in the same direction.
+            for (int i = 0; i < cells.Count; i++)
+            {
+                bool corner = i == 0 || i == cells.Count - 1 ||
+                    (cells[i].X - cells[i - 1].X) != (cells[i + 1].X - cells[i].X) ||
+                    (cells[i].Y - cells[i - 1].Y) != (cells[i + 1].Y - cells[i].Y);
+                if (corner) route.Add(CellCentre(cells[i]));
+            }
+
+            return route.Count >= 2;
+        }
+
+        /// <summary>Note the turrets standing now and remember the one that appeared last. A turret that is
+        /// removed drops out, so a rebuilt one is "the newest" again.</summary>
+        private void TrackTurrets()
+        {
+            TileKind turret = FedTile(BuildKind.Turret);
+            if (turret == TileKind.Empty) return;
+
+            _turretsNow.Clear();
+            int width = _world.Map.Width, height = _world.Map.Height;
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    var cell = new Int2(x, y);
+                    if (_world.TileGrid.Get(cell) != turret) continue;
+                    _turretsNow.Add(cell);
+                    if (!_turrets.Contains(cell))
+                    {
+                        _newestTurret = cell;
+                        _hasNewestTurret = true;
+                    }
+                }
+
+            if (_hasNewestTurret && !_turretsNow.Contains(_newestTurret)) _hasNewestTurret = false;
+
+            HashSet<Int2> swap = _turrets;
+            _turrets = _turretsNow;
+            _turretsNow = swap;
+        }
+
+        /// <summary>A tile's centre in screen pixels.</summary>
+        private Vector2 CellCentre(Int2 cell)
+        {
+            if (_camera == null) return default;
+            Vector3 p = _camera.WorldToScreenPoint(new Vector3(cell.X + 0.5f, cell.Y + 0.5f, 0f));
+            return new Vector2(p.x, p.y);
+        }
+
+        /// <summary>Just right of the popup, halfway down it: where a right-click with nothing to point at is
+        /// acted out, next to the words it illustrates.</summary>
+        private Vector2 BesidePanel(float scale)
+        {
+            Vector2 corner = _panel.anchoredPosition;   // the popup is placed by its bottom-left corner
+            Vector2 size = _panel.sizeDelta;
+            return new Vector2(corner.x + size.x + 24f * scale, corner.y + size.y * 0.5f + 12f * scale);
         }
 
         private static float Height(HudText text, float width)
@@ -670,7 +867,31 @@ namespace Facet.Game
         /// up to do the line. A line with a blueprint is done with the blueprint's building (a belt to feed a
         /// turret is picked up as the belt, not the turret); otherwise the building the line's rule names.</summary>
         private static BuildKind BarBuilding(TutorialTask task)
-            => task.Ghost != null && task.Ghost.Length > 0 ? task.Ghost[0].Build : LineBuilding(task);
+            => NeededTool(task) ?? (task.Ghost != null && task.Ghost.Length > 0 ? task.Ghost[0].Build : LineBuilding(task));
+
+        /// <summary>What the player must have in hand to do this line on the map, or null for a line done with no
+        /// building picked up (a popup, a wave call, picking the building itself). A drag lays belt, whatever the
+        /// line is about - feeding a turret is done with the belt, not the turret; a placing line uses the building
+        /// its blueprint draws, or the one its rule counts.</summary>
+        private static BuildKind? NeededTool(TutorialTask task)
+        {
+            if (task.Gesture == TutorialGesture.Drag) return BuildKind.Belt;
+
+            switch (task.Step)
+            {
+                case TutorialStep.Acknowledge:
+                case TutorialStep.StartWave:
+                case TutorialStep.ClearWave:
+                case TutorialStep.SelectBelt:
+                case TutorialStep.SelectDrill:
+                case TutorialStep.SelectTurret:
+                    return null;
+            }
+
+            if (task.Gesture != TutorialGesture.Click) return null;
+            if (task.Ghost != null && task.Ghost.Length > 0) return task.Ghost[0].Build;
+            return TutorialScript.TryRequiredBuilding(task.Step, out BuildKind building) ? building : (BuildKind?)null;
+        }
 
         private static BuildKind LineBuilding(TutorialTask task)
         {
@@ -886,6 +1107,8 @@ namespace Facet.Game
             _icons = new HudIcons(_palette);
             _demo = new MachineDemo(_palette, _icons);
             _demo.Build(_panel);
+
+            _cue.Build(_canvasRoot);
 
             _panel.gameObject.SetActive(false);
         }

@@ -237,6 +237,10 @@ namespace Facet.Game
                 "the line says how many guns the run needs and the player decides where they stand.")]
             [Min(0)]
             public int Turrets;
+
+            [Tooltip("Coached maps only: the mouse action acted out beside the line's spot - Click, Drag (press, " +
+                "hold and drag) or RightClick - so the player sees what to do without reading.")]
+            public TutorialGesture Gesture = TutorialGesture.None;
         }
 
         [Header("Tutorial")]
@@ -1076,7 +1080,7 @@ namespace Facet.Game
                     placed ? new Int2(row.Target.x, row.Target.y) : (Int2?)null,
                     row.Opens, row.StartsWave, row.Hint, GhostOf(row.Ghost),
                     row.Title, row.Focus, row.Reveal, OreOf(row.AddsOre), GroundOf(row.AddsGround), row.Wave,
-                    row.Turrets);
+                    row.Turrets, row.Gesture);
             }
 
             return new TutorialScript(TutorialStarting, tasks, TutorialCoached, GhostOf(TutorialPrebuilt),
