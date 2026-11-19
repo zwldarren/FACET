@@ -74,83 +74,53 @@ MonoBehaviour:
   TutorialPrebuilt: []
   TutorialTasks:
   - Step: 8
-    Text: "Enemies come in through the GATE. \nDefeat them and protect your CORE."
+    Text: "Enemies come through the GATE. \nStop them before they reach your CORE."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Welcome!
+    Title: "Protect the Core"
     Focus: 0201
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
+    Gesture: 0
   - Step: 8
-    Text: "This is ORE. A belt laid on ore mines shapes from it. \nShapes are your
-      money and your ammo."
+    Text: "ORE gives you shapes. \nShapes pay for buildings - this is how many you have."
     Hint: 
     Target: {x: 14, y: 11}
     Ghost: []
     Opens: 00
     StartsWave: 0
-    Title: Ore
-    Focus: 03
-    Reveal: 0
-    AddsOre: []
-    AddsGround: []
-    Wave: 0
-    Turrets: 0
-  - Step: 8
-    Text: "Every building costs ore shapes. This is how many you have. \nMine ore
-      to get more!"
-    Hint: 
-    Target: {x: -1, y: -1}
-    Ghost: []
-    Opens: 
-    StartsWave: 0
-    Title: Building costs
-    Focus: 06
+    Title: "Ore"
+    Focus: 0306
     Reveal: 2
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
-  - Step: 8
-    Text: 'The buildings you can use appear down here.
-
-      The number on the bottom
-      right is how much ore it costs.'
+    Gesture: 0
+  - Step: 10
+    Text: "Press 1, or click the BELT."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Build bar
-    Focus: 0c
+    Title: "Pick the belt"
+    Focus: 05
     Reveal: 4
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
-  - Step: 10
-    Text: Press 1, or click the BELT.
-    Hint: 
-    Target: {x: -1, y: -1}
-    Ghost: []
-    Opens: 
-    StartsWave: 0
-    Title: Pick the belt
-    Focus: 05
-    Reveal: 0
-    AddsOre: []
-    AddsGround: []
-    Wave: 0
-    Turrets: 0
+    Gesture: 1
   - Step: 1
-    Text: Press on the glowing ORE tile, and drag down into the Core.
-    Hint: Start the drag on the ore itself, then let go on the Core.
+    Text: "Drag from the ORE into the CORE."
+    Hint: "Start on the ore, let go on the Core."
     Target: {x: 14, y: 11}
     Ghost:
     - Build: 0
@@ -164,24 +134,24 @@ MonoBehaviour:
       Facing: 2
     Opens: 
     StartsWave: 0
-    Title: Lay the belt
-    Focus: 0401
+    Title: "Lay a belt"
+    Focus: 040105
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
+    Gesture: 2
   - Step: 8
-    Text: Your first shape reached the Core! This number goes up with every shape
-      you bank.
+    Text: "Each shape that reaches the Core \nadds to your shapes."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 09
     StartsWave: 0
-    Title: Success!
+    Title: "+1 shape!"
     Focus: 06
-    Reveal: 2
+    Reveal: 0
     AddsOre:
     - Cell: {x: 19, y: 2}
       Mineral: 1
@@ -194,36 +164,24 @@ MonoBehaviour:
     AddsGround: []
     Wave: 0
     Turrets: 0
+    Gesture: 0
   - Step: 8
-    Text: "Placed something in the wrong spot? \nRIGHT-CLICK it to delete it."
+    Text: "Right-click a building to delete it."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Mistakes are fine
+    Title: "Undo"
     Focus: 
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
-  - Step: 11
-    Text: "Turrets shoot enemies. \nPress 0, or click the TURRET."
-    Hint: 
-    Target: {x: -1, y: -1}
-    Ghost: []
-    Opens: 
-    StartsWave: 0
-    Title: Pick the turret
-    Focus: 05
-    Reveal: 0
-    AddsOre: []
-    AddsGround: []
-    Wave: 0
-    Turrets: 0
+    Gesture: 0
   - Step: 12
-    Text: Click the glowing tile next to the enemies' road to place the turret.
+    Text: "Press 0, then click the glowing tile."
     Hint: 
     Target: {x: 22, y: 3}
     Ghost:
@@ -232,18 +190,17 @@ MonoBehaviour:
       Facing: 1
     Opens: 
     StartsWave: 0
-    Title: Place the turret
-    Focus: 04
+    Title: "Place a turret"
+    Focus: 0504
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
+    Gesture: 1
   - Step: 2
-    Text: "Turrets fire the shapes you feed them. \nDrag a belt from the new ORE
-      into the turret."
-    Hint: Press 1, start on the glowing ore tile, and drag right until you reach
-      the turret.
+    Text: "Turrets fire shapes. \nPress 1, then drag from the new ORE into the turret."
+    Hint: "Press 1 first, then start the drag on the ore."
     Target: {x: 20, y: 3}
     Ghost:
     - Build: 0
@@ -254,92 +211,67 @@ MonoBehaviour:
       Facing: 1
     Opens: 
     StartsWave: 0
-    Title: Load the turret
+    Title: "Load the turret"
     Focus: 0405
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
+    Gesture: 2
   - Step: 8
-    Text: "The turret has ammo. \nNow let's move to the top of the screen."
+    Text: "If this reaches zero, you lose."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Loaded!
-    Focus: 0b
+    Title: "Core health"
+    Focus: 07
     Reveal: 1
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
+    Gesture: 0
   - Step: 8
-    Text: "Your Core's health. \nIf it reaches zero, you lose."
+    Text: "When the next wave comes, \nand the shape it is weak to."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Core health
-    Focus: 07
+    Title: "Next wave"
+    Focus: 0809
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
-  - Step: 8
-    Text: "Which wave is next, and when it comes. \nClear every wave to win."
-    Hint: 
-    Target: {x: -1, y: -1}
-    Ghost: []
-    Opens: 
-    StartsWave: 0
-    Title: Waves
-    Focus: 08
-    Reveal: 0
-    AddsOre: []
-    AddsGround: []
-    Wave: 0
-    Turrets: 0
-  - Step: 8
-    Text: "The shape these enemies are weak to. \nThis wave: a full circle, which
-      your ore gives."
-    Hint: 
-    Target: {x: -1, y: -1}
-    Ghost: []
-    Opens: 
-    StartsWave: 0
-    Title: Weakness
-    Focus: 09
-    Reveal: 0
-    AddsOre: []
-    AddsGround: []
-    Wave: 0
-    Turrets: 0
+    Gesture: 0
   - Step: 13
-    Text: Press N, or click this button, to start wave 1.
+    Text: "Press N, or click this button."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 1
-    Title: Ready?
+    Title: "Start wave 1"
     Focus: 0a02
     Reveal: 8
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
+    Gesture: 1
   - Step: 24
-    Text: Wave 1 is here. Keep the turret fed and hold the Core.
+    Text: "Here they come! \nWatch your turret fire."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Wave 1
+    Title: "Wave 1"
     Focus: 
     Reveal: 0
     AddsOre:
@@ -354,71 +286,60 @@ MonoBehaviour:
     AddsGround: []
     Wave: 1
     Turrets: 0
-  - Step: 8
-    Text: "Wave 1 is down. \nThe next wave is bigger, so you need a second turret.
-      \nNew ORE just appeared here."
-    Hint: 
-    Target: {x: -1, y: -1}
-    Ghost: []
-    Opens: 
-    StartsWave: 0
-    Title: Two guns
-    Focus: 
-    Reveal: 0
-    AddsOre: []
-    AddsGround: []
-    Wave: 0
-    Turrets: 0
+    Gesture: 0
   - Step: 27
-    Text: "Place a second turret next to the enemies\u2019 road."
-    Hint: Any free tile beside the new vein works - a belt can turn.
-    Target: {x: -1, y: -1}
-    Ghost: []
-    Opens: 
-    StartsWave: 0
-    Title: A second turret
-    Focus: 
-    Reveal: 0
-    AddsOre: []
-    AddsGround: []
-    Wave: 0
-    Turrets: 2
-  - Step: 28
-    Text: Press 1 and drag a BELT from the new ORE into the second turret.
+    Text: "Wave 2 is bigger. \nPress 0 and place a turret next to the road."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Feed it
-    Focus: 
+    Title: "Second turret"
+    Focus: 05
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 2
+    Gesture: 1
+  - Step: 28
+    Text: "Press 1, then drag from the new ORE \ninto your new turret."
+    Hint: "Press 1 first, then start the drag on the ore."
+    Target: {x: 20, y: 11}
+    Ghost: []
+    Opens: 
+    StartsWave: 0
+    Title: "Load it"
+    Focus: 0305
+    Reveal: 0
+    AddsOre: []
+    AddsGround: []
+    Wave: 0
+    Turrets: 2
+    Gesture: 2
   - Step: 13
-    Text: Press N when both turrets are fed.
+    Text: "Press N, or click this button."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 1
-    Title: Wave 2
+    Title: "Start wave 2"
     Focus: 0a02
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
+    Gesture: 1
   - Step: 24
-    Text: Wave 2 is here. Two guns and two feeds - hold the Core.
+    Text: "Two turrets, twice the fire!"
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Wave 2
+    Title: "Wave 2"
     Focus: 
     Reveal: 0
     AddsOre:
@@ -445,93 +366,82 @@ MonoBehaviour:
       Kind: 0
     Wave: 2
     Turrets: 0
+    Gesture: 0
   - Step: 8
-    Text: Use W, A, S, and D to move the camera and look around the map.
-    Hint: W moves up, A moves left, S moves down, and D moves right. Press NEXT or
-      Enter to continue.
-    Target: {x: -1, y: -1}
+    Text: "A new area opened on the LEFT, with more ore. \nThe last wave comes from the LEFT gate."
+    Hint: "Use W A S D to move the camera."
+    Target: {x: 2, y: 2}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Look around
-    Focus: 
+    Title: "New area"
+    Focus: 0302
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
-  - Step: 8
-    Text: Wave 2 is down. The wall on the left is gone, and there is new ORE behind
-      it.
+    Gesture: 0
+  - Step: 27
+    Text: "Press 0 and place a turret \nnext to the LEFT road."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: The west opens
-    Focus: 
-    Reveal: 0
-    AddsOre: []
-    AddsGround: []
-    Wave: 0
-    Turrets: 0
-  - Step: 27
-    Text: The last wave comes from the western gate. Build a turret out west to guard
-      the lane.
-    Hint: Any free tile in the western room that can see the lane works.
-    Target: {x: -1, y: -1}
-    Ghost: []
-    Opens: 
-    StartsWave: 0
-    Title: A western gun
-    Focus: 
+    Title: "Guard the left"
+    Focus: 0502
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 3
+    Gesture: 1
   - Step: 28
-    Text: Feed the western turret. The last wave comes from the west.
-    Hint: Drag a belt from the western vein into the turret.
-    Target: {x: -1, y: -1}
+    Text: "Press 1, then drag from the left ORE \ninto your new turret."
+    Hint: "Press 1 first, then start the drag on the ore."
+    Target: {x: 2, y: 2}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Feed the west
-    Focus: 
+    Title: "Load it"
+    Focus: 0305
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 3
+    Gesture: 2
   - Step: 13
-    Text: Press N. Hold the Core.
+    Text: "Press N, or click this button."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 1
-    Title: Last wave
+    Title: "Last wave"
     Focus: 0a02
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
+    Gesture: 1
   - Step: 14
-    Text: Here they come. Watch your turrets fire!
+    Text: "Here they come. \nWatch your turrets fire!"
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
     Opens: 
     StartsWave: 0
-    Title: Defend!
+    Title: "Defend!"
     Focus: 01
     Reveal: 0
     AddsOre: []
     AddsGround: []
     Wave: 0
     Turrets: 0
+    Gesture: 0
   TutorialCoached: 1
   TutorialClockRuns: 0
   TutorialSpotlight: 1

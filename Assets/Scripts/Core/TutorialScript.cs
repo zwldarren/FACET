@@ -163,6 +163,27 @@ namespace Facet.Core
         AnyTurretHoldsWaveShape = 33,
     }
 
+    /// <summary>The mouse action a coached line acts out beside its spot: a small mouse that clicks, or
+    /// presses and drags, or right-clicks, on a loop - so a player who reads none of the popup still sees
+    /// what their hand has to do. Where it plays is the coach's to work out from the line (its blueprint,
+    /// its target, its boxes); the line only names the action.</summary>
+    public enum TutorialGesture : byte
+    {
+        None = 0,
+
+        /// <summary>A left click: on the line's first unbuilt blueprint tile, else its target, else the first
+        /// thing it boxes (a bar key, the wave button).</summary>
+        Click = 1,
+
+        /// <summary>Press, hold and drag: from the line's target (the ore) to where the run ends - one tile past
+        /// the last blueprint tile, along its arrow, which is the Core or the turret it feeds; with no
+        /// blueprint, the turret built most recently.</summary>
+        Drag = 2,
+
+        /// <summary>A right click, on the line's target, or beside the popup when it has none.</summary>
+        RightClick = 3,
+    }
+
     /// <summary>What a coached line draws a box around, so the player knows where to look. Places on the map
     /// (the Core, the gate, the line's target) are boxed in the world; the rest are pieces of the HUD, which
     /// the HUD itself measures (<c>HudView.TryFocusRect</c>), so a box can never drift from what it points at.
@@ -354,10 +375,15 @@ namespace Facet.Core
         /// <see cref="Wave"/> is: which one of a battery a lesson is about is the designer's arrangement.</summary>
         public readonly int Turrets;
 
+        /// <summary>The mouse action the coach acts out for this line (<see cref="TutorialGesture"/>); None for
+        /// a line that is read, not done.</summary>
+        public readonly TutorialGesture Gesture;
+
         public TutorialTask(TutorialStep step, string text, Int2? target, BuildKind[] opens,
             bool startsWave, string hint = null, TutorialGhost[] ghost = null, string title = null,
             TutorialFocus[] focus = null, TutorialHud reveal = TutorialHud.None, ShapePatch[] addsOre = null,
-            TerrainPatch[] addsGround = null, int wave = 0, int turrets = 0)
+            TerrainPatch[] addsGround = null, int wave = 0, int turrets = 0,
+            TutorialGesture gesture = TutorialGesture.None)
         {
             Step = step;
             Text = text ?? string.Empty;
@@ -373,6 +399,7 @@ namespace Facet.Core
             AddsGround = addsGround ?? new TerrainPatch[0];
             Wave = wave;
             Turrets = turrets;
+            Gesture = gesture;
         }
     }
 

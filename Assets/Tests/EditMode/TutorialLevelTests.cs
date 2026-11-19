@@ -67,55 +67,49 @@ namespace Facet.Tests
             Assert.AreEqual(TerrainKind.Void, world.Terrain.KindAt(WestVein),
                 "the west room is void until its lesson opens it");
 
-            Next(world);                                                        // welcome: gate and Core
-            Next(world);                                                        // the ore
-            Next(world);                                                        // buildings cost ore
-            Next(world);                                                        // the build bar
+            Next(world);                                                        // protect the Core: gate and Core
+            Next(world);                                                        // ore pays for buildings
             Assert.IsTrue(world.IsUnlocked(BuildKind.Belt));
             Assert.IsFalse(world.IsUnlocked(BuildKind.Turret), "the turret waits for its own lesson");
             world.Tick(Gesture.Select(BuildKind.Belt));                          // the bar's belt, not a map stroke
-            Until(world, 5, 2);                                                 // belt picked up
+            Until(world, 3, 2);                                                 // belt picked up
             Sim.Drag(world, FirstVein, new Int2(14, 8));                        // from the ore into the Core
             Assert.IsTrue(world.Belts.Has(FirstVein) && world.Belts.Has(new Int2(14, 9)),
                 "a drag that starts on the ore lays a belt on it, all the way down");
-            Until(world, 6, 600);                                               // the belt on ore mines, and banks
+            Until(world, 4, 600);                                               // the belt on ore mines, and banks
 
             Assert.IsFalse(world.Terrain.HasOre(SecondVein), "the second patch waits for the turret");
-            Next(world);                                                        // "Success!"
+            Next(world);                                                        // "+1 shape!"
             Assert.IsTrue(world.Terrain.HasOre(SecondVein), "and is laid when the turret lesson starts");
             Next(world);                                                        // right-click deletes
 
             world.Tick(Gesture.Select(BuildKind.Turret));
-            Until(world, 9, 2);                                                 // turret picked up
             Sim.Place(world, BuildKind.Turret, new Int2(22, 3), Dir.East);
-            Until(world, 10, 2);                                                // turret placed
+            Until(world, 7, 2);                                                 // turret placed
             Sim.Drag(world, SecondVein, new Int2(22, 3));                       // ore into the turret
-            Until(world, 11, 600);                                              // turret loaded
-            Next(world);                                                        // "Loaded!"
+            Until(world, 8, 600);                                               // turret loaded
             Next(world);                                                        // Core health
-            Next(world);                                                        // the wave line
-            Next(world);                                                        // the weakness chips
+            Next(world);                                                        // the next wave and its weakness
 
             Assert.IsTrue(world.Tutorial.WaitsForWaveCall);
             Sim.Tick(world, 300);
             Assert.AreEqual(0, world.Enemies.AliveCount, "nothing comes until the player calls the wave");
 
             world.Tick(new InputCommand(startWavePressed: true));
-            Until(world, 16, 2);                                                // wave 1 called
+            Until(world, 11, 2);                                                // wave 1 called
             Assert.IsFalse(world.Terrain.HasOre(SouthVein), "the south vein waits for wave 1 to be cleared");
-            Until(world, 17, 30 * 120);                                         // cleared: the second vein
+            Until(world, 12, 30 * 120);                                         // cleared: the second vein
             Assert.AreEqual(100f, world.Core.Hp, 0f, "one turret holds the first wave untouched");
             Assert.IsTrue(world.Terrain.HasOre(SouthVein), "and the lesson lays the vein the second gun feeds on");
 
-            Next(world);                                                        // "Two guns": the wave is down
             Sim.Place(world, BuildKind.Turret, new Int2(23, 11), Dir.East);
-            Until(world, 19, 2);                                                // a second turret, anywhere
+            Until(world, 13, 2);                                                // a second turret, anywhere
             Sim.Drag(world, SouthVein, new Int2(23, 11));                       // and its feed
-            Until(world, 20, 600);                                              // both chambers have a round
+            Until(world, 14, 600);                                              // both chambers have a round
 
             world.Tick(new InputCommand(startWavePressed: true));
-            Until(world, 21, 2);                                                // wave 2 called
-            Until(world, 22, 30 * 180);                                         // cleared: the west opens
+            Until(world, 15, 2);                                                // wave 2 called
+            Until(world, 16, 30 * 180);                                         // cleared: the left opens
             Assert.AreEqual(100f, world.Core.Hp, 0f, "two turrets hold the second wave untouched");
             Assert.AreEqual(TerrainKind.Ore, world.Terrain.KindAt(WestVein),
                 "the west room the map was authored without is now floor, with a vein in it");
@@ -127,16 +121,15 @@ namespace Facet.Tests
             Assert.IsTrue(world.Terrain.HasOre(WestVein), "the vein is there to mine");
             Assert.AreEqual(0, world.Enemies.AliveCount);
 
-            Next(world);                                                        // "Look around"
-            Next(world);                                                        // "The west opens"
+            Next(world);                                                        // "New area": the left gate
             Sim.Place(world, BuildKind.Turret, new Int2(6, 4), Dir.East);
-            Until(world, 25, 2);                                                // a third turret, anywhere
+            Until(world, 18, 2);                                                // a third turret, anywhere
             Sim.Drag(world, new Int2(3, 3), new Int2(6, 4));                    // its feed from the new vein
             Assert.IsTrue(world.Belts.Has(new Int2(6, 3)), "the run turns up into the turret");
-            Until(world, 26, 600);                                              // all three armed
+            Until(world, 19, 600);                                              // all three armed
 
             world.Tick(new InputCommand(startWavePressed: true));
-            Until(world, 27, 2);                                                // wave 3 called
+            Until(world, 20, 2);                                                // wave 3 called
 
             for (int i = 0; i < 30 * 180 && world.Status == GameStatus.Playing; i++) world.Tick(InputCommand.None);
             Assert.AreEqual(GameStatus.Won, world.Status, "the lesson's three waves are the run");
