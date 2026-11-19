@@ -173,8 +173,8 @@ namespace Facet.Tests
         /// The other half of "the panels own their strips": nothing the HUD draws permanently may sit on anything
         /// else it draws permanently. The check covers every pair, because two pieces drifting into each other is
         /// the same bug wherever it comes from; toasts are left out on purpose, since overlaying the map is their
-        /// whole job. The tutorial card is included even though it is only up on the first map: it hangs off the
-        /// status card, the one arrangement where a new piece is placed by eye.
+        /// whole job. The lesson card is included even though it is only up while a map teaches a list of lines:
+        /// it hangs off the status card, the one arrangement where a new piece is placed by eye.
         /// </summary>
         [Test]
         public void NoHudPieceOverlapsAnother()

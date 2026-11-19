@@ -175,7 +175,7 @@ namespace Facet.Game
             if (!_feedback.Hit(enemy.Id, out FeedbackEvents.Entry hit)) return Color.clear;
             float age = (_seconds - hit.Seconds) / Mathf.Max(0.01f, Colors.Feedback.HitSeconds);
             if (age < 0f || age >= 1f) return Color.clear;
-            int marks = ViewFeedback.DamageMarks(hit.Event.Amount, GunDamage);
+            int marks = ViewFeedback.DamageMarks(hit.Event.Amount, GunDamage, World.Enemies.ResistedMultiplier);
             Color colour = marks == 2 ? Colors.Feedback.FullHit : Colors.Feedback.HalfHit;
             colour.a = 1f - age;
             return colour;
@@ -217,7 +217,7 @@ namespace Facet.Game
                 if (e.Kind != SimEventKind.EnemyDamaged) continue;
                 float t = (_seconds - entry.Seconds) / Mathf.Max(0.01f, look.ImpactSeconds);
                 if (t < 0f || t >= 1f) continue;
-                int marks = ViewFeedback.DamageMarks(e.Amount, damage);
+                int marks = ViewFeedback.DamageMarks(e.Amount, damage, World.Enemies.ResistedMultiplier);
                 Color colour = marks == 2 ? look.FullHit : look.HalfHit;
                 colour.a *= 1f - t;
                 var at = new Vector2(e.Position.X, e.Position.Y);

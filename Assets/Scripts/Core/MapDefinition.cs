@@ -101,10 +101,10 @@ namespace Facet.Core
         public readonly int Seed;
 
         /// <summary>
-        /// How many generated waves follow the authored table, or <b>-1 for endless</b>. 0 - the authored
-        /// default - means the map is finished when its table is cleared, which is what every scripted
-        /// tutorial map wants; -1 is how a map becomes endless mode, since the generator then never runs
-        /// out of demands.
+        /// How many generated waves follow the authored table. 0 - the authored default - means the map is
+        /// finished when its table is cleared, which is what every scripted tutorial map wants; a positive
+        /// count is a bounded exam the generator answers for exactly that many waves. Negative values are
+        /// clamped to 0: there is no unbounded run.
         /// </summary>
         public readonly int GeneratedWaves;
 
@@ -133,11 +133,18 @@ namespace Facet.Core
         /// plays exactly as it did before research existed.</summary>
         public readonly ResearchSchedule Research;
 
+        /// <summary>What share of a turret's damage a round does when it is not the shape the enemy is weak to.
+        /// <see cref="Balance.ResistantDamageMultiplier"/> (a half) on every map that does not say otherwise; a map
+        /// that teaches cutting and turning lowers it, so the wrong shape is barely worth firing and the right one
+        /// is worth building.</summary>
+        public readonly float MismatchDamage;
+
         public MapDefinition(string name, int width, int height, int startShapes,
             ShapePatch[] patches, Int2[] spawnPoints, WaveDefinition[] waves,
             TerrainKind[] terrain = null, Int2? coreCell = null,
             Operators unlocked = Operators.All, int seed = 0, int generatedWaves = 0,
-            TutorialScript tutorial = null, ResearchSchedule research = null)
+            TutorialScript tutorial = null, ResearchSchedule research = null,
+            float mismatchDamage = Balance.ResistantDamageMultiplier)
         {
             Name = name;
             Width = width;
@@ -150,9 +157,10 @@ namespace Facet.Core
             CoreCell = coreCell ?? CentredCore(width, height);
             Unlocked = unlocked;
             Seed = seed;
-            GeneratedWaves = generatedWaves;
+            GeneratedWaves = Math.Max(0, generatedWaves);
             Tutorial = tutorial;
             Research = research ?? ResearchSchedule.None;
+            MismatchDamage = Math.Clamp(mismatchDamage, 0f, 1f);
 
             // The money, named off the map's own veins rather than authored beside them: the first mineral
             // the patch list yields, which is the one a drill on this map will first put on a belt.
@@ -169,7 +177,9 @@ namespace Facet.Core
         public ShapePool Pool() => new ShapePool(MineralList(), Unlocked);
 
         /// <summary>The distinct minerals this map's veins yield, in the order the patches list them. What
-        /// the generator roots its pool at.</summary>
+        /// the generator roots its pool at - and what the HUD's money marks are drawn from, since the
+        /// currency is a complete shape of <em>any</em> mineral (see <see cref="CurrencyMineral"/>), not of
+        /// the first one a row happens to name.</summary>
         public Quad[] MineralList()
         {
             var minerals = new List<Quad>();
@@ -186,14 +196,6 @@ namespace Facet.Core
         /// <summary>Does this map source waves procedurally? A generated map may author a scripted opening
         /// and then hand over to the generator, or author nothing at all and be generated from wave 1.</summary>
         public bool GeneratesWaves => GeneratedWaves != 0;
-
-        /// <summary>The same map, with its wave count unbounded: the campaign's entry into endless mode
-        /// (§7) is the last map played again with the generator answering forever, and the driver - not
-        /// the map data - is what flips it, so an authored map stays what the editor drew. Everything else
-        /// is carried over as-is; the run's seed remains the host's per-run decision.</summary>
-        public MapDefinition WithEndless()
-            => new MapDefinition(Name, Width, Height, StartShapes, Patches, SpawnPoints, Waves,
-                Terrain, CoreCell, Unlocked, Seed, -1, Tutorial, Research);
 
         /// <summary>Centre of a spawn point in world units, where enemies are created. The index is
         /// resolved by <see cref="ResolveSpawn"/> like every other reader, so the entry tile is the one the

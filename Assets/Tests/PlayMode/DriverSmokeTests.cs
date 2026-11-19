@@ -33,7 +33,7 @@ namespace Facet.PlayTests
         private SimulationDriver Driver => _driverObject.GetComponent<SimulationDriver>();
 
         /// <summary>Leave the boot title the way the play button does - the game opens held on it.</summary>
-        private void BeginRun() => Driver.PlayMap(0, false);
+        private void BeginRun() => Driver.PlayMap(0);
 
         [SetUp]
         public void CreateScene()
@@ -115,7 +115,13 @@ namespace Facet.PlayTests
                 new TerrainRect(new Int2(2, 2), 6, 4, TerrainKind.Rock),
                 new TerrainRect(new Int2(20, 12), 4, 4, TerrainKind.Water),
                 new TerrainRect(new Int2(30, 18), 2, 2, TerrainKind.Void));
-            map.Ore = new[] { new MapAsset.OreCell { Cell = new Vector2Int(6, 12), Mineral = Quad.Circle } };
+            // Two veins of two minerals: the readout draws one mark per mineral the map mines, and the
+            // fixture has to be a map that mines both for that to be provable.
+            map.Ore = new[]
+            {
+                new MapAsset.OreCell { Cell = new Vector2Int(6, 12), Mineral = Quad.Circle },
+                new MapAsset.OreCell { Cell = new Vector2Int(24, 4), Mineral = Quad.Square },
+            };
             map.SpawnPoints = new[] { new Vector2Int(2, 18) };
             map.Waves = new[] { OneWave() };
             return map;
@@ -228,7 +234,7 @@ namespace Facet.PlayTests
                 driver.Content.Enemy(EnemyKind.Runner).Hp, 1e-4f, "the shipped runner's hp");
 
             // The same door a player's click takes.
-            driver.PlayMap(0, false);
+            driver.PlayMap(0);
             yield return null;
 
             int ticks = driver.World.TickCount;
@@ -271,7 +277,7 @@ namespace Facet.PlayTests
             yield return new WaitForSeconds(0.2f);
             Assert.AreEqual(held, driver.World.TickCount, "no time passes on the title");
 
-            driver.PlayMap(0, false);
+            driver.PlayMap(0);
             yield return null;
             Assert.IsFalse(shell.Open, "the play door closes the title");
 
@@ -410,61 +416,14 @@ namespace Facet.PlayTests
             Assert.IsNotNull(status.Find("after5.name"), "and the second row's");
         }
 
-        /// <summary>The "how to play" card is a prefab (<c>Resources/Hud/HudTutorial</c>) and the lesson's card is
-        /// its own (<c>Resources/Hud/HudTasks</c>): two cards, one rect. With no lesson the reference card owns it.</summary>
-        [UnityTest]
-        public IEnumerator TheHudTutorialCard_IsThePrefabAtTheLayoutsRect()
-        {
-            yield return null;
-            BeginRun();
-            yield return null;   // the rebuild a map change asks for lands on the next frame
-
-            var hud = _driverObject.GetComponentInChildren<HudView>(true);
-            Transform canvas = hud.transform.Find("HudCanvas");
-            Assert.IsNotNull(canvas, "the HUD builds its canvas");
-
-            var tutorial = canvas.Find("tutorial") as RectTransform;
-            Assert.IsNotNull(tutorial, "the reference card is the prefab's own 'tutorial' node");
-
-            float s = HudLayout.Scale(Screen.height);
-            Rect laid = HudLayout.Tutorial(s);
-            Assert.AreEqual(laid.width, tutorial.sizeDelta.x, 0.5f, "the card is the layout's width");
-            Assert.AreEqual(laid.height, tutorial.sizeDelta.y, 0.5f, "and the layout's height");
-            Assert.AreEqual(laid.x, tutorial.anchoredPosition.x, 0.5f, "hung off the screen's top-left");
-            Assert.AreEqual(-laid.y, tutorial.anchoredPosition.y, 0.5f, "under the status rail");
-
-            // The fixture's first map teaches nothing, so the corner is the reference card's.
-            Assert.IsTrue(tutorial.gameObject.activeSelf, "a map with no lesson leaves the card up");
-            Assert.IsFalse(canvas.Find("tasks").gameObject.activeSelf, "and the lesson's card down");
-
-            // Rows in design units, scaled once at bind: the one card inset, the heading's 22, the rule on 27,
-            // the body's 66.
-            AssertRow(tutorial, "title", 14f, 4f, 250f, 22f, s);
-            AssertRow(tutorial, "rule", 14f, 27f, 332f, 1f, s);
-            AssertRow(tutorial, "body", 14f, 30f, 332f, 66f, s);
-
-            var hide = tutorial.Find("hide") as RectTransform;
-            Assert.IsNotNull(hide, "the card carries its hide button");
-            Assert.AreEqual(-14f * s, hide.anchoredPosition.x, 0.5f, "inside the card's right inset");
-            Assert.AreEqual(-5f * s, hide.anchoredPosition.y, 0.5f, "one line down from its top");
-            Assert.AreEqual(58f * s, hide.sizeDelta.x, 0.5f, "the button is its design width");
-            Assert.AreEqual(18f * s, hide.sizeDelta.y, 0.5f, "and its design height");
-
-            var button = hide.GetComponent<HudButton>();
-            Assert.IsNotNull(button, "the hide button answers the pointer");
-            Assert.IsNotNull(button.Fill, "it has its surface");
-            Assert.IsTrue(button.Fill.Image.raycastTarget, "and takes the click");
-            Assert.IsNotNull(hide.Find("hide.label"), "and its words");
-        }
-
-        /// <summary>The lesson's card is the second prefab (<c>Resources/Hud/HudTasks</c>) and the one whose
-        /// contents are the map's. Drives it on the map with a lesson, swaps to the reference card with <c>T</c>,
-        /// and presses that card's own way back.</summary>
+        /// <summary>The lesson's card is a prefab (<c>Resources/Hud/HudTasks</c>) and the one whose contents are
+        /// the map's. The HUD has no other card: the coach's popup is the other voice a map can teach in, and it
+        /// belongs to <see cref="TutorialCoachView"/>.</summary>
         [UnityTest]
         public IEnumerator TheHudTaskCard_IsThePrefab_AndPrintsTheLesson()
         {
             yield return null;
-            Driver.PlayMap(2, false);   // the fixture's map with a lesson on it
+            Driver.PlayMap(2);   // the fixture's map with a lesson on it
             yield return null;
 
             var hud = _driverObject.GetComponentInChildren<HudView>(true);
@@ -473,11 +432,11 @@ namespace Facet.PlayTests
             var tasks = canvas.Find("tasks") as RectTransform;
             Assert.IsNotNull(tasks, "the lesson's card is the prefab's own 'tasks' node");
             Assert.IsTrue(tasks.gameObject.activeSelf, "a lesson owns the corner while it is being taught");
-            Assert.IsFalse(canvas.Find("tutorial").gameObject.activeSelf, "and the reference card waits");
+            Assert.IsNull(canvas.Find("tutorial"), "and there is no second card to hand the corner to");
 
             float s = HudLayout.Scale(Screen.height);
             Rect laid = HudLayout.Tutorial(s);
-            Assert.AreEqual(laid.size, tasks.sizeDelta, "the two cards are one rect and one place");
+            Assert.AreEqual(laid.size, tasks.sizeDelta, "the card is the layout's own rect");
             Assert.AreEqual(-laid.y, tasks.anchoredPosition.y, 0.5f, "under the status rail");
 
             // Heading, the count at the far end, the hairline, the lines' 74 and the hint's own 14 under them:
@@ -498,41 +457,6 @@ namespace Facet.PlayTests
                 tasks.Find("body").GetComponent<TMPro.TMP_Text>().text, "and prints the line being taught");
             Assert.IsFalse(tasks.Find("hint").gameObject.activeSelf,
                 "the hint is the card's second voice and stays quiet until the line has stood");
-
-            // The fixture severs the real devices, so the keyboard it hands back is the one the key goes through.
-            Transform tutorial = canvas.Find("tutorial");
-            Transform hide = tutorial.Find("hide");
-            var input = new InputTestFixture();
-            input.Setup();
-            try
-            {
-                Keyboard keyboard = InputSystem.AddDevice<Keyboard>();
-                InputSystem.AddDevice<Mouse>();   // the HUD's event system binds a pointer
-                yield return null;
-
-                input.Press(keyboard.tKey);
-                yield return AssertWithinFrames(() => tutorial.gameObject.activeSelf,
-                    "T hands the corner to the reference card");
-                Assert.IsFalse(tasks.gameObject.activeSelf, "and the lesson's card stands down");
-
-                Assert.AreEqual("TASKS  T", hide.Find("hide.label").GetComponent<TMPro.TMP_Text>().text,
-                    "the hide button says where the same key goes back to");
-
-                input.Release(keyboard.tKey);
-                yield return null;
-
-                // The button itself hands the corner back, one deliberate press - and the press must not take
-                // the card down inside its own dispatch.
-                var press = new PointerEventData(EventSystem.current);
-                ExecuteEvents.ExecuteHierarchy(hide.gameObject, press, ExecuteEvents.pointerDownHandler);
-                yield return AssertWithinFrames(() => tasks.gameObject.activeSelf,
-                    "the button gives the corner back to the lesson");
-                Assert.IsFalse(tutorial.gameObject.activeSelf, "and takes its own card away");
-            }
-            finally
-            {
-                input.TearDown();
-            }
         }
 
         /// <summary>The controls cluster is a prefab (<c>Resources/Hud/HudControls</c>), and each button's left
@@ -589,6 +513,30 @@ namespace Facet.PlayTests
             Assert.AreEqual(12f * s, bars.sizeDelta.y, 0.5f, "and its design height");
         }
 
+        /// <summary>The wave button names the action, in words that fit its pill.</summary>
+        [UnityTest]
+        public IEnumerator TheWaveButton_NamesTheAction_AndItsWordsFitThePill()
+        {
+            yield return null;
+            BeginRun();
+            yield return null;   // the first controls pass after the rebuild writes the label
+
+            var hud = _driverObject.GetComponentInChildren<HudView>(true);
+            Transform wave = hud.transform.Find("HudCanvas/controls/wave");
+            Assert.IsNotNull(wave, "the cluster carries the wave button");
+            Assert.IsTrue(wave.gameObject.activeSelf, "a run that opens held offers the wave");
+
+            var button = wave.GetComponent<HudButton>();
+            Assert.IsNotNull(button, "and the node is the button the cluster binds");
+            Assert.AreEqual("START WAVE 1", button.Label.Text.text,
+                "the pill's word is the action it performs, not the phase's name");
+
+            button.Label.Text.ForceMeshUpdate();
+            float s = HudLayout.Scale(Screen.height);
+            Assert.LessOrEqual(button.Label.PreferredWidth, (HudLayout.WaveButtonWidth - 8f) * s + 0.5f,
+                "the word fits inside the pill, with its 4-unit inset each side");
+        }
+
         /// <summary>The build bar is a prefab (<c>Resources/Hud/HudBar</c>) and so is a key (<c>Resources/Hud/HudBarTile</c>).
         /// The bar's length is the run's, so this reads both ends: the full table, and the strip a lesson opens.</summary>
         [UnityTest]
@@ -615,7 +563,7 @@ namespace Facet.PlayTests
             // The row the keys sit in is the one place inside the bar that is the asset's rather than the run's.
             var row = bar.Find("tiles") as RectTransform;
             Assert.IsNotNull(row, "the card carries the row its keys sit in");
-            AssertRow(bar, "tiles", HudLayout.BarPad, 6f, 0f, 0f, s);
+            AssertRow(bar, "tiles", HudLayout.BarPad, HudLayout.BarPad, 0f, 0f, s);
 
             // The fixture's first map hands everything over, so every building has a key on the strip.
             Assert.AreEqual(expected.Count, KeyCount(row), "one key per building this run offers");
@@ -629,26 +577,28 @@ namespace Facet.PlayTests
             Assert.AreEqual(Screen.height - laid.yMax, bar.anchoredPosition.y, 0.5f,
                 "one margin up from the screen's bottom edge");
 
-            // One key at the row's origin, 66.75 by 40, and the next one key plus its air on.
+            // One key at the row's origin, 100 by 80, and the next one key plus its air on.
             var key = row.Find("tile0") as RectTransform;
             Assert.IsNotNull(key, "the row carries the first key");
-            AssertRow(row, "tile0", 0f, 0f, HudLayout.BarTileWidth, 40f, s);
+            AssertRow(row, "tile0", 0f, 0f, HudLayout.BarTileWidth, HudLayout.BarTileHeight, s);
             AssertRow(row, "tile1", HudLayout.BarTileWidth + HudLayout.BarGap, 0f,
-                HudLayout.BarTileWidth, 40f, s);
+                HudLayout.BarTileWidth, HudLayout.BarTileHeight, s);
 
-            // The key's pieces in design units.
-            AssertRow(key, "name", 6f, 3f, HudLayout.BarTileWidth - 12f, 16f, s);
-            AssertRow(key, "keycap", 6f, 21f, 16f, 14f, s);
-            AssertRow(key, "hotkey", 6f, 21f, 16f, 14f, s);
-            AssertRow(key, "cost", 24f, 21f, HudLayout.BarTileWidth - 30f, 14f, s);
+            // The key's pieces in design units: digit and price on the top row, the machine's picture under
+            // them, the name last.
+            AssertRow(key, "hotkey", 5f, 3f, 17f, 15f, s);
+            AssertRow(key, "keycap", 5f, 3f, 17f, 15f, s);
+            AssertRow(key, "cost", 64f, 3f, 30f, 18f, s);
+            AssertRow(key, "icon", 29f, 22f, 42f, 42f, s);
+            AssertRow(key, "name", 6f, 64f, HudLayout.BarTileWidth - 12f, 14f, s);
 
-            // The mark's square is the asset's, but where it stands is measured against the number's own width on
-            // the first update (PlaceCostIcon), so three digits push it left and four keep it in.
+            // The mark's square is the asset's, but where it stands is measured against the number's own width
+            // on the first update (PlaceCostIcon), so three digits push it left and four keep it in.
             var markRect = key.Find("costIcon") as RectTransform;
             Assert.IsNotNull(markRect, "the key carries the price's mark");
-            Assert.AreEqual(9f * s, markRect.sizeDelta.x, 0.5f, "the mark is its design size");
-            Assert.AreEqual(9f * s, markRect.sizeDelta.y, 0.5f, "and square");
-            Assert.Greater(markRect.anchoredPosition.x, 24f * s, "and stands clear of the keycap");
+            Assert.AreEqual(14f * s, markRect.sizeDelta.x, 0.5f, "the mark is its design size");
+            Assert.AreEqual(14f * s, markRect.sizeDelta.y, 0.5f, "and square");
+            Assert.Greater(markRect.anchoredPosition.x, 34f * s, "and stands clear of the keycap");
             Assert.Less(markRect.anchoredPosition.x, (HudLayout.BarTileWidth - 6f) * s,
                 "inside the key's right inset");
 
@@ -656,11 +606,11 @@ namespace Facet.PlayTests
             var afford = key.Find("afford") as RectTransform;
             Assert.IsNotNull(afford, "the key carries the line the bank's share is drawn on");
             Assert.AreEqual(6f * s, afford.anchoredPosition.x, 0.5f, "one inset in");
-            Assert.AreEqual(2f * s, afford.anchoredPosition.y, 0.5f, "two units up from the floor");
+            Assert.AreEqual(1f * s, afford.anchoredPosition.y, 0.5f, "one unit up from the floor");
             Assert.AreEqual((HudLayout.BarTileWidth - 12f) * s, afford.sizeDelta.x, 0.5f,
                 "and the key's inner width, which is the length the fraction measures against");
 
-            // The words on the keys are the machine's, key by key and in the table's order.
+            // The words on the keys are the machine's, key by key and in the bar's order.
             for (int i = 0; i < expected.Count; i++)
             {
                 Transform keyI = row.Find("tile" + i);
@@ -668,8 +618,8 @@ namespace Facet.PlayTests
 
                 MachineDef machine = driver.Content.Machine(expected[i]);
                 Assert.AreEqual(machine.Name, LabelText(keyI, "name"), "key " + i + " names its building");
-                Assert.AreEqual(BuildInput.HotkeyLabel((int)expected[i]), LabelText(keyI, "hotkey"),
-                    "key " + i + " says the key that presses it");
+                Assert.AreEqual(BuildInput.HotkeyLabel(i), LabelText(keyI, "hotkey"),
+                    "key " + i + " says the key that presses it: its bar position, not its ordinal");
                 Assert.AreEqual(machine.Cost.ToString(), LabelText(keyI, "cost"), "key " + i + " prices it");
             }
 
@@ -683,6 +633,16 @@ namespace Facet.PlayTests
             var mark = markRect.GetComponent<RawImage>();
             Assert.IsNotNull(mark, "the price's mark is a picture");
             Assert.IsNotNull(mark.texture, "and the bar painted it");
+            Assert.AreNotSame(Texture2D.whiteTexture, mark.texture,
+                "a mark the bar never painted would draw the RawImage's white fallback");
+
+            // The building's own picture, from the same palette as the map.
+            var preview = key.Find("icon") as RectTransform;
+            Assert.IsNotNull(preview, "the key carries the machine's preview");
+            var picture = preview.GetComponent<RawImage>();
+            Assert.IsNotNull(picture, "and the preview is a picture");
+            Assert.IsNotNull(picture.texture, "which the bar painted");
+            Assert.IsTrue(picture.gameObject.activeSelf, "and shows it");
 
             // The selection is latched by the input and applied by the next tick.
             var press = new PointerEventData(EventSystem.current);
@@ -691,9 +651,38 @@ namespace Facet.PlayTests
             Assert.IsTrue(driver.World.SelectedKind.HasValue, "a click selects the kind the key names");
             Assert.AreEqual(expected[0], driver.World.SelectedKind.Value, "and it is that key's own kind");
 
-            // The strip follows the run: a lesson that handed over one building gets one key, not a full shelf.
-            Driver.PlayMap(2, false);
+            // A rebuild with the same money mineral is the case that used to leave every price a white square:
+            // the new tiles are new RawImages, and the "already drawn" bookkeeping must not believe them.
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            typeof(HudView).GetMethod("RebuildPanels", flags).Invoke(hud, null);
             yield return null;
+
+            var rebuiltRow = canvas.Find("bar/tiles") as RectTransform;
+            Assert.IsNotNull(rebuiltRow, "the rebuilt bar is the same card");
+            for (int i = 0; i < expected.Count; i++)
+            {
+                Transform tile = rebuiltRow.Find("tile" + i);
+                Assert.IsNotNull(tile, "the rebuild kept key " + i);
+
+                var price = tile.Find("costIcon").GetComponent<RawImage>();
+                Assert.IsNotNull(price.texture, "the rebuilt key " + i + " painted its price's mark");
+                Assert.AreNotSame(Texture2D.whiteTexture, price.texture,
+                    "and it is the run's coin, not the RawImage's white fallback");
+            }
+
+            // The strip follows the run: a lesson that handed over one building gets one key, not a full shelf.
+            // Two frames, because a map change rebuilds the panels and then dresses the new keys.
+            Driver.PlayMap(2);
+
+            // The old bar is torn down with Destroy, which lands at the end of a frame, so for a frame or two
+            // canvas.Find("bar") can still answer with the old card and its nine keys. Wait for the rebuild to
+            // settle rather than for one frame - the assertions below are unchanged.
+            for (int frame = 0; frame < 10; frame++)
+            {
+                yield return null;
+                var settling = canvas.Find("bar/tiles") as RectTransform;
+                if (settling != null && KeyCount(settling) == 1) break;
+            }
 
             var lessonRow = canvas.Find("bar/tiles") as RectTransform;
             Assert.IsNotNull(lessonRow, "the lesson's bar is the same card and the same row");
@@ -703,7 +692,7 @@ namespace Facet.PlayTests
             Rect narrow = HudLayout.Bar(Screen.width, Screen.height, s, 1);
             Assert.AreEqual(narrow.width, canvas.Find("bar").GetComponent<RectTransform>().sizeDelta.x,
                 0.5f, "the card is only as wide as the keys it holds");
-            AssertRow(lessonRow, "tile0", 0f, 0f, HudLayout.BarTileWidth, 40f, s);
+            AssertRow(lessonRow, "tile0", 0f, 0f, HudLayout.BarTileWidth, HudLayout.BarTileHeight, s);
         }
 
         /// <summary>The info card is a prefab (<c>Resources/Hud/HudInfo</c>): one surface, two faces, and the
@@ -910,9 +899,10 @@ namespace Facet.PlayTests
                 "and the last line ends inside the card, above its foot");
         }
 
-        /// <summary>The bank is a prefab (<c>Resources/Hud/HudStockpile</c>): a pill, the shape it counts, the
-        /// number. The mark stands left, so the number grows rightwards without touching it (issue #12) - which is
-        /// what lets its geometry be read against the layout rather than against a picture.</summary>
+        /// <summary>The bank is a prefab (<c>Resources/Hud/HudStockpile</c>): a pill, one mark per mineral the
+        /// map mines, and the number. The marks stand left, so the number grows rightwards without touching them
+        /// (issue #12) - which is what lets their geometry be read against the layout rather than against a
+        /// picture. The map this run opens mines a circle vein and a square vein, so it draws two.</summary>
         [UnityTest]
         public IEnumerator TheHudStockpile_IsThePrefabAtTheLayoutsCorner()
         {
@@ -926,31 +916,49 @@ namespace Facet.PlayTests
             Assert.IsNotNull(panel, "the bank is the prefab's own 'stockpile' node");
 
             float s = HudLayout.Scale(Screen.height);
-            Rect laid = HudLayout.Stockpile(Screen.width, s);
+            int marks = driver.World.Map.MineralList().Length;
+            Assert.AreEqual(2, marks, "the map this run opens mines two minerals, so it takes two marks");
+
+            Rect laid = HudLayout.Stockpile(Screen.width, s, marks);
             Assert.AreEqual(laid.width, panel.sizeDelta.x, 0.5f, "the bank is the width the layout names");
             Assert.AreEqual(laid.height, panel.sizeDelta.y, 0.5f, "and the height");
             Assert.AreEqual(laid.x, panel.anchoredPosition.x, 0.5f, "at the layout's left edge");
             Assert.AreEqual(-laid.y, panel.anchoredPosition.y, 0.5f, "and its one margin down");
 
-            // The coin at the demand figure's size, centred on the pill; the number six units to its right.
-            AssertRow(panel, "icon", 12f, (HudLayout.StockpileHeight - HudLayout.DemandFigure) * 0.5f,
-                HudLayout.DemandFigure, HudLayout.DemandFigure, s);
-            AssertRow(panel, "number", 12f + HudLayout.DemandFigure + 6f, 2f,
-                HudLayout.StockpileWidth - (12f + HudLayout.DemandFigure + 12f), 40f, s);
+            // The marks at the readout's own size, side by side from the pill's left inset; the number right
+            // of the last of them.
+            AssertRow(panel, "icon", HudLayout.MoneyInsetLeft,
+                (HudLayout.StockpileHeight - HudLayout.MoneyMark) * 0.5f,
+                HudLayout.MoneyMark, HudLayout.MoneyMark, s);
+            AssertRow(panel, "number",
+                HudLayout.MoneyInsetLeft + HudLayout.MoneySpan(marks) + HudLayout.MoneyToNumber,
+                2f, 84f, 40f, s);
+
+            // One mark per mineral: the second is a copy of the prefab's icon node, and it draws a different
+            // picture because the two minerals are two pictures.
+            var mark = panel.Find("icon").GetComponent<RawImage>();
+            var second = panel.Find("icon1") as RectTransform;
+            Assert.IsNotNull(second, "the second mineral got a mark of its own");
+            var square = second.GetComponent<RawImage>();
+            AssertRow(panel, "icon1", HudLayout.MoneyInsetLeft + HudLayout.MoneyMark + HudLayout.MoneyMarkGap,
+                (HudLayout.StockpileHeight - HudLayout.MoneyMark) * 0.5f,
+                HudLayout.MoneyMark, HudLayout.MoneyMark, s);
 
             // The atlas is rasterised at runtime, so the binder paints the map's mineral onto an empty picture;
             // a mark the palette cannot draw leaves the number bare rather than showing a white square.
-            var mark = panel.Find("icon").GetComponent<RawImage>();
             Assert.IsNotNull(mark, "the coin is a picture");
             Assert.IsNotNull(mark.texture, "and the binder painted it");
+            Assert.IsNotNull(square.texture, "so is the second mineral's");
+            Assert.AreNotSame(mark.texture, square.texture, "two minerals are two pictures");
             Assert.AreEqual(mark.texture != null, mark.gameObject.activeSelf,
                 "the mark is shown exactly when there is one to show");
+            Assert.IsTrue(square.gameObject.activeSelf, "and so is the second");
             Assert.AreEqual(driver.World.Economy.Shapes.ToString(), LabelText(panel, "number"),
                 "the number is the bank's own");
         }
 
         /// <summary>The banner is a prefab (<c>Resources/Hud/HudBanner</c>): the run's one unmissable sentence, on a
-        /// card the layout does not size - it is an overlay, off the screen's 22 % budget.</summary>
+        /// card the layout does not size - it is an overlay, off the screen's persistent-panel budget.</summary>
         [UnityTest]
         public IEnumerator TheHudBanner_IsThePrefabCentred_AndSaysWhyTheRunStopped()
         {
@@ -1222,7 +1230,7 @@ namespace Facet.PlayTests
             yield return new WaitForSeconds(0.2f);
             Assert.AreEqual(held, driver.World.TickCount, "and it does not tick behind the title");
 
-            driver.PlayMap(0, false);
+            driver.PlayMap(0);
             yield return null;
             int started = driver.World.TickCount;
             yield return new WaitForSeconds(0.2f);

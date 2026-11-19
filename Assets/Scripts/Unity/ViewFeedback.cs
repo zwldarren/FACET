@@ -21,11 +21,12 @@ namespace Facet.Game
 
         /// <summary>The current roster has one gun. Read THIS run's base damage, never a literal 4/2.
         /// Return 0 for an unknown amount, rather than mislabelling a custom damage source.</summary>
-        public static int DamageMarks(float damage, float baseDamage)
+        public static int DamageMarks(float damage, float baseDamage,
+            float resisted = Balance.ResistantDamageMultiplier)
         {
             if (baseDamage <= 0f) return 0;
             if (Mathf.Approximately(damage, baseDamage * Balance.WeaknessDamageMultiplier)) return 2;
-            if (Mathf.Approximately(damage, baseDamage * Balance.ResistantDamageMultiplier)) return 1;
+            if (Mathf.Approximately(damage, baseDamage * resisted)) return 1;
             return 0;
         }
     }

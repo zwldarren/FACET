@@ -3,8 +3,9 @@ namespace Facet.Core
     /// <summary>
     /// Everything the player can put on the map, in the order the design's final machine list gives
     /// (DESIGN §3): mine, then the three operators that build the shape ladder, then transport, routing,
-    /// the maze tool and the gun. The ordinal is both the selecting control and the
-    /// <see cref="ContentDatabase"/> index, so the order is the hotkey order and a new kind is appended.
+    /// the maze tool and the gun. The ordinal is the <see cref="ContentDatabase"/> index, so a new kind is
+    /// appended. It is <em>not</em> the hotkey number: that is the kind's place on the run's bar, which closes
+    /// the gaps a retired or not-yet-taught kind leaves - see <see cref="SimWorld.BarIndex"/>.
     ///
     /// The rework reshaped this enum rather than appending to it: the decomposer, the mortar and the
     /// assembler are retired and their processing is <em>operators</em> now, so the ladder reads in
@@ -48,8 +49,8 @@ namespace Facet.Core
         /// <summary>The drain: eats anything delivered into it and destroys it. It exists because a fork
         /// makes two pieces and a layout often wants one - the surplus has to go <em>somewhere</em>, and
         /// without a sink "route the unwanted half" has no ending, so its lane fills and the machine that
-        /// made it stalls. Appended past the ten the keyboard reaches, which is why it is the one kind with
-        /// a letter for a hotkey rather than a digit.</summary>
+        /// made it stalls. Appended last in the table, which makes it the bar's ninth key while the two retired
+        /// kinds stay off the strip.</summary>
         Sink = 10,
     }
 
@@ -58,7 +59,7 @@ namespace Facet.Core
     /// code handed a <see cref="ContentDatabase"/> should read that instead.</summary>
     public static class BuildCatalog
     {
-        /// <summary>Every buildable kind, in ordinal (hotkey) order.</summary>
+        /// <summary>Every buildable kind, in the content table's order.</summary>
         public static BuildKind[] All => ContentDatabase.Default.BuildKinds;
 
         public static int Count => ContentDatabase.Default.BuildKinds.Length;

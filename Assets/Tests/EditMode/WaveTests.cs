@@ -339,42 +339,30 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void AnEndlessMap_NeverFinishes_AndHasNoTotalToPrint()
+        public void AGeneratedRun_StopsAtTheNumberOfWavesItsMapAskedFor()
         {
-            // Endless mode is not a second mode: it is the generator with no bound (§5), so the clock's
-            // answer to "how many waves are there" is zero and the HUD prints the wave number alone. What
-            // must never happen is the run reporting itself finished - there is no last wave to clear.
-            var map = new MapDefinition("endless", 24, 16, Sim.TestShapes,
+            // The generator is a source of waves, not a source of waves without end: every run has a total,
+            // the HUD can print it, and the clock reports itself over once the last one is cleared.
+            var map = new MapDefinition("bounded", 24, 16, Sim.TestShapes,
                 new[] { new ShapePatch(new Int2(2, 2), 1, 1, Quad.Circle) },
                 new[] { new Int2(12, 14) },
                 new WaveDefinition[0],
                 coreCell: new Int2(10, 6),
                 unlocked: Operators.All,
                 seed: 4242,
-                generatedWaves: -1);
+                generatedWaves: 3);
 
             var world = new SimWorld(map, new SimConfig { CoreMaxHp = 1000000f });
 
-            Assert.IsTrue(world.Waves.Endless);
-            Assert.AreEqual(0, world.Waves.TotalWaves, "an endless run has no total");
+            Assert.AreEqual(3, world.Waves.TotalWaves, "three generated waves, and that is the run");
             Assert.AreEqual(0, world.Waves.AuthoredCount, "and nothing scripted to play first");
             Assert.AreEqual(4242, world.Waves.Seed, "the run's seed is the map's, for the HUD to print");
             Assert.IsNotNull(world.Waves.Definition(1), "the generator answers from wave one");
-            Assert.IsNotNull(world.Waves.Definition(200), "and keeps answering: there is no last one");
-            Assert.IsNotNull(world.Waves.Definition(1), "and asking twice is the same answer");
+            Assert.IsNotNull(world.Waves.Definition(3), "and up to the last wave the map asked for");
+            Assert.IsNull(world.Waves.Definition(4), "but no further: the run has a last wave");
 
-            world.Waves.StartNextWave();
-            Sim.Tick(world, (int)(60 * SimConfig.TickRate));
-
-            Assert.GreaterOrEqual(world.Waves.CurrentWave, 1, "a wave is on the clock");
-            Assert.IsFalse(world.Waves.Finished, "a minute in, an endless run has not run out of waves");
-            Assert.AreNotEqual(WavePhase.Over, world.Waves.Phase, "and the clock is not over");
-            Assert.AreEqual(GameStatus.Playing, world.Status, "with the run still to be won or lost");
-
-            // The control: the same questions asked of a bounded map, where the total is a number and the
-            // clock can reach the end of it. (That it *does* end is the win test's business, above.)
+            // The control: a table-only map, where the total is the table's own length.
             SimWorld bounded = Sim.OneWaveWorld();
-            Assert.IsFalse(bounded.Waves.Endless);
             Assert.AreEqual(1, bounded.Waves.TotalWaves);
             Assert.AreEqual(1, bounded.Waves.AuthoredCount);
         }

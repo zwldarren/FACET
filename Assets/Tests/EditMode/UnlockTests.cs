@@ -25,7 +25,7 @@ namespace Facet.Tests
                 coreCell: new Int2(14, 8),
                 unlocked: unlocked,
                 seed: seed,
-                generatedWaves: -1);
+                generatedWaves: 40);
 
         private static ShapePatch[] Patches(Quad[] minerals)
         {
@@ -156,7 +156,7 @@ namespace Facet.Tests
                 for (int n = 1; n <= 25; n++)
                 {
                     WaveDefinition wave = world.Waves.Definition(n);
-                    Assert.IsNotNull(wave, "an endless map answers for wave " + n);
+                    Assert.IsNotNull(wave, "the map's generated stretch answers for wave " + n);
 
                     foreach (SpawnGroup group in wave.Groups)
                     {

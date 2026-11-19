@@ -46,8 +46,8 @@ namespace Facet.Core
     /// <b>Where a wave comes from is the map's decision.</b> A map's authored table is played first, and
     /// then the <see cref="WaveGenerator"/> takes over if the map asked for generated waves
     /// (<see cref="MapDefinition.GeneratedWaves"/>): a scripted opening followed by a procedurally
-    /// generated run, or - a map that authors nothing - a generated run from wave 1. Endless mode is the
-    /// same mechanism with no bound, which is why it needed no separate mode.
+    /// generated run, or - a map that authors nothing - a generated run from wave 1. Both are bounded: how
+    /// many waves a run has is the map's own number.
     ///
     /// Lookups are by wave <em>number</em> and pure, so the briefing can show the wave after next without
     /// disturbing the stream the running wave came from. The generator's answers are memoised, because a
@@ -168,8 +168,8 @@ namespace Facet.Core
         /// the number; for *branching*, read <see cref="Phase"/>.</summary>
         public int CurrentWave { get; private set; }
 
-        /// <summary>How many waves this run has cleared - the highest wave survived. What research is scheduled
-        /// against, and what an endless run is scored by.</summary>
+        /// <summary>How many waves this run has cleared - the highest wave survived. What research is
+        /// scheduled against, and what the end-of-run report reads.</summary>
         public int Cleared { get; private set; }
 
         /// <summary>1-based number of the wave the intermission is counting down to, 0 when none is left.
@@ -205,12 +205,9 @@ namespace Facet.Core
         /// <summary>How many authored waves the map has, before the generator takes over.</summary>
         public int AuthoredCount => Table.Length;
 
-        /// <summary>Is this run endless - the generator past the last map with no bound (§5)? Then
-        /// <see cref="TotalWaves"/> is 0 and the HUD prints the wave number alone.</summary>
-        public bool Endless => _map.GeneratedWaves < 0;
-
-        /// <summary>How many waves the run has, or 0 for an endless one.</summary>
-        public int TotalWaves => Endless ? 0 : Table.Length + Math.Max(0, _map.GeneratedWaves);
+        /// <summary>How many waves the run has: the authored table plus however many the generator answers.
+        /// Every run has a number.</summary>
+        public int TotalWaves => Table.Length + _map.GeneratedWaves;
 
         /// <summary>The run's seed: the generator's only input, and what the HUD shows so a run is
         /// reproducible from the number on the screen. Drawn once per run - construction and every
@@ -256,7 +253,7 @@ namespace Facet.Core
             get
             {
                 if (NextWave <= 0) return null;
-                if (!Endless && NextWave + 1 > TotalWaves) return null;
+                if (NextWave + 1 > TotalWaves) return null;
 
                 return Definition(NextWave + 1);
             }
@@ -275,7 +272,7 @@ namespace Facet.Core
             if (!_map.GeneratesWaves) return null;
 
             int generated = number - Table.Length;
-            if (!Endless && generated > _map.GeneratedWaves) return null;
+            if (generated > _map.GeneratedWaves) return null;
 
             for (int i = 0; i < _memoNumber.Length; i++)
                 if (_memoNumber[i] == number && _memoWave[i] != null) return _memoWave[i];
@@ -522,8 +519,8 @@ namespace Facet.Core
             ClearedWaves++;
             _events.WaveCleared(cleared);
 
-            // A run with no bound - endless mode - never runs out: the generator simply keeps answering.
-            if (!Endless && cleared >= TotalWaves)
+            // Every run is bounded: the last wave cleared is the run's end.
+            if (cleared >= TotalWaves)
             {
                 Finished = true;
                 NextWave = 0;

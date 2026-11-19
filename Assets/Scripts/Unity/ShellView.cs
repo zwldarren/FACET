@@ -36,7 +36,7 @@ namespace Facet.Game
 
         /// <summary>The shell's four doors back into the driver. The driver owns every transition; the shell only
         /// asks.</summary>
-        private Action<int, bool> _play;
+        private Action<int> _play;
         private Action _resume;
         private Action _restart;
         private Action _toTitle;
@@ -96,7 +96,7 @@ namespace Facet.Game
         /// into the driver. The canvas is built once; every open rebuilds the content against the progress of the
         /// moment, which is what keeps a level list honest after a run has cleared something.</summary>
         public void Initialize(Palette palette, MapCatalog catalog, CampaignState campaign,
-            Action<int, bool> play, Action resume, Action restart, Action toTitle)
+            Action<int> play, Action resume, Action restart, Action toTitle)
         {
             _palette = palette;
             _catalog = catalog;
@@ -379,11 +379,11 @@ namespace Facet.Game
         private const float TitleMotifCentre = 0.44f;
 
         /// <summary>From where the campaign stands: a fresh profile plays, a started campaign continues at its
-        /// frontier map, and a finished one has nothing left but the last map played endless.</summary>
+        /// frontier map, and a finished one has nothing left but to replay the last map it cleared.</summary>
         private string PlayLabel()
         {
             if (_campaign.ClearedCount >= _campaign.MapCount)
-                return "endless on " + _catalog.At(_campaign.MapCount - 1).Name + "  ·  Enter";
+                return "replay " + _catalog.At(_campaign.MapCount - 1).Name + "  ·  Enter";
             if (_campaign.ClearedCount == 0) return "play  ·  Enter";
 
             return "continue, map " + (_campaign.ClearedCount + 1) + " of " + _campaign.MapCount + "  ·  Enter";
@@ -402,11 +402,9 @@ namespace Facet.Game
 
         private void PressPlay()
         {
-            // The frontier is the first map the campaign has not cleared; with the whole campaign
-            // cleared, the same button is the endless entry - the last map, unbounded.
-            bool endless = _campaign.ClearedCount >= _campaign.MapCount;
+            // The frontier is the first map the campaign has not cleared; a spent campaign replays the last.
             int index = Mathf.Min(_campaign.ClearedCount, _campaign.MapCount - 1);
-            _play?.Invoke(index, endless);
+            _play?.Invoke(index);
         }
 
         private void ShowLevelScreen() => SetMode(Mode.Levels);
@@ -624,7 +622,7 @@ namespace Facet.Game
             if (!locked)
             {
                 int captured = index;
-                button.Pressed = () => _play?.Invoke(captured, false);
+                button.Pressed = () => _play?.Invoke(captured);
                 _buttons.Add(button);
             }
             else _locked.Add(button);
@@ -713,18 +711,17 @@ namespace Facet.Game
         }
 
         /// <summary>A map's own facts, one line: the size a route is planned on, the budget it starts with, its wave
-        /// count (or "endless"), the operators it hands over, and the seed only when the map pins one. Deliberately no
-        /// wave table here: the demands are the run's surprises.</summary>
+        /// count, the operators it hands over, and the seed only when the map pins one. Deliberately no wave table
+        /// here: the demands are the run's surprises.</summary>
         private static string Facts(MapDefinition map)
         {
             var text = new StringBuilder();
             text.Append(map.Width).Append(" × ").Append(map.Height);
             text.Append("  ·  start ").Append(map.StartShapes);
-            text.Append("  ·  ").Append(map.GeneratedWaves < 0 ? "endless" : map.Waves.Length + " waves");
+            text.Append("  ·  ").Append(map.Waves.Length + map.GeneratedWaves).Append(" waves");
 
             string operators = OperatorNames(map.Unlocked);
             if (operators.Length > 0) text.Append("  ·  ").Append(operators);
-            if (map.GeneratedWaves >= 0) text.Append("  ·  endless on N");
             if (map.Seed != 0) text.Append("  ·  seed ").Append(map.Seed);
 
             return text.ToString();

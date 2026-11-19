@@ -24,10 +24,10 @@ namespace Facet.Tests
         [Test]
         public void BuildKind_Ordinals_AreTheShippedFormat()
         {
-            // The ordinal is the hotkey order and the content-table index. The rework reshaped this list
-            // rather than appending to it - the operators landed where the two splitters used to be - so it
-            // is pinned here in full, and every authored row in the content asset is keyed by id for exactly
-            // this reason.
+            // The ordinal is the content-table index. The rework reshaped this list rather than appending to it
+            // - the operators landed where the two splitters used to be - so it is pinned here in full, and
+            // every authored row is keyed by id for exactly this reason. The hotkey number is separate: it is
+            // the bar position, gap-free - see BarKeys_AreNumberedFromOne_WithNoGapForRetiredKinds.
             Assert.AreEqual("Belt", ((BuildKind)0).ToString());
             Assert.AreEqual("Drill", ((BuildKind)1).ToString());
             Assert.AreEqual("Cutter", ((BuildKind)2).ToString());
@@ -39,8 +39,7 @@ namespace Facet.Tests
             Assert.AreEqual("Wall", ((BuildKind)8).ToString());
             Assert.AreEqual("Turret", ((BuildKind)9).ToString());
 
-            // Appended past the ten the keyboard's digits reach, which is why the drain is the one kind whose
-            // key is a letter: the ordinal is the hotkey order, and there was no digit left to give it.
+            // The drain is the last kind appended to the table, and it sits on the bar's ninth key.
             Assert.AreEqual("Sink", ((BuildKind)10).ToString());
 
             Assert.AreEqual(11, Enum.GetValues(typeof(BuildKind)).Length,
@@ -240,22 +239,55 @@ namespace Facet.Tests
         [Test]
         public void Hotkeys_ReachEveryBuildKind()
         {
-            // The digit-to-kind mapping is positional (BuildInput.BuildKeys): a twelfth kind would have no key
-            // and bar tiles whose labels wrap onto a used digit, both silently. This is the fail-loud -
-            // extend BuildKeys and the labels before extending the table. The eleventh is the drain, and it
-            // took the one key past the digits rather than a second row of them, because a keyboard has
-            // exactly ten.
+            // The digit-to-kind mapping is positional over the bar, not the enum: a key's number is the place it
+            // stands on the strip, so a hidden building closes the gap instead of leaving dead digits. This is
+            // the fail-loud for a bar that outgrows the keyboard, and for the labels the strip prints.
             BuildKind[] kinds = ContentDatabase.Default.BuildKinds;
-            Assert.LessOrEqual(kinds.Length, BuildInput.HotkeyCount,
-                kinds.Length + " build kinds against " + BuildInput.HotkeyCount + " hotkeys");
+            int onBar = 0;
+            for (int i = 0; i < kinds.Length; i++)
+                if (!BuildCatalog.Retired(kinds[i])) onBar++;
+
+            Assert.LessOrEqual(onBar, BuildInput.HotkeyCount,
+                onBar + " bar keys against " + BuildInput.HotkeyCount + " hotkeys");
 
             Assert.AreEqual("1", BuildInput.HotkeyLabel(0));
             Assert.AreEqual("9", BuildInput.HotkeyLabel(8));
-            Assert.AreEqual("0", BuildInput.HotkeyLabel(9), "the tenth kind is key 0");
+            Assert.AreEqual("0", BuildInput.HotkeyLabel(9), "the tenth key is 0");
             Assert.AreEqual("X", BuildInput.HotkeyLabel(10), "and the eleventh is the letter X");
-            Assert.AreEqual("1-9, 0 and X", BuildInput.KeyRangeText(),
-                "the shipped eleven kinds are keys 1-9 and 0 plus X - and the bar's hint says exactly that, " +
-                "in the characters a built player's HUD font actually carries");
+
+            Assert.AreEqual("1-9", BuildInput.KeyRangeText(9),
+                "the nine shipped buildings are keys 1-9 - the bar has no gap and no letter");
+            Assert.AreEqual("1-5", BuildInput.KeyRangeText(5), "a lesson's half-open bar says its own range");
+            Assert.AreEqual("1", BuildInput.KeyRangeText(1));
+            Assert.AreEqual("1-9 and 0", BuildInput.KeyRangeText(10));
+            Assert.AreEqual("1-9, 0 and X", BuildInput.KeyRangeText(11),
+                "and a table that outgrows the digits names every key it uses");
+        }
+
+        [Test]
+        public void BarKeys_AreNumberedFromOne_WithNoGapForRetiredKinds()
+        {
+            SimWorld world = Sim.NewWorld(20, 12);
+
+            Assert.AreEqual(9, world.BarCount, "the shipped bar carries the nine kinds a run can build");
+            Assert.AreEqual(BuildKind.Belt, world.BarKindAt(0), "the first key is the first visible kind");
+            Assert.AreEqual(BuildKind.Cutter, world.BarKindAt(1),
+                "the retired drill leaves no gap: key 2 is the next building the bar shows");
+            Assert.AreEqual(BuildKind.Sink, world.BarKindAt(8), "and the drain is the ninth key, not X");
+            Assert.IsNull(world.BarKindAt(9), "there is no tenth key on this bar");
+
+            Assert.AreEqual(0, world.BarIndex(BuildKind.Belt));
+            Assert.AreEqual(8, world.BarIndex(BuildKind.Sink));
+            Assert.AreEqual(-1, world.BarIndex(BuildKind.Drill), "a retired kind has no key at all");
+            Assert.AreEqual(-1, world.BarIndex(BuildKind.Wall));
+
+            for (int i = 0; i < world.BarCount; i++)
+            {
+                BuildKind kind = world.BarKindAt(i).Value;
+                Assert.AreEqual(i, world.BarIndex(kind), "position and lookup are the same order");
+                Assert.AreEqual(BuildInput.HotkeyLabel(i), (i + 1).ToString(),
+                    "and every key on the shipped bar prints its own digit");
+            }
         }
 
         [Test]

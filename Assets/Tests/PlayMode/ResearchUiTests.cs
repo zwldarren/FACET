@@ -33,7 +33,6 @@ namespace Facet.PlayTests
             _progressKeyExisted = PlayerPrefs.HasKey(CampaignProgress.Key);
             _progressBefore = CampaignProgress.Read();
             CampaignProgress.Forget();
-            PlayerPrefs.DeleteKey(BestWave.KeyPrefix + MapName);
 
             _cameraObject = new GameObject("Main Camera");
             _cameraObject.tag = "MainCamera";
@@ -66,7 +65,6 @@ namespace Facet.PlayTests
             if (_map != null) Object.Destroy(_map);
             if (_campaign != null) Object.Destroy(_campaign);
 
-            PlayerPrefs.DeleteKey(BestWave.KeyPrefix + MapName);
             if (_progressKeyExisted) CampaignProgress.Write(_progressBefore);
             else CampaignProgress.Forget();
         }
@@ -154,7 +152,7 @@ namespace Facet.PlayTests
         public IEnumerator BeforeItsWave_NothingIsOffered()
         {
             yield return null;
-            Driver.PlayMap(0, false);
+            Driver.PlayMap(0);
             yield return null;
             yield return null;
 
@@ -168,7 +166,7 @@ namespace Facet.PlayTests
         public IEnumerator TheLesson_TeachesThroughTheCoach_WithoutStoppingTheRun()
         {
             yield return null;
-            Driver.PlayMap(0, false);
+            Driver.PlayMap(0);
             yield return null;
 
             SimWorld world = Driver.World;
@@ -220,7 +218,7 @@ namespace Facet.PlayTests
         public IEnumerator TheLockedKey_ShowsItsPrice_AndBuysTheBuilding()
         {
             yield return null;
-            Driver.PlayMap(0, false);
+            Driver.PlayMap(0);
             yield return null;
 
             SimWorld world = Driver.World;
@@ -250,7 +248,7 @@ namespace Facet.PlayTests
         public IEnumerator TheLockedKey_RefusesWhatTheCoreCannotPay()
         {
             yield return null;
-            Driver.PlayMap(0, false);
+            Driver.PlayMap(0);
             yield return null;
 
             SimWorld world = Driver.World;
@@ -270,7 +268,7 @@ namespace Facet.PlayTests
         public IEnumerator AnOfferWithoutALesson_OnlyPutsItsKeyOnTheBar()
         {
             yield return null;
-            Driver.PlayMap(0, false);
+            Driver.PlayMap(0);
             yield return null;
 
             SimWorld world = Driver.World;
@@ -288,7 +286,7 @@ namespace Facet.PlayTests
         public IEnumerator CallingTheWave_SkipsTheLesson()
         {
             yield return null;
-            Driver.PlayMap(0, false);
+            Driver.PlayMap(0);
             yield return null;
 
             SimWorld world = Driver.World;
@@ -306,7 +304,7 @@ namespace Facet.PlayTests
         public IEnumerator ARestart_TakesTheLessonAndTheOffersBack()
         {
             yield return null;
-            Driver.PlayMap(0, false);
+            Driver.PlayMap(0);
             yield return null;
 
             SimWorld world = Driver.World;
@@ -326,17 +324,57 @@ namespace Facet.PlayTests
         }
 
         [UnityTest]
-        public IEnumerator AnEndlessLoss_ReportsTheWavesHeld_AndKeepsTheBest()
+        public IEnumerator TheBuildCard_ShowsTheBuildingAtWork_InsteadOfAParagraph()
         {
             yield return null;
-            Driver.PlayMap(0, true);
+            Driver.PlayMap(0);
+            yield return null;
+
+            Key("Belt").GetComponent<HudButton>().Pressed.Invoke();
+            for (int i = 0; i < 60 && Driver.World.SelectedKind != BuildKind.Belt; i++)
+                yield return new WaitForSeconds(0.02f);
+            yield return null;
+            yield return null;
+
+            Transform build = Hud.transform.Find("HudCanvas/info/build");
+            Assert.IsNotNull(build, "the info card's build face");
+            Assert.IsTrue(build.gameObject.activeInHierarchy, "is up for the building in hand");
+
+            Transform demo = build.Find("demo");
+            Assert.IsNotNull(demo, "the card carries a demo");
+            Assert.IsTrue(demo.gameObject.activeSelf, "and plays it");
+            Assert.IsFalse(build.Find("blurb").gameObject.activeSelf, "in place of the paragraph");
+            Assert.IsFalse(build.Find("stats").gameObject.activeSelf, "and the numbers under it");
+
+            int items = 0;
+            foreach (Transform child in demo)
+                if (child.name.StartsWith("item") && child.gameObject.activeSelf) items++;
+            Assert.Greater(items, 0, "with shapes riding through it");
+
+            // The demo sits inside the card, between the header and the facing line.
+            var card = (RectTransform)Hud.transform.Find("HudCanvas/info");
+            var strip = (RectTransform)demo;
+            Assert.LessOrEqual(strip.sizeDelta.x, card.sizeDelta.x, "no wider than the card");
+            Assert.Greater(strip.sizeDelta.y, 0f);
+        }
+
+        [Test]
+        public void EveryBuildingTheBarOffers_HasADemo()
+        {
+            foreach (BuildKind kind in BuildCatalog.All)
+                if (!BuildCatalog.Retired(kind))
+                    Assert.IsTrue(MachineDemo.Covers(kind), kind + " has no demo for its card");
+        }
+
+        [UnityTest]
+        public IEnumerator ALoss_ReportsHowManyOfTheMapsWavesWereHeld()
+        {
+            yield return null;
+            Driver.PlayMap(0);
             yield return null;
 
             SimWorld world = Driver.World;
             yield return ClearWave(world);
-            yield return null;
-
-            Assert.AreEqual(1, BestWave.Read(MapName), "the record is written as it is beaten");
 
             world.Core.Hp = 0f;
             for (int i = 0; i < 60 && world.Status != GameStatus.Lost; i++) yield return new WaitForSeconds(0.02f);
@@ -348,8 +386,8 @@ namespace Facet.PlayTests
             var banner = Hud.transform.Find("HudCanvas/banner");
             Assert.IsTrue(banner.gameObject.activeSelf);
             string words = banner.GetComponentInChildren<TMPro.TMP_Text>().text;
-            StringAssert.Contains("you held 1 wave", words);
-            StringAssert.Contains("best 1", words);
+            StringAssert.Contains("you held 1 of " + world.Waves.TotalWaves + " waves", words,
+                "every run has a last wave, so the banner can say how far short the run stopped");
         }
     }
 }

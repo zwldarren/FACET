@@ -96,7 +96,7 @@ namespace Facet.Core
         /// a player reads, and past this the curve has outrun anything the director could spawn - and it is
         /// what keeps a deep wave number an <em>answer</em> rather than a loop, since the budget grows
         /// geometrically and there are wave numbers in the hundreds that a preview or a test may ask about.
-        /// Retune it with <see cref="Growth"/> if endless runs should bite sooner.
+        /// Retune it with <see cref="Growth"/> if long runs should bite sooner.
         /// </summary>
         public const int MaxEnemies = MaxGroups * 25;
 
@@ -220,8 +220,8 @@ namespace Facet.Core
         ///
         /// <b>One pass, not one enemy at a time.</b> Buying them a unit at a time gives the same answer and
         /// does not terminate: the budget grows geometrically, so wave 200's is around 10^19 and a loop that
-        /// spends it an enemy at a time never finishes - which is what a preview, or a test that asks an
-        /// endless run what wave 200 looks like, would hang on.
+        /// spends it an enemy at a time never finishes - which is what a preview, or a test that asks what
+        /// wave 200 looks like, would hang on.
         /// </summary>
         private static void Spread(List<SpawnGroup> groups, float budget)
         {

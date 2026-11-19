@@ -5,7 +5,8 @@ namespace Facet.Game
     /// <summary>Where the HUD's pieces sit, as unscaled screen-pixel geometry multiplied by
     /// <see cref="Scale"/>, so the layout holds the same fraction of the screen at any resolution. A shared
     /// table because the HUD draws these panels and the camera rig has to keep the map out from under them.
-    /// The four persistent pieces must stay within 22 % of a 720p screen with the tutorial up.</summary>
+    /// The four persistent pieces stay within 30 % of a 720p screen with the tutorial up. The budget was 22 %
+    /// while a key was words alone; the machine previews raised it on purpose, not by drift.</summary>
     public static class HudLayout
     {
         /// <summary>Gap between a panel and the screen edge.</summary>
@@ -21,14 +22,16 @@ namespace Facet.Game
 
         public const float StatusHeight = 153f;
 
-        /// <summary>The top-right cluster: a small wave button, three square buttons, and MENU.</summary>
-        public const float ControlsWidth = 224f;
+        /// <summary>The top-right cluster: the start-wave button, three square buttons, and MENU.</summary>
         public const float ControlsHeight = 34f;
 
         // The wave and menu buttons are wider than the squares: they carry words, not glyphs.
-        public const float WaveButtonWidth = 54f;
+        public const float WaveButtonWidth = 128f;
         public const float MenuButtonWidth = 44f;
         public const float ControlGap = 6f;
+
+        public const float ControlsWidth =
+            WaveButtonWidth + 4f * ControlGap + 3f * ControlsHeight + MenuButtonWidth;
 
         /// <summary>Wide enough for the keyboard list: the card is reference material and is not read at a
         /// glance.</summary>
@@ -56,9 +59,12 @@ namespace Facet.Game
         /// <summary>How much taller the card is with a sorter's filter picker on it.</summary>
         public const float InfoPickHeight = 66f;
 
-        public const float BarTileWidth = 66.75f;
-        public const float BarPad = 12f;
-        public const float BarGap = 5f;
+        /// <summary>One key of the build bar: wide enough to carry a picture of the building (about forty design
+        /// units) rather than only its name.</summary>
+        public const float BarTileWidth = 100f;
+        public const float BarTileHeight = 80f;
+        public const float BarPad = 8f;
+        public const float BarGap = 3f;
 
         /// <summary>Keys the shipped table puts on the bar - <see cref="BuildKind.Belt"/> to
         /// <see cref="BuildKind.Sink"/> less the two kinds retired from play (<see cref="BuildCatalog.Retired"/>:
@@ -69,7 +75,7 @@ namespace Facet.Game
         /// <summary>The full table's width, spelled from the tile numbers so the two cannot drift. Fewer
         /// keys make a narrower bar, not a stretched one.</summary>
         public const float BarWidth = 2f * BarPad + BarTiles * BarTileWidth + (BarTiles - 1) * BarGap;
-        public const float BarHeight = 52f;
+        public const float BarHeight = BarTileHeight + 2f * BarPad;
 
         public static float BarWidthFor(int tiles)
             => tiles <= 0 ? 0f : 2f * BarPad + tiles * BarTileWidth + (tiles - 1) * BarGap;
@@ -85,8 +91,28 @@ namespace Facet.Game
 
         public const float StockpileGap = 10f;
 
-        /// <summary>Room for a five-digit stockpile and its shape.</summary>
+        /// <summary>
+        /// How the readout is drawn, in design units: a mark is <see cref="MoneyMark" /> square, the first sits
+        /// <see cref="MoneyInsetLeft" /> in, the gap between two of them is <see cref="MoneyMarkGap" />, and the
+        /// number follows the last mark after <see cref="MoneyToNumber" />. Spelled here so the width the layout
+        /// promises and the boxes the view places cannot disagree.
+        ///
+        /// <b>The readout has no panel of its own:</b> it hangs off the status card's edge, so the camera rig
+        /// reserves no strip for it (its top strip is the status card's).
+        /// </summary>
+        public const float MoneyInsetLeft = 12f;
+
+        /// <summary>Where the number starts after the last mark: the view's own breathing room.</summary>
+        public const float MoneyToNumber = 4f;
+
+        /// <summary>Room for a five-digit stockpile and one money mark: the base width
+        /// <see cref="StockpileWidthFor"/> grows from.</summary>
         public const float StockpileWidth = 124f;
+
+        /// <summary>One money mark's diameter, and the gap between two of them. A mark is an item's whole square
+        /// - a complete shape of a mineral - so a square reads as a square and a circle fills its box.</summary>
+        public const float MoneyMark = 16f;
+        public const float MoneyMarkGap = 4f;
 
         /// <summary>Tall enough to centre the readout on the status card's title line.</summary>
         public const float StockpileHeight = 44f;
@@ -111,8 +137,9 @@ namespace Facet.Game
             => new Rect(screenWidth - (Margin + HelpWidth) * s,
                 (Margin + ControlsHeight + ControlGap) * s, HelpWidth * s, HelpHeightFor(lines) * s);
 
-        /// <summary>Directly under the status card, its width, on the campaign's first map only. It takes
-        /// clicks, which is why <see cref="Insets"/> widens the top strip while it is up.</summary>
+        /// <summary>Directly under the status card, its width: the lesson's card, while a map teaches by a list
+        /// of lines the player works through. It takes clicks, which is why <see cref="Insets"/> widens the top
+        /// strip while it is up.</summary>
         public static Rect Tutorial(float s)
         {
             Rect status = Status(s);
@@ -122,16 +149,35 @@ namespace Facet.Game
         }
 
         /// <summary>Right of the status card, at its top edge. Gives up width rather than ever reaching the
-        /// controls on a narrow screen.</summary>
-        public static Rect Stockpile(float screenWidth, float s)
+        /// controls on a narrow screen. The marks are cut, never wrapped, when the card has to shrink - a
+        /// narrower card shows fewer minerals, and the card is sized to show them all at the shipped
+        /// scale.</summary>
+        public static Rect Stockpile(float screenWidth, float s, int marks = 1)
         {
             Rect status = Status(s);
             float left = status.xMax + StockpileGap * s;
             float right = Controls(screenWidth, s).x - StockpileGap * s;
-            float width = Mathf.Min(StockpileWidth * s, Mathf.Max(0f, right - left));
+            float width = Mathf.Min(StockpileWidthFor(marks) * s, Mathf.Max(0f, right - left));
 
             return new Rect(left, Margin * s, width, StockpileHeight * s);
         }
+
+        /// <summary>How wide the readout has to be to hold this many money marks: the number's own room plus
+        /// one mark per mineral, so a map that mines two minerals says so and a map that mines one is as
+        /// narrow as it always was.</summary>
+        public static float StockpileWidthFor(int marks)
+            => StockpileWidth + (MarkCount(marks) - 1) * (MoneyMark + MoneyMarkGap);
+
+        /// <summary>How much of the card's left edge the marks take, inset included: what the number has to
+        /// start after.</summary>
+        public static float MoneySpan(int marks)
+            => MarkCount(marks) * (MoneyMark + MoneyMarkGap);
+
+        /// <summary>How many money marks the readout is cut to fit. The shipped maps mine two minerals; the
+        /// cap is what keeps a future map from growing the card past the controls card beside it.</summary>
+        public const int MaxMoneyMarks = 3;
+
+        private static int MarkCount(int marks) => Mathf.Clamp(marks, 1, MaxMoneyMarks);
 
         /// <summary>A centred strip, narrower than the screen on purpose, so the map stays visible either
         /// side of it. <paramref name="tiles"/> is the run's, not the table's: a tutorial hands buildings

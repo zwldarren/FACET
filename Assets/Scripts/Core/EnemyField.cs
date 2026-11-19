@@ -465,13 +465,17 @@ namespace Facet.Core
             ApplyDamageAtSlot(slot, baseDamage, ammo);
         }
 
+        /// <summary>The share of its damage a mismatched round does: the map's
+        /// <see cref="MapDefinition.MismatchDamage"/>, set by the world when it is built.</summary>
+        public float ResistedMultiplier { get; set; } = Balance.ResistantDamageMultiplier;
+
         private void ApplyDamageAtSlot(int slot, float baseDamage, Shape ammo)
         {
             // Weakness is exact identity now: the round is the shape the briefing named, or it is not.
             bool matched = ammo == _enemies[slot].Weakness;
             float damage = baseDamage * (matched
                 ? Balance.WeaknessDamageMultiplier
-                : Balance.ResistantDamageMultiplier);
+                : ResistedMultiplier);
 
             if (matched) MatchedHits++;
             else ResistedHits++;

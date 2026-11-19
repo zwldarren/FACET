@@ -262,7 +262,7 @@ namespace Facet.Tests
             Assert.IsTrue(belt.Covers(centre), "a belt's ghost is a bed, and a bed covers its tile's middle");
             Assert.IsTrue(turret.Covers(centre), "a turret's ghost is a body on its tile");
 
-            Assert.LessOrEqual(belt.Reach(cell), 0.5f + 0.06f, "a belt's ghost stays inside the one tile it is");
+            Assert.IsTrue(belt.StaysInside(cell), "a belt's ghost stays inside the one tile it is");
             Assert.Greater(turret.Reach(cell), 1f,
                 "while a turret's ghost draws the gun and the coverage it is bought for, past its own tile");
 
@@ -429,6 +429,27 @@ namespace Facet.Tests
                 foreach (Vector2 p in Points) reach = Mathf.Max(reach, (p - centre).magnitude);
 
                 return reach;
+            }
+
+            /// <summary>Is every point of the figure inside the one tile it is drawn on: half a tile from
+            /// that tile's middle, on each axis.
+            ///
+            /// Asked per axis rather than as a radius, because the two questions part company at the
+            /// corners: a belt's bed is a square whose rail corner sits at the tile's edge but 0.71 tiles
+            /// from its middle, so a radius test calls a ghost that is exactly inside its tile "outside" it.
+            /// </summary>
+            public bool StaysInside(Int2 cell)
+            {
+                var centre = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
+                const float slack = 0.001f;   // a drawn edge lands on the tile's own edge, not inside it
+
+                foreach (Vector2 p in Points)
+                {
+                    if (Mathf.Abs(p.x - centre.x) > 0.5f + slack) return false;
+                    if (Mathf.Abs(p.y - centre.y) > 0.5f + slack) return false;
+                }
+
+                return true;
             }
 
             private static bool Inside(Vector2 p, Vector2 a, Vector2 b, Vector2 c)
