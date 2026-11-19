@@ -261,14 +261,15 @@ namespace Facet.Game
                 }
             }
 
-            // N means "go on" in every run state there is: start the next wave mid-map, carry on to the
-            // next map once won, and - the campaign spent - keep going on the last map, endless (§7). The
-            // one-shot is consumed either way, so the new run does not spend the same press twice.
+            // N means "go on" in every run state: start the next wave mid-map, carry on to the next map once
+            // won. On the last map there is nowhere further to go, so the press restarts instead - the same door
+            // the banner offers. The one-shot is consumed either way, so the new run does not spend the same
+            // press twice.
             if (World.Status == GameStatus.Won && _input.StartWaveRequested)
             {
                 _input.ConsumeOneShots();
                 if (Campaign.EnterNext()) LoadMap();
-                else EnterEndless();
+                else World.RequestRestart();
             }
 
             InputCommand cmd = _input.Snapshot();
@@ -294,9 +295,6 @@ namespace Facet.Game
             // Recorded as it happens rather than on a keypress, so the count is right whatever got the
             // player here; idempotent, so polling every frame is the honest way to read an unreported edge.
             if (World.Status == GameStatus.Won) Campaign.MarkCleared();
-
-            // An endless run's score is the waves it held; the record only writes when it is beaten.
-            if (World.Waves.Endless) BestWave.Record(World.Map.Name, World.Waves.Cleared);
 
             // A clear is the one moment progress grows, so it is the one moment the store is written -
             // not every frame the won world keeps saying so.
@@ -369,16 +367,14 @@ namespace Facet.Game
         }
 
         /// <summary>A run is one run, so the map is always built again - the world behind a menu is never
-        /// carried past it. Endless is the same map with its wave table unbounded, which is the only thing
-        /// the flag changes. Public because it is also the door out of the boot title.</summary>
-        public void PlayMap(int index, bool endless)
+        /// carried past it. Public because it is also the door out of the boot title.</summary>
+        public void PlayMap(int index)
         {
             SetRunHeld(false);
             if (_shell != null) _shell.Close();
 
             Campaign.StartMap(index);
-            if (endless) LoadMap(Catalog.At(Campaign.MapIndex).WithEndless());
-            else LoadMap();
+            LoadMap();
 
             PersistProgress();
         }
@@ -425,8 +421,6 @@ namespace Facet.Game
         /// rebind rather than rebuild, their meshes and sprites being the same objects either way.</summary>
         public void LoadMap() => LoadMap(Catalog.At(Campaign.MapIndex));
 
-        /// <summary>The endless re-entry of the campaign's last map, whose world is built from a derived copy
-        /// rather than the authored data.</summary>
         private void LoadMap(MapDefinition map)
         {
             _progressMetrics?.FinishRun("map_changed");
@@ -459,15 +453,9 @@ namespace Facet.Game
                     _input.RequestFilter, Clock, OpenMenu);
             if (_coach != null) _coach.Initialize(World, _hud, _camera, palette);
 
+            int waves = World.Waves.TotalWaves;
             Debug.Log("FACET: loaded map " + (Campaign.MapIndex + 1) + " of " + Campaign.MapCount +
-                " - " + World.Map.Name + (World.Map.GeneratedWaves < 0 ? " (endless)" : string.Empty), this);
-        }
-
-        /// <summary>A new world from a copy of the map's own data with the generator unbounded: the exam keeps
-        /// setting questions forever, on a seed of its own.</summary>
-        private void EnterEndless()
-        {
-            LoadMap(Catalog.At(Campaign.MapIndex).WithEndless());
+                " - " + World.Map.Name + " (" + waves + (waves == 1 ? " wave" : " waves") + ")", this);
         }
 
         /// <summary>A map is data, and data's mistakes do not throw: a ridge across a lane leaves a wave

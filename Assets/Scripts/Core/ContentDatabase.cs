@@ -549,12 +549,12 @@ namespace Facet.Core
                     description: "turns a shape a quarter clockwise · the orientation fix",
                     interval: 0.75f, maxHp: 45f),
 
-                // The expensive operator, and the one that costs time: 2 s per fuse is the premium on
-                // mixed rounds, and the reason a two-mineral line is a commitment.
+                // The combining operator: 1.5 s per fuse matches the cutter's 1.5 s split 1:1, so a single
+                // two-mineral chain runs smoothly without the stacker starving its own turret.
                 new MachineDef(new ContentId("stacker"), BuildKind.Stacker, TileKind.Stacker,
                     BehaviorKind.Stacker, cost: 25, name: "Stacker",
                     description: "joins two pieces that do not overlap into one mixed round · an overlapping pair waits",
-                    interval: 2f, maxHp: 60f),
+                    interval: 1.5f, maxHp: 60f),
 
                 // Well under a belt's one second per item, so a pipe never throttles the line it carries.
                 new MachineDef(new ContentId("pipe"), BuildKind.Pipe, TileKind.Pipe, BehaviorKind.Pipe,

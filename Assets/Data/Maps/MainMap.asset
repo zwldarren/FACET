@@ -14,180 +14,112 @@ MonoBehaviour:
   m_EditorClassIdentifier: FACET.Game::Facet.Game.MapAsset
   Name: Frontier
   Width: 40
-  Height: 30
-  StartShapes: 60
-  CoreCell: {x: 9, y: 13}
-  Terrain: 040404040202020202020202020202020202020202020202020202020202020202040404040404040404040000000000000000000000000000000000000000000000000003000000000004040404040404040000000000000000000000000000000000000000000000000000030000000000000404040404040000000000000000000000000000000000000000000000000000000300000000000000040404040200000000000000000000000000000000000000000000000000000003000000000000000004040402000000000000000000000000000000000000000000000000000000030000000000000000000404020000000000000000000000000000000000000000000000000000000300000000000000000000040200000000000000000000000000000000000000000000000000000003000000000000000000000202000000000000000000000000000000000000000000000000000000030000000000000000000002020000000000000000000000000000000000000202000000000000000300000000000000000000020200000000000000000000000000000000000002020000000000000003000000000000000000000202000000000000000000000000000000000000020200000000000000030000000000000000000002020000000000000000000000000000000000000202000000000000000300000000000000000000020200000000000000000000000000000000000002020000020202000003000000000000000000000202000000000000000000000000000000000000020200000202020000030000000000000000000002020000000000000000000000000000000000000202000002020200000300000000000000000000000200000000000000000000000000000000000002020000000000000003000000000000000000000202000000000000000000000000000000000000020200000000000000030000000000000000000002020000000000000000000000000000000000000202000000000000000300000000000000000000020200000000000000000000000000000000000002020000000000000003000000000000000000000202000000000000000000000000000000000000020200000000000000030000000000000000000002020000000000000000000000000000000000000202000000000000000000000000000000000000020200000000000000000000000000000000000002020000000000000000000000000000000000000204000000000000000000000000000000000000020200000000000000000000000000000000000002040400000000000000000000000000000000000202000000000000000000000000000000000000020404040000000000000000000000000000000002020000000000000000000000000000000000000204040404000000000000000000000000000000020200000000000000000000000000000000000002040404040400000000000000000000000000000202000000000000000000000000000000000000020404040404040000000000000000000000000002020000000000000000000000000000000000000204040404040404020202020202020202020202020202020202020002020202020202020202020202
+  Height: 28
+  StartShapes: 80
+  CoreCell: {x: 5, y: 12}
+  Terrain: 02020202020202020202020202020202020202020202020202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000000000000202020202000000000000000000000000000000000000000000000000000000000000000000000000020202000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000020200000000000000000000020202020202020202020202020202020202020202020202020202000202000000000000000000000000000000000000000000000000000003000000000000000000000002020000000000000000000000000000000000000000000000000000030000000000000000000000020200000000000000000000000000000000000000000000000000000300000000000000000000000202000000000000000000000000000000000000000000000000000003000000000000000000000002020000000000000000000000000000000000000000000000000000030000000000000000000000020200000000000000000000000000000000000000000000000000000300000000000000000000000202000000000000000000000000000000000000000000000000000003000000000000000000000002020000000000000000000000000000000000000000000000000000030000000000000000000000020200000000000000000000000000000000000000000000000000000300000000000000000000000202000000000000000000000000000000000000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000000000000000000000000000000000000020200000000000000000000000000000000000000000000000000000000000000000000000000000202000000000000000000000000000000000000000000000000000000000000000000000000000002020000000000000000000000000000000000000000000000000000000000000000000000000000020200000000000000000000000000000000000000000000000000000000000000000000000000000202000000000000000000000000000000000000000000000000000000000000000000000000000002020000000000000000000002020202020202020202020202020202020202020202020202020202020200000000000000000000000000000000000000000000000000000000000000000000000000000202000000000000000000000000000000000000000000000000000000000000000000000000000000020200000000000000000000000000000000000000000000000000000000000000000000000002020202020000000000000000000000000000000000000000000000000000000000000000000002020202020202020202020202020202020202020202020202020202020202020202020202020202020202
   Ore:
-  - Cell: {x: 4, y: 16}
+  - Cell: {x: 1, y: 7}
     Mineral: 1
-  - Cell: {x: 5, y: 16}
+  - Cell: {x: 2, y: 7}
     Mineral: 1
-  - Cell: {x: 6, y: 16}
+  - Cell: {x: 3, y: 7}
     Mineral: 1
-  - Cell: {x: 4, y: 17}
+  - Cell: {x: 1, y: 8}
     Mineral: 1
-  - Cell: {x: 5, y: 17}
+  - Cell: {x: 2, y: 8}
     Mineral: 1
-  - Cell: {x: 6, y: 17}
+  - Cell: {x: 3, y: 8}
     Mineral: 1
-  - Cell: {x: 4, y: 18}
+  - Cell: {x: 1, y: 9}
     Mineral: 1
-  - Cell: {x: 5, y: 18}
+  - Cell: {x: 2, y: 9}
     Mineral: 1
-  - Cell: {x: 6, y: 18}
+  - Cell: {x: 3, y: 9}
     Mineral: 1
-  - Cell: {x: 4, y: 7}
-    Mineral: 1
-  - Cell: {x: 5, y: 7}
-    Mineral: 1
-  - Cell: {x: 6, y: 7}
-    Mineral: 1
-  - Cell: {x: 4, y: 8}
-    Mineral: 1
-  - Cell: {x: 5, y: 8}
-    Mineral: 1
-  - Cell: {x: 6, y: 8}
-    Mineral: 1
-  - Cell: {x: 4, y: 9}
-    Mineral: 1
-  - Cell: {x: 5, y: 9}
-    Mineral: 1
-  - Cell: {x: 6, y: 9}
-    Mineral: 1
-  - Cell: {x: 12, y: 3}
-    Mineral: 1
-  - Cell: {x: 13, y: 3}
-    Mineral: 1
-  - Cell: {x: 14, y: 3}
-    Mineral: 1
-  - Cell: {x: 12, y: 4}
-    Mineral: 1
-  - Cell: {x: 13, y: 4}
-    Mineral: 1
-  - Cell: {x: 14, y: 4}
-    Mineral: 1
-  - Cell: {x: 12, y: 5}
-    Mineral: 1
-  - Cell: {x: 13, y: 5}
-    Mineral: 1
-  - Cell: {x: 14, y: 5}
-    Mineral: 1
-  - Cell: {x: 22, y: 22}
-    Mineral: 1
-  - Cell: {x: 23, y: 22}
-    Mineral: 1
-  - Cell: {x: 24, y: 22}
-    Mineral: 1
-  - Cell: {x: 22, y: 23}
-    Mineral: 1
-  - Cell: {x: 23, y: 23}
-    Mineral: 1
-  - Cell: {x: 24, y: 23}
-    Mineral: 1
-  - Cell: {x: 22, y: 24}
-    Mineral: 1
-  - Cell: {x: 23, y: 24}
-    Mineral: 1
-  - Cell: {x: 24, y: 24}
-    Mineral: 1
-  - Cell: {x: 32, y: 22}
+  - Cell: {x: 31, y: 10}
     Mineral: 2
-  - Cell: {x: 33, y: 22}
+  - Cell: {x: 32, y: 10}
     Mineral: 2
-  - Cell: {x: 34, y: 22}
+  - Cell: {x: 33, y: 10}
     Mineral: 2
-  - Cell: {x: 35, y: 22}
+  - Cell: {x: 31, y: 11}
     Mineral: 2
-  - Cell: {x: 32, y: 23}
+  - Cell: {x: 32, y: 11}
     Mineral: 2
-  - Cell: {x: 33, y: 23}
+  - Cell: {x: 33, y: 11}
     Mineral: 2
-  - Cell: {x: 34, y: 23}
+  - Cell: {x: 31, y: 12}
     Mineral: 2
-  - Cell: {x: 35, y: 23}
+  - Cell: {x: 32, y: 12}
     Mineral: 2
-  - Cell: {x: 32, y: 24}
+  - Cell: {x: 33, y: 12}
     Mineral: 2
-  - Cell: {x: 33, y: 24}
+  - Cell: {x: 31, y: 15}
     Mineral: 2
-  - Cell: {x: 34, y: 24}
+  - Cell: {x: 32, y: 15}
     Mineral: 2
-  - Cell: {x: 35, y: 24}
+  - Cell: {x: 33, y: 15}
     Mineral: 2
-  - Cell: {x: 32, y: 25}
+  - Cell: {x: 15, y: 16}
+    Mineral: 1
+  - Cell: {x: 16, y: 16}
+    Mineral: 1
+  - Cell: {x: 17, y: 16}
+    Mineral: 1
+  - Cell: {x: 31, y: 16}
     Mineral: 2
-  - Cell: {x: 33, y: 25}
+  - Cell: {x: 32, y: 16}
     Mineral: 2
-  - Cell: {x: 34, y: 25}
+  - Cell: {x: 33, y: 16}
     Mineral: 2
-  - Cell: {x: 35, y: 25}
+  - Cell: {x: 1, y: 17}
+    Mineral: 1
+  - Cell: {x: 2, y: 17}
+    Mineral: 1
+  - Cell: {x: 3, y: 17}
+    Mineral: 1
+  - Cell: {x: 15, y: 17}
+    Mineral: 1
+  - Cell: {x: 16, y: 17}
+    Mineral: 1
+  - Cell: {x: 17, y: 17}
+    Mineral: 1
+  - Cell: {x: 31, y: 17}
     Mineral: 2
-  - Cell: {x: 32, y: 26}
+  - Cell: {x: 32, y: 17}
     Mineral: 2
-  - Cell: {x: 33, y: 26}
+  - Cell: {x: 33, y: 17}
     Mineral: 2
-  - Cell: {x: 34, y: 26}
-    Mineral: 2
-  - Cell: {x: 35, y: 26}
-    Mineral: 2
+  - Cell: {x: 1, y: 18}
+    Mineral: 1
+  - Cell: {x: 2, y: 18}
+    Mineral: 1
+  - Cell: {x: 3, y: 18}
+    Mineral: 1
+  - Cell: {x: 15, y: 18}
+    Mineral: 1
+  - Cell: {x: 16, y: 18}
+    Mineral: 1
+  - Cell: {x: 17, y: 18}
+    Mineral: 1
+  - Cell: {x: 1, y: 19}
+    Mineral: 1
+  - Cell: {x: 2, y: 19}
+    Mineral: 1
+  - Cell: {x: 3, y: 19}
+    Mineral: 1
   SpawnPoints:
-  - {x: 39, y: 15}
-  - {x: 26, y: 29}
+  - {x: 39, y: 24}
+  - {x: 39, y: 3}
   Waves:
-  - Intermission: 60
-    Groups:
-    - Kind: 0
-      Count: 5
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 3
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 1
-        SW: 1
-  - Intermission: 30
-    Groups:
-    - Kind: 0
-      Count: 7
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 2.6
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 1
-        SW: 1
-  - Intermission: 30
-    Groups:
-    - Kind: 0
-      Count: 9
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 2.3
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 1
-        SW: 1
   - Intermission: 45
     Groups:
     - Kind: 0
-      Count: 8
+      Count: 6
       SpawnPoint: 0
       FirstDelay: 0
-      Interval: 1
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 1
-        SW: 1
-    - Kind: 0
-      Count: 8
-      SpawnPoint: 0
-      FirstDelay: 0.5
-      Interval: 1
+      Interval: 2.4
       Weakness:
         NW: 1
         NE: 1
@@ -195,87 +127,11 @@ MonoBehaviour:
         SW: 1
   - Intermission: 30
     Groups:
-    - Kind: 0
-      Count: 10
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 1
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 1
-        SW: 1
-    - Kind: 0
-      Count: 8
-      SpawnPoint: 0
-      FirstDelay: 0.5
-      Interval: 1.2
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 1
-        SW: 1
-  - Intermission: 60
-    Groups:
-    - Kind: 0
-      Count: 8
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 2
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 0
-        SW: 0
     - Kind: 0
       Count: 6
       SpawnPoint: 0
-      FirstDelay: 1
+      FirstDelay: 0
       Interval: 2
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 0
-        SW: 0
-  - Intermission: 30
-    Groups:
-    - Kind: 0
-      Count: 8
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 1.8
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 0
-        SW: 0
-    - Kind: 0
-      Count: 8
-      SpawnPoint: 0
-      FirstDelay: 0.9
-      Interval: 1.8
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 1
-        SW: 1
-  - Intermission: 30
-    Groups:
-    - Kind: 0
-      Count: 8
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 1.6
-      Weakness:
-        NW: 0
-        NE: 0
-        SE: 1
-        SW: 1
-    - Kind: 0
-      Count: 8
-      SpawnPoint: 0
-      FirstDelay: 0.8
-      Interval: 1.6
       Weakness:
         NW: 1
         NE: 1
@@ -284,288 +140,201 @@ MonoBehaviour:
     - Kind: 1
       Count: 2
       SpawnPoint: 0
-      FirstDelay: 6
-      Interval: 6
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 1
-        SW: 1
-  - Intermission: 60
-    Groups:
-    - Kind: 0
-      Count: 10
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 1.6
-      Weakness:
-        NW: 0
-        NE: 1
-        SE: 1
-        SW: 0
-    - Kind: 0
-      Count: 6
-      SpawnPoint: 0
-      FirstDelay: 0.8
-      Interval: 2.4
-      Weakness:
-        NW: 0
-        NE: 1
-        SE: 1
-        SW: 0
-  - Intermission: 30
-    Groups:
-    - Kind: 0
-      Count: 10
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 1.5
-      Weakness:
-        NW: 0
-        NE: 1
-        SE: 1
-        SW: 0
-    - Kind: 0
-      Count: 8
-      SpawnPoint: 0
-      FirstDelay: 0.7
-      Interval: 1.5
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 0
-        SW: 0
-    - Kind: 1
-      Count: 3
-      SpawnPoint: 0
-      FirstDelay: 5
+      FirstDelay: 3
       Interval: 5
       Weakness:
         NW: 1
         NE: 1
-        SE: 1
-        SW: 1
+        SE: 0
+        SW: 0
   - Intermission: 30
     Groups:
     - Kind: 0
-      Count: 10
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 1.4
-      Weakness:
-        NW: 1
-        NE: 0
-        SE: 0
-        SW: 1
-    - Kind: 0
-      Count: 8
-      SpawnPoint: 0
-      FirstDelay: 0.7
-      Interval: 1.6
-      Weakness:
-        NW: 0
-        NE: 1
-        SE: 1
-        SW: 0
-    - Kind: 1
-      Count: 4
-      SpawnPoint: 0
-      FirstDelay: 4
-      Interval: 4.5
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 0
-        SW: 0
-  - Intermission: 75
-    Groups:
-    - Kind: 0
-      Count: 10
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 1.6
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 1
-        SW: 1
-    - Kind: 1
-      Count: 4
-      SpawnPoint: 1
-      FirstDelay: 4
-      Interval: 4
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 2
-        SW: 2
-  - Intermission: 35
-    Groups:
-    - Kind: 0
-      Count: 10
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 1.4
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 0
-        SW: 0
-    - Kind: 1
-      Count: 5
-      SpawnPoint: 1
-      FirstDelay: 3
-      Interval: 3.5
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 2
-        SW: 2
-    - Kind: 0
       Count: 8
       SpawnPoint: 1
-      FirstDelay: 1
-      Interval: 1.6
+      FirstDelay: 0
+      Interval: 2
       Weakness:
         NW: 2
         NE: 2
         SE: 2
         SW: 2
-  - Intermission: 35
+    - Kind: 1
+      Count: 2
+      SpawnPoint: 1
+      FirstDelay: 3
+      Interval: 5
+      Weakness:
+        NW: 2
+        NE: 2
+        SE: 2
+        SW: 2
+  - Intermission: 45
     Groups:
     - Kind: 1
+      Count: 4
+      SpawnPoint: 1
+      FirstDelay: 0
+      Interval: 5
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 2
+        SW: 2
+  - Intermission: 25
+    Groups:
+    - Kind: 0
       Count: 6
       SpawnPoint: 0
       FirstDelay: 0
+      Interval: 1.8
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 0
+        SW: 0
+    - Kind: 1
+      Count: 2
+      SpawnPoint: 0
+      FirstDelay: 3
+      Interval: 5
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 0
+        SW: 0
+    - Kind: 0
+      Count: 2
+      SpawnPoint: 1
+      FirstDelay: 1
       Interval: 3
       Weakness:
         NW: 1
         NE: 1
         SE: 2
         SW: 2
+    - Kind: 1
+      Count: 4
+      SpawnPoint: 1
+      FirstDelay: 0
+      Interval: 4.5
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 2
+        SW: 2
+  - Intermission: 30
+    Groups:
     - Kind: 0
       Count: 10
-      SpawnPoint: 1
-      FirstDelay: 0.5
-      Interval: 1.3
-      Weakness:
-        NW: 0
-        NE: 1
-        SE: 1
-        SW: 0
-    - Kind: 0
-      Count: 8
       SpawnPoint: 0
-      FirstDelay: 2
+      FirstDelay: 0
       Interval: 1.5
-      Weakness:
-        NW: 2
-        NE: 2
-        SE: 2
-        SW: 2
-  - Intermission: 35
-    Groups:
-    - Kind: 1
-      Count: 6
-      SpawnPoint: 0
-      FirstDelay: 0
-      Interval: 2.8
-      Weakness:
-        NW: 1
-        NE: 2
-        SE: 2
-        SW: 1
-    - Kind: 1
-      Count: 6
-      SpawnPoint: 1
-      FirstDelay: 1.4
-      Interval: 2.8
-      Weakness:
-        NW: 1
-        NE: 1
-        SE: 2
-        SW: 2
-    - Kind: 0
-      Count: 12
-      SpawnPoint: 1
-      FirstDelay: 0
-      Interval: 1.2
       Weakness:
         NW: 1
         NE: 1
         SE: 0
         SW: 0
+    - Kind: 1
+      Count: 4
+      SpawnPoint: 0
+      FirstDelay: 2.5
+      Interval: 4
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 0
+        SW: 0
+    - Kind: 0
+      Count: 4
+      SpawnPoint: 1
+      FirstDelay: 0.5
+      Interval: 2.5
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 2
+        SW: 2
+    - Kind: 1
+      Count: 5
+      SpawnPoint: 1
+      FirstDelay: 1.5
+      Interval: 4
+      Weakness:
+        NW: 1
+        NE: 1
+        SE: 2
+        SW: 2
   Unlocked: 7
   Seed: 0
-  GeneratedWaves: -1
+  GeneratedWaves: 0
   TutorialStarting: 
   TutorialPrebuilt: []
   TutorialTasks: []
   TutorialCoached: 0
   TutorialClockRuns: 0
-  Research:
-  - AfterWave: 3
-    Builds: 06
-    Cost: 15
-    Hint: ""
-    Lesson:
-    - Step: 8
-      Text: "Shapes take turns leaving each side.\nOne ore line can now feed two turrets."
-      Hint: ""
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 06
-      StartsWave: 0
-      Title: "New: Splitter"
-      Focus: 0d
-      Reveal: 0
-      AddsOre: []
-    - Step: 29
-      Text: "Click the glowing SPLITTER key: 15 circles."
-      Hint: "Short on circles? Belt more into the Core. Press N to skip this and start the wave."
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 06
-      StartsWave: 0
-      Title: "Unlock it"
-      Focus: 0506
-      Reveal: 0
-      AddsOre: []
-  - AfterWave: 10
-    Builds: 05
-    Cost: 20
-    Hint: "PIPE available - hops one tile: over a belt, or the river. Click its key: 20 circles."
-    Lesson: []
-  - AfterWave: 11
-    Builds: 04
-    Cost: 50
-    Hint: ""
-    Lesson:
-    - Step: 8
-      Text: "Joins two halves into one shape.\nSquare ore lies across the river - pipe it over. A gate opens at the top."
-      Hint: ""
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 04
-      StartsWave: 0
-      Title: "New: Stacker"
-      Focus: 0d
-      Reveal: 0
-      AddsOre: []
-    - Step: 29
-      Text: "Click the glowing STACKER key: 50 circles."
-      Hint: "Short on circles? Belt more into the Core. Press N to skip this and start the wave."
-      Target: {x: -1, y: -1}
-      Ghost: []
-      Opens: 04
-      StartsWave: 0
-      Title: "Unlock it"
-      Focus: 0506
-      Reveal: 0
-      AddsOre: []
-  - AfterWave: 15
-    Builds: 07
-    Cost: 40
-    Hint: "SORTER available - sends one shape its own way. Click its key: 40 circles."
-    Lesson: []
+  TutorialSpotlight: 0
   MismatchDamage: 0.25
+  Research:
+  - AfterWave: 1
+    Builds: 06
+    Cost: 0
+    Hint: 
+    Lesson:
+    - Step: 8
+      Text: "Shapes take turns leaving each side.\nOne line can feed two turrets."
+      Hint: 
+      Target: {x: -1, y: -1}
+      Ghost: []
+      Opens: 06
+      StartsWave: 0
+      Title: 'New: Splitter'
+      Focus: 0d05
+      Reveal: 0
+      AddsOre: []
+      AddsGround: []
+      Wave: 0
+      Turrets: 0
+  - AfterWave: 2
+    Builds: 05
+    Cost: 0
+    Hint: 
+    Lesson:
+    - Step: 8
+      Text: "Hops one tile over water or another belt. Square ore sits across the river. A full square banks like a full circle - any complete shape is money."
+      Hint: 
+      Target: {x: -1, y: -1}
+      Ghost: []
+      Opens: 05
+      StartsWave: 0
+      Title: 'New: Pipe'
+      Focus: 0d05
+      Reveal: 0
+      AddsOre: []
+      AddsGround: []
+      Wave: 0
+      Turrets: 0
+  - AfterWave: 3
+    Builds: 04
+    Cost: 0
+    Hint: 
+    Lesson:
+    - Step: 8
+      Text: "Joins two halves into one mixed shape.\nCombine a top circle with a bottom square."
+      Hint: 
+      Target: {x: -1, y: -1}
+      Ghost: []
+      Opens: 04
+      StartsWave: 0
+      Title: 'New: Stacker'
+      Focus: 0d05
+      Reveal: 0
+      AddsOre: []
+      AddsGround: []
+      Wave: 0
+      Turrets: 0
+  - AfterWave: 7
+    Builds: 07
+    Cost: 0
+    Hint: 
+    Lesson: []

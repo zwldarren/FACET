@@ -255,9 +255,7 @@ namespace Facet.Core
             TutorialScript tutorial = map.Tutorial;
             if (tutorial == null) return;
 
-            int waves = map.GeneratedWaves < 0
-                ? int.MaxValue
-                : map.Waves.Length + Math.Max(0, map.GeneratedWaves);
+            int waves = map.Waves.Length + map.GeneratedWaves;
 
             for (int t = 0; t < tutorial.Count; t++)
             {
@@ -374,8 +372,8 @@ namespace Facet.Core
             else if (map.GeneratesWaves && map.MineralList().Length == 0)
             {
                 // The generator roots its pool at the map's veins, so a map that mines nothing has an empty
-                // closure: every generated wave would be built out of nothing and arrive empty, which ends a
-                // bounded run without a fight and never ends an endless one.
+                // closure: every generated wave would be built out of nothing and arrive empty, which ends the
+                // run without a fight.
                 into.Add(new MapProblem(MapProblemKind.GeneratorWithoutMineral, NoCell,
                     map.Name + ": the generator runs but no vein names a mineral, so it has nothing to " +
                     "demand and every generated wave arrives empty"));

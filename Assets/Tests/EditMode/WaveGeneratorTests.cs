@@ -382,7 +382,7 @@ namespace Facet.Tests
             // Two properties in one, and the second is why the ceiling is not merely a balance number: a wave
             // whose budget has outrun what a wave can hold is capped rather than asked for ten thousand
             // million million enemies, and a wave number in the hundreds is answered in one pass rather than
-            // by a loop that spends the budget an enemy at a time. A preview on an endless run asks exactly
+            // by a loop that spends the budget an enemy at a time. A preview asks exactly
             // this, every frame it is open - and the suite would hang rather than fail if it regressed.
             ShapePool pool = FullPool();
             WaveGenerator generator = Generator(seed: 5, pool);
@@ -418,8 +418,7 @@ namespace Facet.Tests
             // A map with veins and no unlocked operators can build nothing past the ores themselves, so the
             // mined minerals are the only demands it can be given. A band starting above them would ask for
             // something this map cannot make on every single wave and hand the director waves with nothing in
-            // them - a bounded run won without a fight, and an endless one that advances through empty waves
-            // for ever.
+            // them - a run won without a fight.
             var oresOnly = new ShapePool(BothMinerals, Operators.None);
             WaveGenerator generator = Generator(seed: 11, oresOnly);
 
@@ -478,7 +477,6 @@ namespace Facet.Tests
             SimWorld world = new SimWorld(GeneratedMap(authored: 2, generated: 12), new SimConfig());
             WaveDirector waves = world.Waves;
 
-            Assert.IsFalse(waves.Endless, "a bounded map is not endless");
             Assert.AreEqual(2, waves.AuthoredCount);
             Assert.AreEqual(14, waves.TotalWaves, "the table plus what the generator answers");
             Assert.AreEqual(7, waves.Seed, "and the run's seed is the map's");
@@ -492,19 +490,19 @@ namespace Facet.Tests
         }
 
         [Test]
-        public void WithEndless_UnboundsACopyOfTheSameMap()
+        public void ANegativeGeneratedCount_IsClamped_SoNoMapIsUnbounded()
         {
-            // §7's endless entry: the driver re-opens the campaign's last map with the generator unbounded,
-            // and it starts from a copy - the authored data stays what the editor drew.
-            MapDefinition bounded = GeneratedMap(authored: 2, generated: 12);
-            MapDefinition endless = bounded.WithEndless();
+            // Every run ends: a count of -1 used to mean "the generator never runs out", which is what made
+            // the campaign's last map endless. The field is a count now, so a stale asset that still carries
+            // -1 loads as a map that owes nothing past its table rather than as an exam with no last wave.
+            MapDefinition clamped = GeneratedMap(authored: 2, generated: -1);
 
-            Assert.AreEqual(-1, endless.GeneratedWaves, "the copy is the endless one");
-            Assert.IsTrue(endless.GeneratesWaves);
-            Assert.AreEqual(bounded.Name, endless.Name, "the same map, only unbounded");
-            Assert.AreEqual(bounded.Seed, endless.Seed, "the seed stays the host's per-run decision");
-            Assert.AreSame(bounded.Waves, endless.Waves, "the authored table is carried over, not copied");
-            Assert.AreEqual(12, bounded.GeneratedWaves, "and the map the copy came from is untouched");
+            Assert.AreEqual(0, clamped.GeneratedWaves, "a negative count reads as no generated waves");
+            Assert.IsFalse(clamped.GeneratesWaves);
+
+            SimWorld world = new SimWorld(clamped, new SimConfig());
+            Assert.AreEqual(2, world.Waves.TotalWaves, "so the run has the table's waves and no more");
+            Assert.IsNull(world.Waves.Definition(3), "and nothing answers past the authored table");
         }
 
         [Test]
@@ -513,7 +511,7 @@ namespace Facet.Tests
             // The briefing shows the next wave AND the one after (§5.5), on every frame, so the lookups
             // have to be pure - a preview that advanced the stream would make the wave that arrives differ
             // from the wave that was announced.
-            SimWorld world = new SimWorld(GeneratedMap(authored: 0, generated: -1), new SimConfig());
+            SimWorld world = new SimWorld(GeneratedMap(authored: 0, generated: 30), new SimConfig());
             WaveDirector waves = world.Waves;
 
             string third = Signature(waves.Definition(3));

@@ -65,13 +65,11 @@ namespace Facet.EditorTools
             asset.Unlocked = OperatorsField(asset, "Unlocked", asset.Unlocked, "Edit the map's unlocks");
             asset.Seed = IntField(asset, "Seed", asset.Seed,
                 "0 draws a fresh seed every run; a non-zero value pins every run to it");
-            asset.GeneratedWaves = IntField(asset, "Generated waves",
-                asset.GeneratedWaves, "Edit the map's generated waves");
-            EditorGUILayout.LabelField(asset.GeneratedWaves < 0
-                    ? "  endless: the generator never runs out of demands"
-                    : asset.GeneratedWaves == 0
-                        ? "  scripted only: the map ends with its wave table"
-                        : "  " + asset.GeneratedWaves + " generated waves after the table",
+            asset.GeneratedWaves = Mathf.Max(0, IntField(asset, "Generated waves",
+                asset.GeneratedWaves, "Edit the map's generated waves"));
+            EditorGUILayout.LabelField(asset.GeneratedWaves == 0
+                    ? "  scripted only: the map ends with its wave table"
+                    : "  " + asset.GeneratedWaves + " generated waves after the table",
                 EditorStyles.miniLabel);
 
             // Width and Height are the one pair of fields not written straight back. A resize re-lays the

@@ -165,19 +165,14 @@ namespace Facet.Tests
             var scripted = new MapDefinition("generated", 16, 12, Sim.TestShapes, vein,
                 new[] { new Int2(0, 10) }, new WaveDefinition[0], generatedWaves: 4);
             AssertNoProblem(MapValidation.Validate(scripted), MapProblemKind.NoWaves);
-
-            var endless = new MapDefinition("endless", 16, 12, Sim.TestShapes, vein,
-                new[] { new Int2(0, 10) }, new WaveDefinition[0], generatedWaves: -1);
-            AssertNoProblem(MapValidation.Validate(endless), MapProblemKind.NoWaves);
         }
 
         [Test]
         public void Validate_AGeneratorWithNoMineralToDemandFrom_IsReported()
         {
             // The generator roots its legal demands at the map's own veins, so a map that mines nothing hands it
-            // an empty pool and every generated wave arrives with nothing in it: a bounded run won without a
-            // fight, and an endless one that advances through empty waves for ever. The empty-wave rule never
-            // sees it, because that rule only ever reads the authored table.
+            // an empty pool and every generated wave arrives with nothing in it: a run won without a fight.
+            // The empty-wave rule never sees it, because that rule only ever reads the authored table.
             var noOre = new MapDefinition("no ore", 16, 12, Sim.TestShapes, new ShapePatch[0],
                 new[] { new Int2(0, 10) }, new WaveDefinition[0], generatedWaves: 6);
 

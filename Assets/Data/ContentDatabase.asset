@@ -125,7 +125,7 @@ MonoBehaviour:
     Name: Stacker
     Description: "joins two pieces that do not overlap into one mixed round \xB7
       an overlapping pair waits"
-    Interval: 2
+    Interval: 1.5
     Filter:
       Mode: 0
       Shape:

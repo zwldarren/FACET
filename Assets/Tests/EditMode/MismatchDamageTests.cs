@@ -47,14 +47,6 @@ namespace Facet.Tests
             Assert.AreEqual(4f, HitWith(0.25f, Top), 1e-4f, "and a matched round is untouched");
         }
 
-        [Test]
-        public void TheEndlessCopy_KeepsIt()
-        {
-            var map = new MapDefinition("x", 20, 12, 80, new ShapePatch[0], new Int2[0], new WaveDefinition[0],
-                mismatchDamage: 0.25f);
-            Assert.AreEqual(0.25f, map.WithEndless().MismatchDamage, 1e-4f);
-        }
-
         [TestCase("Assets/Data/Maps/Workshop.asset", 0.25f)]
         [TestCase("Assets/Data/Maps/MainMap.asset", 0.25f)]
         [TestCase("Assets/Data/Maps/Tutorial.asset", 0.5f)]

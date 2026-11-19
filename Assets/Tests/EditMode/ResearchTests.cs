@@ -325,15 +325,5 @@ namespace Facet.Tests
             Assert.AreEqual(BuildKind.Turret, TutorialScript.RequiredBuilding(TutorialStep.TwoTurretsArmed));
             Assert.AreEqual(BuildKind.Turret, TutorialScript.RequiredBuilding(TutorialStep.AnyTurretHoldsWaveShape));
         }
-
-        [Test]
-        public void TheEndlessCopy_KeepsTheSchedule()
-        {
-            SimWorld world = World(Rich, Splitter(1, 20));
-
-            MapDefinition endless = world.Map.WithEndless();
-
-            Assert.AreSame(world.Map.Research, endless.Research);
-        }
     }
 }

@@ -129,9 +129,9 @@ namespace Facet.Game
         public int Seed = 0;
 
         [Tooltip("How many generated waves follow the authored table: 0 finishes the map when the table is " +
-            "cleared (what every scripted map wants), a positive count hands over to the generator for that " +
-            "many exam waves, and -1 is ENDLESS - the generator never runs out of demands.")]
-        public int GeneratedWaves = 0;
+            "cleared (what every scripted map wants), and a positive count hands over to the generator for " +
+            "that many exam waves. Every run ends; there is no endless count.")]
+        [Min(0)] public int GeneratedWaves = 0;
 
         // ------------------------------------------------------------------ the tutorial
 
@@ -313,8 +313,10 @@ namespace Facet.Game
             return new ResearchSchedule(offers.ToArray());
         }
 
-        /// <summary>A research row's lesson as a coached script. It starts no buildings of its own: research
-        /// decides what is open, and the rest of the run goes on around it.</summary>
+        /// <summary>A research row's lesson as a coached script: the coach's popup, its spotlight and its boxes,
+        /// the same voice the tutorial levels teach in. It starts no buildings of its own - research decides what
+        /// is open, and the rest of the run goes on around it - and a target still points at the part of the map
+        /// the lesson is about, even though research supplies no blueprint.</summary>
         private static TutorialScript LessonPlan(TutorialTaskRow[] rows)
         {
             if (rows == null || rows.Length == 0) return null;
@@ -323,12 +325,19 @@ namespace Facet.Game
             for (int i = 0; i < rows.Length; i++)
             {
                 TutorialTaskRow row = rows[i];
-                tasks[i] = row == null
-                    ? new TutorialTask(TutorialScript.NoStep, "(task line missing)", null, null, false)
-                    : new TutorialTask(row.Step, row.Text, null, row.Opens, false, row.Hint, null, row.Title, row.Focus);
+                if (row == null)
+                {
+                    tasks[i] = new TutorialTask(TutorialScript.NoStep, "(task line missing)", null, null, false);
+                    continue;
+                }
+
+                bool hasTarget = row.Target.x >= 0 && row.Target.y >= 0;
+                tasks[i] = new TutorialTask(row.Step, row.Text,
+                    hasTarget ? new Int2(row.Target.x, row.Target.y) : (Int2?)null,
+                    row.Opens, false, row.Hint, null, row.Title, row.Focus);
             }
 
-            return new TutorialScript(null, tasks, coached: true);
+            return new TutorialScript(null, tasks, coached: true, spotlight: true);
         }
 
         /// <summary>The tile a problem is about when it is about the map as a whole, spelled as

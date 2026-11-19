@@ -91,8 +91,28 @@ namespace Facet.Game
 
         public const float StockpileGap = 10f;
 
-        /// <summary>Room for a five-digit stockpile and its shape.</summary>
+        /// <summary>
+        /// How the readout is drawn, in design units: a mark is <see cref="MoneyMark" /> square, the first sits
+        /// <see cref="MoneyInsetLeft" /> in, the gap between two of them is <see cref="MoneyMarkGap" />, and the
+        /// number follows the last mark after <see cref="MoneyToNumber" />. Spelled here so the width the layout
+        /// promises and the boxes the view places cannot disagree.
+        ///
+        /// <b>The readout has no panel of its own:</b> it hangs off the status card's edge, so the camera rig
+        /// reserves no strip for it (its top strip is the status card's).
+        /// </summary>
+        public const float MoneyInsetLeft = 12f;
+
+        /// <summary>Where the number starts after the last mark: the view's own breathing room.</summary>
+        public const float MoneyToNumber = 4f;
+
+        /// <summary>Room for a five-digit stockpile and one money mark: the base width
+        /// <see cref="StockpileWidthFor"/> grows from.</summary>
         public const float StockpileWidth = 124f;
+
+        /// <summary>One money mark's diameter, and the gap between two of them. A mark is an item's whole square
+        /// - a complete shape of a mineral - so a square reads as a square and a circle fills its box.</summary>
+        public const float MoneyMark = 16f;
+        public const float MoneyMarkGap = 4f;
 
         /// <summary>Tall enough to centre the readout on the status card's title line.</summary>
         public const float StockpileHeight = 44f;
@@ -117,8 +137,9 @@ namespace Facet.Game
             => new Rect(screenWidth - (Margin + HelpWidth) * s,
                 (Margin + ControlsHeight + ControlGap) * s, HelpWidth * s, HelpHeightFor(lines) * s);
 
-        /// <summary>Directly under the status card, its width, on the campaign's first map only. It takes
-        /// clicks, which is why <see cref="Insets"/> widens the top strip while it is up.</summary>
+        /// <summary>Directly under the status card, its width: the lesson's card, while a map teaches by a list
+        /// of lines the player works through. It takes clicks, which is why <see cref="Insets"/> widens the top
+        /// strip while it is up.</summary>
         public static Rect Tutorial(float s)
         {
             Rect status = Status(s);
@@ -128,16 +149,35 @@ namespace Facet.Game
         }
 
         /// <summary>Right of the status card, at its top edge. Gives up width rather than ever reaching the
-        /// controls on a narrow screen.</summary>
-        public static Rect Stockpile(float screenWidth, float s)
+        /// controls on a narrow screen. The marks are cut, never wrapped, when the card has to shrink - a
+        /// narrower card shows fewer minerals, and the card is sized to show them all at the shipped
+        /// scale.</summary>
+        public static Rect Stockpile(float screenWidth, float s, int marks = 1)
         {
             Rect status = Status(s);
             float left = status.xMax + StockpileGap * s;
             float right = Controls(screenWidth, s).x - StockpileGap * s;
-            float width = Mathf.Min(StockpileWidth * s, Mathf.Max(0f, right - left));
+            float width = Mathf.Min(StockpileWidthFor(marks) * s, Mathf.Max(0f, right - left));
 
             return new Rect(left, Margin * s, width, StockpileHeight * s);
         }
+
+        /// <summary>How wide the readout has to be to hold this many money marks: the number's own room plus
+        /// one mark per mineral, so a map that mines two minerals says so and a map that mines one is as
+        /// narrow as it always was.</summary>
+        public static float StockpileWidthFor(int marks)
+            => StockpileWidth + (MarkCount(marks) - 1) * (MoneyMark + MoneyMarkGap);
+
+        /// <summary>How much of the card's left edge the marks take, inset included: what the number has to
+        /// start after.</summary>
+        public static float MoneySpan(int marks)
+            => MarkCount(marks) * (MoneyMark + MoneyMarkGap);
+
+        /// <summary>How many money marks the readout is cut to fit. The shipped maps mine two minerals; the
+        /// cap is what keeps a future map from growing the card past the controls card beside it.</summary>
+        public const int MaxMoneyMarks = 3;
+
+        private static int MarkCount(int marks) => Mathf.Clamp(marks, 1, MaxMoneyMarks);
 
         /// <summary>A centred strip, narrower than the screen on purpose, so the map stays visible either
         /// side of it. <paramref name="tiles"/> is the run's, not the table's: a tutorial hands buildings

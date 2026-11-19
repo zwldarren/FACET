@@ -6,7 +6,7 @@ namespace Facet.Game
 {
     /// <summary>
     /// The route preview: one semi-transparent red arrow that sweeps from each gate the coming wave uses to the
-    /// Core, its tail fading behind it, a few seconds before the wave sets out and for a moment after - "they
+    /// Core, its tail fading behind it, through the wait before the wave sets out and for a moment after - "they
     /// are coming, and this is the way they will walk".
     ///
     /// The route is <see cref="SimWorld.TraceEnemyRoute"/>, which makes the walkers' own choices on the
@@ -14,21 +14,27 @@ namespace Facet.Game
     /// lane the wave will not take. It is asked fresh every frame it shows, so a building placed during the
     /// countdown re-draws the way at once.
     ///
-    /// When it shows: the last <see cref="LeadSeconds"/> of a countdown; a tutorial's held wave while its line
-    /// is waiting for the player to call it; and the first <see cref="TrailSeconds"/> of every wave, which
-    /// covers a wave called early or started without a countdown. Read-only: it changes nothing in the run.
+    /// When it shows: the whole of a countdown - softly at first, at full strength over its last
+    /// <see cref="LeadSeconds"/>; a held wave, softly for an ordinary map's opening wait and at full strength
+    /// for a tutorial waiting on the player's call; and the first <see cref="TrailSeconds"/> of every wave,
+    /// which covers a wave called early or started without a countdown. Read-only: it changes nothing in the
+    /// run.
     /// </summary>
     [DefaultExecutionOrder(115)]
     public sealed class EnemyRouteView : MeshView
     {
-        /// <summary>How long before a counted-down wave the route appears.</summary>
-        private const float LeadSeconds = 4f;
+        /// <summary>How long before a counted-down wave the route brightens to full warning strength.</summary>
+        private const float LeadSeconds = 5f;
+
+        /// <summary>Steady preview alpha before the lead window, so the player always sees which gate the next
+        /// wave uses instead of waiting for the last few seconds.</summary>
+        private const float PreviewAlpha = 0.55f;
 
         /// <summary>How long into a wave the route stays, fading over the last second.</summary>
         private const float TrailSeconds = 1.5f;
 
-        /// <summary>Fade-in at the start of the lead window, in seconds.</summary>
-        private const float FadeIn = 0.3f;
+        /// <summary>Fade-in when the route intensifies into the final lead window, in seconds.</summary>
+        private const float FadeIn = 0.6f;
 
         /// <summary>One sweep: the arrow runs gate to Core in <see cref="SweepSeconds"/>, its tail drains into
         /// the Core, then a short rest before the next.</summary>
@@ -105,16 +111,28 @@ namespace Facet.Game
             switch (waves.Phase)
             {
                 case WavePhase.Intermission:
-                    if (waves.IntermissionRemaining > LeadSeconds) return false;
+                    // Preview early, brighten over the final LeadSeconds. The clamp is what holds the preview
+                    // steady before that window: a wave further out than LeadSeconds is zero progress.
                     wave = waves.NextWaveDefinition;
-                    alpha = Mathf.Clamp01((LeadSeconds - waves.IntermissionRemaining) / FadeIn);
+                    alpha = Mathf.Lerp(PreviewAlpha, 1f,
+                        Mathf.Clamp01((LeadSeconds - waves.IntermissionRemaining) / FadeIn));
                     return true;
 
                 case WavePhase.Held:
-                    // A lesson holding its wave for the player to call: show where it will come from.
-                    if (!world.Tutorial.WaitsForWaveCall) return false;
+                    // A tutorial holding its wave for the player to call shows at full strength; an ordinary
+                    // map's pre-build wait previews the opening route softly, so the player knows which gate to
+                    // build for before the first belt goes down. Any other held wave has nothing to show.
+                    if (world.Tutorial.WaitsForWaveCall)
+                    {
+                        wave = waves.NextWaveDefinition;
+                        alpha = 1f;
+                        return true;
+                    }
+
+                    if (waves.HoldEveryWait) return false;
+
                     wave = waves.NextWaveDefinition;
-                    alpha = 1f;
+                    alpha = PreviewAlpha;
                     return true;
 
                 case WavePhase.Running:

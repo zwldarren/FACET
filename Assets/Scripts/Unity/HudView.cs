@@ -50,8 +50,9 @@ namespace Facet.Game
         /// <summary>The buildings as pictures: one miniature per key, from the same palette the map draws with.</summary>
         private BuildIcons _buildIcons;
 
-        /// <summary>Which mineral's mark the HUD is wearing right now; repainted when a map change moves it.</summary>
-        private Shape _moneyDrawn = Shape.None;
+        /// <summary>Which minerals' marks the HUD is wearing right now - one per vein the map mines - so a map
+        /// change that moves them repaints, and an update that changed nothing writes nothing.</summary>
+        private Quad[] _moneyDrawn;
 
         // ------------------------------------------------------------------ the canvas and its panels
 
@@ -66,7 +67,6 @@ namespace Facet.Game
         private StockpilePanel _stockpile;
         private ToastPanel _toast;
         private BannerPanel _banner;
-        private TutorialPanel _tutorial;
         private TaskPanel _tasks;
         private TooltipPanel _tooltip;
 
@@ -157,8 +157,6 @@ namespace Facet.Game
         private ShapeFilter _filterSeen;
         private Int2 _filterCell = new Int2(-1, -1);
 
-        private bool _tutorialUp;
-
         /// <summary>The last line the task card printed, and whether that was the completion line. Rebuilt on
         /// the tick a line is ticked and on nothing else; whether the card is up is asked of the panel itself.</summary>
         private int _seenTaskStep = -1;
@@ -183,11 +181,6 @@ namespace Facet.Game
         private bool _hintPinned;
 
         private bool _seenHintPinned;
-
-        private string _hideWord;
-
-        /// <summary>The player's own say over the "how to play" card; null means the campaign decides.</summary>
-        private bool? _tutorialChoice;
 
         /// <summary>The tile under the pointer, pushed by the driver each frame; (-1,-1) hides the tooltip.</summary>
         private Int2 _cursor = new Int2(-1, -1);
@@ -263,51 +256,11 @@ namespace Facet.Game
         /// the locator and the guide, whose panel boxes are the boxes the HUD draws.</summary>
         public int BarTiles => _bar != null ? _bar.Tiles.Count : HudLayout.BarTiles;
 
-        /// <summary>The operators this map hands over that the map before it did not. A later map that adds a
-        /// machine says what it is for, so a new operator is never dropped in without a word.</summary>
-        private Operators NewOperators
-        {
-            get
-            {
-                if (_campaign == null || _campaign.IsFirstMap || _world == null) return Operators.None;
-                MapDefinition previous = _catalog != null && _campaign.MapIndex > 0
-                    ? _catalog.At(_campaign.MapIndex - 1)
-                    : null;
-                return previous == null ? Operators.None : MachineReading.NewOperators(_world.Map, previous);
-            }
-        }
-
-        private bool HasIntroduction => NewOperators != Operators.None;
-
-        /// <summary>Is the "how to play" card up? Up by default on the campaign's first map and on any later map
-        /// that hands over a machine - unless that map brings a lesson, which owns the corner while it is taught.
-        /// Once the player has hidden or shown the card themselves, their choice wins on every map.</summary>
-        private bool ShowTutorial
-        {
-            get
-            {
-                if (_campaign == null) return false;
-                if (_world != null && _world.Tutorial.Coached) return false;
-                if (_tutorialChoice.HasValue) return _tutorialChoice.Value;
-
-                // A later map that hands over a machine opens with the card up too, unless it brings a lesson
-                // of its own, which then owns the corner the same way.
-                return (_campaign.IsFirstMap && (!HasTutorial || LessonHandedOver)) ||
-                       (HasIntroduction && (!HasTutorial || LessonHandedOver));
-            }
-        }
-
-        /// <summary>Has the lesson finished and given the corner back? The two cards are complements: one corner,
-        /// one card.</summary>
-        private bool LessonHandedOver => HasTutorial && !TaskListWanted;
-
-        private bool HasTutorial => _world != null && _world.Tutorial.Active;
-
-        /// <summary>Is the task list on screen this frame? Yielded to the reference card while the player has
-        /// asked for it with <c>T</c>: the corner belongs to whichever card they wanted to read.</summary>
-        private bool TaskListUp => TaskListWanted && !ShowTutorial;
-
-        private bool TaskListWanted
+        /// <summary>Is the lesson's card on screen this frame? The HUD's one card, and the one predicate the
+        /// card's claim on the pointer, the toast's clearance and the driver's camera rig all read. A map that
+        /// teaches by the coach's popup (<see cref="TutorialScript.Coached"/>) has no card at all, and a map that
+        /// teaches by a list of lines wears it while the list is being worked through.</summary>
+        public bool TutorialUp
         {
             get
             {
@@ -342,12 +295,29 @@ namespace Facet.Game
         private const float HintSeconds = 7f;
         private const float NoticeFade = 0.3f;
 
-        /// <summary>Is either card on screen? The one predicate the cards' claim on the pointer, the toast's
-        /// clearance and the driver's camera rig all read.</summary>
-        public bool TutorialUp => ShowTutorial || TaskListUp;
+        /// <summary>The coin this run is paid in: a <em>complete</em> shape of every mineral the map mines,
+        /// since any full shape banks (<see cref="Shape.IsFull"/>) whichever mineral it is made of. One mark
+        /// each, side by side, so a map whose ore is circles and squares says exactly that.
+        ///
+        /// A field rather than a property because <see cref="MapDefinition.MineralList"/> walks the patches:
+        /// the HUD asks once per map, not once per frame.</summary>
+        private Quad[] _money = new Quad[0];
 
-        /// <summary>The coin this run is paid in: the <em>complete</em> shape of the map's own mineral, since any
-        /// full shape banks (<see cref="Shape.IsFull"/>).</summary>
+        /// <summary>The map's minerals, cut to the number of marks the readout can hold. A map that mines
+        /// nothing falls back on its currency, the one mineral every map has.</summary>
+        private Quad[] ResolveMoneyMinerals()
+        {
+            Quad[] minerals = _world.Map.MineralList();
+            if (minerals.Length == 0) return new[] { _world.Map.CurrencyMineral };
+            if (minerals.Length <= HudLayout.MaxMoneyMarks) return minerals;
+
+            var capped = new Quad[HudLayout.MaxMoneyMarks];
+            System.Array.Copy(minerals, capped, capped.Length);
+            return capped;
+        }
+
+        /// <summary>The coin the bar's price marks wear - the first of <see cref="_money"/>; the readout
+        /// itself draws the whole list.</summary>
         private Shape MoneyShape => Shape.Full(_world.Map.CurrencyMineral);
 
         /// <summary>Point the HUD at a world, its palette and its campaign. Called on every map change, which is why
@@ -363,9 +333,6 @@ namespace Facet.Game
             _palette = palette;
             _campaign = campaign;
             _catalog = catalog;
-            // A map that hands over a new machine opens with its card up even if the player hid "how to play"
-            // earlier: that choice was about a card they had read, and this one is new.
-            if (HasIntroduction) _tutorialChoice = null;
             if (selectKind != null) _selectKind = selectKind;
             if (rotate != null) _rotate = rotate;
             if (setFilter != null) _setFilter = setFilter;
@@ -385,8 +352,10 @@ namespace Facet.Game
             }
 
             // The hierarchy stands; a map change is a rebinding. Every dirty flag goes up, so the next
-            // update pass redraws the cards against the new world.
-            FillTutorial(_tutorial);
+            // update pass redraws the cards against the new world - and the money list is resolved again,
+            // because two maps with the same bar still mint different minerals.
+            _money = ResolveMoneyMinerals();
+            _moneyDrawn = null;
             MarkEverythingDirty();
         }
 
@@ -411,7 +380,6 @@ namespace Facet.Game
             // the button anyway. The stockpile and the toast are read, never clicked, so clicks pass through.
             PointerOverHud = ComputePointerOver();
 
-            UpdateTutorial();
             UpdateTasks();
             UpdateToast();
             UpdateBanner();
@@ -497,10 +465,10 @@ namespace Facet.Game
         {
             // The tiles are new objects, so the money mark has to be painted onto them again: otherwise the
             // "already drawn" bookkeeping leaves each price with the white texture a RawImage starts with.
-            _moneyDrawn = Shape.None;
+            _moneyDrawn = null;
+            _money = ResolveMoneyMinerals();
 
             _status = BuildStatus();
-            _tutorial = BuildTutorial();
             _tasks = BuildTasks();
             _controls = BuildControls();
             _help = BuildHelp();
@@ -545,7 +513,6 @@ namespace Facet.Game
             _tooltipDirty = true;
             _tooltipTick = -1;
             _tooltipRows = 0;
-            _tutorialUp = !ShowTutorial;   // forces the tutorial's own update to decide again
 
             // The card is built at its base height, and a picker left standing on the old hierarchy would be
             // a band nobody re-placed.
@@ -666,7 +633,6 @@ namespace Facet.Game
         /// serialized reference, because the driver makes the HUD in code and a test has no scene to wire one in.
         /// One per panel, so a diff touches the panel it changed.</summary>
         private const string StatusPrefab = "Hud/HudStatus";
-        private const string TutorialPrefab = "Hud/HudTutorial";
         private const string TasksPrefab = "Hud/HudTasks";
         private const string ControlsPrefab = "Hud/HudControls";
         private const string HelpPrefab = "Hud/HudHelp";
@@ -757,31 +723,9 @@ namespace Facet.Game
             return chips;
         }
 
-        private TutorialPanel BuildTutorial()
-        {
-            RectTransform root = BindPanel(TutorialPrefab, "tutorial", HudLayout.Tutorial(_scale),
-                PlaceCorner.TopLeft);
-            var panel = new TutorialPanel { Root = root };
-
-            AdoptCard(root, "tutorial");
-            panel.Title = BindLabel(root, "title", HudType.Body, FontStyle.Bold, TextAnchor.MiddleLeft,
-                tracked: true);
-            panel.Hide = BindButton(root, "hide", HudType.Micro, HudInk.Muted(_palette), "HIDE  T",
-                () => SetTutorialShown(false));
-            HudUi.AdoptBox(HudUi.Child(root, "rule"), HudInk.Rule(_palette));
-
-            panel.Body = BindLabel(root, "body", HudType.Micro, FontStyle.Normal, TextAnchor.UpperLeft,
-                wrap: false, rich: true);
-            AutoFit(panel.Body, 8f);
-
-            FillTutorial(panel);
-            root.gameObject.SetActive(ShowTutorial);
-            return panel;
-        }
-
         /// <summary>
-        /// The lesson's card, in the corner the reference card wears: same rect, same width and height, so the top
-        /// strip does not have to know which card is up and the asset carries only what the two do not share.
+        /// The lesson's card: the corner the lesson teaches from, at the rect <see cref="HudLayout.Tutorial"/>
+        /// gives it, so the top strip does not have to know which card is up.
         ///
         /// No close button: the card is not a thing the player opens, so it is not a thing they dismiss.
         /// </summary>
@@ -809,70 +753,6 @@ namespace Facet.Game
 
             root.gameObject.SetActive(false);
             return panel;
-        }
-
-        /// <summary>The card's five lines for the map being played, re-said on every map change because the card is
-        /// built once and kept. Five lines of Micro type, one numeral each, no wrapping.</summary>
-        private void FillTutorial(TutorialPanel panel)
-        {
-            if (panel == null || panel.Title == null) return;
-
-            string accent = "#" + ColorUtility.ToHtmlStringRGB(_palette.HudAccent);
-            Color ink = HudInk.Blend(_palette.HudText, _palette.HudPanel, 0.18f);
-
-            Operators fresh = NewOperators;
-            string[] lines;
-            if (fresh == Operators.None)
-            {
-                panel.Title.Set("HOW TO PLAY", _palette.HudText);
-                lines = new[]
-                {
-                    "Drag Belt (1) from ore into the Core - a belt on ore mines it.",
-                    "A full shape banked earns one coin.",
-                    "Each wave is weak to the shape printed above it.",
-                    "Cutter (3) splits, Rotator (4) turns  \u00B7  Q/E turns a ghost.",
-                    "Belt it to a Turret (0): the exact shape does full damage.",
-                };
-            }
-            else if ((fresh & Operators.Stacker) != 0)
-            {
-                // The map that first asks for a mixed round: what the machine is for, then the recipe.
-                panel.Title.Set("NEW: STACKER (" + HotkeyFor(Operators.Stacker) + ")", _palette.HudText);
-                lines = new[]
-                {
-                    MachineReading.Introduction(Operators.Stacker),
-                    "Mine both ores, and cut a half of each with a Cutter (" + HotkeyFor(Operators.Cutter) + ").",
-                    "Belt the two halves into two sides of the Stacker.",
-                    "Halves on the same side never join - it waits for the other.",
-                    "A two-colour figure above is a round only it can make.",
-                };
-            }
-            else
-            {
-                panel.Title.Set("NEW ON THIS MAP", _palette.HudText);
-                var list = new List<string>();
-                foreach (Operators op in new[] { Operators.Cutter, Operators.Rotator })
-                    if ((fresh & op) != 0)
-                        list.Add(MachineReading.Introduction(op) + " (" + HotkeyFor(op) + ")");
-                lines = list.ToArray();
-            }
-
-            var body = new StringBuilder();
-            for (int i = 0; i < lines.Length && i < 5; i++)
-            {
-                if (i > 0) body.Append('\n');
-                body.Append("<color=").Append(accent).Append('>').Append(i + 1).Append("</color>  ").Append(lines[i]);
-            }
-
-            panel.Body.Set(body.ToString(), ink);
-        }
-
-        private string HotkeyFor(Operators op)
-        {
-            BuildKind kind = op == Operators.Cutter ? BuildKind.Cutter
-                : op == Operators.Rotator ? BuildKind.Rotator
-                : BuildKind.Stacker;
-            return HotkeyOf(kind);
         }
 
         /// <summary>The digit that presses one building's key on this run's bar, or "+" while the building is
@@ -951,8 +831,9 @@ namespace Facet.Game
 
         private StockpilePanel BuildStockpile()
         {
+            Quad[] minerals = _money;
             RectTransform root = BindPanel(StockpilePrefab, "stockpile",
-                HudLayout.Stockpile(Screen.width, _scale), PlaceCorner.TopLeft);
+                HudLayout.Stockpile(Screen.width, _scale, minerals.Length), PlaceCorner.TopLeft);
             var panel = new StockpilePanel { Root = root };
 
             // Lifted off the status card beside it, so the stockpile and the status read as two objects.
@@ -960,11 +841,49 @@ namespace Facet.Game
             panel.Number = BindLabel(root, "number", HudType.Display, FontStyle.Bold,
                 TextAnchor.MiddleLeft, tracked: true);
 
-            panel.Icon = HudUi.AdoptIcon(HudUi.Child(root, "icon"));
-            Paint(panel.Icon, _icons.Mark(MoneyShape));
-            panel.Icon.gameObject.SetActive(panel.Icon.texture != null);
+            // One mark per mineral the map mines: the prefab carries the first, and the rest are copies of
+            // that node, which a prefab cannot know to provide. The copies are scaled by hand, because the
+            // root's design units were scaled when the card was bound and a node added afterwards would be
+            // placed in unscaled units beside scaled siblings.
+            RectTransform first = HudUi.Child(root, "icon");
+            panel.Icons.Add(HudUi.AdoptIcon(first));
+            for (int i = 1; i < minerals.Length; i++)
+            {
+                RectTransform copy = Instantiate(first, root);
+                copy.name = "icon" + i;
+                panel.Icons.Add(HudUi.AdoptIcon(copy));
+            }
+
+            for (int i = 0; i < panel.Icons.Count; i++)
+            {
+                Paint(panel.Icons[i], _icons.Mark(Shape.Full(minerals[i])));
+                panel.Icons[i].gameObject.SetActive(panel.Icons[i].texture != null);
+            }
+
+            PlaceMoneyMarks(panel);
+
+            // The number starts right of the marks, not after one shape's worth of room, so a two-mark map
+            // does not print its count through the second mark. Placed here because the prefab was authored
+            // for the one-mark readout every map used to have.
+            HudUi.TopLeft(panel.Number.Rect,
+                (HudLayout.MoneyInsetLeft + HudLayout.MoneySpan(minerals.Length) + HudLayout.MoneyToNumber) * _scale,
+                2f * _scale, 84f * _scale, 40f * _scale);
 
             return panel;
+        }
+
+        /// <summary>Lay the readout's marks out left to right, each in its mineral's own square.</summary>
+        private void PlaceMoneyMarks(StockpilePanel panel)
+        {
+            float size = HudLayout.MoneyMark * _scale;
+            float step = (HudLayout.MoneyMark + HudLayout.MoneyMarkGap) * _scale;
+
+            // Centred on the pill's height, which is where the one mark the prefab drew always sat.
+            float y = (HudLayout.StockpileHeight - HudLayout.MoneyMark) * 0.5f * _scale;
+
+            for (int i = 0; i < panel.Icons.Count; i++)
+                HudUi.TopLeft(panel.Icons[i].rectTransform, HudLayout.MoneyInsetLeft * _scale + i * step, y,
+                    size, size);
         }
 
         private BarPanel BuildBar()
@@ -1348,10 +1267,6 @@ namespace Facet.Game
 
             if (_helpOpen && Over(_help.Root, pointer)) return true;
 
-            if (ShowTutorial && _tutorial != null && _tutorial.Root.gameObject.activeSelf &&
-                Over(_tutorial.Root, pointer))
-                return true;
-
             return _tasks != null && _tasks.Root.gameObject.activeSelf && Over(_tasks.Root, pointer);
         }
 
@@ -1520,37 +1435,11 @@ namespace Facet.Game
             }
         }
 
-        // ------------------------------------------------------------------ the tutorial card
-
-        /// <summary>The one piece of the HUD that explains the game rather than reporting it: up only while
-        /// the run is on a map that asks for it - the same predicate the camera rig is given, so the card and
-        /// the map's bound cannot disagree. On a map that teaches, this is the reference card behind <c>T</c>;
-        /// the lesson itself is <see cref="UpdateTasks"/>.</summary>
-        private void UpdateTutorial()
-        {
-            bool up = ShowTutorial;
-            if (up != _tutorialUp)
-            {
-                _tutorialUp = up;
-                _tutorial.Root.gameObject.SetActive(up);
-            }
-
-            // While the lesson is still teaching, this card is a detour the player may not have meant to take
-            // (T swaps the cards), so the button says where the same key goes back to. Once the corner is the
-            // reference card's own again, the word is the plain one.
-            string hide = HasTutorial && !_world.Tutorial.Complete ? "TASKS  T" : "HIDE  T";
-            if (hide != _hideWord)
-            {
-                _hideWord = hide;
-                _tutorial.Hide.Label.Set(hide, HudInk.Muted(_palette));
-            }
-        }
-
         // ------------------------------------------------------------------ the task list
 
         /// <summary>
-        /// The lesson's card: the line being taught, under the ones already ticked, in the corner the reference
-        /// card otherwise wears. It prints the history and the present only, and the ticked lines stay up (muted)
+        /// The lesson's card: the line being taught, under the ones already ticked, in the top-left corner under
+        /// the status rail. It prints the history and the present only, and the ticked lines stay up (muted)
         /// because they are the record of what the bar has already grown by.
         /// </summary>
         private void UpdateTasks()
@@ -1570,7 +1459,7 @@ namespace Facet.Game
 
             UpdateLessonNotice(tutorial);
 
-            bool up = TaskListUp;
+            bool up = TutorialUp;
 
             // Asked of the panel rather than of a cached flag: the lesson's last line also changes the bar's key
             // set, so this frame's update went through RebuildPanels and returned, and the panel that rebuild made
@@ -1766,7 +1655,7 @@ namespace Facet.Game
             {
                 int price = _world.Research.CostOf(kind);
                 Notice("LOCKED - click the " + def.Name + " key to research it for " + price + " " +
-                    Plural(Shape.MineralName(_world.Map.CurrencyMineral), price), NoticeSeconds);
+                    Money(price), NoticeSeconds);
                 return;
             }
 
@@ -1800,7 +1689,7 @@ namespace Facet.Game
             switch (refusal.Reason)
             {
                 case RejectionReason.NoFunds:
-                    return "NOT ENOUGH " + Plural(Shape.MineralName(_world.Map.CurrencyMineral), 2)
+                    return "NOT ENOUGH " + Money(2)
                                .ToUpperInvariant() +
                            " - " + def.Name + " costs " + Mathf.RoundToInt(refusal.Amount) + ", you have " +
                            _world.Economy.Shapes;
@@ -1825,22 +1714,56 @@ namespace Facet.Game
         // ------------------------------------------------------------------ stockpile
 
         /// <summary>
-        /// Keep every money mark on the HUD on the run's own coin. Both are repainted from here rather than at
-        /// their own call sites, so a map change cannot leave the previous map's mineral on one of them.
+        /// Keep every money mark on the HUD on the run's own coin: the readout's one mark per mineral, and the
+        /// bar's single price mark. Repainted from here rather than at their own call sites, so a map change
+        /// cannot leave the previous map's mineral on one of them - and guarded by the whole <em>list</em>,
+        /// because a map that mines two minerals is a different picture from one that mines one.
         /// </summary>
         private void UpdateMoneyMarks()
         {
-            Shape money = MoneyShape;
-            if (money == _moneyDrawn) return;
+            Quad[] minerals = _money;
+            if (SameMinerals(minerals, _moneyDrawn)) return;
 
-            _moneyDrawn = money;
-            HudIcons.Icon coin = _icons.Mark(money);
+            _moneyDrawn = minerals;
 
-            if (_stockpile != null && _stockpile.Icon != null) Paint(_stockpile.Icon, coin);
+            if (_stockpile != null)
+            {
+                for (int i = 0; i < _stockpile.Icons.Count; i++)
+                {
+                    RawImage mark = _stockpile.Icons[i];
+                    if (mark == null) continue;
+
+                    // A card built for more veins than this map mines leaves its spare marks dark.
+                    if (i >= minerals.Length)
+                    {
+                        mark.gameObject.SetActive(false);
+                        continue;
+                    }
+
+                    Paint(mark, _icons.Mark(Shape.Full(minerals[i])));
+                    mark.gameObject.SetActive(mark.texture != null);
+                }
+
+                // The marks are new pictures, so the tint the last frame put on them says nothing about these.
+                _stockpileAlpha = -1f;
+            }
+
             if (_bar == null) return;
 
+            HudIcons.Icon coin = _icons.Mark(Shape.Full(minerals[0]));
             for (int i = 0; i < _bar.Tiles.Count; i++)
                 if (_bar.Tiles[i].CostIcon != null) Paint(_bar.Tiles[i].CostIcon, coin);
+        }
+
+        /// <summary>Are these the minerals the HUD already painted? In order, because a mark sits where its
+        /// mineral was listed.</summary>
+        private static bool SameMinerals(Quad[] a, Quad[] b)
+        {
+            if (a == null || b == null || a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++)
+                if (a[i] != b[i]) return false;
+
+            return true;
         }
 
         /// <summary>Point one mark at one rasterised item. Without a texture a <see cref="RawImage"/> draws a white
@@ -1866,21 +1789,23 @@ namespace Facet.Game
             {
                 _stockpileCount = shapes;
                 _stockpile.Number.Set(shapes.ToString(), numberColour);
-
-                // The mark stands to the left of the number, so it never has to move as the number grows.
-                if (_stockpile.Icon != null)
-                    _stockpile.Icon.gameObject.SetActive(_stockpile.Icon.texture != null);
             }
             else _stockpile.Number.SetColour(numberColour);
 
             // The texture carries the shape's colour; the tint carries only the fade, so a fading number fades
-            // its shape with it.
-            if (_stockpile.Icon != null && !Mathf.Approximately(_stockpileAlpha, numberColour.a))
+            // its shapes with it.
+            if (!Mathf.Approximately(_stockpileAlpha, numberColour.a))
             {
                 _stockpileAlpha = numberColour.a;
-                Color tint = _stockpile.Icon.color;
-                tint.a = numberColour.a;
-                _stockpile.Icon.color = tint;
+                for (int i = 0; i < _stockpile.Icons.Count; i++)
+                {
+                    RawImage mark = _stockpile.Icons[i];
+                    if (mark == null) continue;
+
+                    Color tint = mark.color;
+                    tint.a = numberColour.a;
+                    mark.color = tint;
+                }
             }
         }
 
@@ -2282,15 +2207,14 @@ namespace Facet.Game
             }
         }
 
-        /// <summary>The title line's left end: the map in the campaign, and the endless word when the last map
-        /// re-enters as an endless run.</summary>
+        /// <summary>The title line's left end: the map in the campaign, and its name.</summary>
         private string MapLine()
         {
             string at = _campaign != null && _campaign.MapCount > 1
                 ? (_campaign.MapIndex + 1) + "/" + _campaign.MapCount + "  ·  "
                 : string.Empty;
 
-            return at + _world.Map.Name + (_world.Waves.Endless ? "  ·  endless" : string.Empty);
+            return at + _world.Map.Name;
         }
 
         private string WaveTag()
@@ -2322,10 +2246,10 @@ namespace Facet.Game
         {
             if (_world.Status != GameStatus.Playing)
             {
-                // Won with no map after this one, the next press of N is the endless entry; a loss, or a win
-                // with a map still ahead, has no N to offer.
-                return _world.Status == GameStatus.Won && _campaign != null && !_campaign.HasNext
-                    ? "press N to keep going, endless  ·  R to restart"
+                // Every run ends on its own last wave, so a finished run offers no next map and no N: the
+                // restart door is the only one left.
+                return _world.Status == GameStatus.Won
+                    ? "campaign complete  ·  R to restart"
                     : "press R to restart";
             }
 
@@ -2349,8 +2273,8 @@ namespace Facet.Game
 
                 case WavePhase.Running:
                 {
-                    // Definition, not the authored table: an endless or generated run has waves the table
-                    // never held, and the count still has to be right.
+                    // Definition, not the authored table: a generated run has waves the table never held,
+                    // and the count still has to be right.
                     WaveDefinition current = waves.Definition(waves.CurrentWave);
                     int left = _world.Enemies.AliveCount + waves.PendingInWave;
                     return left + " of " + (current != null ? current.Total : left) + " enemies left in this wave"
@@ -2371,7 +2295,6 @@ namespace Facet.Game
         {
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.hKey.wasPressedThisFrame) SetHelpOpen(!_helpOpen);
-            if (keyboard != null && keyboard.tKey.wasPressedThisFrame) SetTutorialShown(!ShowTutorial);
 
             int gear = _clock != null ? _clock.Gear : 1;
             bool behind = _clock != null && _clock.FallingBehind && !_world.Paused;
@@ -2402,8 +2325,6 @@ namespace Facet.Game
             _help.Root.gameObject.SetActive(open);
         }
 
-        private void SetTutorialShown(bool shown) => _tutorialChoice = shown;
-
         /// <summary>The tile under the pointer, pushed by the driver every frame: the tooltip reads what the click
         /// would read, and the driver is the one place that already knows the answer.</summary>
         public void SetCursor(Int2 cell) => _cursor = cell;
@@ -2426,9 +2347,9 @@ namespace Facet.Game
                 buildLine,
                 "the same one again drops it",
                 "Q / E turn  ·  drag lays belts",
-                "T how to play  ·  H this card",
+                "H this card  ·  M menu",
                 "RMB deletes, or clears a jam",
-                "Esc / M menu  ·  C the Core",
+                "Esc menu  ·  C the Core",
                 "N the wave  ·  Space  ·  R restart",
                 "[ / ] speed 1x - 3x",
             };
@@ -2628,7 +2549,7 @@ namespace Facet.Game
 
             string names = OfferNames(offer);
             int cost = offer.Cost;
-            string money = Plural(Shape.MineralName(_world.Map.CurrencyMineral), cost);
+            string money = Money(cost);
 
             if (_world.Research.CanAfford(kind))
             {
@@ -2771,7 +2692,7 @@ namespace Facet.Game
             // family it belongs to.
             _info.BuildTitle.Set(def.Name, locked ? HudInk.Muted(_palette) : _palette.HudText);
             _info.BuildRight.Set(
-                def.Cost + " " + Plural(Shape.MineralName(_world.Map.CurrencyMineral), def.Cost) + "   ·   " +
+                def.Cost + " " + Money(def.Cost) + "   ·   " +
                 (locked ? "LOCKED" : RoleOf(kind)),
                 HudInk.Muted(_palette));
 
@@ -2781,7 +2702,7 @@ namespace Facet.Game
             {
                 int price = _world.Research.CostOf(kind);
                 _info.BuildRight.Set("research " + price + " " +
-                    Plural(Shape.MineralName(_world.Map.CurrencyMineral), price) + "   ·   LOCKED",
+                    Money(price) + "   ·   LOCKED",
                     HudInk.Muted(_palette));
             }
 
@@ -3569,13 +3490,9 @@ namespace Facet.Game
             switch (_world.Status)
             {
                 case GameStatus.Lost:
-                    // An endless run is scored by how long it held, and the best is kept across runs.
-                    text = _world.Waves.Endless
-                        ? "CORE DESTROYED\nyou held " + _world.Waves.Cleared + " " +
-                          (_world.Waves.Cleared == 1 ? "wave" : "waves") + " · best " +
-                          Mathf.Max(BestWave.Read(_world.Map.Name), _world.Waves.Cleared) + "\n" + StatsLine() +
-                          "\nR to restart"
-                        : "CORE DESTROYED\n" + StatsLine() + "\nR to restart";
+                    // The run's own number, cleared against the map's: a loss is a run that stopped short.
+                    text = "CORE DESTROYED\nyou held " + _world.Waves.Cleared + " of " +
+                           _world.Waves.TotalWaves + " waves\n" + StatsLine() + "\nR to restart";
                     colour = _palette.HudWarn;
                     show = true;
                     break;
@@ -3592,12 +3509,9 @@ namespace Facet.Game
                     }
                     else
                     {
-                        // No map after this one, and pressing N is the "go on" verb in every state: here it
-                        // is the endless entry, the same map with the generator unbounded.
+                        // No map after this one: the campaign is spent, and the only door left is a replay.
                         text = _world.Map.Name.ToUpperInvariant() + " CLEARED\n" + StatsLine() +
-                               (_campaign != null
-                                    ? "\ncampaign complete · press N to keep going, endless"
-                                    : "\nR to restart");
+                               "\ncampaign complete · R to replay";
                     }
 
                     colour = HudInk.Good(_palette);
@@ -3625,7 +3539,7 @@ namespace Facet.Game
         private string StatsLine()
         {
             return _world.ShotsFired + " shots fired · " + _world.Economy.TotalBanked + " " +
-                Plural(Shape.MineralName(_world.Map.CurrencyMineral), _world.Economy.TotalBanked) + " banked";
+                Money(_world.Economy.TotalBanked) + " banked";
         }
 
         // ------------------------------------------------------------------ the buttons' dressing
@@ -3640,7 +3554,6 @@ namespace Facet.Game
             Dress(_controls.Help, ButtonFill);
             Dress(_help.Restart, ButtonFill);
             DressGhost(_help.Close);
-            if (_tutorial.Root.gameObject.activeSelf) DressGhost(_tutorial.Hide);
             DressGhost(_info.TurnLeft);
             DressGhost(_info.TurnRight);
             if (_info.Inspect.Root.gameObject.activeSelf) DressGhost(_info.Inspect);
@@ -3739,6 +3652,14 @@ namespace Facet.Game
         /// <summary>The item's own words, pluralised the way the sentence reading it needs.</summary>
         private static string Plural(string word, int count)
             => count == 1 ? word : word + "s";
+
+        /// <summary>
+        /// The run's money as a sentence would name it. Never a mineral: the Core banks <em>any</em> complete
+        /// shape (<see cref="Shape.IsFull"/>), so "not enough circles" is a sentence that is wrong on every
+        /// map with a square vein in it - and the reason a player who has just piped a square home reads their
+        /// own working economy as broken.
+        /// </summary>
+        private static string Money(int count) => Plural("shape", count);
 
         private static Color WithAlpha(Color colour, float alpha)
             => new Color(colour.r, colour.g, colour.b, colour.a * alpha);
@@ -3883,7 +3804,11 @@ namespace Facet.Game
         {
             public RectTransform Root;
             public HudText Number;
-            public RawImage Icon;
+
+            /// <summary>One complete shape per mineral the map mines, side by side: the readout's whole claim
+            /// is that <em>any</em> complete shape is money.</summary>
+            public readonly System.Collections.Generic.List<RawImage> Icons =
+                new System.Collections.Generic.List<RawImage>();
         }
 
         private sealed class ToastPanel
@@ -3900,14 +3825,6 @@ namespace Facet.Game
             public RectTransform Root;
             public HudBox Back;
             public HudText Label;
-        }
-
-        private sealed class TutorialPanel
-        {
-            public RectTransform Root;
-            public HudButton Hide;
-            public HudText Title;
-            public HudText Body;
         }
 
         /// <summary>The lesson's card: heading, position in the list, the lines as one rich-text label, and the pinned

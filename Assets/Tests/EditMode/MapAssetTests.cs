@@ -560,6 +560,39 @@ namespace Facet.Tests
         }
 
         [Test]
+        public void Research_ALessonRow_KeepsItsMapTarget()
+        {
+            _asset.Research = new[]
+            {
+                new MapAsset.ResearchRow
+                {
+                    AfterWave = 2,
+                    Builds = new[] { BuildKind.Stacker },
+                    Cost = 20,
+                    Lesson = new[]
+                    {
+                        new MapAsset.TutorialTaskRow
+                        {
+                            Step = TutorialStep.Acknowledge,
+                            Text = "Build the northern yard.",
+                            Target = new Vector2Int(8, 6),
+                            Opens = new[] { BuildKind.Stacker },
+                            Focus = new[] { TutorialFocus.Target },
+                        },
+                    },
+                },
+            };
+
+            ResearchOffer offer = _asset.ToCore().Research.Offers[0];
+
+            Assert.AreEqual(2, offer.AfterWave);
+            Assert.AreEqual(20, offer.Cost);
+            Assert.AreEqual(new Int2(8, 6), offer.Lesson[0].Target.Value);
+            CollectionAssert.Contains(offer.Lesson[0].Focus, TutorialFocus.Target);
+            Assert.IsEmpty(offer.Lesson[0].Ghost, "a map target does not invent a research blueprint");
+        }
+
+        [Test]
         public void Tutorial_ARowCarriesItsGhostBlueprint_AndOffMapGhostsAreReported()
         {
             // The ghost is the standard answer drawn on the map: several tiles, each with its own facing.

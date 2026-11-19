@@ -163,12 +163,12 @@ namespace Facet.Tests
         public void ShippedNumbers_AreTheOnesTheDesignWasBalancedOn()
         {
             // Pinned so a refactor cannot quietly retune the prototype: these are the exact values the
-            // tests' timing (30 ticks per item, 1.5 s per cut, 0.75 s per turn, 2 s per union) was derived
+            // tests' timing (30 ticks per item, 1.5 s per cut, 0.75 s per turn, 1.5 s per union) was derived
             // from, read straight from the table.
             Assert.AreEqual(1f, Content.Machine(BuildKind.Drill).Interval, Sim.Tol);
             Assert.AreEqual(1.5f, Content.Machine(BuildKind.Cutter).Interval, Sim.Tol);
             Assert.AreEqual(0.75f, Content.Machine(BuildKind.Rotator).Interval, Sim.Tol);
-            Assert.AreEqual(2f, Content.Machine(BuildKind.Stacker).Interval, Sim.Tol);
+            Assert.AreEqual(1.5f, Content.Machine(BuildKind.Stacker).Interval, Sim.Tol);
             Assert.AreEqual(0.25f, Content.Machine(BuildKind.Pipe).Interval, Sim.Tol);
 
             Assert.AreEqual(1, Content.Machine(BuildKind.Belt).Cost);
