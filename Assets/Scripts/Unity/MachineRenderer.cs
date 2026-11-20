@@ -410,9 +410,11 @@ namespace Facet.Game
             };
         }
 
-        /// <summary>Two rails from this cell's entry edge across the jumped tile to the landing belt,
-        /// with a collar at each end - the collars and the gap under the tube read as "over". The item
-        /// rides the tube at its work fraction.</summary>
+        /// <summary>A bridge over the jumped tile and a bed leading up to it. The bridge is two rails with the
+        /// same collar at each end, spanning exactly the jumped tile, so whatever it crosses sits in its middle -
+        /// the collars and the gap under the tube read as "over". The pipe's own tile is the bed, in the belts'
+        /// colours as the splitter's stubs are, so a crossing reads belt, bridge, belt. The item rides the bed
+        /// and then the tube at its work fraction.</summary>
         private void AppendPipe(in MachineSnapshot machine, float outlineWidth)
         {
             var centre = CellCentre(machine.Cell);
@@ -424,6 +426,7 @@ namespace Facet.Game
 
             Palette.MachineLook look = Colors.Machines;
             Vector2 entry = centre - forward * 0.5f;
+            Vector2 rise = centre + forward * 0.5f;
             Vector2 landing = centre + forward * 1.5f;
 
             if (IsSprite(style))
@@ -435,28 +438,38 @@ namespace Facet.Game
                 AppendShadowLane(entry - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
                     look.PipeRailWidth);
                 DrawSprite(style, centre, Damaged(Color.white, machine));
+                AppendChevron(machine.Cell, machine.Direction, body);
             }
             else
             {
-                AppendLane(entry + right * look.PipeRailOffset, landing + right * look.PipeRailOffset,
+                // The bed is on the ground, so it casts nothing; rails first, as the belt view lays them.
+                Palette.BeltLook bed = Colors.Belts;
+                float rail = Mathf.Max(0f, bed.RailWidth);
+                if (rail > 0f) AppendLane(entry, rise, bed.HalfWidth + rail, Colors.BeltRail);
+                AppendLane(entry, rise, bed.HalfWidth, Colors.Belt);
+
+                AppendLane(rise + right * look.PipeRailOffset, landing + right * look.PipeRailOffset,
                     look.PipeRailWidth, body);
-                AppendLane(entry - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
+                AppendLane(rise - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
                     look.PipeRailWidth, body);
 
                 // The two rails, and not the collars: a collar crosses both rails, and two translucent
                 // silhouettes laid over each other read as a darker patch than either.
-                AppendShadowLane(entry + right * look.PipeRailOffset, landing + right * look.PipeRailOffset,
+                AppendShadowLane(rise + right * look.PipeRailOffset, landing + right * look.PipeRailOffset,
                     look.PipeRailWidth);
-                AppendShadowLane(entry - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
+                AppendShadowLane(rise - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
                     look.PipeRailWidth);
 
+                // One collar on each edge of the jumped tile, centred on the edge, so the two ends mirror.
                 float ct = look.PipeCollarThickness;
                 float cw = look.PipeCollarHalfWidth;
-                AppendLane(entry - forward * ct + right * cw, entry - forward * ct - right * cw, ct, body);
+                AppendLane(rise + right * cw, rise - right * cw, ct, body);
                 AppendLane(landing + right * cw, landing - right * cw, ct, body);
-            }
 
-            AppendChevron(machine.Cell, machine.Direction, body);
+                // The facing sits on the bed, the pipe's own tile, clear of the collar at its edge.
+                AppendChevron(centre, machine.Direction, look.ChevronBack, look.ChevronHalfWidth,
+                    look.ChevronLength, body);
+            }
 
             AppendIcon(_pipeIcons, machine.Shape, entry + forward * (2f * machine.Work), null);
         }

@@ -162,9 +162,10 @@ namespace Facet.Game
             float exitLength = exitFull ? 0.5f + Dock(exitCell) : 0.32f + cap;
             AppendLane(centre, centre + forward * exitLength, halfWidth, color);
 
-            // A lane from every side something feeds in from: belts pointing at me, and machines whose facing pushes
-            // onto me (a drill or an operator pushing out, a splitter whose output port I am). A pipe lands from
-            // above instead - its own tube, drawn by the machine view, is that hand-off's visual.
+            // A lane from every side something feeds in from: belts pointing at me, machines whose facing pushes
+            // onto me (a drill or an operator pushing out, a splitter whose output port I am), and a pipe landing
+            // on me, whose bridge ends on my edge - the lane reaches back to meet it, as the pipe's own bed does
+            // on its other side.
             for (int s = 0; s < Sides.Length; s++)
             {
                 if (!Fed(feeds, Sides[s])) continue;
@@ -281,7 +282,8 @@ namespace Facet.Game
         /// thing rather than two.</summary>
         private bool TakesFrom(Int2 cell) => World.TileGrid.Get(cell).Takes();
 
-        /// <summary>Does the neighbour on <paramref name="side"/> push items onto this belt?</summary>
+        /// <summary>Does something on <paramref name="side"/> push items onto this belt - the neighbour there, or a
+        /// pipe landing from the cell beyond it?</summary>
         private bool DeliversInto(BeltSnapshot belt, Dir side)
         {
             Int2 neighbour = belt.Cell + side.Offset();
@@ -295,7 +297,12 @@ namespace Facet.Game
             // fronts, so the lane beside the blade docks with a port the blade tile's own mask knows nothing
             // about.
             World.Machines.PortMasksAt(neighbour, out _, out DirMask outMask);
-            return outMask.Has(side.Opposite());
+            if (outMask.Has(side.Opposite())) return true;
+
+            // A pipe two cells out on this side, facing me, lands here over the tile between us.
+            Int2 pipe = belt.Cell + side.Offset() * 2;
+            return World.Machines.TryGet(pipe, out MachineState state) && state.Direction == side.Opposite() &&
+                   World.Content.Machine(state.Build).Behavior == BehaviorKind.Pipe;
         }
 
         /// <summary>
