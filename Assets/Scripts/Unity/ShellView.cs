@@ -760,11 +760,13 @@ namespace Facet.Game
                 tracked: true).Set("CONTROLS", _palette.HudText);
             HudUi.AdoptBox(HudUi.Child(card, "rule"), HudInk.Rule(_palette));
 
+            ControlsCard.Row[] rows = ControlsCard.Rows(HudLayout.BarTiles);
             for (int i = 0; i < lines.Length; i++)
             {
                 HudText row = AdoptLabel(card, "key" + i, HudLayout.HelpLineSize, FontStyle.Normal,
                     TextAnchor.MiddleLeft);
                 row.Set(lines[i], HudInk.Muted(_palette));
+                ControlsCard.DressRow(card, row, rows[i], i, _palette, _scale);
             }
 
             HudButton close = HudUi.AdoptButton(HudUi.Child(card, "close"), "×", FontSize(HudType.Label),

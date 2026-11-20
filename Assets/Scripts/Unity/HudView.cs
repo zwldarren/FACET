@@ -801,6 +801,7 @@ namespace Facet.Game
         /// than on the cluster, so a misplaced click can never restart the run. It overlays the map while open.</summary>
         private HelpPanel BuildHelp()
         {
+            ControlsCard.Row[] rows = ControlsCard.Rows(_world.BarCount);
             string[] lines = KeyLines(_world.BarCount);
             RectTransform root = BindPanel(HelpPrefab, "help",
                 HudLayout.Help(Screen.width, _scale, lines.Length), PlaceCorner.TopRight);
@@ -818,6 +819,7 @@ namespace Facet.Game
                     TextAnchor.MiddleLeft);
                 AutoFit(line, 8f);
                 line.Set(lines[i], HudInk.Muted(_palette));
+                ControlsCard.DressRow(root, line, rows[i], i, _palette, _scale);
             }
 
             panel.Restart = BindButton(root, "restart", HudType.Label, _palette.HudText,
@@ -2335,25 +2337,7 @@ namespace Facet.Game
 
         /// <summary>The same list for a bar of <paramref name="barCount"/> keys: the build line names the digits
         /// the bar actually carries, so a lesson that has handed over five buildings says 1-5.</summary>
-        public static string[] KeyLines(int barCount)
-        {
-            string buildLine = barCount > 0
-                ? BuildInput.KeyRangeText(barCount) + " or click builds"
-                : "the lesson hands buildings over";
-
-            return new[]
-            {
-                "WASD / arrows pan  ·  wheel zooms",
-                buildLine,
-                "the same one again drops it",
-                "Q / E turn  ·  drag lays belts",
-                "H this card  ·  M menu",
-                "RMB deletes, or clears a jam",
-                "Esc menu  ·  C the Core",
-                "N the wave  ·  Space  ·  R restart",
-                "[ / ] speed 1x - 3x",
-            };
-        }
+        public static string[] KeyLines(int barCount) => ControlsCard.Actions(barCount);
 
         // ------------------------------------------------------------------ build bar
 
