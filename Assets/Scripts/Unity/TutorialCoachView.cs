@@ -33,7 +33,6 @@ namespace Facet.Game
         private RectTransform _panel;
         private HudBox _panelBack;
         private HudBorder _panelFrame;
-        private HudText _counter;
         private HudText _title;
         private HudText _body;
         private HudText _hint;
@@ -95,7 +94,6 @@ namespace Facet.Game
 
         private const float TitleSize = 26f;
         private const float BodySize = 19f;
-        private const float SmallSize = 12f;
         private const float Inset = 22f;
         private const float MaxWidth = HudLayout.StatusWidth;
         private const float ButtonHeight = 40f;
@@ -244,7 +242,6 @@ namespace Facet.Game
                 _lineSince = Time.unscaledTime;
             }
 
-            string counter = "STEP " + (index + 1) + " OF " + tutorial.Count;
             string button = null;
             _buttonAction = null;
 
@@ -267,7 +264,7 @@ namespace Facet.Game
             TrackTurrets();
             PrepareFeedRoute(task);
             LayoutBoxes(task, scale, done: false);
-            Fill(counter, task.Title, WithHotkey(task.Text, task), hintDue ? WithHotkey(task.Hint, task) : null, button,
+            Fill(task.Title, WithHotkey(task.Text, task), hintDue ? WithHotkey(task.Hint, task) : null, button,
                 scale, _palette.HudAccent, demo);
 
             // The fight is the one line not dimmed: the player has to see the enemies, wherever they walk. A
@@ -281,7 +278,7 @@ namespace Facet.Game
         {
             _buttonAction = null;
             _focusRects.Clear();
-            Fill(string.Empty, title, body, null, null, scale,
+            Fill(title, body, null, null, scale,
                 _world.Status == GameStatus.Won ? HudInk.Good(_palette) : _palette.HudWarn, null);
             HideBoxesFrom(0);
             LayoutShade(null);
@@ -298,7 +295,7 @@ namespace Facet.Game
             return false;
         }
 
-        private void Fill(string counter, string title, string body, string hint, string button, float scale,
+        private void Fill(string title, string body, string hint, string button, float scale,
             Color titleColour, BuildKind? demo)
         {
             _canvasRoot.gameObject.SetActive(true);
@@ -307,20 +304,16 @@ namespace Facet.Game
             float width = Mathf.Min(MaxWidth * scale, Screen.width - 2f * HudLayout.Margin * scale);
             float inner = width - Inset * 2f * scale;
 
-            _counter.Text.fontSize = SmallSize * scale;
             _title.Text.fontSize = TitleSize * scale;
             _body.Text.fontSize = BodySize * scale;
             _hint.Text.fontSize = (BodySize - 3f) * scale;
 
-            _counter.Set(counter, HudInk.Quiet(_palette));
             _title.Set(title ?? string.Empty, titleColour);
             _body.Set(body ?? string.Empty, _palette.HudText);
             _hint.Set(hint ?? string.Empty, HudInk.Quiet(_palette));
             _hint.Show(!string.IsNullOrEmpty(hint));
 
             float y = Inset * 0.6f * scale;
-            Place(_counter.Rect, Inset * scale, y, inner, SmallSize * 1.4f * scale);
-            y += SmallSize * 1.6f * scale;
 
             float titleHeight = string.IsNullOrEmpty(title) ? 0f : Height(_title, inner);
             Place(_title.Rect, Inset * scale, y, inner, titleHeight);
@@ -1241,7 +1234,6 @@ namespace Facet.Game
             _panelBack.Image.raycastTarget = true;   // the popup is solid: a click on it is not a click on the map
             _panelFrame = HudUi.AdoptBorder(ImageNode(_panel, "frame"), _palette.HudAccent, 14f, 2.5f);
 
-            _counter = Label(_panel, "counter", SmallSize, FontStyle.Bold, wrap: false, tracked: true);
             _title = Label(_panel, "title", TitleSize, FontStyle.Bold, wrap: true, tracked: false);
             _body = Label(_panel, "body", BodySize, FontStyle.Normal, wrap: true, tracked: false);
             _hint = Label(_panel, "hint", BodySize - 3f, FontStyle.Italic, wrap: true, tracked: false);
