@@ -252,7 +252,8 @@ namespace Facet.Game
                 ? building
                 : (BuildKind?)null;
             LayoutBoxes(task, scale, done: false);
-            Fill(counter, task.Title, task.Text, hintDue ? task.Hint : null, button, scale, _palette.HudAccent, demo);
+            Fill(counter, task.Title, WithHotkey(task.Text, task), hintDue ? WithHotkey(task.Hint, task) : null, button,
+                scale, _palette.HudAccent, demo);
 
             // The fight is the one line not dimmed: the player has to see the enemies, wherever they walk. A
             // lesson without the spotlight is never dimmed.
@@ -483,7 +484,10 @@ namespace Facet.Game
             }
             else if (_hasNewestTurret)
             {
-                cells.Add(_newestTurret);
+                // The way a belt can actually be laid, not the straight line: around rock, water and the
+                // buildings already standing. A turret walled off from the ore keeps the straight line, which
+                // is still the right direction to look in.
+                if (!TryBeltWay(start, _newestTurret, cells)) cells.Add(_newestTurret);
             }
             else
             {
@@ -500,6 +504,70 @@ namespace Facet.Game
             }
 
             return route.Count >= 2;
+        }
+
+        /// <summary>
+        /// The shortest run of tiles a belt can be dragged along from <paramref name="from"/> to a tile beside
+        /// <paramref name="to"/>, ending on <paramref name="to"/> itself - appended to <paramref name="cells"/>,
+        /// which already holds <paramref name="from"/>. Breadth-first over the tiles a belt may be laid on, so it
+        /// turns at walls the way the player's drag would have to.
+        /// </summary>
+        private bool TryBeltWay(Int2 from, Int2 to, List<Int2> cells)
+        {
+            int width = _world.Map.Width, height = _world.Map.Height;
+            var came = new Dictionary<Int2, Int2>();
+            var open = new Queue<Int2>();
+            came[from] = from;
+            open.Enqueue(from);
+
+            Int2 reached = from;
+            bool found = false;
+            while (open.Count > 0 && !found)
+            {
+                Int2 c = open.Dequeue();
+                for (int d = 0; d < 4; d++)
+                {
+                    Int2 n = new Int2(c.X + (d == 0 ? 1 : d == 1 ? -1 : 0), c.Y + (d == 2 ? 1 : d == 3 ? -1 : 0));
+                    if (n.X < 0 || n.Y < 0 || n.X >= width || n.Y >= height || came.ContainsKey(n)) continue;
+
+                    if (n == to)
+                    {
+                        reached = c;
+                        found = true;
+                        break;
+                    }
+
+                    if (!_world.CanPlaceBelt(n)) continue;
+                    came[n] = c;
+                    open.Enqueue(n);
+                }
+            }
+
+            if (!found) return false;
+
+            var way = new List<Int2>();
+            for (Int2 c = reached; c != from; c = came[c]) way.Add(c);
+            way.Reverse();
+            cells.AddRange(way);
+            cells.Add(to);
+            return true;
+        }
+
+        /// <summary>
+        /// A line's words with <c>{key}</c> replaced by the digit that picks its building on the bar right now. The
+        /// bar numbers its keys by position, so a turret is 2 on a bar of two and 0 on a full one; a line that wrote
+        /// the digit down would go wrong the moment the bar changed. Not on the bar: the line just says "its key".
+        /// </summary>
+        private string WithHotkey(string text, TutorialTask task)
+        {
+            if (string.IsNullOrEmpty(text) || !text.Contains("{key}")) return text;
+
+            BuildKind building = LineBuilding(task);
+            for (int i = 0; i < _world.BarCount; i++)
+                if (_world.BarKindAt(i) == building)
+                    return text.Replace("{key}", BuildInput.HotkeyLabel(i));
+
+            return text.Replace("{key}", "its key");
         }
 
         /// <summary>Note the turrets standing now and remember the one that appeared last. A turret that is
