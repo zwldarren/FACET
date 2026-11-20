@@ -95,6 +95,11 @@ namespace Facet.Core
 
         /// <summary>Belts on ore mine it - the drill's job, without the drill.</summary>
         private readonly BeltMining _mining;
+
+        /// <summary>How many lines each belt carries, re-read before the belts move whenever the layout has
+        /// changed - so a run out of a merge runs fast enough to take both of the lines feeding it.</summary>
+        private readonly BeltFlow _flow;
+
         private readonly BuildController _build;
 
         /// <summary>The walkers' way to the Core, rebuilt in the tick whenever the machines' solidity
@@ -133,6 +138,7 @@ namespace Facet.Core
                 Content, Events);
             _sink = new CoreSinkSystem(TileGrid, Belts, Economy, Events);
             _mining = new BeltMining(TileGrid, Terrain, Belts, Content);
+            _flow = new BeltFlow(TileGrid, Belts, Machines, Content);
             _build = new BuildController(TileGrid, Terrain, map, Belts, Machines, Economy, Content, Events,
                 Tutorial, Research);
 
@@ -187,6 +193,7 @@ namespace Facet.Core
             // armed this way at all (<see cref="WaveDirector.HoldEveryWait"/>); the lesson releases them.
             if (_build.HasBuilt) Waves.ArmFirstWave();
 
+            _flow.Update();
             Belts.Step(SimConfig.TickDt, Config.BeltSpeed);
             _machineSystem.Step(SimConfig.TickDt);
             _mining.Step(SimConfig.TickDt);

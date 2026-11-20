@@ -193,7 +193,7 @@ namespace Facet.Core
                     return "one shape leaves by the side it faces · the rest take the other outlets";
 
                 case BehaviorKind.Splitter:
-                    return "deals items round-robin · skips blocked outlets";
+                    return "deals items round-robin · skips blocked outlets · merge two into one and the outlet runs 2×";
 
                 case BehaviorKind.Sink:
                     return "1 × 1 tile · no outlet · never jams · eats "
@@ -216,6 +216,18 @@ namespace Facet.Core
         /// bug in the card rather than a fact about the machine.</summary>
         private static string ShapesPerSecond(float speed)
             => speed.ToString("0.##") + (speed == 1f ? " shape/s" : " shapes/s");
+
+        /// <summary>
+        /// What a merged belt says about its pace - "2× speed · fed by 2 lines, so it carries 2 shapes/s" -
+        /// and nothing on an ordinary run. One sentence for the card and the tooltip, because a run that speeds
+        /// up past a merge is the one belt that is not doing what every other belt does, and the player should
+        /// not have to work out why.
+        /// </summary>
+        public static string BeltPace(SimConfig config, int lines)
+            => lines > 1
+                ? lines + "× speed · fed by " + lines + " lines, so it carries " +
+                  ShapesPerSecond(config.BeltSpeed * lines)
+                : string.Empty;
 
         // ---------------------------------------------------------------- the live card
 

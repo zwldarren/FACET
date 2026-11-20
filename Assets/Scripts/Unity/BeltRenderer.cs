@@ -42,9 +42,11 @@ namespace Facet.Game
         private readonly List<Vector2> _hub = new List<Vector2>();
         private int _seenRevision = -1;
 
-        /// <summary>How far along a cell the chevrons have slid, 0..1. One phase for every belt, so the
-        /// chevron leaving one cell's exit edge is the one entering the next cell's entry edge and a run reads
-        /// as one moving stream rather than a field of arrows ticking in place.</summary>
+        /// <summary>How far along a cell the chevrons of an ordinary belt have slid, 0..1. One phase for every
+        /// belt of a pace, so the chevron leaving one cell's exit edge is the one entering the next cell's entry
+        /// edge and a run reads as one moving stream rather than a field of arrows ticking in place. A belt
+        /// carrying more than one line slides that many times as far (<see cref="BeltSnapshot.Lines"/>) - a whole
+        /// number, so wrapping this at 1 never makes its arrows jump.</summary>
         private float _phase;
         private int _phaseFrame = -1;
 
@@ -55,8 +57,9 @@ namespace Facet.Game
         protected override Palette.Layer Layer => Colors.BeltLayer;
 
         /// <summary>Items moving deliberately do not bump the revision, so a rebuild means a cell was actually laid,
-        /// re-pointed or jammed - not that the line is busy. The one exception is the chevrons' slide: while it is
-        /// on and the run is live, the bed is redrawn every frame so the arrows move with the items.</summary>
+        /// re-pointed, jammed or given a new pace by a merge - not that the line is busy. The one exception is the
+        /// chevrons' slide: while it is on and the run is live, the bed is redrawn every frame so the arrows move
+        /// with the items.</summary>
         protected override void Observe(in ViewFrame frame)
         {
             int revision = World.Belts.Revision;
@@ -318,7 +321,7 @@ namespace Facet.Game
             bool fedFromEntry = feeds != 0;
             bool exitFull = TakesFrom(belt.Cell + belt.Direction.Offset());
 
-            float p = _phase;
+            float p = Mathf.Repeat(_phase * belt.Lines, 1f);
             // A run that starts on ore starts at the vein's edge, so its arrows only begin past the figure.
             float bedStart = fedFromEntry ? 0f : World.Terrain.HasOre(belt.Cell) ? 0.8f : 0.5f - halfWidth;
             float bedEnd = exitFull ? 1f : 0.5f + 0.32f;

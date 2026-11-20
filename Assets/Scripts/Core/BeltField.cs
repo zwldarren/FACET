@@ -3,8 +3,9 @@ using System.Collections.Generic;
 
 namespace Facet.Core
 {
-    /// <summary>State of one belt cell. A cell holds at most one item, which makes throughput equal to
-    /// <see cref="SimConfig.BeltSpeed"/> and a jam a single locatable cell.</summary>
+    /// <summary>State of one belt cell. A cell holds at most one item, which makes throughput equal to its
+    /// speed - <see cref="SimConfig.BeltSpeed"/> times the lines it carries (<see cref="BeltField.LinesAt"/>) -
+    /// and a jam a single locatable cell.</summary>
     public struct BeltState
     {
         /// <summary>Which way items leave this cell.</summary>
@@ -60,6 +61,10 @@ namespace Facet.Core
 
         /// <summary>Parked at the end of a line that goes nowhere - the bed's other warning colour.</summary>
         public bool Blocked;
+
+        /// <summary>How many lines this cell carries - <see cref="BeltField.LinesAt"/>: 1 on an ordinary run,
+        /// more downstream of a merge, and the multiple of the base speed its chevrons slide at.</summary>
+        public int Lines;
     }
 
     /// <summary>The belt layer: one <see cref="BeltState"/> per tile, indexed exactly like
@@ -93,6 +98,13 @@ namespace Facet.Core
         private readonly SimEventBuffer _events;
 
         private readonly BeltState[] _state;
+
+        /// <summary>How many lines each cell carries, as <see cref="BeltFlow"/> last read the layout. 0 - a cell
+        /// laid since - reads as 1, so a new belt runs at the base speed until the next tick says otherwise.
+        /// Kept beside <see cref="_state"/> rather than in it: it is a fact about the layout, not about what is
+        /// riding the cell, and it must survive a jam being cleared.</summary>
+        private readonly byte[] _lines;
+
         private readonly byte[] _memo;
         private readonly bool[] _visiting;
         private readonly bool[] _claimed;
@@ -124,6 +136,7 @@ namespace Facet.Core
 
             int cells = grid.Width * grid.Height;
             _state = new BeltState[cells];
+            _lines = new byte[cells];
             _memo = new byte[cells];
             _visiting = new bool[cells];
             _claimed = new bool[cells];
@@ -149,6 +162,27 @@ namespace Facet.Core
         /// <summary>Is the item on this cell parked at the end of a line that goes nowhere?</summary>
         public bool IsBlocked(Int2 cell) => Has(cell) && _state[_grid.Index(cell)].Blocked;
 
+        /// <summary>
+        /// How many lines this belt carries: 1 on an ordinary run, 2 downstream of two lines merging, and so on
+        /// up to <see cref="BeltFlow.MaxLines"/>. The cell runs that many times <see cref="SimConfig.BeltSpeed"/>,
+        /// and since a cell holds one item, carries that many times as much - which is what lets a merge keep
+        /// up with both of the lines feeding it. 0 off a belt.
+        /// </summary>
+        public int LinesAt(Int2 cell) => Has(cell) ? LinesOf(_grid.Index(cell)) : 0;
+
+        private int LinesOf(int index) => _lines[index] == 0 ? 1 : _lines[index];
+
+        /// <summary>Record what <see cref="BeltFlow"/> read off the layout. A change is a redraw - the chevrons
+        /// slide at the new pace - so it bumps <see cref="Revision"/>; the same answer again does not.</summary>
+        internal void SetLines(int index, int lines)
+        {
+            byte value = (byte)lines;
+            if (_lines[index] == value) return;
+
+            _lines[index] = value;
+            Revision++;
+        }
+
         /// <summary>Lay a new belt. Fails out of bounds, on a tile that already holds something, on
         /// ground that takes no transport, or on an existing belt. Ground and ore both take one
         /// (<see cref="TerrainField.CanLayBelt"/>), so a run can cross a vein.</summary>
@@ -160,6 +194,7 @@ namespace Facet.Core
             int i = _grid.Index(cell);
             _state[i] = default;
             _state[i].Direction = direction;
+            _lines[i] = 0;
             Revision++;
             return true;
         }
@@ -184,6 +219,7 @@ namespace Facet.Core
             if (_state[i].Jammed) JamCount--;
             if (_state[i].Blocked) BlockedCount--;
             _state[i] = default;
+            _lines[i] = 0;
             _terrain.Release(cell);
             Revision++;
             return true;
@@ -342,7 +378,9 @@ namespace Facet.Core
         }
 
         /// <summary>Pass 1. An item advances to the end of its own cell and no further - it need not know
-        /// whether the next cell is free, because progress 1 <em>is</em> the boundary it queues on.</summary>
+        /// whether the next cell is free, because progress 1 <em>is</em> the boundary it queues on. Each cell
+        /// moves at its own pace, <paramref name="beltSpeed"/> times the lines it carries, so a merged run
+        /// clears a cell as fast as its feeders fill it.</summary>
         private void AdvanceProgress(float dt, float beltSpeed)
         {
             float step = beltSpeed * dt;
@@ -351,7 +389,7 @@ namespace Facet.Core
             {
                 if (!_state[i].HasItem || _state[i].Jammed || _state[i].Progress >= 1f) continue;
 
-                float p = _state[i].Progress + step;
+                float p = _state[i].Progress + step * LinesOf(i);
                 _state[i].Progress = p >= 1f - ProgressEpsilon ? 1f : p;
             }
         }
@@ -434,6 +472,7 @@ namespace Facet.Core
         public void Clear()
         {
             Array.Clear(_state, 0, _state.Length);
+            Array.Clear(_lines, 0, _lines.Length);
             JamCount = 0;
             BlockedCount = 0;
             Revision++;
@@ -454,6 +493,7 @@ namespace Facet.Core
                     Direction = _state[i].Direction,
                     Jammed = _state[i].Jammed,
                     Blocked = _state[i].Blocked,
+                    Lines = LinesOf(i),
                 });
             }
         }

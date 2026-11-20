@@ -2907,6 +2907,9 @@ namespace Facet.Game
 
                 InspectLine("runs " + MachineReading.DirName(belt.Direction) +
                     " · one item per cell, so this is its rate", HudInk.Muted(_palette));
+
+                string pace = MachineReading.BeltPace(_world.Config, _world.Belts.LinesAt(cell));
+                if (pace.Length > 0) InspectLine(pace, HudInk.Good(_palette));
                 FinishInspect();
                 return;
             }
@@ -3449,6 +3452,9 @@ namespace Facet.Game
                         : "empty";
                 TooltipLine(state + " · to the " + MachineReading.DirName(belt.Direction),
                     belt.Jammed ? _palette.HudWarn : _palette.HudText);
+
+                string pace = MachineReading.BeltPace(_world.Config, _world.Belts.LinesAt(cell));
+                if (pace.Length > 0) TooltipLine(pace, HudInk.Muted(_palette));
                 FinishTooltip();
                 return true;
             }
