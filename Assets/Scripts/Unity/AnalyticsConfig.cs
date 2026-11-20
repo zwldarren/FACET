@@ -31,8 +31,9 @@ namespace Facet.Game
         public const string EntryBuild = "entry.338387420";
 
         /// <summary>Which build a row came from, so one build's players can be compared with another's -
-        /// change it whenever a build that changes how the game plays is published (alpha, alpha-2, beta).</summary>
-        public const string BuildLabel = "beta";
+        /// change it whenever a build that changes how the game plays is published (alpha, alpha-2, beta,
+        /// gold-progress).</summary>
+        public const string BuildLabel = "gold-progress";
 
         /// <summary>Send from the Unity Editor too. Off, so play-testing in the Editor does not fill the
         /// sheet with developer runs: the Editor logs each row to the Console instead.</summary>
