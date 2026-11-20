@@ -38,9 +38,11 @@ rm -rf "$PUBLISH_DIR"
 mkdir -p "$PUBLISH_DIR"
 # git archive of a tree streams the tree's contents, not the directory itself, so each snapshot is
 # extracted into a directory of its own name.
+# -c core.autocrlf=false: archive applies the eol conversion a checkout would, so on a machine with
+# core.autocrlf=true a restored snapshot came back with CRLF and read as modified in every publish.
 for name in $preserved; do
     mkdir -p "$PUBLISH_DIR/$name"
-    git -C "$PROJECT_ROOT" archive "HEAD:docs/$name" | tar -x -C "$PUBLISH_DIR/$name"
+    git -C "$PROJECT_ROOT" -c core.autocrlf=false archive "HEAD:docs/$name" | tar -x -C "$PUBLISH_DIR/$name"
 done
 cp -R "$BUILD_DIR/." "$PUBLISH_DIR/"
 
