@@ -500,8 +500,8 @@ namespace Facet.Game
                 AppendRangeRing(centre, World.Content.Turret(kind).Range, WithAlpha(Colors.RangeRing, GhostRingAlpha));
         }
 
-        /// <summary>A pipe's ghost: the two rails and their collars across the jumped tile, plus its
-        /// chevron.</summary>
+        /// <summary>A pipe's ghost, the placed pipe's figure: a belt ghost's bed on its own tile, then the two
+        /// rails across the jumped tile with a collar on each edge, so what it crosses sits in the middle.</summary>
         private void AppendPipeGhost(Int2 cell, Dir direction, Color body)
         {
             Palette.MachineLook look = Colors.Machines;
@@ -510,19 +510,25 @@ namespace Facet.Game
             var right = new Vector2(-forward.y, forward.x);
 
             Vector2 entry = centre - forward * 0.5f;
+            Vector2 rise = centre + forward * 0.5f;
             Vector2 landing = centre + forward * 1.5f;
 
-            AppendLane(entry + right * look.PipeRailOffset, landing + right * look.PipeRailOffset,
+            Palette.BeltLook bed = Colors.Belts;
+            float rail = Mathf.Max(0f, bed.RailWidth);
+            if (rail > 0f) AppendLane(entry, rise, bed.HalfWidth + rail, WithAlpha(PlanInk, GhostRailAlpha));
+            AppendLane(entry, rise, bed.HalfWidth, WithAlpha(PlanInk, GhostBeltAlpha));
+
+            AppendLane(rise + right * look.PipeRailOffset, landing + right * look.PipeRailOffset,
                 look.PipeRailWidth, body);
-            AppendLane(entry - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
+            AppendLane(rise - right * look.PipeRailOffset, landing - right * look.PipeRailOffset,
                 look.PipeRailWidth, body);
 
             float ct = look.PipeCollarThickness;
             float cw = look.PipeCollarHalfWidth;
-            AppendLane(entry - forward * ct + right * cw, entry - forward * ct - right * cw, ct, body);
+            AppendLane(rise + right * cw, rise - right * cw, ct, body);
             AppendLane(landing + right * cw, landing - right * cw, ct, body);
 
-            AppendMachineChevron(cell, direction);
+            AppendChevron(centre, direction, look.ChevronBack, look.ChevronHalfWidth, look.ChevronLength, Rim());
         }
 
         /// <summary>A sorter's ghost: the triangle turned so its apex points out the exit side - the machine's
