@@ -71,6 +71,13 @@ namespace Facet.Game
         private Int2 _newestTurret;
         private bool _hasNewestTurret;
 
+        // Keep cell coordinates, so camera movement still updates the screen-space cue.
+        private readonly List<Int2> _feedRoute = new List<Int2>();
+        private TutorialTask _feedTask;
+        private bool _hasFeedTask;
+        private int _feedTick = -1;
+        private Int2 _feedTurret;
+
         /// <summary>Which half of a line the cue is acting out - 1, picking the building up from the bar; 2, using
         /// it on the map - and since when, so each half starts its loop from the beginning.</summary>
         private int _cuePhase;
@@ -143,6 +150,12 @@ namespace Facet.Game
 
         public void Initialize(SimWorld world, HudView hud, Camera camera, Palette palette)
         {
+            _feedRoute.Clear();
+            _hasFeedTask = false;
+            _feedTick = -1;
+            _hasNewestTurret = false;
+            _turrets.Clear();
+            _turretsNow.Clear();
             _world = world;
             _hud = hud;
             _camera = camera;
@@ -251,6 +264,8 @@ namespace Facet.Game
             BuildKind? demo = HasFocus(task, TutorialFocus.Demo) && MachineDemo.Covers(building)
                 ? building
                 : (BuildKind?)null;
+            TrackTurrets();
+            PrepareFeedRoute(task);
             LayoutBoxes(task, scale, done: false);
             Fill(counter, task.Title, WithHotkey(task.Text, task), hintDue ? WithHotkey(task.Hint, task) : null, button,
                 scale, _palette.HudAccent, demo);
@@ -482,16 +497,12 @@ namespace Facet.Game
                 TutorialGhost last = task.Ghost[task.Ghost.Length - 1];
                 cells.Add(last.Cell + last.Direction.Offset());
             }
-            else if (_hasNewestTurret)
-            {
-                // The way a belt can actually be laid, not the straight line: around rock, water and the
-                // buildings already standing. A turret walled off from the ore keeps the straight line, which
-                // is still the right direction to look in.
-                if (!TryBeltWay(start, _newestTurret, cells)) cells.Add(_newestTurret);
-            }
             else
             {
-                return false;
+                PrepareFeedRoute(task);
+                if (_feedRoute.Count < 2) return false;
+                cells.Clear();
+                cells.AddRange(_feedRoute);
             }
 
             // Keep only the corners: a cell is dropped when it carries on in the same direction.
@@ -504,6 +515,70 @@ namespace Facet.Game
             }
 
             return route.Count >= 2;
+        }
+
+        /// <summary>The common ore target for the route, spotlight and blue tile marker.</summary>
+        public Int2? ResolveGuideTarget(TutorialTask task)
+        {
+            TrackTurrets();
+            PrepareFeedRoute(task);
+            return _feedRoute.Count > 1 ? _feedRoute[0] : task.Target;
+        }
+
+        // Free-placement feed lessons choose an unused ore tile by actual path length.
+        // Building the displayed belts does not invalidate the route they are following.
+        private void PrepareFeedRoute(TutorialTask task)
+        {
+            if (task.Gesture != TutorialGesture.Drag || task.Ghost.Length > 0 || !_hasNewestTurret)
+            {
+                _feedRoute.Clear();
+                _hasFeedTask = false;
+                return;
+            }
+
+            bool keep = _hasFeedTask && _feedTask.Equals(task) && _feedTurret == _newestTurret &&
+                        _world.TickCount >= _feedTick && _feedRoute.Count > 1;
+            if (keep)
+            {
+                for (int i = 0; i < _feedRoute.Count - 1; i++)
+                {
+                    Int2 c = _feedRoute[i];
+                    if (_world.TileGrid.Get(c) != TileKind.Belt && !_world.CanPlaceBelt(c))
+                    {
+                        keep = false;
+                        break;
+                    }
+                }
+            }
+            _feedTick = _world.TickCount;
+            if (keep) return;
+
+            _feedTask = task;
+            _hasFeedTask = true;
+            _feedTurret = _newestTurret;
+            _feedRoute.Clear();
+            var candidate = new List<Int2>();
+            for (int y = 0; y < _world.Map.Height; y++)
+                for (int x = 0; x < _world.Map.Width; x++)
+                {
+                    var ore = new Int2(x, y);
+                    if (!_world.Terrain.HasOre(ore) || !_world.CanPlaceBelt(ore)) continue;
+                    candidate.Clear();
+                    candidate.Add(ore);
+                    if (!TryBeltWay(ore, _newestTurret, candidate)) continue;
+                    if (_feedRoute.Count > 0 && candidate.Count >= _feedRoute.Count) continue;
+                    _feedRoute.Clear();
+                    _feedRoute.AddRange(candidate);
+                }
+
+            // If all ore is already belted, a correctly directed existing run can be reused.
+            if (_feedRoute.Count == 0 && task.Target.HasValue)
+            {
+                candidate.Clear();
+                candidate.Add(task.Target.Value);
+                if (TryBeltWay(task.Target.Value, _newestTurret, candidate))
+                    _feedRoute.AddRange(candidate);
+            }
         }
 
         /// <summary>
@@ -530,6 +605,10 @@ namespace Facet.Game
                     Int2 n = new Int2(c.X + (d == 0 ? 1 : d == 1 ? -1 : 0), c.Y + (d == 2 ? 1 : d == 3 ? -1 : 0));
                     if (n.X < 0 || n.Y < 0 || n.X >= width || n.Y >= height || came.ContainsKey(n)) continue;
 
+                    // Existing belts are usable only along their output direction.
+                    if (_world.Belts.TryGet(c, out BeltState belt) && c + belt.Direction.Offset() != n)
+                        continue;
+
                     if (n == to)
                     {
                         reached = c;
@@ -537,7 +616,7 @@ namespace Facet.Game
                         break;
                     }
 
-                    if (!_world.CanPlaceBelt(n)) continue;
+                    if (!_world.CanPlaceBelt(n) && _world.TileGrid.Get(n) != TileKind.Belt) continue;
                     came[n] = c;
                     open.Enqueue(n);
                 }
@@ -1004,6 +1083,8 @@ namespace Facet.Game
                     return WorldRect(gate.X, gate.Y, 1, 1, out rect);
 
                 case TutorialFocus.Target:
+                    if (_feedRoute.Count > 1 && _hasFeedTask && _feedTask.Equals(task))
+                        return WorldRect(PatchAround(_feedRoute[0]), out rect);
                     if (!task.Target.HasValue) return false;
                     return WorldRect(PatchAround(task.Target.Value), out rect);
 
@@ -1045,6 +1126,8 @@ namespace Facet.Game
                     return false;
 
                 case TutorialFocus.BarTile:
+                    BuildKind? needed = NeededTool(task);
+                    if (needed.HasValue && _world.SelectedKind == needed.Value) return false;
                     return _hud != null && _hud.TryFocusRect(focus, BarBuilding(task), out rect);
 
                 default:

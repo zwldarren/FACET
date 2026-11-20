@@ -528,6 +528,7 @@ namespace Facet.Game
             // The coach over the HUD: it boxes the HUD's own pieces, so it is built after them.
             _coach = AddView<TutorialCoachView>("TutorialCoach");
             _coach.Initialize(World, _hud, _camera, palette);
+            _guide.TargetResolver = _coach.ResolveGuideTarget;
 
             _rig = _camera.GetComponent<CameraRig>();
             if (_rig == null) _rig = _camera.gameObject.AddComponent<CameraRig>();

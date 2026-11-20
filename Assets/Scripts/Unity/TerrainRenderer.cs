@@ -51,6 +51,7 @@ namespace Facet.Game
             float rim = OutlineWidth;
 
             AppendFills();
+            AppendWaterMarks(rim);
             AppendRims(rim);
         }
 
@@ -72,6 +73,31 @@ namespace Facet.Game
             }
         }
 
+        /// <summary>Sparse, offset surface lines make water readable without repeating a tile pattern.
+        /// Their positions are deterministic, so a terrain rebuild never shuffles the surface.</summary>
+        private void AppendWaterMarks(float rim)
+        {
+            Color mark = Color.Lerp(ColorOf(TerrainKind.Water), Color.white, 0.28f);
+            float thickness = Mathf.Max(0.01f, rim * 0.24f);
+            for (int y = 0; y < _grid.Height; y++)
+            {
+                for (int x = 0; x < _grid.Width; x++)
+                {
+                    if (ObstacleAt(new Int2(x, y)) != TerrainKind.Water) continue;
+                    int pattern = (x * 37 + y * 101 + x * y * 7) % 23;
+                    if (pattern >= 8) continue;
+
+                    float left = x + 0.12f + (pattern % 3) * 0.08f;
+                    float height = y + 0.3f + (pattern % 4) * 0.1f;
+                    float length = 0.28f + (pattern % 3) * 0.09f;
+                    AppendLane(new Vector2(left, height), new Vector2(left + length, height), thickness, mark);
+                    if (pattern == 2 || pattern == 7)
+                        AppendLane(new Vector2(left + 0.13f, height + 0.17f),
+                            new Vector2(left + 0.34f, height + 0.17f), thickness, mark);
+                }
+            }
+        }
+
         /// <summary>Outline every side of an obstacle tile that does not face the same kind. A ridge therefore gets one
         /// rim around its whole perimeter and nothing down its middle, so it reads as one mass rather than a row of
         /// blocks.</summary>
@@ -84,20 +110,33 @@ namespace Facet.Game
                     var cell = new Int2(x, y);
                     TerrainKind kind = ObstacleAt(cell);
                     if (kind == TerrainKind.Ground) continue;
-
-                    if (ObstacleAt(cell + Dir.North.Offset()) != kind)
-                        AppendLane(new Vector2(x, y + 1f), new Vector2(x + 1f, y + 1f), rim, Colors.Outline);
-
-                    if (ObstacleAt(cell + Dir.South.Offset()) != kind)
-                        AppendLane(new Vector2(x, y), new Vector2(x + 1f, y), rim, Colors.Outline);
-
-                    if (ObstacleAt(cell + Dir.East.Offset()) != kind)
-                        AppendLane(new Vector2(x + 1f, y), new Vector2(x + 1f, y + 1f), rim, Colors.Outline);
-
-                    if (ObstacleAt(cell + Dir.West.Offset()) != kind)
-                        AppendLane(new Vector2(x, y), new Vector2(x, y + 1f), rim, Colors.Outline);
+                    DrawSide(kind, ObstacleAt(cell + Dir.North.Offset()),
+                        new Vector2(x, y + 1f), new Vector2(x + 1f, y + 1f), rim);
+                    DrawSide(kind, ObstacleAt(cell + Dir.South.Offset()),
+                        new Vector2(x, y), new Vector2(x + 1f, y), rim);
+                    DrawSide(kind, ObstacleAt(cell + Dir.East.Offset()),
+                        new Vector2(x + 1f, y), new Vector2(x + 1f, y + 1f), rim);
+                    DrawSide(kind, ObstacleAt(cell + Dir.West.Offset()),
+                        new Vector2(x, y), new Vector2(x, y + 1f), rim);
                 }
             }
+        }
+
+        // A water/rock boundary belongs to the bank, so it is drawn once rather than double-stroked.
+        private static bool DrawEdge(TerrainKind kind, TerrainKind neighbour)
+            => neighbour != kind && !(kind == TerrainKind.Water && neighbour == TerrainKind.Rock);
+
+        private void DrawSide(TerrainKind kind, TerrainKind neighbour,
+            Vector2 from, Vector2 to, float rim)
+        {
+            if (!DrawEdge(kind, neighbour)) return;
+
+            // Rock keeps one continuous silhouette. Water yields the shared edge to rock.
+            bool water = kind == TerrainKind.Water;
+            Color edge = water
+                ? Color.Lerp(ColorOf(kind), Colors.Outline, 0.16f)
+                : Colors.Outline;
+            AppendLane(from, to, water ? rim * 0.35f : rim, edge);
         }
 
         /// <summary>The obstacle kind at a tile, or <see cref="TerrainKind.Ground"/> where this view has nothing of its
@@ -116,7 +155,9 @@ namespace Facet.Game
         /// ground. The map is stamped from it, and the HUD's inscription card reads the same table, so a kind of ground
         /// carries its look in one place and neither surface keeps a colour of its own to drift.</summary>
         internal static Color ColorOf(TerrainKind kind, Palette palette)
-            => kind == TerrainKind.Water ? palette.Water : palette.Rock;
+            => kind == TerrainKind.Water
+                ? Color.Lerp(palette.Water, new Color(0.7f, 0.85f, 0.91f, 1f), 0.55f)
+                : palette.Rock;
 
         private Color ColorOf(TerrainKind kind)
             => ColorOf(kind, Colors);

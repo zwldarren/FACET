@@ -19,6 +19,8 @@ namespace Facet.Game
     [DefaultExecutionOrder(116)]
     public sealed class TutorialGuideView : MeshView
     {
+        public System.Func<TutorialTask, Int2?> TargetResolver { get; set; }
+
         /// <summary>The off-screen chevron, in screen pixels: the guide is an annotation, so it reads the same
         /// at every zoom rather than growing with the tiles.</summary>
         private const float ChevronBackPixels = 7f;
@@ -186,7 +188,7 @@ namespace Facet.Game
             bool active = tutorial.Active && !complete;
             TutorialTask task = active ? tutorial.Current : TutorialScript.Empty;
 
-            Int2? primary = task.Target;
+            Int2? primary = active && TargetResolver != null ? TargetResolver(task) : task.Target;
             if (!primary.HasValue && task.Ghost.Length > 0) primary = task.Ghost[0].Cell;
 
             bool hasGuide = primary.HasValue;
@@ -272,6 +274,9 @@ namespace Facet.Game
 
             if (ghosts.Length == 0)
             {
+                // Introductions describe an area; only an action lesson marks a precise start tile.
+                // Keep the off-screen locator, but leave on-screen area emphasis to the coach.
+                if (World.Tutorial.Coached && task.Step == TutorialStep.Acknowledge) return;
                 if (World.Tutorial.Coached) AppendCoachGlow(task);
                 AppendFallbackFrame(_seenTarget);
                 return;
@@ -620,7 +625,7 @@ namespace Facet.Game
 
             if (task.Ghost.Length == 0)
             {
-                if (task.Target.HasValue) AppendGlowCell(task.Target.Value, fill, ring);
+                if (_seenHasGuide) AppendGlowCell(_seenTarget, fill, ring);
                 return;
             }
 
