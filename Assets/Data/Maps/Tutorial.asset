@@ -181,7 +181,7 @@ MonoBehaviour:
     Turrets: 0
     Gesture: 0
   - Step: 12
-    Text: "Press 0, then click the glowing tile."
+    Text: "Press {key}, then click the glowing tile."
     Hint: 
     Target: {x: 22, y: 3}
     Ghost:
@@ -288,7 +288,7 @@ MonoBehaviour:
     Turrets: 0
     Gesture: 0
   - Step: 27
-    Text: "Wave 2 is bigger. \nPress 0 and place a turret next to the road."
+    Text: "Wave 2 is bigger. \nPress {key} and place a turret next to the road."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []
@@ -383,7 +383,7 @@ MonoBehaviour:
     Turrets: 0
     Gesture: 0
   - Step: 27
-    Text: "Press 0 and place a turret \nnext to the LEFT road."
+    Text: "Press {key} and place a turret \nnext to the LEFT road."
     Hint: 
     Target: {x: -1, y: -1}
     Ghost: []

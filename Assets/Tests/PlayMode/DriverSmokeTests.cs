@@ -1158,6 +1158,11 @@ namespace Facet.PlayTests
                 Assert.IsNotNull(text, "row " + i + " is a label");
                 Assert.AreEqual(lines[i], text.text, "row " + i + " prints its line");
 
+                // And beside it, the keys that do it, drawn as caps rather than spelled out in the sentence.
+                Transform caps = help.Find("caps" + i);
+                Assert.IsNotNull(caps, "row " + i + " draws its keys");
+                Assert.Greater(caps.childCount, 0, "row " + i + " has at least one key cap");
+
                 // The rows sit on the step HelpHeightFor adds up: a row moved in the asset moves the button under
                 // it in the code, and the two stop agreeing here.
                 var rect = (RectTransform)row;

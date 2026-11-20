@@ -39,8 +39,8 @@ namespace Facet.Game
         public const float HelpInset = 14f;
         public const float HelpHeaderTop = 9f;
         public const float HelpLineTop = 30f;
-        public const float HelpLineStep = 15f;
-        public const float HelpLineHeight = 14f;
+        public const float HelpLineStep = 19f;
+        public const float HelpLineHeight = 16f;
         public const float HelpLineSize = HudType.Label;
 
         public const float HelpButtonGap = 8f;
