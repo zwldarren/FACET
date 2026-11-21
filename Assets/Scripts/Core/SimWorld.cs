@@ -202,6 +202,14 @@ namespace Facet.Core
             _paths.Sync();
             Enemies.Step(SimConfig.TickDt, ref Core);
 
+            // A map whose Core holds (the first lesson) stops it at 1 health rather than ending the run.
+            if (Map.CoreHolds && Core.Hp < 1f)
+            {
+                Core.Hp = 1f;
+                if (!_coreAtFloor) CoreSaves++;
+                _coreAtFloor = true;
+            }
+
             // The lesson reads the tick that just finished - a drill standing, a shape really banked, a round
             // in a chamber, a half off a cutter - and releases the wave it is waiting on there and then, before
             // the clock step gets to look at the gate. Read after the machines, because the question "is that
@@ -295,6 +303,9 @@ namespace Facet.Core
 
             Paused = false;
             Status = GameStatus.Playing;
+            CoreSaves = 0;
+            _coreAtFloor = false;
+            _reachTick = -1;
             TickCount = 0;
             _waveRequested = false;
             _restartRequested = false;
@@ -325,6 +336,48 @@ namespace Facet.Core
         }
 
         public void RequestTutorialNext() => _tutorialNextRequested = true;
+
+        /// <summary>How many times this run the Core would have fallen and held instead (<see cref="MapDefinition.CoreHolds"/>).
+        /// The HUD reads it to say so once.</summary>
+        public int CoreSaves { get; private set; }
+
+        private bool _coreAtFloor;
+
+        /// <summary>Would a turret of this kind standing on <paramref name="cell"/> reach the road the enemies walk?
+        /// True when its range touches any tile of any gate's route - and when there is no route to reach, since then
+        /// there is nothing to warn about. A read: it changes nothing. The routes are traced once per tick and kept,
+        /// because the cursor asks every frame.</summary>
+        public bool TurretReachesEnemies(Int2 cell, BuildKind kind)
+        {
+            if (!Content.IsTurret(kind)) return true;
+
+            if (_reachTick != TickCount)
+            {
+                _reachTick = TickCount;
+                _reachRoute.Clear();
+                for (int s = 0; s < Map.SpawnPoints.Length; s++)
+                {
+                    TraceEnemyRoute(s, _reachScratch);
+                    _reachRoute.AddRange(_reachScratch);
+                }
+            }
+
+            if (_reachRoute.Count == 0) return true;
+
+            float range = Content.Turret(kind).Range;
+            float reach = range * range;
+            for (int i = 0; i < _reachRoute.Count; i++)
+            {
+                float dx = _reachRoute[i].X - cell.X, dy = _reachRoute[i].Y - cell.Y;
+                if (dx * dx + dy * dy <= reach) return true;
+            }
+
+            return false;
+        }
+
+        private int _reachTick = -1;
+        private readonly System.Collections.Generic.List<Int2> _reachRoute = new System.Collections.Generic.List<Int2>();
+        private readonly System.Collections.Generic.List<Int2> _reachScratch = new System.Collections.Generic.List<Int2>();
 
         /// <summary>Buy the research offer that names this building, on the next tick. A request for something not
         /// on offer, or not affordable then, is dropped.</summary>

@@ -139,12 +139,17 @@ namespace Facet.Core
         /// is worth building.</summary>
         public readonly float MismatchDamage;
 
+        /// <summary>Does the Core refuse to fall? For the first lesson only: a new player who loses there is sent
+        /// back to its first line, which teaches nothing and bores. The Core stops at 1 health instead and the HUD
+        /// says what would have saved it.</summary>
+        public readonly bool CoreHolds;
+
         public MapDefinition(string name, int width, int height, int startShapes,
             ShapePatch[] patches, Int2[] spawnPoints, WaveDefinition[] waves,
             TerrainKind[] terrain = null, Int2? coreCell = null,
             Operators unlocked = Operators.All, int seed = 0, int generatedWaves = 0,
             TutorialScript tutorial = null, ResearchSchedule research = null,
-            float mismatchDamage = Balance.ResistantDamageMultiplier)
+            float mismatchDamage = Balance.ResistantDamageMultiplier, bool coreHolds = false)
         {
             Name = name;
             Width = width;
@@ -161,6 +166,7 @@ namespace Facet.Core
             Tutorial = tutorial;
             Research = research ?? ResearchSchedule.None;
             MismatchDamage = Math.Clamp(mismatchDamage, 0f, 1f);
+            CoreHolds = coreHolds;
 
             // The money, named off the map's own veins rather than authored beside them: the first mineral
             // the patch list yields, which is the one a drill on this map will first put on a belt.

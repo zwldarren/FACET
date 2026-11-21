@@ -381,6 +381,8 @@ namespace Facet.Game
             PointerOverHud = ComputePointerOver();
 
             UpdateTasks();
+            NoticeRunMoments();
+            UpdateCountdown();
             UpdateToast();
             UpdateBanner();
             UpdateStockpile();
@@ -477,6 +479,7 @@ namespace Facet.Game
             _info = BuildInfo();
             _banner = BuildBanner();
             _toast = BuildToast();
+            _countdown = BuildCountdown();
             _tooltip = BuildTooltip();
         }
 
@@ -831,6 +834,43 @@ namespace Facet.Game
             return panel;
         }
 
+        /// <summary>The next wave's countdown, big and at the top centre of the screen: the status card's line was
+        /// the only place it was said, and players never saw it.</summary>
+        private HudText BuildCountdown()
+        {
+            var node = new GameObject("countdown", typeof(RectTransform), typeof(TMPro.TextMeshProUGUI))
+                .GetComponent<RectTransform>();
+            node.SetParent(_canvasRoot, false);
+            HudText text = HudUi.AdoptText(node, FontSize(22f), FontStyle.Bold, TextAnchor.MiddleCenter, false, true);
+            node.gameObject.SetActive(false);
+            return text;
+        }
+
+        private HudText _countdown;
+
+        private void UpdateCountdown()
+        {
+            if (_countdown == null) return;
+
+            WaveDirector waves = _world.Waves;
+            bool show = _world.Status == GameStatus.Playing && waves.Phase == WavePhase.Intermission &&
+                        waves.NextWave > 0;
+            if (_countdown.Rect.gameObject.activeSelf != show) _countdown.Rect.gameObject.SetActive(show);
+            if (!show) return;
+
+            int seconds = Mathf.CeilToInt(waves.IntermissionRemaining);
+            bool soon = seconds <= 5;
+            Color ink = soon ? _palette.HudWarn : _palette.HudText;
+            if (soon)
+            {
+                float pulse = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 6f));
+                ink = new Color(ink.r, ink.g, ink.b, pulse);
+            }
+
+            _countdown.Set("WAVE " + waves.NextWave + " IN " + seconds, ink);
+            HudUi.TopCentre(_countdown.Rect, HudLayout.Margin * _scale, 300f * _scale, 34f * _scale);
+        }
+
         private StockpilePanel BuildStockpile()
         {
             Quad[] minerals = _money;
@@ -1067,6 +1107,10 @@ namespace Facet.Game
                 TextAnchor.MiddleRight);
 
             HudUi.AdoptBox(HudUi.Child(panel.InspectRoot, "rule"), HudInk.Rule(_palette));
+
+            // REMOVE: the right click, as a button - a touchpad has no easy right click, and Delete does the same.
+            panel.InspectRightSize = panel.InspectRight.Rect.sizeDelta;
+            panel.Remove = BuildRemoveButton(panel.InspectRoot);
 
             // Six lines: the card prints the ones the machine has and hides the rest. A sentence longer than the
             // card wraps rather than printing past its edge, and the stack grows the card upward.
@@ -1664,6 +1708,35 @@ namespace Facet.Game
             Notice("NOT YET - the " + def.Name + " is the lesson's to hand over", NoticeSeconds);
         }
 
+        /// <summary>The first press of R in a run that is still going.</summary>
+        public void NoticeRestartArmed()
+            => Notice("PRESS R AGAIN TO RESTART - this run is not saved", BuildInput.RestartWindow);
+
+        /// <summary>The run's moments worth a sentence that no refusal carries: the Core holding where it would have
+        /// fallen, and a turret placed where its range cannot reach the road.</summary>
+        private void NoticeRunMoments()
+        {
+            if (_world.CoreSaves < _coreSavesSeen) _coreSavesSeen = 0;
+            if (_world.CoreSaves > _coreSavesSeen)
+            {
+                _coreSavesSeen = _world.CoreSaves;
+                Notice("THE CORE HOLDS IN THE TUTORIAL - add a turret by the road to stop them", NoticeSeconds * 2f);
+            }
+
+            if (_world.Events.TryLastWithin(SimEventKind.Built, _world.TickCount - 2, out SimEvent built) &&
+                built.Tick != _builtSeenTick)
+            {
+                _builtSeenTick = built.Tick;
+                if (_world.Machines.TryGetSnapshot(built.Cell, out MachineSnapshot placed) &&
+                    placed.Behavior == BehaviorKind.Turret &&
+                    !_world.TurretReachesEnemies(built.Cell, placed.Build))
+                    Notice("OUT OF REACH - this turret's range does not touch the enemies' road", NoticeSeconds * 1.5f);
+            }
+        }
+
+        private int _coreSavesSeen;
+        private int _builtSeenTick = -1;
+
         /// <summary>Is a notice still inside its window?</summary>
         private bool NoticeLive => _noticeText != null && Time.unscaledTime - _noticeFrom < _noticeFor;
 
@@ -1696,6 +1769,9 @@ namespace Facet.Game
                            " - " + def.Name + " costs " + Mathf.RoundToInt(refusal.Amount) + ", you have " +
                            _world.Economy.Shapes;
                 case RejectionReason.Occupied:
+                    // The Core is the one building a player tries to drag out of: it only ever takes shapes in.
+                    if (_world.TileGrid.Get(refusal.Cell) == TileKind.Core)
+                        return "THE CORE ONLY TAKES SHAPES IN - start the belt on ORE and end it at the Core";
                     return "BLOCKED - something already stands on " + refusal.Cell;
                 case RejectionReason.BadGround:
                     return def.Tile == TileKind.Drill
@@ -2298,6 +2374,11 @@ namespace Facet.Game
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null && keyboard.hKey.wasPressedThisFrame) SetHelpOpen(!_helpOpen);
 
+            // Delete or Backspace removes the building the card is reading: the right click without a right button.
+            if (keyboard != null && _world.SelectedKind == null &&
+                (keyboard.deleteKey.wasPressedThisFrame || keyboard.backspaceKey.wasPressedThisFrame))
+                RemoveInspected();
+
             int gear = _clock != null ? _clock.Gear : 1;
             bool behind = _clock != null && _clock.FallingBehind && !_world.Paused;
             bool canWave = CanStartWaveNow;
@@ -2740,6 +2821,50 @@ namespace Facet.Game
                 _world.PlacementDirection);
         }
 
+        private HudButton BuildRemoveButton(RectTransform parent)
+        {
+            var root = new GameObject("remove", typeof(RectTransform)).GetComponent<RectTransform>();
+            root.SetParent(parent, false);
+            foreach (string part in new[] { "remove.back", "remove.label", "remove.frame" })
+            {
+                var node = new GameObject(part, typeof(RectTransform)).GetComponent<RectTransform>();
+                node.SetParent(root, false);
+                node.anchorMin = Vector2.zero;
+                node.anchorMax = Vector2.one;
+                node.offsetMin = Vector2.zero;
+                node.offsetMax = Vector2.zero;
+                if (part == "remove.label") node.gameObject.AddComponent<TMPro.TextMeshProUGUI>();
+                else node.gameObject.AddComponent<Image>();
+            }
+
+            HudUi.TopRight(root, 10f * _scale, 5f * _scale, 60f * _scale, 18f * _scale);
+            HudButton button = HudUi.AdoptButton(root, "REMOVE", FontSize(HudType.Micro), _palette.HudWarn,
+                RemoveInspected);
+            button.Fill.Set(HudInk.Raised(_palette));
+            button.Border.Set(_palette.HudWarn);
+            root.gameObject.SetActive(false);
+            return button;
+        }
+
+        /// <summary>Delete the building the card is reading, the way a right click on it would - a jam is cleared
+        /// rather than its belt deleted, and anything removed is refunded.</summary>
+        private void RemoveInspected()
+        {
+            if (_world == null) return;
+            if (_world.TryRemoveBuilding(_world.InspectedCell)) _inspectDirty = true;
+        }
+
+        /// <summary>The REMOVE button stands in the header for a building, and nothing else; the header's right-hand
+        /// words make room for it.</summary>
+        private void ShowRemove(bool show)
+        {
+            if (_info.Remove == null) return;
+            _info.Remove.gameObject.SetActive(show);
+            _info.InspectRight.Rect.sizeDelta = show
+                ? _info.InspectRightSize - new Vector2(70f * _scale, 0f)
+                : _info.InspectRightSize;
+        }
+
         /// <summary>The card with nothing selected: the building's <em>state</em> - its ports, what it is doing this
         /// second, whether it is starved or jammed - from the same state the tick runs on. The blurb and the cost are
         /// the catalogue's business and left out. Nothing pinned is not an empty card: it says what the state is for
@@ -2763,6 +2888,8 @@ namespace Facet.Game
             bool picker = machineHere && machine.Behavior == BehaviorKind.Sorter;
             SetPickerUp(picker);
             if (picker) RefreshFilterPicker(cell, machine);
+
+            ShowRemove(machineHere || _world.Belts.Has(cell));
 
             if (machineHere)
             {
@@ -3892,6 +4019,8 @@ namespace Facet.Game
             public HudButton Inspect;
 
             public RectTransform InspectRoot;
+            public HudButton Remove;
+            public Vector2 InspectRightSize;
             public HudText InspectTitle;
             public HudText InspectRight;
             public HudText[] Rows;

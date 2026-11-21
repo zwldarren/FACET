@@ -115,7 +115,7 @@ namespace Facet.Tests
                 "the west room the map was authored without is now floor, with a vein in it");
             Assert.AreEqual(TerrainKind.Ground, world.Terrain.KindAt(new Int2(5, 2)),
                 "and the floor reaches past the vein");
-            Assert.AreEqual(TerrainKind.Rock, world.Terrain.KindAt(WestWall), "with its lane walled");
+            Assert.IsFalse(world.Terrain.KindAt(WestWall).Walkable(), "with its lane walled (rock or water)");
             Assert.AreEqual(TerrainKind.Ground, world.Terrain.KindAt(new Int2(10, 7)),
                 "and its doorway opened onto the old map");
             Assert.IsTrue(world.Terrain.HasOre(WestVein), "the vein is there to mine");

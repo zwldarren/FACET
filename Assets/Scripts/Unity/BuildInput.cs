@@ -82,6 +82,13 @@ namespace Facet.Game
         /// this run's to explain.</summary>
         public BuildKind? LockedPressed { get; private set; }
 
+        /// <summary>R was pressed once in a run that is still going: the HUD says "press R again". A second press
+        /// within <see cref="RestartWindow"/> seconds restarts; a run that has ended restarts on the first press.</summary>
+        public bool RestartArmed { get; private set; }
+
+        public const float RestartWindow = 2.5f;
+        private float _restartArmedAt = float.NegativeInfinity;
+
         /// <summary>True exactly once after P was pressed. Cleared by the call.</summary>
         public bool ConsumePauseToggle()
         {
@@ -110,6 +117,7 @@ namespace Facet.Game
         public void Sample(Camera camera, SimWorld world, bool pointerOverHud = false)
         {
             LockedPressed = null;
+            RestartArmed = false;
 
             var keyboard = Keyboard.current;
             if (keyboard != null)
@@ -151,7 +159,22 @@ namespace Facet.Game
                 if (keyboard.spaceKey.wasPressedThisFrame) _pauseToggleRequested = true;
                 if (keyboard.pKey.wasPressedThisFrame) _pauseToggleRequested = true;
                 if (keyboard.nKey.wasPressedThisFrame) _startWaveRequested = true;
-                if (keyboard.rKey.wasPressedThisFrame) _restartRequested = true;
+                if (keyboard.rKey.wasPressedThisFrame)
+                {
+                    // A run in progress is thrown away by R, and the key sits beside the WASD the player is
+                    // panning with: the first press only arms it.
+                    float now = Time.unscaledTime;
+                    if (world.Status != GameStatus.Playing || now - _restartArmedAt <= RestartWindow)
+                    {
+                        _restartRequested = true;
+                        _restartArmedAt = float.NegativeInfinity;
+                    }
+                    else
+                    {
+                        _restartArmedAt = now;
+                        RestartArmed = true;
+                    }
+                }
 
                 // [ and ] step the speed gear down and up.
                 if (keyboard.leftBracketKey.wasPressedThisFrame) _gearSteps--;

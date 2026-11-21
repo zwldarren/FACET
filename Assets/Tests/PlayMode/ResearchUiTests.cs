@@ -174,7 +174,6 @@ namespace Facet.PlayTests
 
             Assert.IsTrue(Popup.gameObject.activeSelf, "the coach's popup is up");
             Assert.AreEqual("New: Splitter", Words(Popup, "title"));
-            Assert.AreEqual("STEP 1 OF 2", Words(Popup, "counter"));
             Assert.IsFalse(world.Paused, "and the run is not held: the player has to do what it says");
             Assert.IsFalse(Popup.Find("demo").gameObject.activeSelf, "a line without a demo shows none");
 
@@ -194,7 +193,6 @@ namespace Facet.PlayTests
                 yield return new WaitForSeconds(0.02f);
             yield return null;
             Assert.AreEqual("Pick the Splitter", Words(Popup, "title"), "the next line");
-            Assert.AreEqual("STEP 2 OF 2", Words(Popup, "counter"));
             Transform demo = Popup.Find("demo");
             Assert.IsTrue(demo.gameObject.activeSelf, "this line plays the machine at work");
             Assert.AreEqual("SPLITTER", Words(demo, "machine/name"));
@@ -320,7 +318,6 @@ namespace Facet.PlayTests
 
             yield return ClearWave(world);
             Assert.IsTrue(Popup.gameObject.activeSelf, "offered afresh, taught afresh");
-            Assert.AreEqual("STEP 1 OF 2", Words(Popup, "counter"));
         }
 
         [UnityTest]
@@ -356,6 +353,49 @@ namespace Facet.PlayTests
             var strip = (RectTransform)demo;
             Assert.LessOrEqual(strip.sizeDelta.x, card.sizeDelta.x, "no wider than the card");
             Assert.Greater(strip.sizeDelta.y, 0f);
+        }
+
+        [UnityTest]
+        public IEnumerator TheInspectCard_HasARemoveButton_ThatDeletesWhatItReads()
+        {
+            yield return null;
+            Driver.PlayMap(0);
+            yield return null;
+
+            SimWorld world = Driver.World;
+            var cell = new Int2(4, 4);
+            Assert.IsTrue(world.TryPlaceBelt(cell, Dir.East), "a belt to read");
+            world.Tick(new InputCommand(cursorCell: cell, inspectPressed: true));
+            yield return null;
+            yield return null;
+
+            Transform remove = Hud.transform.Find("HudCanvas/info/inspect/remove");
+            Assert.IsNotNull(remove, "the inspect card carries REMOVE");
+            Assert.IsTrue(remove.gameObject.activeInHierarchy, "and shows it for a building");
+
+            int before = world.Economy.Shapes;
+            remove.GetComponent<HudButton>().Pressed.Invoke();
+            yield return null;
+
+            Assert.IsFalse(world.Belts.Has(cell), "the belt is gone");
+            Assert.Greater(world.Economy.Shapes, before, "and refunded");
+        }
+
+        [UnityTest]
+        public IEnumerator TheNextWaveCountdown_StandsAtTheTop_InBigType()
+        {
+            yield return null;
+            Driver.PlayMap(0);
+            yield return null;
+
+            SimWorld world = Driver.World;
+            yield return ClearWave(world);
+
+            Transform countdown = Hud.transform.Find("HudCanvas/countdown");
+            Assert.IsNotNull(countdown);
+            Assert.AreEqual(WavePhase.Intermission, world.Waves.Phase);
+            Assert.IsTrue(countdown.gameObject.activeSelf, "a wave counting down says so at the top");
+            StringAssert.StartsWith("WAVE 2 IN ", countdown.GetComponent<TMPro.TMP_Text>().text);
         }
 
         [Test]

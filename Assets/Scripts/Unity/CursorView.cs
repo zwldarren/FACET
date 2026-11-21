@@ -201,7 +201,8 @@ namespace Facet.Game
             }
 
             if (World.Content.IsTurret(kind))
-                AppendRangeRing(Centre(_seenCell), kind, _seenValid ? Colors.RangeRing : Colors.CursorBlocked);
+                AppendRangeRing(Centre(_seenCell), kind,
+                    _seenValid && World.TurretReachesEnemies(_seenCell, kind) ? Colors.RangeRing : Colors.CursorBlocked);
         }
 
         /// <summary>

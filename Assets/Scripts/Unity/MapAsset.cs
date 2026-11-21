@@ -300,6 +300,10 @@ namespace Facet.Game
             "everywhere by default; a map that teaches cutting and turning can lower it so the right shape matters.")]
         [Range(0f, 1f)] public float MismatchDamage = Balance.ResistantDamageMultiplier;
 
+        [Tooltip("The Core stops at 1 health instead of falling, and the HUD says what would have saved it. For the " +
+            "first lesson, where losing sends a new player back to line one.")]
+        public bool CoreHolds;
+
         [Header("Research")]
         [Tooltip("Buildings this map hands over wave by wave. A building any row names is locked until that row " +
             "is bought; one no row names is left as the map and the lesson leave it. Empty - the default - is a " +
@@ -478,7 +482,8 @@ namespace Facet.Game
                 generatedWaves: GeneratedWaves,
                 tutorial: TutorialPlan(),
                 research: ResearchPlan(),
-                mismatchDamage: MismatchDamage);
+                mismatchDamage: MismatchDamage,
+                coreHolds: CoreHolds);
         }
 
         /// <summary>Everything wrong with this map as the simulation would read it; pure, because it runs

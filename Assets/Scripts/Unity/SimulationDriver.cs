@@ -225,6 +225,7 @@ namespace Facet.Game
             // A digit the lesson keeps dead gets a word rather than silence.
             if (_hud != null && _input.LockedPressed.HasValue)
                 _hud.NoticeLocked(_input.LockedPressed.Value);
+            if (_hud != null && _input.RestartArmed) _hud.NoticeRestartArmed();
 
             // Both arrow views fold past the boxes the HUD drew, so they follow the card's two kinds of
             // growth. One frame of lag, like the pointer's: a card the arrows do not know about is a place an
